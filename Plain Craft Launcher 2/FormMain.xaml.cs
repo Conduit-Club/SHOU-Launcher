@@ -350,7 +350,7 @@ public partial class FormMain
             return;
         if (lowerVersionCode >= ModBase.versionCode)
             return;
-        ShowUpdateLog();
+        // 社团版本不展示上游 PCL-CE 更新日志；社团日志由 ClubUpdates 独立检查。
         
         // 重置自定义主页配置
         if (lastVersionCode < 521 && Config.Preference.Homepage.SelectedPreset >= 3)
@@ -738,6 +738,7 @@ public partial class FormMain
                     MyMsgLogin login => login.Btn3.Visibility == Visibility.Visible
                         ? () => login.Btn3_Click(sender, null)
                         : () => login.Btn1_Click(sender, null),
+                    ClubUpdateHistoryWindow history => history.CloseHistory,
                     _ => null
                 };
                 escapeAction?.Invoke();

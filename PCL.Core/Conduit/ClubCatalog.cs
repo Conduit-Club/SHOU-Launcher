@@ -12,6 +12,13 @@ public sealed record ClubServer(string Id, string Name, string Address)
 /// <summary>社团公开文档中的入口；不包含账户凭据。</summary>
 public static class ClubCatalog
 {
+    public const string BrandName = "潮涌核心社";
+    public const string BrandNameEnglish = "Conduit Club";
+    public const string LauncherName = "潮涌核心社启动器";
+    public const string LauncherNameEnglish = "Conduit Club Launcher";
+    public const string GameTypeInfo = BrandName;
+    public const string LegacyGameTypeInfo = "PCLCE";
+
     public const string Website = "https://conduit-club.github.io/";
     public const string Repository = "https://github.com/Conduit-Club/PCL-CE-SHOU";
     // MUA Union is a server-side aggregation API. Players authenticate against
@@ -20,10 +27,9 @@ public static class ClubCatalog
     public const string MuaAuth = "https://skin.mualliance.ltd/api/yggdrasil";
     public const string MuaUnionAuth = "https://skin.mualliance.ltd/api/union/yggdrasil";
     public const string LittleSkinAuth = "https://littleskin.cn/api/yggdrasil";
-    // The public client ID is configured, but the club application is not yet
-    // approved for Microsoft authentication. Keep this gate explicit until
-    // the application review and API access are complete.
-    public const bool MicrosoftApiReady = false;
+    // The public client ID is configured and the club application has passed
+    // Microsoft's review. Actual account login still needs to be verified.
+    public const bool MicrosoftApiReady = true;
     public static IReadOnlyList<ClubServer> Servers { get; } = Array.AsReadOnly(new[]
     {
         new ClubServer("none", "只启动游戏", ""),
@@ -41,6 +47,15 @@ public static class ClubCatalog
 
     public static string ResolveLaunchServer(string? selectedAddress, string? instanceAddress)
         => selectedAddress ?? instanceAddress ?? string.Empty;
+
+    /// <summary>
+    /// Migrate the old default game version type without changing an empty value
+    /// or a value chosen by the user.
+    /// </summary>
+    public static string MigrateLegacyGameTypeInfo(string value)
+        => string.Equals(value, LegacyGameTypeInfo, StringComparison.Ordinal)
+            ? GameTypeInfo
+            : value;
 
     public static bool CanJoin(McProfile profile) => profile.ProfileType == ProfileType.Microsoft
         || (profile.ProfileType is ProfileType.Authlib or ProfileType.YggdrasilConnect
@@ -74,6 +89,11 @@ public static class ClubCatalog
     public static string AccountStatus(McProfile profile)
     {
         if (profile.ProfileType == ProfileType.Offline) return "本地档案";
+        if (profile.ProfileType == ProfileType.Authlib &&
+            string.IsNullOrWhiteSpace(profile.AccessToken) &&
+            !string.IsNullOrWhiteSpace(profile.LoginName) &&
+            !string.IsNullOrWhiteSpace(profile.Password))
+            return "已导入 · 首次启动时验证";
         if (profile.IsExpired) return "凭据已过期 · 启动时刷新";
         if (string.IsNullOrWhiteSpace(profile.AccessToken)) return "需要重新登录";
         return "已保存 · 启动时验证";

@@ -25,6 +25,7 @@ public class McPingService : IMcPingService
 {
     private readonly IPEndPoint _endpoint;
     private readonly string _host;
+    private readonly string? _connectHost;
     private const int DefaultTimeout = 10000;
     private readonly int _timeout;
     private bool _disposed;
@@ -58,11 +59,40 @@ public class McPingService : IMcPingService
     }
 
     /// <summary>
+    /// 创建按主机名异步连接的探测服务。Endpoint 仅保留端口和占位地址，实际连接不经过
+    /// 同步 DNS 解析，也不会把主机名替换成预解析的 IP。
+    /// </summary>
+    internal McPingService(string host, int port, int timeout, bool connectByHost)
+    {
+        if (!connectByHost) throw new ArgumentException("此构造函数仅用于主机名连接。", nameof(connectByHost));
+        if (string.IsNullOrWhiteSpace(host)) throw new ArgumentException("主机名不能为空。", nameof(host));
+        if (port is < 1 or > 65535) throw new ArgumentOutOfRangeException(nameof(port));
+
+        _endpoint = new IPEndPoint(IPAddress.None, port);
+        _host = host;
+        _connectHost = host;
+        _timeout = timeout;
+    }
+
+    /// <summary>
     /// 执行现代Minecraft协议的服务器探测
     /// </summary>
     /// <param name="cancellationToken"></param>
     /// <returns></returns>
-    public async Task<McPingResult?> PingAsync(CancellationToken cancellationToken = default)
+    public Task<McPingResult?> PingAsync(CancellationToken cancellationToken = default)
+        => _PingAsync(cancellationToken, waitForPong: true, logFailures: true);
+
+    /// <summary>
+    /// 仅请求并读取 Minecraft status 响应，不发送 ping 请求或等待 pong。
+    /// 某些代理在返回 status 后会立即关闭连接，社团首页只需要人数时应使用此模式。
+    /// </summary>
+    public Task<McPingResult?> PingStatusOnlyAsync(CancellationToken cancellationToken = default)
+        => _PingAsync(cancellationToken, waitForPong: false, logFailures: false);
+
+    private async Task<McPingResult?> _PingAsync(
+        CancellationToken cancellationToken,
+        bool waitForPong,
+        bool logFailures)
     {
         using var so = new Socket(SocketType.Stream, ProtocolType.Tcp);
         using var timeoutCts = new CancellationTokenSource(_timeout);
@@ -70,21 +100,30 @@ public class McPingService : IMcPingService
 
         try
         {
-            LogWrapper.Debug(ModuleName, $"Connecting to {_endpoint}");
-            await so.ConnectAsync(_endpoint.Address, _endpoint.Port, linkedCts.Token);
+            LogWrapper.Debug(ModuleName, $"Connecting to {_GetEndpointDescription()}");
+            if (_connectHost is null)
+                await so.ConnectAsync(_endpoint.Address, _endpoint.Port, linkedCts.Token);
+            else
+                await so.ConnectAsync(_connectHost, _endpoint.Port, linkedCts.Token);
         }
         catch (OperationCanceledException)
         {
-            LogWrapper.Error(new TimeoutException(Lang.Text("Tools.ServerQuery.Error.Timeout.Connect")), ModuleName, $"Failed to connect to the {_endpoint}");
+            if (logFailures)
+                LogWrapper.Error(new TimeoutException(Lang.Text("Tools.ServerQuery.Error.Timeout.Connect")), ModuleName, $"Failed to connect to the {_GetEndpointDescription()}");
+            else
+                LogWrapper.Debug(ModuleName, $"Status-only connection timed out on {_GetEndpointDescription()}");
             return null;
         }
         catch (Exception e)
         {
-            LogWrapper.Error(e, ModuleName, $"Failed to connect to the {_endpoint}");
+            if (logFailures)
+                LogWrapper.Error(e, ModuleName, $"Failed to connect to the {_GetEndpointDescription()}");
+            else
+                LogWrapper.Debug(ModuleName, $"Status-only connection failed on {_GetEndpointDescription()}: {e.Message}");
             return null;
         }
 
-        LogWrapper.Debug(ModuleName, $"Connection established: {_endpoint}");
+        LogWrapper.Debug(ModuleName, $"Connection established: {_GetEndpointDescription()}");
         await using var stream = new NetworkStream(so, false);
 
         var handshakePacket = _BuildHandshakePacket(_host, _endpoint.Port);
@@ -100,22 +139,31 @@ public class McPingService : IMcPingService
             await stream.WriteAsync(statusPacket, linkedCts.Token);
             LogWrapper.Debug(ModuleName, $"Status sent, packet length: {statusPacket.Length}");
 
-            var pingTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-            var pingPacket = _BuildPingRequestPacket(pingTimestamp);
-            
-            await stream.WriteAsync(pingPacket, linkedCts.Token);
-            LogWrapper.Debug(ModuleName, $"Ping sent, packet length: {pingPacket.Length}");
+            if (waitForPong)
+            {
+                var pingTimestamp = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                var pingPacket = _BuildPingRequestPacket(pingTimestamp);
 
-            (statusPayload, latency) = await _ReadStatusPayloadAsync(stream, linkedCts.Token);
+                await stream.WriteAsync(pingPacket, linkedCts.Token);
+                LogWrapper.Debug(ModuleName, $"Ping sent, packet length: {pingPacket.Length}");
+            }
+
+            (statusPayload, latency) = await _ReadStatusPayloadAsync(stream, linkedCts.Token, waitForPong);
         }
         catch (OperationCanceledException)
         {
-            LogWrapper.Error(new TimeoutException(Lang.Text("Tools.ServerQuery.Error.Timeout.ReadWrite")), "McPing", $"Operation timed out on {_endpoint}");
+            if (logFailures)
+                LogWrapper.Error(new TimeoutException(Lang.Text("Tools.ServerQuery.Error.Timeout.ReadWrite")), "McPing", $"Operation timed out on {_GetEndpointDescription()}");
+            else
+                LogWrapper.Debug(ModuleName, $"Status-only query timed out on {_GetEndpointDescription()}");
             return null;
         }
         catch (Exception e)
         {
-            LogWrapper.Error(e, ModuleName, $"Failed to communicate with {_endpoint}: {e.Message}");
+            if (logFailures)
+                LogWrapper.Error(e, ModuleName, $"Failed to communicate with {_GetEndpointDescription()}: {e.Message}");
+            else
+                LogWrapper.Debug(ModuleName, $"Status-only query failed on {_GetEndpointDescription()}: {e.Message}");
             return null;
         }
         finally
@@ -155,6 +203,9 @@ public class McPingService : IMcPingService
 
         return response;
     }
+
+    private string _GetEndpointDescription()
+        => $"{_connectHost ?? _endpoint.Address.ToString()}:{_endpoint.Port}";
 
     public void Dispose()
     {
@@ -203,14 +254,17 @@ public class McPingService : IMcPingService
         return pingRequest.ToArray();
     }
 
-    private async Task<(byte[] StatusPayload, long Latency)> _ReadStatusPayloadAsync(Stream stream, CancellationToken cancellationToken)
+    private async Task<(byte[] StatusPayload, long Latency)> _ReadStatusPayloadAsync(
+        Stream stream,
+        CancellationToken cancellationToken,
+        bool waitForPong)
     {
         byte[]? statusPayload = null;
         long? latency = null;
 
         try
         {
-            while (statusPayload is null || latency is null)
+            while (statusPayload is null || (waitForPong && latency is null))
             {
                 var packetLength = checked((int)await VarIntHelper.ReadFromStreamAsync(stream, cancellationToken));
                 LogWrapper.Debug(ModuleName, $"Packet length: {packetLength}");
@@ -245,7 +299,7 @@ public class McPingService : IMcPingService
         }
         catch (EndOfStreamException ex)
         {
-            if (statusPayload is not null && latency is null)
+            if (statusPayload is not null && waitForPong && latency is null)
                 throw new EndOfStreamException(Lang.Text("Tools.ServerQuery.Error.StaleConnection"), ex);
 
             if (statusPayload is null)
@@ -254,7 +308,7 @@ public class McPingService : IMcPingService
             throw;
         }
 
-        return (statusPayload, latency.Value);
+        return (statusPayload, latency ?? 0);
     }
 
     private static long _ReadInt64BigEndian(byte[] data)

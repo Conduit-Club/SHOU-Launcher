@@ -688,6 +688,19 @@ public partial class PageLaunchLeft
     ///     当前页面的种类。
     /// </summary>
     private PageType pageCurrent = PageType.None;
+    private bool _showAllProfiles;
+    public bool IsShowingAllProfiles => _showAllProfiles;
+
+    public void ShowAllProfiles()
+    {
+        _showAllProfiles = true;
+        RefreshPage(false);
+    }
+
+    public void ClearAllProfiles()
+    {
+        _showAllProfiles = false;
+    }
 
     private object PageGet(PageType type)
     {
@@ -817,6 +830,14 @@ public partial class PageLaunchLeft
             if (targetLoginType == ModLaunch.McLoginType.Legacy)
                 type = PageType.Offline;
         }
+        else if (_showAllProfiles)
+        {
+            type = PageType.Profile;
+            if (ProfileService.Current is not null)
+                BtnLaunch.IsEnabled = true;
+            else if (_launchButtonAction != LaunchButtonAction.Download)
+                BtnLaunch.IsEnabled = false;
+        }
         else if (ProfileService.Current is not null)
         {
             type = PageType.ProfileSkin;
@@ -832,6 +853,7 @@ public partial class PageLaunchLeft
         // 刷新页面
         if (pageCurrent == type)
         {
+            if (type == PageType.Profile) ModMain.frmLoginProfile?.Reload();
             if (type == PageType.ProfileSkin) ModMain.frmLoginProfileSkin?.Reload();
             if (type == PageType.Auth && targetLoginType == ModLaunch.McLoginType.Auth) ModMain.frmLoginAuth?.Reload();
             return;
@@ -842,6 +864,28 @@ public partial class PageLaunchLeft
     #endregion
 
     #region 皮肤
+
+    /// <summary>
+    ///     判断皮肤请求是否仍对应当前档案。皮肤加载是异步的，切换档案后旧请求不能再更新界面或显示错误。
+    /// </summary>
+    private static bool IsCurrentSkinRequest(string userName, string uuid, string server = null)
+    {
+        var profile = ProfileService.Current;
+        if (profile is null)
+            return string.IsNullOrEmpty(userName) && string.IsNullOrEmpty(uuid);
+
+        if (!string.Equals(profile.UserName, userName, StringComparison.Ordinal) ||
+            !string.Equals(profile.Uuid, uuid, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        return server is null || string.Equals(profile.Server ?? string.Empty, server, StringComparison.Ordinal);
+    }
+
+    private static bool IsCurrentSkinTask(ModLoader.LoaderTask data, int taskId, string userName, string uuid,
+        string server = null)
+    {
+        return !data.IsAbortedWithThread(taskId) && IsCurrentSkinRequest(userName, uuid, server);
+    }
 
     // 正版皮肤
     public static ModLoader.LoaderTask<ModBase.EqualableList<string>, string> skinMs = new("Loader Skin Ms", SkinMsLoad,
@@ -856,13 +900,7 @@ public partial class PageLaunchLeft
 
     private static void SkinMsLoad(ModLoader.LoaderTask<ModBase.EqualableList<string>, string> data)
     {
-        // 清空已有皮肤
-        // 如果在输入时清空皮肤，若输入内容一样则不会执行 Load 方法，导致皮肤不被加载
-        ModBase.RunInUi(() =>
-        {
-            if (ModMain.frmLoginProfileSkin is not null && ModMain.frmLoginProfileSkin.Skin is not null)
-                ModMain.frmLoginProfileSkin.Skin.Clear();
-        });
+        var taskId = Task.CurrentId ?? -1;
         // 获取 Url
         var userName = data.input[0];
         var uuid = data.input[1];
@@ -872,8 +910,18 @@ public partial class PageLaunchLeft
             uuid = ProfileService.Current.Uuid;
         }
 
+        // 清空已有皮肤
+        // 如果在输入时清空皮肤，若输入内容一样则不会执行 Load 方法，导致皮肤不被加载
+        ModBase.RunInUi(() =>
+        {
+            if (data.IsAbortedWithThread(taskId) || !IsCurrentSkinRequest(userName, uuid)) return;
+            if (ModMain.frmLoginProfileSkin is not null && ModMain.frmLoginProfileSkin.Skin is not null)
+                ModMain.frmLoginProfileSkin.Skin.Clear();
+        });
+
         if (string.IsNullOrEmpty(userName))
         {
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid)) return;
             data.output = ModBase.pathImage + "Skins/" + ModSkin.McSkinSex(ProfileUi.GetOfflineUuid(userName)) +
                           ".png";
             ModBase.Log("[Minecraft] 获取微软正版皮肤失败，ID 为空");
@@ -882,55 +930,65 @@ public partial class PageLaunchLeft
 
         try
         {
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid)) return;
+
             var result = ModSkin.McSkinGetAddress(uuid, "Ms");
-            if (data.IsAborted)
-                throw new ThreadInterruptedException("当前任务已取消：" + userName);
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid)) return;
+
             result = ModSkin.McSkinDownload(result);
-            if (data.IsAborted)
-                throw new ThreadInterruptedException("当前任务已取消：" + userName);
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid)) return;
+
             data.output = result;
         }
         catch (Exception ex)
         {
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid)) return;
+
             if (ex is ThreadInterruptedException)
             {
-                data.output = "";
                 ModBase.Log("[Minecraft] 已取消皮肤获取：" + userName);
                 return;
             }
 
+            var fallback = ModBase.pathImage + "Skins/" + ModSkin.McSkinSex(ProfileUi.GetOfflineUuid(userName)) +
+                           ".png";
             if (ex.ToString().Contains("429"))
             {
-                data.output = ModBase.pathImage + "Skins/" +
-                              ModSkin.McSkinSex(ProfileUi.GetOfflineUuid(userName)) + ".png";
                 ModBase.Log(
                     Lang.Text("Launch.Skin.Error.MsRateLimited", userName),
                     ModBase.LogLevel.Hint,
                     userSummary: Lang.Text("Launch.Skin.Error.MsRateLimited", userName));
             }
-            else if (ex.ToString().Contains("未设置自定义皮肤"))
+            else if (ex is ModSkin.NoCustomSkinException)
             {
-                data.output = ModBase.pathImage + "Skins/" +
-                               ModSkin.McSkinSex(ProfileUi.GetOfflineUuid(userName)) + ".png";
                 ModBase.Log("[Minecraft] 用户未设置自定义皮肤，跳过皮肤加载");
             }
             else
             {
-                data.output = ModBase.pathImage + "Skins/" +
-                               ModSkin.McSkinSex(ProfileUi.GetOfflineUuid(userName)) + ".png";
                 ModBase.Log(
                     ex,
                     Lang.Text("Launch.Skin.Error.MsGet", userName),
-                    ModBase.LogLevel.Hint,
-                    userSummary: Lang.Text("Launch.Skin.Error.MsGet", userName));
+                    ModBase.LogLevel.Normal);
             }
+
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid)) return;
+            data.output = fallback;
         }
 
         Finish: ;
 
+        if (!IsCurrentSkinTask(data, taskId, userName, uuid)) return;
+
         // 刷新显示
-        if (ModMain.frmLoginProfileSkin is not null && ReferenceEquals(ModMain.frmLoginProfileSkin.Skin.loader, data))
-            ModBase.RunInUi(ModMain.frmLoginProfileSkin.Skin.Load);
+        var profileSkin = ModMain.frmLoginProfileSkin?.Skin;
+        if (profileSkin is not null && ReferenceEquals(profileSkin.loader, data))
+            ModBase.RunInUi(() =>
+            {
+                if (data.IsAbortedWithThread(taskId) || !IsCurrentSkinRequest(userName, uuid)) return;
+                if (ModMain.frmLoginProfileSkin?.Skin is { } currentSkin && ReferenceEquals(currentSkin, profileSkin) &&
+                    ReferenceEquals(currentSkin.loader, data))
+                    currentSkin.Load();
+            });
         else if (!data.IsAborted) // 如果已经中断，Input 也被清空，就不会再次刷新
             data.input = null; // 清空输入，因为皮肤实际上没有被渲染，如果不清空切换到页面的 Start 会由于输入相同而不渲染
     }
@@ -968,24 +1026,33 @@ public partial class PageLaunchLeft
     private static ModBase.EqualableList<string> SkinAuthInput()
     {
         // 获取名称
+        var profile = ProfileService.Current;
         return new ModBase.EqualableList<string>
-            { ProfileService.Current?.UserName ?? "", ProfileService.Current?.Uuid ?? "" };
+            {
+                profile?.UserName ?? "", profile?.Uuid ?? "", profile?.Server ?? ""
+            };
     }
 
     private static void SkinAuthLoad(ModLoader.LoaderTask<ModBase.EqualableList<string>, string> data)
     {
+        var taskId = Task.CurrentId ?? -1;
+        // 获取 Url
+        var userName = data.input[0];
+        var uuid = data.input[1];
+        var server = data.input.Count > 2 ? data.input[2] : null;
+
         // 清空已有皮肤
         // 如果在输入时清空皮肤，若输入内容一样则不会执行 Load 方法，导致皮肤不被加载
         ModBase.RunInUi(() =>
         {
+            if (data.IsAbortedWithThread(taskId) || !IsCurrentSkinRequest(userName, uuid, server)) return;
             if (ModMain.frmLoginProfileSkin is not null && ModMain.frmLoginProfileSkin.Skin is not null)
                 ModMain.frmLoginProfileSkin.Skin.Clear();
         });
-        // 获取 Url
-        var userName = data.input[0];
-        var uuid = data.input[1];
+
         if (string.IsNullOrEmpty(userName))
         {
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid, server)) return;
             data.output = ModBase.pathImage + "Skins/Steve.png";
             ModBase.Log("[Minecraft] 获取 Authlib-Injector 皮肤失败，ID 为空");
             goto Finish;
@@ -993,51 +1060,63 @@ public partial class PageLaunchLeft
 
         try
         {
-            var result = ModSkin.McSkinGetAddress(uuid, "Auth");
-            if (data.IsAborted)
-                throw new ThreadInterruptedException("当前任务已取消：" + userName);
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid, server)) return;
+
+            var result = ModSkin.McSkinGetAddress(uuid, "Auth", server);
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid, server)) return;
+
             result = ModSkin.McSkinDownload(result);
-            if (data.IsAborted)
-                throw new ThreadInterruptedException("当前任务已取消：" + userName);
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid, server)) return;
+
             data.output = result;
         }
         catch (Exception ex)
         {
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid, server)) return;
+
             if (ex is ThreadInterruptedException)
             {
-                data.output = "";
                 return;
             }
 
+            var fallback = ModBase.pathImage + "Skins/Steve.png";
             if (ex.ToString().Contains("429"))
             {
-                data.output = ModBase.pathImage + "Skins/Steve.png";
                 ModBase.Log(
                     $"[Minecraft] 获取 Authlib-Injector 皮肤失败（{userName}）：获取皮肤太过频繁，请 5 分钟后再试！",
                     ModBase.LogLevel.Hint,
                     userSummary: Lang.Text("Launch.Skin.Error.AuthlibRateLimited"));
             }
-            else if (ex.ToString().Contains("未设置自定义皮肤"))
+            else if (ex is ModSkin.NoCustomSkinException)
             {
-                data.output = ModBase.pathImage + "Skins/Steve.png";
                 ModBase.Log("[Minecraft] 用户未设置自定义皮肤，跳过皮肤加载");
             }
             else
             {
-                data.output = ModBase.pathImage + "Skins/Steve.png";
                 ModBase.Log(
                     ex,
                     Lang.Text("Launch.Skin.Error.AuthGet", userName),
-                    ModBase.LogLevel.Hint,
-                    userSummary: Lang.Text("Launch.Skin.Error.AuthGet", userName));
+                    ModBase.LogLevel.Normal);
             }
+
+            if (!IsCurrentSkinTask(data, taskId, userName, uuid, server)) return;
+            data.output = fallback;
         }
 
         Finish: ;
 
+        if (!IsCurrentSkinTask(data, taskId, userName, uuid, server)) return;
+
         // 刷新显示
-        if (ModMain.frmLoginProfileSkin is not null && ReferenceEquals(ModMain.frmLoginProfileSkin.Skin.loader, data))
-            ModBase.RunInUi(ModMain.frmLoginProfileSkin.Skin.Load);
+        var profileSkin = ModMain.frmLoginProfileSkin?.Skin;
+        if (profileSkin is not null && ReferenceEquals(profileSkin.loader, data))
+            ModBase.RunInUi(() =>
+            {
+                if (data.IsAbortedWithThread(taskId) || !IsCurrentSkinRequest(userName, uuid, server)) return;
+                if (ModMain.frmLoginProfileSkin?.Skin is { } currentSkin && ReferenceEquals(currentSkin, profileSkin) &&
+                    ReferenceEquals(currentSkin.loader, data))
+                    currentSkin.Load();
+            });
         else if (!data.IsAborted) // 如果已经中断，Input 也被清空，就不会再次刷新
             data.input = null; // 清空输入，因为皮肤实际上没有被渲染，如果不清空切换到页面的 Start 会由于输入相同而不渲染
     }

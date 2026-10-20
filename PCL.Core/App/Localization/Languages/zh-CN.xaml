@@ -10,6 +10,13 @@
     <sys:String x:Key="Meta.Code">zh-CN</sys:String>
     <sys:String x:Key="Meta.Name">简体中文（中国大陆）</sys:String>
 
+    <!-- Conduit brand -->
+
+    <sys:String x:Key="Conduit.Brand.Name">潮涌核心社</sys:String>
+    <sys:String x:Key="Conduit.Brand.LauncherTitle">潮涌核心社启动器</sys:String>
+    <sys:String x:Key="Conduit.Brand.AboutTitle">关于潮涌核心社</sys:String>
+    <sys:String x:Key="Conduit.Brand.AboutDescription">Plain Craft Launcher 潮涌核心社版</sys:String>
+
     <!-- Application -->
 
     <sys:String x:Key="Application.Animation.Error.OperationFailed">动画操作失败。请查看错误详情。</sys:String>
@@ -1852,7 +1859,7 @@
     <sys:String x:Key="Main.Eula.Message">在使用 PCL CE 前，请同意 PCL 的用户协议与免责声明。</sys:String>
     <sys:String x:Key="Main.Eula.Title">协议授权</sys:String>
     <sys:String x:Key="Main.Eula.View">查看用户协议与免责声明</sys:String>
-    <sys:String x:Key="Main.Exit.HasDownloadingTask">还有下载任务尚未完成，是否确定退出？</sys:String>
+    <sys:String x:Key="Main.Exit.HasDownloadingTask">潮涌核心社启动器仍有下载任务尚未完成，是否确定退出？</sys:String>
     <sys:String x:Key="Main.Extra.BackToTop.ToolTip">返回顶部</sys:String>
     <sys:String x:Key="Main.Extra.GameLog.ToolTip">游戏日志</sys:String>
     <sys:String x:Key="Main.Extra.GiveUp.ToolTip">投降</sys:String>

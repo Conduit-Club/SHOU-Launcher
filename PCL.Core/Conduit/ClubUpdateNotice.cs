@@ -16,6 +16,9 @@ public sealed record ClubUpdateNotice(DateOnly Date, string Title, Uri Url)
     public string DateText => Date.ToString("yyyy.MM.dd", CultureInfo.InvariantCulture);
 }
 
+/// <summary>社团更新日志文章中可安全展示的纯文本正文。</summary>
+public sealed record ClubUpdateArticle(ClubUpdateNotice Notice, string Body);
+
 /// <summary>
 /// 解析社团更新日志总览页。解析器只读取 article 内的日期文章链接，绝不执行或呈现远程 HTML。
 /// </summary>
@@ -24,6 +27,7 @@ public static class ClubUpdateNoticeParser
     public const string IndexUrl = "https://conduit-club.github.io/updates/";
     public const string TrustedHost = "conduit-club.github.io";
     private const int MaxTitleLength = 200;
+    private const int MaxBodyLength = 120_000;
     private static readonly TimeSpan RegexMatchTimeout = TimeSpan.FromMilliseconds(250);
 
     private static readonly Regex ArticleRegex = new(
@@ -51,6 +55,28 @@ public static class ClubUpdateNoticeParser
     private static readonly Regex DatePrefixRegex = new(
         @"^\d{4}[./-]\d{1,2}[./-]\d{1,2}\s*(?:[·•|:：\-–—]\s*)?",
         RegexOptions.CultureInvariant, RegexMatchTimeout);
+
+    private static readonly Regex NavigationRegex = new(
+        @"<(?:nav|div)\b[^>]*(?:class\s*=\s*(?:""[^""]*(?:breadcrumbs|tocCollapsible)[^""]*""|'[^']*(?:breadcrumbs|tocCollapsible)[^']*'))[^>]*>.*?</(?:nav|div)\s*>",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant, RegexMatchTimeout);
+
+    private static readonly Regex MarkdownContainerRegex = new(
+        @"<div\b[^>]*class\s*=\s*(?:""[^""]*\btheme-doc-markdown\b[^""]*""|'[^']*\btheme-doc-markdown\b[^']*')[^>]*>",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant, RegexMatchTimeout);
+
+    private static readonly Regex HeaderRegex = new(
+        @"<header\b[^>]*>.*?</header\s*>",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant, RegexMatchTimeout);
+
+    private static readonly Regex CommentRegex = new(
+        @"<!--.*?-->", RegexOptions.Singleline | RegexOptions.CultureInvariant, RegexMatchTimeout);
+
+    private static readonly Regex BlockTagRegex = new(
+        @"<(?:br\b[^>]*>|/p\s*>|/li\s*>|/h[1-6]\s*>|/pre\s*>|/tr\s*>|/table\s*>|/ul\s*>|/ol\s*>|/blockquote\s*>|/div\s*>)",
+        RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant, RegexMatchTimeout);
+
+    private static readonly Regex ListItemRegex = new(
+        @"<li\b[^>]*>", RegexOptions.IgnoreCase | RegexOptions.Singleline | RegexOptions.CultureInvariant, RegexMatchTimeout);
 
     /// <summary>从正文 HTML 中提取有效、去重并按日期倒序排列的记录。</summary>
     /// <param name="html">更新日志总览页的 HTML。</param>
@@ -114,6 +140,54 @@ public static class ClubUpdateNoticeParser
     /// <summary>取得总览页中应关注的最新记录；历史记录不会逐条补弹。</summary>
     public static ClubUpdateNotice? ParseLatest(string? html, DateOnly? today = null)
         => Parse(html, today).FirstOrDefault();
+
+    /// <summary>
+    /// 从受信任日期文章中提取可显示的纯文本。远程 HTML 只会被去标签和解码，绝不交给 WPF/XAML 执行。
+    /// </summary>
+    public static ClubUpdateArticle? ParseArticle(string? html, ClubUpdateNotice notice)
+    {
+        try
+        {
+            if (string.IsNullOrWhiteSpace(html))
+                return null;
+
+            var article = ArticleRegex.Match(html).Groups["content"].Value;
+            if (string.IsNullOrWhiteSpace(article))
+                return null;
+
+            article = NavigationRegex.Replace(article, "\n");
+            var markdownContainer = MarkdownContainerRegex.Match(article);
+            if (markdownContainer.Success)
+                article = article[(markdownContainer.Index + markdownContainer.Length)..];
+
+            article = HeaderRegex.Replace(article, "\n");
+            article = CommentRegex.Replace(article, "\n");
+            article = ScriptOrStyleRegex.Replace(article, "\n");
+            article = ListItemRegex.Replace(article, "\n• ");
+            article = BlockTagRegex.Replace(article, "\n");
+            article = TagRegex.Replace(article, " ");
+            article = WebUtility.HtmlDecode(article)
+                .Replace('\u00a0', ' ')
+                .Replace('\u200b', ' ')
+                .Replace('\r', '\n');
+
+            var lines = article.Split('\n')
+                .Select(line => WhitespaceRegex.Replace(line, " ").Trim())
+                .Where(line => line.Length > 0)
+                .ToArray();
+            if (lines.Length == 0)
+                return null;
+
+            var body = string.Join("\r\n", lines);
+            if (body.Length > MaxBodyLength)
+                body = body[..(MaxBodyLength - 1)].TrimEnd() + "…";
+            return new ClubUpdateArticle(notice, body);
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return null;
+        }
+    }
 
     /// <summary>只在记录日期严格晚于已展示日期时提醒。</summary>
     public static bool ShouldNotify(ClubUpdateNotice notice, DateOnly? lastAcknowledgedDate)

@@ -127,6 +127,13 @@ public class ClubIntegrationTest
     {
         var profile = new McProfile { ProfileType = ProfileType.Microsoft };
         Assert.AreEqual("需要重新登录", ClubCatalog.AccountStatus(profile));
+        profile = new McProfile
+        {
+            ProfileType = ProfileType.Authlib,
+            LoginName = "user@example.test",
+            Password = "password-test"
+        };
+        Assert.AreEqual("已导入 · 首次启动时验证", ClubCatalog.AccountStatus(profile));
         profile.AccessToken = "test-not-a-real-token";
         Assert.AreEqual("已保存 · 启动时验证", ClubCatalog.AccountStatus(profile));
         profile.ExpiresAt = DateTimeOffset.UtcNow.AddMinutes(-2);

@@ -44,6 +44,15 @@ public static class McPingServiceFactory
     }
 
     /// <summary>
+    /// 创建按原始主机名连接的现代 status 探测服务。调用方负责提供已解析的端口；
+    /// 此方法不会预解析或替换主机名为 IP。
+    /// </summary>
+    public static McPingService CreateServiceByHost(string host, int port = 25565, int timeout = 10000)
+    {
+        return new McPingService(host, port, timeout, connectByHost: true);
+    }
+
+    /// <summary>
     /// 创建旧版协议探测服务
     /// </summary>
     /// <param name="endpoint">服务器端点</param>

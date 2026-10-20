@@ -26,23 +26,29 @@
    <Button x:Name="MuaButton" Content="MUA (0)" Tag="mua" Click="Provider_Click" Style="{StaticResource ClubActionButton}" Height="34" FontSize="10" />
   </UniformGrid>
   <DockPanel Margin="0,2,0,4">
-   <Button Content="其他" Tag="other" Click="Provider_Click" DockPanel.Dock="Right" Style="{StaticResource ClubActionButton}" Padding="6,2" FontSize="11" />
-   <Button Content="＋ 添加" Click="Add_Click" DockPanel.Dock="Right" Style="{StaticResource ClubActionButton}" Padding="6,2" Margin="0,0,4,0" FontSize="11" />
+   <Button x:Name="AllButton" Content="全部" Tag="all" Click="Provider_Click" DockPanel.Dock="Right" Style="{StaticResource ClubActionButton}" Padding="6,2" FontSize="11" />
    <TextBlock x:Name="AccountSummary" FontWeight="SemiBold" VerticalAlignment="Center" />
   </DockPanel>
-  <TextBlock x:Name="EmptyHint" Text="尚无此来源账户，请在下方登录。" FontSize="11" TextWrapping="Wrap" />
-  <ScrollViewer MaxHeight="100" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
-   <ItemsControl x:Name="Accounts"><ItemsControl.ItemTemplate><DataTemplate>
-    <Grid><Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-     <local:MyListItem Title="{Binding Title}" Info="{Binding Info}" Tag="{Binding Profile}" Type="Clickable" Click="Account_Click" MinHeight="45" />
-     <Button Grid.Column="1" Content="×" ToolTip="移除此账户" Tag="{Binding Profile}" Click="RemoveAccount_Click" Style="{StaticResource ClubActionButton}" Padding="5,0" Height="24" />
-    </Grid>
-   </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-  </ScrollViewer>
-  <TextBlock x:Name="LoginStatus" FontSize="10" TextWrapping="Wrap" Margin="0,4" Opacity="0.7" />
-  <DockPanel>
-   <local:MyButton Text="微软登录配置" Click="MicrosoftConfig_Click" Height="25" Padding="6,0" DockPanel.Dock="Right" />
-   <TextBlock x:Name="MicrosoftStatus" FontSize="10" VerticalAlignment="Center" TextWrapping="Wrap" Opacity="0.7" />
-  </DockPanel>
+  <TextBlock x:Name="EmptyHint" Text="尚无此来源角色，请在下方登录。" FontSize="11" TextWrapping="Wrap" />
+  <Grid x:Name="AccountActions" Margin="0,2,0,0">
+   <Grid.ColumnDefinitions>
+    <ColumnDefinition />
+    <ColumnDefinition Width="Auto" />
+    <ColumnDefinition Width="Auto" />
+   </Grid.ColumnDefinitions>
+   <local:MyComboBox x:Name="AccountSelector" Grid.Column="0" SelectionChanged="AccountSelector_SelectionChanged" MinHeight="32" MaxDropDownHeight="240" ToolTip="选择当前账户角色">
+    <ComboBox.ItemTemplate>
+     <DataTemplate>
+      <StackPanel MaxWidth="270" ToolTip="{Binding Tooltip}">
+       <TextBlock Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+       <TextBlock Text="{Binding Info}" FontSize="10" Opacity="0.7" TextTrimming="CharacterEllipsis" />
+      </StackPanel>
+     </DataTemplate>
+    </ComboBox.ItemTemplate>
+   </local:MyComboBox>
+   <Button x:Name="AddAccountButton" Grid.Column="1" Content="+" ToolTip="添加账户" Click="Add_Click" Style="{StaticResource ClubActionButton}" Padding="7,0" Height="32" Margin="4,0,0,0" />
+   <Button x:Name="RemoveSelectedButton" Grid.Column="2" Content="×" ToolTip="移除当前选中的账户" Click="RemoveSelectedButton_Click" Style="{StaticResource ClubActionButton}" Padding="7,0" Height="32" Margin="4,0,0,0" IsEnabled="False" />
+  </Grid>
+  <TextBlock x:Name="LoginStatus" FontSize="10" TextWrapping="Wrap" Margin="0,4" Opacity="0.7" Visibility="Collapsed" />
  </StackPanel>
 </UserControl>

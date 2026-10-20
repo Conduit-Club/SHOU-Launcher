@@ -10,6 +10,13 @@
     <sys:String x:Key="Meta.Code">en-GB</sys:String>
     <sys:String x:Key="Meta.Name">English (United Kingdom)</sys:String>
 
+    <!-- Conduit brand -->
+
+    <sys:String x:Key="Conduit.Brand.Name">Conduit Club</sys:String>
+    <sys:String x:Key="Conduit.Brand.LauncherTitle">Conduit Club Launcher</sys:String>
+    <sys:String x:Key="Conduit.Brand.AboutTitle">About Conduit Club</sys:String>
+    <sys:String x:Key="Conduit.Brand.AboutDescription">Plain Craft Launcher — Conduit Club edition</sys:String>
+
     <!-- Application -->
 
     <sys:String x:Key="Application.Animation.Error.OperationFailed">An animation operation failed. See the details below.</sys:String>
@@ -1849,7 +1856,7 @@
     <sys:String x:Key="Main.Eula.Message">Before using PCL CE, please review and agree to the Terms of Service and Disclaimer.</sys:String>
     <sys:String x:Key="Main.Eula.Title">ToS &amp; Disclaimer authorisation</sys:String>
     <sys:String x:Key="Main.Eula.View">ToS &amp; Disclaimer</sys:String>
-    <sys:String x:Key="Main.Exit.HasDownloadingTask">There is a download task in progress. Are you sure you want to quit?</sys:String>
+    <sys:String x:Key="Main.Exit.HasDownloadingTask">The Conduit Club launcher still has a download task in progress. Are you sure you want to quit?</sys:String>
     <sys:String x:Key="Main.Extra.BackToTop.ToolTip">Back to top</sys:String>
     <sys:String x:Key="Main.Extra.GameLog.ToolTip">Launch log</sys:String>
     <sys:String x:Key="Main.Extra.GiveUp.ToolTip">Surrender</sys:String>

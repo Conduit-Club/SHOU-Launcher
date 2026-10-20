@@ -165,7 +165,8 @@ public partial class PageLoginAuth
                 {
                     BaseUrl = await ApiLocation.TryRequestAsync(authServerUrl).ConfigureAwait(true),
                     UserName = TextName.Text, Password = TextPass.Password, Description = "Authlib-Injector",
-                    LoginType = ModLaunch.McLoginType.Auth
+                    LoginType = ModLaunch.McLoginType.Auth,
+                    ImportAvailableProfiles = true
                 };
                 ModLaunch.mcLoginAuthLoader.Start(loginData, true);
                 while (ModLaunch.mcLoginAuthLoader.State == ModBase.LoadState.Loading)

@@ -1,13 +1,27 @@
-﻿using System.Windows;
-using System.Windows.Controls;
+﻿using System;
 using System.ComponentModel;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Input;
+using System.Windows.Threading;
 using PCL.Core.App;
 using PCL.Core.Conduit;
+
 namespace PCL;
+
 public partial class ClubLaunchPanel : UserControl
 {
     private bool _ready;
     private ServerChoice[] _serverChoices = [];
+    private readonly DispatcherTimer _statusTimer = new() { Interval = TimeSpan.FromSeconds(15) };
+    private readonly ClubServerStatusProbe _statusProbe = new();
+    private CancellationTokenSource? _statusCancellation;
+    private int _statusGeneration;
+    private bool _statusRefreshRunning;
+
     public sealed class ServerChoice(ClubServer server, bool selected) : INotifyPropertyChanged
     {
         public string Id => server.Id;
@@ -23,8 +37,10 @@ public partial class ClubLaunchPanel : UserControl
                 PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(Selected)));
             }
         }
+
         public event PropertyChangedEventHandler? PropertyChanged;
     }
+
     public ClubLaunchPanel()
     {
         InitializeComponent();
@@ -35,11 +51,20 @@ public partial class ClubLaunchPanel : UserControl
             Servers.ItemsSource = _serverChoices;
             UpdateDestination(selected);
             _ready = true;
-
+            StartStatusRefresh();
         };
-        Unloaded += (_, _) => { _ready = false;  };
-
+        _statusTimer.Tick += (_, _) =>
+        {
+            if (_statusCancellation is { } cancellation)
+                _ = RefreshServerStatusesAsync(_statusGeneration, cancellation.Token);
+        };
+        Unloaded += (_, _) =>
+        {
+            _ready = false;
+            StopStatusRefresh();
+        };
     }
+
     private void Server_Checked(object sender, RoutedEventArgs e)
     {
         if (!_ready || sender is not RadioButton { Tag: string id }) return;
@@ -48,7 +73,82 @@ public partial class ClubLaunchPanel : UserControl
         Config.System.ClubServer = server.Id;
         UpdateDestination(server);
     }
+
     private void UpdateDestination(ClubServer server) => DestinationHint.Text = server.Id == "none"
         ? "当前选择：只启动游戏，不自动入服。"
         : $"启动后前往 {server.Name}，实际版本 {(server.Id == "smp" ? "1.21.1" : "1.21.11")}。";
+
+    private void StartStatusRefresh()
+    {
+        StopStatusRefresh();
+        _statusCancellation = new CancellationTokenSource();
+        var generation = ++_statusGeneration;
+        _statusTimer.Start();
+        _ = RefreshServerStatusesAsync(generation, _statusCancellation.Token);
+    }
+
+    private void StopStatusRefresh()
+    {
+        _statusTimer.Stop();
+        ++_statusGeneration;
+        _statusCancellation?.Cancel();
+        _statusCancellation?.Dispose();
+        _statusCancellation = null;
+    }
+
+    private async Task RefreshServerStatusesAsync(int generation, CancellationToken cancellationToken)
+    {
+        if (!_ready || generation != _statusGeneration || _statusRefreshRunning)
+            return;
+        _statusRefreshRunning = true;
+        try
+        {
+            // The public proxy reports the same upstream population for every forced-host
+            // entry, so querying all three cards would count the same players repeatedly.
+            var server = ClubCatalog.FindServer("smp");
+            var status = await Task.Run(
+                () => _statusProbe.QueryAsync(server, cancellationToken), cancellationToken);
+            if (!_ready || generation != _statusGeneration || cancellationToken.IsCancellationRequested)
+                return;
+            UpdateClubStatus(status);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+        }
+        catch (Exception ex)
+        {
+            ModBase.Log(ex, "[Conduit] 社团服务器状态刷新失败", ModBase.LogLevel.Debug);
+        }
+        finally
+        {
+            if (generation == _statusGeneration)
+                _statusRefreshRunning = false;
+            else if (_ready && _statusCancellation is { } cancellation)
+            {
+                _statusRefreshRunning = false;
+                _ = RefreshServerStatusesAsync(_statusGeneration, cancellation.Token);
+            }
+            else
+                _statusRefreshRunning = false;
+        }
+    }
+
+    private void UpdateClubStatus(ClubServerStatus status)
+    {
+        if (!status.IsKnown)
+        {
+            ClubOnlineCount.Text = "未知";
+            ClubOnlineBadge.ToolTip = "社团代理入口未响应，在线人数未知。";
+            return;
+        }
+
+        ClubOnlineCount.Text = status.OnlinePlayers!.Value.ToString();
+        var sampleText = status.SampleNames.Count == 0
+            ? "服务器未提供玩家名单。"
+            : "服务器提供的玩家名单（可能不完整）：\n" + string.Join("、", status.SampleNames);
+        ClubOnlineBadge.ToolTip = $"按社团代理入口返回的人数：{status.OnlinePlayers}/{status.MaxPlayers}\n{sampleText}";
+    }
+
+    private void ShowHistory_Click(object sender, MouseButtonEventArgs e)
+        => ClubUpdates.ShowHistory();
 }

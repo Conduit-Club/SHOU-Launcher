@@ -20,6 +20,15 @@ public sealed record AuthenticationRequest
     public string? ClientId { get; init; }
     public bool ForceRefresh { get; init; }
     public bool ForceReselectProfile { get; init; }
+    /// <summary>Imports other roles from a new password login response.</summary>
+    public bool ImportAvailableProfiles { get; init; }
+    /// <summary>
+    /// The profile that should be selected when credentials are re-used for a
+    /// profile imported from the same login response.  A profile with no
+    /// access token must be re-authenticated for this UUID rather than
+    /// silently falling back to the server's first profile.
+    /// </summary>
+    public string? PreferredProfileId { get; init; }
     public Func<DeviceCodeAuthenticationContext, CancellationToken, Task<AuthorizeResult?>>? DeviceCodeHandler { get; init; }
     public Func<Exception, CancellationToken, Task<bool>>? RefreshFailureHandler { get; init; }
     public Func<IReadOnlyList<AuthenticationCandidate>, CancellationToken, Task<AuthenticationCandidate?>>? ProfileSelector { get; init; }
@@ -48,6 +57,13 @@ public sealed class AuthenticationResult
     public string? Provider { get; init; }
     public string? DiscoveryAddress { get; init; }
     public string? IdToken { get; init; }
+    /// <summary>
+    /// All profiles returned by a password authentication response.  Only the
+    /// selected profile receives the response token; the other entries are
+    /// imported as password-backed profiles by <see cref="PCL.Core.Minecraft.Profile.ProfileService"/>.
+    /// </summary>
+    public IReadOnlyList<AuthenticationCandidate> AvailableProfiles { get; init; } =
+        Array.Empty<AuthenticationCandidate>();
 }
 
 public interface IAuthenticateProvider

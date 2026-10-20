@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Input;
 using PCL.Core.App.Localization;
+using PCL.Core.Conduit;
 using PCL.Core.Minecraft.Profile;
 using PCL.Core.Minecraft.Profile.Models;
 
@@ -132,10 +133,22 @@ public partial class PageLoginProfileSkin
             ProfileUi.ChangeSkinMs();
         else if ((profile?.ProfileType is ProfileType.Authlib or ProfileType.YggdrasilConnect) &&
                  !string.IsNullOrWhiteSpace(profile.Server))
-            ModBase.OpenWebsite(profile.Server.BeforeFirst("api/yggdrasil/authserver") +
-                                "user/closet");
+            ModBase.OpenWebsite(GetSkinManagementUrl(profile));
         else
                 HintService.Hint(Lang.Text("Launch.Account.ProfileSkin.SkinUnsupported"));
+    }
+
+    /// <summary>
+    /// Returns the skin-management page for a third-party profile.
+    /// LittleSkin's Yggdrasil root is not its web root, so its known public
+    /// wardrobe page must be opened explicitly. Other providers retain the
+    /// original launcher convention.
+    /// </summary>
+    private static string GetSkinManagementUrl(McProfile profile)
+    {
+        if (ClubCatalog.IsProvider(profile.Server, ClubCatalog.LittleSkinAuth))
+            return "https://littleskin.cn/user/closet";
+        return profile.Server!.BeforeFirst("api/yggdrasil/authserver") + "user/closet";
     }
 
     // 保存皮肤
@@ -158,8 +171,7 @@ public partial class PageLoginProfileSkin
             Skin.BtnSkinCape_Click(sender, e);
         else if ((profile?.ProfileType is ProfileType.Authlib or ProfileType.YggdrasilConnect) &&
                  !string.IsNullOrWhiteSpace(profile.Server))
-            ModBase.OpenWebsite(profile.Server.BeforeFirst("api/yggdrasil/authserver") +
-                                "user/closet");
+            ModBase.OpenWebsite(GetSkinManagementUrl(profile));
         else
             HintService.Hint(Lang.Text("Launch.Account.ProfileSkin.CapeUnsupported"));
     }

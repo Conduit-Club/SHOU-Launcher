@@ -33,8 +33,29 @@ internal static class Program
         };
         MainWindowService.Loading = static () =>
         {
-            var form = new FormMain();
-            return form;
+            try
+            {
+                return new FormMain();
+            }
+            catch (Exception ex)
+            {
+                // If XAML construction fails, the lifecycle service catches the exception and
+                // would otherwise leave the startup splash visible while continuing without a window.
+                try
+                {
+                    var splash = ModMain.frmStart;
+                    ModMain.frmStart = null;
+                    splash?.Close(TimeSpan.Zero);
+                }
+                catch (Exception closeException)
+                {
+                    ModBase.Log(closeException, "[Start] 关闭启动画面失败", ModBase.LogLevel.Debug);
+                }
+
+                ModBase.Log(ex, "[Start] 主窗体创建失败，启动已终止", ModBase.LogLevel.Debug);
+                Lifecycle.ForceShutdown((int)ModBase.ProcessReturnValues.Exception);
+                throw;
+            }
         };
         // From dotnet/wpf #2393: fix tablet devices broken on .NET Core 3.0+
         _ = Tablet.TabletDevices;

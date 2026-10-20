@@ -14,6 +14,8 @@
 
 > **v1.0.0（zst）**：社团首发版本。Windows x64 自包含下载包与 SHA-256 校验文件见[社团 Releases](https://github.com/Conduit-Club/PCL-CE-SHOU/releases)，功能边界与验证说明见[首发说明](docs/conduit/RELEASE-v1.0.0.md)。
 
+> **当前版本目标：v1.1.0（sxj）**：候选功能与验证范围见[发行说明](docs/conduit/RELEASE-v1.1.0.md)。已发布包请以[社团 Releases](https://github.com/Conduit-Club/PCL-CE-SHOU/releases)页面显示的版本为准；v1.0.0 首发说明仍保留供历史参考。
+
 ## 五湖四海之士，汇于东海之滨
 
 潮涌核心社希望把校园、记忆与新的创作汇聚在同一片 Minecraft 空间。社团服务器包含长期建设的 **SMP 多人生存服**、用于地皮与大型作品制作的 **Create 创造建筑服**，以及承载校园还原作品的 **SHOU 建筑展示服**。启动器的首页、服务器入口和更新提醒都围绕这套真实运行的社团网络设计。
@@ -41,15 +43,15 @@
 
 | 账户来源 | 说明 |
 | --- | --- |
-| Microsoft | 原版 Microsoft 账户。账户页首次先显示此入口，但社团应用审核尚未完成，当前明确提示未开通并阻止授权。 |
+| Microsoft | 原版 Microsoft 账户。社团应用审核已获准，当前构建已启用此入口；实际授权与 Minecraft 服务联调仍需使用测试账户确认。 |
 | MUA Union | MUA Union 第三方账户。首次使用时在 MUA 皮肤站注册并验证邮箱；随后在启动器选择 MUA Union，填写该皮肤站的邮箱和密码。旧 Union 地址档案若无法登录，请移除后通过 MUA 入口重新添加。Union 聚合地址用于服务器端认证配置，不是启动器账号登录 API，也无需填入 Minecraft 服务器地址栏。 |
 | LittleSkin | LittleSkin 第三方账户。启动器支持按登录页提供的密码登录路线操作，不需要额外的 app ID；若使用 OAuth 设备授权，则需要符合 LittleSkin 的应用 ID 与白名单要求。 |
 
-> **验证边界**：LittleSkin 与 MUA 的皮肤站邮箱密码登录路线已由用户实际确认可用；Microsoft 授权仍因社团 API 审核未完成而禁用，令牌刷新、角色切换与 Minecraft 端联机不在本次密码登录确认范围内。遇到登录问题时，请先查看[社团服务器认证说明](https://conduit-club.github.io/servers/velocity/)。
+> **验证边界**：LittleSkin 与 MUA 的皮肤站邮箱密码登录路线已由用户实际确认可用；Microsoft 应用审核已获准，但实际授权、令牌刷新、角色切换与 Minecraft 端联机仍需使用测试账户确认。遇到登录问题时，请先查看[社团服务器认证说明](https://conduit-club.github.io/servers/velocity/)。
 
 ## 三步开始游玩
 
-1. **获取启动器**：从[社团 Releases](https://github.com/Conduit-Club/PCL-CE-SHOU/releases)下载 v1.0.0 Windows x64 自包含包，并使用旁侧的 SHA-256 文件校验完整性。
+1. **获取启动器**：从[社团 Releases](https://github.com/Conduit-Club/PCL-CE-SHOU/releases)下载页面显示的最新 Windows x64 自包含包，并使用旁侧的 SHA-256 文件校验完整性。
 2. **添加账户**：在启动器中添加并选择 Microsoft、MUA Union 或 LittleSkin 账户；MUA Union 用户先在皮肤站注册并验证邮箱，再填写皮肤站邮箱和密码。
 3. **准备实例并选择服务器**：先下载或选择一个游戏实例（推荐 **1.21.1**），再在主页选择 SMP、Create 或 SHOU 后启动游戏；若只想进入游戏再手动选服，可选择“只启动游戏”，进入代理后使用 `/server smp`、`/server create` 或 `/server shou`。
 
@@ -72,7 +74,7 @@
 
 ## 下载与开发
 
-v1.0.0 是 Conduit-Club 基于 PCL-CE 的独立第三方发行版；请从[社团 Releases](https://github.com/Conduit-Club/PCL-CE-SHOU/releases)获取正式包，不要把上游 PCL-CE 的版本号、下载统计或发行包当作潮涌核心社版本。
+当前版本目标为 v1.1.0（sxj）。Conduit-Club 基于 PCL-CE 维护独立第三方发行版；正式包与历史 v1.0.0 包均请从[社团 Releases](https://github.com/Conduit-Club/PCL-CE-SHOU/releases)获取，不要把上游 PCL-CE 的版本号、下载统计或发行包当作潮涌核心社版本。
 
 社团发行目标为 **Windows x64 自包含程序**，运行时无需另外安装 .NET Runtime，但启动 Minecraft 仍需要可用的 Java 运行时。若要从源码构建，请先阅读[社团构建说明](docs/conduit/BUILD.md)；构建使用 **.NET 10 SDK**，入口为 [`scripts/conduit/Publish.ps1`](scripts/conduit/Publish.ps1)。
 

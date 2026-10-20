@@ -18,9 +18,9 @@
             x:Name="PanMain"
             Margin="25,10"
             Grid.IsSharedSizeScope="True">
-            <local:MyCard Margin="0,15,0,15" Title="关于潮涌核心社">
+            <local:MyCard Margin="0,15,0,15" Title="{DynamicResource Conduit.Brand.AboutTitle}">
                 <StackPanel Margin="24,42,24,22">
-                    <TextBlock Text="Plain Craft Launcher 潮涌核心社版" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap" />
+                    <TextBlock Text="{DynamicResource Conduit.Brand.AboutDescription}" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap" />
                     <TextBlock Text="Conduit Club · 上海海洋大学 Minecraft 社团" Margin="0,10,0,6" TextWrapping="Wrap" />
                     <TextBlock Text="基于 PCL-CE 独立开发的第三方社团启动器。开发：Moeary 与 Codex。" TextWrapping="Wrap" />
                     <TextBlock x:Name="ClubReleaseIdentity" Margin="0,8,0,0" Opacity="0.72" TextWrapping="Wrap" />

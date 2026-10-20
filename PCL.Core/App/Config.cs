@@ -1,4 +1,5 @@
 using PCL.Core.App.Configuration;
+using PCL.Core.Conduit;
 
 namespace PCL.Core.App;
 
@@ -15,6 +16,10 @@ public static partial class Config
     {
         [ConfigItem<string>("ConduitServer", "none")] public partial string ClubServer { get; set; }
         [ConfigItem<string>("ConduitMicrosoftClientId", "")] public partial string ClubMicrosoftClientId { get; set; }
+        /// <summary>
+        /// Whether the one-time migration of the old game version type has run.
+        /// </summary>
+        [ConfigItem<bool>("ConduitBrandDefaultsMigrated", false, ConfigSource.Local)] public partial bool ClubBrandDefaultsMigrated { get; set; }
         // /// <summary>
         // /// 系统缓存目录。
         // /// </summary>
@@ -573,7 +578,7 @@ public static partial class Config
         /// <summary>
         /// 自定义左下角版本信息。
         /// </summary>
-        [ConfigItem<string>("LaunchArgumentInfo", "PCLCE", ConfigSource.Local)] public partial string TypeInfo { get; set; }
+        [ConfigItem<string>("LaunchArgumentInfo", ClubCatalog.GameTypeInfo, ConfigSource.Local)] public partial string TypeInfo { get; set; }
 
         /// <summary>
         /// 选择的默认 Java 实例。

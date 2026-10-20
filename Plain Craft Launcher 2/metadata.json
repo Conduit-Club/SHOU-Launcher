@@ -1,10 +1,10 @@
 {
   "name": "Plain Craft Launcher 潮涌核心社版",
   "version": {
-    "base": "1.0.0",
+    "base": "1.1.0",
     "upstream": "2.12.1",
     "suffix": "",
-    "code": 524
+    "code": 525
   },
   "licenses": [
     {

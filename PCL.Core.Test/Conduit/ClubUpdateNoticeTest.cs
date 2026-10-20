@@ -68,4 +68,46 @@ public sealed class ClubUpdateNoticeTest
         Assert.IsFalse(ClubUpdateNoticeParser.ShouldNotify(notice, new DateOnly(2026, 10, 1)));
         Assert.IsTrue(ClubUpdateNoticeParser.ShouldNotify(notice, new DateOnly(2026, 9, 27)));
     }
+
+    [TestMethod]
+    public void ParsesDetailArticleAsSafePlainText()
+    {
+        var notice = new ClubUpdateNotice(
+            new DateOnly(2026, 10, 2),
+            "域名、资源与 SMP",
+            new Uri("https://conduit-club.github.io/updates/2026-10-02/"));
+        const string html = """
+            <article>
+              <nav>不要把面包屑放进正文</nav>
+              <div class="tocCollapsible_ETCw">页面总览</div>
+              <div class="theme-doc-markdown markdown">
+                <header><h1>2026.10.02 · 域名、资源与 SMP 更新</h1></header>
+                <p>服务器入口已更新。</p>
+                <h2>连接地址</h2>
+                <ul><li><code>smp.shoumc.com</code></li><li>create.shoumc.com</li></ul>
+                <script>alert('不要执行');</script>
+              </div>
+            </article>
+            """;
+
+        var parsed = ClubUpdateNoticeParser.ParseArticle(html, notice);
+
+        Assert.IsNotNull(parsed);
+        StringAssert.Contains(parsed!.Body, "服务器入口已更新。");
+        StringAssert.Contains(parsed.Body, "• smp.shoumc.com");
+        StringAssert.Contains(parsed.Body, "• create.shoumc.com");
+        Assert.IsFalse(parsed.Body.Contains("面包屑", StringComparison.Ordinal));
+        Assert.IsFalse(parsed.Body.Contains("alert", StringComparison.Ordinal));
+    }
+
+    [TestMethod]
+    public void DetailWithoutArticleBodyIsIgnored()
+    {
+        var notice = new ClubUpdateNotice(
+            new DateOnly(2026, 10, 2),
+            "标题",
+            new Uri("https://conduit-club.github.io/updates/2026-10-02/"));
+
+        Assert.IsNull(ClubUpdateNoticeParser.ParseArticle("<main><p>不是文章正文</p></main>", notice));
+    }
 }

@@ -150,9 +150,10 @@ public static class ModLaunch
         #endif
 
         // 正版购买提示
-        if (!ProfileService.HasMicrosoftProfile)
+        if (!ProfileService.HasMicrosoftProfile &&
+            selectedProfile?.ProfileType is not (ProfileType.Authlib or ProfileType.YggdrasilConnect))
         {
-            if (Lang.IsFeaturesUnrestricted || selectedProfile?.ProfileType is ProfileType.Authlib or ProfileType.YggdrasilConnect)
+            if (Lang.IsFeaturesUnrestricted)
             {
                 if (ModMain.MyMsgBox(
                         Lang.Text("Minecraft.Launch.PurchaseHint.Message"),
@@ -514,6 +515,11 @@ public static class ModLaunch
         public bool IsExist = false;
 
         /// <summary>
+        ///     是否将密码登录响应中的其他角色导入账户列表。
+        /// </summary>
+        public bool ImportAvailableProfiles = false;
+
+        /// <summary>
         ///     登录密码。
         /// </summary>
         public string Password;
@@ -765,6 +771,11 @@ public static class ModLaunch
             Password = input.Password,
             ForceRefresh = data.isForceRestarting,
             ForceReselectProfile = input.ForceReselectProfile,
+            ImportAvailableProfiles = input.ImportAvailableProfiles,
+            // Imported multi-profile entries deliberately have no token. On
+            // their first launch, re-authenticate for this exact UUID rather
+            // than accepting the server's default profile.
+            PreferredProfileId = input.ForceReselectProfile ? null : existing?.Uuid,
             DeviceCodeHandler = input.ProviderType == ProfileType.YggdrasilConnect
                 ? ProfileUi.ShowDeviceCodeLoginAsync
                 : null,

@@ -512,9 +512,9 @@ internal sealed class CrashResultFormatter
     {
         try
         {
-            return UpdateManager.GetVersionStatus() == UpdateEnums.VersionStatus.Latest
-                ? null
-                : Lang.Text("Crash.Suggestion.LauncherOutdated");
+            return UpdateManager.GetVersionStatus() == UpdateEnums.VersionStatus.NotLatest
+                ? Lang.Text("Crash.Suggestion.LauncherOutdated")
+                : null;
         }
         catch (Exception ex)
         {

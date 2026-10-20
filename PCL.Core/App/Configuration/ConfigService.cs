@@ -5,9 +5,11 @@ using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using PCL.Core.App;
 using PCL.Core.App.Configuration.Storage;
 using PCL.Core.App.Localization;
 using PCL.Core.App.IoC;
+using PCL.Core.Conduit;
 using PCL.Core.Logging;
 using PCL.Core.Utils.Exts;
 
@@ -285,6 +287,7 @@ public sealed partial class ConfigService
             {
                 item.TriggerEvent(ConfigEvent.Init, null, true, true);
             }
+            _ApplyConduitBrandDefaults();
             IsInitialized = true;
         }
         catch (Exception ex)
@@ -319,6 +322,20 @@ public sealed partial class ConfigService
         timer.Stop();
         Context.Info($"Config initialization finished in {timer.ElapsedMilliseconds} ms");
 #endif
+    }
+
+    private static void _ApplyConduitBrandDefaults()
+    {
+        if (Config.System.ClubBrandDefaultsMigrated) return;
+
+        var currentTypeInfo = Config.Launch.TypeInfo;
+        var migratedTypeInfo = ClubCatalog.MigrateLegacyGameTypeInfo(currentTypeInfo);
+        if (!string.Equals(currentTypeInfo, migratedTypeInfo, StringComparison.Ordinal))
+            Config.Launch.TypeInfo = migratedTypeInfo;
+
+        // Mark even when the old value was empty or user-defined so future
+        // launcher updates cannot overwrite that intentional choice.
+        Config.System.ClubBrandDefaultsMigrated = true;
     }
 
     [LifecycleStop]

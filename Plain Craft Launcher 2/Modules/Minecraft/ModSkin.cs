@@ -1,11 +1,10 @@
 ﻿using System;
 using System.Globalization;
 using System.IO;
-using System.Text;
-using System.Text.Json.Nodes;
 using Microsoft.VisualBasic;
 using PCL.Core.App.Localization;
 using PCL.Core.Minecraft.Profile;
+using PCL.Core.Minecraft.Skin;
 using PCL.Core.UI;
 using PCL.Core.Utils;
 using PCL.Network;
@@ -14,6 +13,16 @@ namespace PCL;
 
 public static class ModSkin
 {
+    /// <summary>
+    ///     The profile response is valid, but it does not contain a custom skin.
+    /// </summary>
+    public sealed class NoCustomSkinException : Exception
+    {
+        public NoCustomSkinException() : base(Lang.Text("Minecraft.Skin.Error.NoCustomSkin"))
+        {
+        }
+    }
+
     public struct McSkinInfo
     {
         public bool IsSlim;
@@ -73,17 +82,27 @@ public static class ModSkin
     /// <summary>
     ///     获取 Uuid 对应的皮肤文件地址，失败将抛出异常。
     /// </summary>
-    public static string McSkinGetAddress(string uuid, string type)
+    public static string McSkinGetAddress(string uuid, string type, string authServer = null)
     {
-        if (string.IsNullOrEmpty(uuid))
+        var sessionProfileId = SkinProfileId.NormalizeForSession(uuid);
+        if (string.IsNullOrEmpty(sessionProfileId))
             throw new ArgumentException(Lang.Text("Minecraft.Skin.Error.UuidEmpty"), nameof(uuid));
 
-        if (uuid.StartsWith("00000"))
+        if (sessionProfileId.StartsWith("00000"))
             throw new InvalidOperationException(Lang.Text("Minecraft.Skin.Error.OfflineNoSkin"));
+
+        // Authlib 服务器是皮肤地址的一部分。调用方应传入任务开始时的服务器快照，
+        // 否则切换到另一个使用相同 UUID 的档案时，可能读到旧服务器的缓存。
+        var authServerBase = type == "Auth"
+            ? NormalizeAuthServer(authServer ?? ProfileService.Current?.Server)
+            : string.Empty;
+        var cacheKey = type == "Auth"
+            ? sessionProfileId + "_" + ModBase.GetHash(authServerBase).ToString("X16", CultureInfo.InvariantCulture)
+            : sessionProfileId;
 
         // 尝试读取缓存
         var cachePath = Path.Combine(ModBase.pathTemp, $"Cache\\Skin\\Index{type}.ini");
-        var cacheSkinAddress = ModBase.ReadIni(cachePath, uuid);
+        var cacheSkinAddress = ModBase.ReadIni(cachePath, cacheKey);
         if (!string.IsNullOrEmpty(cacheSkinAddress))
             return cacheSkinAddress;
 
@@ -92,29 +111,23 @@ public static class ModSkin
         {
             "Mojang" => "https://sessionserver.mojang.com/session/minecraft/profile/",
             "Ms" => "https://sessionserver.mojang.com/session/minecraft/profile/",
-            "Auth" => (ProfileService.Current?.Server ?? string.Empty).Replace("/authserver", "") +
-                      "/sessionserver/session/minecraft/profile/",
+            "Auth" => authServerBase + "/sessionserver/session/minecraft/profile/",
             _ => throw new ArgumentException(Lang.Text("Minecraft.Skin.Error.InvalidSkinType", type ?? "null"))
         };
 
-        var skinString = ModNet.NetGetCodeByRequestRetry(url + uuid);
+        var skinString = ModNet.NetGetCodeByRequestRetry(url + sessionProfileId);
         if (string.IsNullOrEmpty((string?)skinString))
             throw new InvalidDataException(Lang.Text("Minecraft.Skin.Error.SkinReturnEmpty"));
 
         // 解析皮肤 Property
-        string skinValue = null;
+        string? skinUrl;
         try
         {
-            var json = (JsonObject)ModBase.GetJson((string)skinString);
-            foreach (var property in json["properties"].AsArray())
-                if (property["name"]?.ToString() == "textures")
-                {
-                    skinValue = property["value"]?.ToString();
-                    break;
-                }
-
-            if (skinValue is null)
-                throw new InvalidDataException(Lang.Text("Minecraft.Skin.Error.PropertyNotFound"));
+            skinUrl = SkinResponseParser.TryGetSkinUrl((string)skinString);
+        }
+        catch (FormatException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -124,21 +137,27 @@ public static class ModSkin
             throw new InvalidDataException(Lang.Text("Minecraft.Skin.Error.NoSkinData"), ex);
         }
 
-        // 解码 Base64 并解析 JSON
-        var decoded = Encoding.UTF8.GetString(Convert.FromBase64String(skinValue));
-        var skinJson = (JsonObject)ModBase.GetJson(decoded.ToLowerInvariant());
+        if (skinUrl is null)
+            throw new NoCustomSkinException();
 
-        if (skinJson["textures"]?["skin"]?["url"] is null)
-            throw new InvalidDataException(Lang.Text("Minecraft.Skin.Error.NoCustomSkin"));
-
-        var skinUrl = skinJson["textures"]["skin"]["url"].ToString();
-        skinUrl = skinUrl.Contains("minecraft.net/") ? skinUrl.Replace("http://", "https://") : skinUrl;
+        if (skinUrl.Contains("minecraft.net/", StringComparison.OrdinalIgnoreCase) &&
+            skinUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase))
+            skinUrl = "https://" + skinUrl["http://".Length..];
 
         // 保存缓存
-        ModBase.WriteIni(cachePath, uuid, skinUrl);
-        ModBase.Log($"[Skin] UUID {uuid} 对应的皮肤文件为 {skinUrl}");
+        ModBase.WriteIni(cachePath, cacheKey, skinUrl);
+        ModBase.Log($"[Skin] UUID {sessionProfileId} 对应的皮肤文件为 {skinUrl}");
 
         return skinUrl;
+    }
+
+    private static string NormalizeAuthServer(string server)
+    {
+        var value = (server ?? string.Empty).Trim().TrimEnd('/');
+        const string authServerSuffix = "/authserver";
+        return value.EndsWith(authServerSuffix, StringComparison.OrdinalIgnoreCase)
+            ? value[..^authServerSuffix.Length]
+            : value;
     }
 
     private static readonly object mcSkinDownloadLock = new();

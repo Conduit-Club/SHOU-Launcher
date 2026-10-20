@@ -17,6 +17,11 @@ namespace PCL.Core.Minecraft;
 
 public static class ServerAddressResolver
 {
+    /// <summary>
+    /// 保留原始主机名和 SRV 端口的入口地址。它不包含预解析的 IP。
+    /// </summary>
+    public readonly record struct HostPortAddress(string Host, int Port);
+
     public readonly record struct ResolvedServerAddress(string Host, string? Ip, int Port);
 
     // Minecraft Java 默认端口
@@ -33,6 +38,43 @@ public static class ServerAddressResolver
     // 纯端口（用于 host:port 末尾匹配）
     private static readonly Regex _TrailingPort =
         new(@":(?<port>\d{1,5})$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// 为需要保留原始入口主机名的状态探测解析主机名和端口。
+    /// 此方法只从 SRV 记录取端口，不解析 SRV target、不做 IP 解析或 TCP 可达性预探测；
+    /// 它不适用于需要连接 SRV target 主机的通用 SRV 解析场景。
+    /// </summary>
+    public static async Task<HostPortAddress> GetOriginalHostPortAsync(
+        string address,
+        CancellationToken cancelToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(address))
+            throw new ArgumentException("服务器地址不能为空", nameof(address));
+
+        cancelToken.ThrowIfCancellationRequested();
+        address = _NormalizeInput(address);
+        var (hostOrIp, portOpt) = _ParseHostAndPort(address);
+        if (portOpt is { } explicitPort)
+        {
+            _ValidatePort(explicitPort);
+            return new HostPortAddress(hostOrIp, explicitPort);
+        }
+
+        if (IPAddress.TryParse(hostOrIp, out _))
+            return new HostPortAddress(hostOrIp, DefaultPort);
+
+        var idnHost = _ToAsciiIdn(hostOrIp);
+        var srvOrdered = await _QuerySrvOrderedAsync(idnHost, cancelToken).ConfigureAwait(false);
+        cancelToken.ThrowIfCancellationRequested();
+        if (srvOrdered.Count > 0)
+        {
+            var port = srvOrdered[0].Port;
+            _ValidatePort(port);
+            return new HostPortAddress(idnHost, port);
+        }
+
+        return new HostPortAddress(idnHost, DefaultPort);
+    }
 
     public static async Task<ResolvedServerAddress> GetResolvedServerAddressAsync(string address, CancellationToken cancelToken = default)
     {

@@ -41,6 +41,9 @@ public partial class PageLoginProfile
     public void RefreshProfileList()
     {
         ModBase.Log("[Profile] 刷新档案列表");
+        PanButtons.Visibility = ModMain.frmLaunchLeft?.IsShowingAllProfiles == true
+            ? Visibility.Collapsed
+            : Visibility.Visible;
         ProfileCollection.Clear();
         ProfileService.Load();
         try

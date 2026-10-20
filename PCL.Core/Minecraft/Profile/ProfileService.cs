@@ -179,7 +179,8 @@ public partial class ProfileService
             }
         }
 
-        if (canUseExisting && (!request.ForceReselectProfile || profileType != ProfileType.Authlib))
+        if (canUseExisting && !string.IsNullOrWhiteSpace(existing!.AccessToken) &&
+            (!request.ForceReselectProfile || profileType != ProfileType.Authlib))
         {
             try
             {
@@ -224,17 +225,29 @@ public partial class ProfileService
 
         if (result is null)
         {
-            var loginRequest = request with { RefreshToken = null, IdToken = existing?.IdToken ?? request.IdToken };
+            var loginRequest = request with
+            {
+                RefreshToken = null,
+                IdToken = existing?.IdToken ?? request.IdToken,
+                PreferredProfileId = request.PreferredProfileId ??
+                    (!request.ForceReselectProfile && profileType == ProfileType.Authlib
+                        ? existing?.Uuid
+                        : null)
+            };
             result = await provider.AuthenticateAsync(loginRequest, token).ConfigureAwait(false);
         }
 
         var matched = canUseExisting ? existing : _FindMatchingProfile(result);
-        return ApplyAuthenticationResult(result, matched, select);
+        token.ThrowIfCancellationRequested();
+        return ApplyAuthenticationResult(result, matched, select, token, request.ImportAvailableProfiles);
     }
 
-    public static McProfile ApplyAuthenticationResult(AuthenticationResult result, McProfile? existing = null, bool select = true)
+    public static McProfile ApplyAuthenticationResult(AuthenticationResult result, McProfile? existing = null,
+        bool select = true, CancellationToken cancellationToken = default, bool importAvailableProfiles = false)
     {
         ArgumentNullException.ThrowIfNull(result);
+        _EnsureLoaded();
+        cancellationToken.ThrowIfCancellationRequested();
         var profile = existing?.Clone() ?? new McProfile { ProfileId = Guid.NewGuid().ToString("N") };
         profile.ProfileType = result.ProfileType;
         profile.UserName = result.UserName;
@@ -252,12 +265,23 @@ public partial class ProfileService
         profile.Provider = result.Provider ?? profile.Provider;
         profile.DiscoveryAddress = result.DiscoveryAddress ?? profile.DiscoveryAddress;
         profile.IdToken = result.IdToken ?? profile.IdToken;
-        if (existing is null) Add(profile, select);
+
+        // Prepare every candidate before the first profile write. Once the
+        // commit starts no further cancellation checks can leave a partial
+        // candidate import behind.
+        var plan = importAvailableProfiles
+            ? PlanAuthenticationCandidates(result, profile, Profiles, importAvailableProfiles, cancellationToken)
+            : new AuthenticationCandidateImportPlan([], []);
+        cancellationToken.ThrowIfCancellationRequested();
+        if (existing is null) _profiles.Add(profile, select);
         else
         {
-            Update(existing, profile);
-            if (select) Select(profile);
+            _profiles.Update(existing, profile);
+            if (select) _profiles.Select(profile);
         }
+        foreach (var (origin, current) in plan.Updates) _profiles.Update(origin, current);
+        foreach (var addition in plan.Additions) _profiles.Add(addition, select: false);
+        Save();
         return profile;
     }
 
@@ -289,11 +313,120 @@ public partial class ProfileService
     }
 
     private static McProfile? _FindMatchingProfile(AuthenticationResult result)
-        => Profiles.FirstOrDefault(profile =>
-            profile.ProfileType == result.ProfileType &&
-            string.Equals(profile.Uuid, result.Uuid, StringComparison.Ordinal) &&
-            (result.ProfileType == ProfileType.Microsoft ||
-             string.Equals(profile.Server, result.Server, StringComparison.OrdinalIgnoreCase)));
+        => _FindMatchingProfile(result.ProfileType, result.Uuid, result.Server);
+
+    private static McProfile? _FindMatchingProfile(ProfileType profileType, string? uuid, string? server)
+    {
+        var profileId = _NormalizeProfileId(uuid);
+        if (string.IsNullOrEmpty(profileId)) return null;
+        var serverId = _NormalizeServerIdentity(server);
+        return Profiles.FirstOrDefault(profile =>
+            profile.ProfileType == profileType &&
+            _NormalizeProfileId(profile.Uuid) == profileId &&
+            (profileType == ProfileType.Microsoft ||
+             _NormalizeServerIdentity(profile.Server) == serverId));
+    }
+
+    internal sealed record AuthenticationCandidateImportPlan(
+        IReadOnlyList<(McProfile Origin, McProfile Current)> Updates,
+        IReadOnlyList<McProfile> Additions);
+
+    /// <summary>
+    /// Builds the complete candidate change set before it is persisted. This
+    /// keeps cancellation and duplicate handling testable without touching
+    /// the encrypted profile store.
+    /// </summary>
+    internal static AuthenticationCandidateImportPlan PlanAuthenticationCandidates(
+        AuthenticationResult result, McProfile selected, IReadOnlyList<McProfile> existingProfiles,
+        bool importAvailableProfiles, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(result);
+        ArgumentNullException.ThrowIfNull(selected);
+        ArgumentNullException.ThrowIfNull(existingProfiles);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        // Only password authentication can safely seed another profile. A
+        // refresh or OAuth result without credentials must never create a
+        // profile that appears launchable but has no way to re-authenticate.
+        if (!importAvailableProfiles || result.ProfileType != ProfileType.Authlib ||
+            result.AvailableProfiles.Count == 0 ||
+            string.IsNullOrWhiteSpace(result.Server) || string.IsNullOrWhiteSpace(result.LoginName) ||
+            string.IsNullOrWhiteSpace(result.Password))
+            return new([], []);
+
+        var selectedId = _NormalizeProfileId(selected.Uuid);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var updates = new List<(McProfile Origin, McProfile Current)>();
+        var additions = new List<McProfile>();
+        foreach (var candidate in result.AvailableProfiles)
+        {
+            var candidateId = _NormalizeProfileId(candidate.Id);
+            if (string.IsNullOrEmpty(candidateId) || candidateId == selectedId || !seen.Add(candidateId)) continue;
+
+            var existing = existingProfiles.FirstOrDefault(profile =>
+                profile.ProfileType == ProfileType.Authlib &&
+                _NormalizeProfileId(profile.Uuid) == candidateId &&
+                _NormalizeServerIdentity(profile.Server) == _NormalizeServerIdentity(result.Server));
+            if (existing is not null)
+            {
+                // Keep any token already earned by this profile. Its password
+                // remains the independent fallback if that token expires.
+                var updated = existing.Clone();
+                updated.UserName = candidate.Name;
+                updated.Uuid = candidate.Id;
+                updated.Server = result.Server;
+                updated.ServerName = result.ServerName ?? updated.ServerName;
+                updated.LoginName = result.LoginName;
+                updated.Password = result.Password;
+                updated.Provider = result.Provider ?? updated.Provider;
+                updates.Add((existing, updated));
+                continue;
+            }
+
+            additions.Add(new McProfile
+            {
+                ProfileId = Guid.NewGuid().ToString("N"),
+                ProfileType = ProfileType.Authlib,
+                UserName = candidate.Name,
+                Uuid = candidate.Id,
+                AccessToken = string.Empty,
+                RefreshToken = string.Empty,
+                ClientToken = string.Empty,
+                TokenType = result.TokenType,
+                Server = result.Server,
+                ServerName = result.ServerName,
+                LoginName = result.LoginName,
+                Password = result.Password,
+                Provider = result.Provider
+            });
+        }
+
+        // A cancellation that arrives here leaves the profile list untouched.
+        cancellationToken.ThrowIfCancellationRequested();
+        return new(updates, additions);
+    }
+
+    private static string _NormalizeProfileId(string? id)
+    {
+        if (string.IsNullOrWhiteSpace(id)) return string.Empty;
+        if (Guid.TryParse(id.Trim(), out var guid)) return guid.ToString("N");
+        return id.Trim().ToUpperInvariant();
+    }
+
+    private static string _NormalizeServerIdentity(string? server)
+    {
+        if (string.IsNullOrWhiteSpace(server)) return string.Empty;
+        var value = server.Trim().TrimEnd('/');
+        if (Uri.TryCreate(value, UriKind.Absolute, out var uri))
+        {
+            var path = uri.AbsolutePath.TrimEnd('/');
+            if (path.EndsWith("/authserver", StringComparison.OrdinalIgnoreCase))
+                path = path[..^"/authserver".Length].TrimEnd('/');
+            var port = uri.IsDefaultPort ? string.Empty : $":{uri.Port}";
+            return $"{uri.Scheme.ToLowerInvariant()}://{uri.Host.ToLowerInvariant()}{port}{path}".TrimEnd('/');
+        }
+        return value;
+    }
 
     private static void _EnsureLoaded()
     {
