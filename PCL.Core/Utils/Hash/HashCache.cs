@@ -7,13 +7,16 @@ using System.Threading.Tasks;
 
 namespace PCL.Core.Utils.Hash;
 
-public class HashCache
+public class HashCache : IDisposable
 {
     private readonly string _dbPath;
+    private readonly string _connectionString;
+    private bool _disposed;
 
     public HashCache(string dbPath)
     {
         _dbPath = dbPath ?? throw new ArgumentNullException(nameof(dbPath));
+        _connectionString = $"Data Source={_dbPath};Pooling=True";
         var dir = Path.GetDirectoryName(Path.GetFullPath(_dbPath));
         if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
             Directory.CreateDirectory(dir);
@@ -45,7 +48,8 @@ public class HashCache
 
     private SqliteConnection _CreateConnection()
     {
-        var connection = new SqliteConnection($"Data Source={_dbPath};Pooling=True");
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        var connection = new SqliteConnection(_connectionString);
         connection.Open();
         return connection;
     }
@@ -227,5 +231,18 @@ public class HashCache
         public string? SHA256 { get; init; }
         public string? SHA512 { get; init; }
         public string? MurmurHash2 { get; init; }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        // A disposed pooled connection is otherwise retained by the process and
+        // keeps the SQLite database (and WAL sidecars) locked on Windows.
+        using var poolConnection = new SqliteConnection(_connectionString);
+        SqliteConnection.ClearPool(poolConnection);
     }
 }

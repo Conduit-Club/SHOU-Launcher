@@ -58,10 +58,18 @@ public class FolderPathValidator(bool useMinecraftCharCheck) : FileSystemValidat
         {
             return [];
         }
-        
-        var fullPath = new DirectoryInfo(path).FullName;
-        return fullPath[Path.GetPathRoot(fullPath)!.Length..]
-            .TrimEnd(Path.DirectorySeparatorChar)
-            .Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries);
+
+        // DirectoryInfo.FullName normalizes Windows device names such as CON and AUX
+        // (for example C:\CON\AUX becomes \\.\AUX), which would hide the segments that
+        // this validator is required to reject. Strip only the root from the original text
+        // and validate the user-provided segments before filesystem normalization.
+        var root = Path.GetPathRoot(path);
+        var rootLength = root?.Length ?? 0;
+        var pathWithoutRoot = rootLength <= path.Length ? path[rootLength..] : path;
+
+        return pathWithoutRoot
+            .Trim(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+            .Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar],
+                StringSplitOptions.RemoveEmptyEntries);
     }
 }

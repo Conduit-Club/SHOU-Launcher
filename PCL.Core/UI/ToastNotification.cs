@@ -18,7 +18,18 @@ public static class ToastNotification
     /// <param name="title">通知标题</param>
     public static void SendToast(string message, string title = "Notice")
     {
-        var xml = $"""
+        SendToastFromTemplate(BuildToastXml(message, title));
+    }
+
+    /// <summary>
+    /// 构造简单 Toast 通知的 XML 模板。
+    /// </summary>
+    /// <remarks>
+    /// 此方法不访问 Windows Toast/AUMID API，适合在启动器 UI 初始化前进行验证。
+    /// </remarks>
+    internal static string BuildToastXml(string message, string title = "Notice")
+    {
+        return $"""
                    <toast>
                        <visual>
                            <binding template="ToastGeneric">
@@ -28,8 +39,6 @@ public static class ToastNotification
                        </visual>
                    </toast>
                    """;
-
-        SendToastFromTemplate(xml);
     }
 
     /// <summary>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Threading;
@@ -27,7 +27,9 @@ public sealed class MicrosoftProvider : IAuthenticateProvider
 
     public MicrosoftProvider(string? clientId = null)
     {
-        _clientId = string.IsNullOrWhiteSpace(clientId) ? Secrets.MSOAuthClientId : clientId;
+        _clientId = !string.IsNullOrWhiteSpace(clientId) ? clientId
+            : !string.IsNullOrWhiteSpace(Config.System.ClubMicrosoftClientId) ? Config.System.ClubMicrosoftClientId
+            : Secrets.MSOAuthClientId;
         if (string.IsNullOrWhiteSpace(_clientId))
             throw new InvalidOperationException("Microsoft OAuth client id is not configured.");
     }

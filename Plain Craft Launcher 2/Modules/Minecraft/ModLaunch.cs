@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Net;
@@ -66,8 +66,16 @@ public static class ModLaunch
         {
             checkResult = Lang.Text("Minecraft.Launch.Precheck.NoProfile");
         }
-        else if (ModInstanceList.McMcInstanceSelected.Info.HasLabyMod ||
-                 Config.InstanceAuth.LoginRequirementSolution[ModInstanceList.McMcInstanceSelected?.PathInstance] == 1) // 要求正版验证
+        else if (ModInstanceList.McMcInstanceSelected.Info.HasLabyMod) // LabyMod 本身仍要求正版
+        {
+            if (selectedProfile.ProfileType != ProfileType.Microsoft) checkResult = Lang.Text("Minecraft.Launch.Precheck.RequireMicrosoft");
+        }
+        else if (currentLaunchOptions.UseClubAccount)
+        {
+            if (!PCL.Core.Conduit.ClubCatalog.CanJoin(selectedProfile))
+                checkResult = "请选择微软正版、MUA Union 或 LittleSkin 账户进入社团服务器。";
+        }
+        else if (Config.InstanceAuth.LoginRequirementSolution[ModInstanceList.McMcInstanceSelected?.PathInstance] == 1) // 要求正版验证
         {
             if (selectedProfile.ProfileType != ProfileType.Microsoft) checkResult = Lang.Text("Minecraft.Launch.Precheck.RequireMicrosoft");
         }
@@ -144,7 +152,7 @@ public static class ModLaunch
         // 正版购买提示
         if (!ProfileService.HasMicrosoftProfile)
         {
-            if (Lang.IsFeaturesUnrestricted)
+            if (Lang.IsFeaturesUnrestricted || selectedProfile?.ProfileType is ProfileType.Authlib or ProfileType.YggdrasilConnect)
             {
                 if (ModMain.MyMsgBox(
                         Lang.Text("Minecraft.Launch.PurchaseHint.Message"),
@@ -218,6 +226,9 @@ public static class ModLaunch
         ///     默认值：Nothing。使用实例设置的值。
         /// </summary>
         public string ServerIp = null;
+
+        /// <summary>社团入口使用已选账户的认证方式，不读取实例中遗留的认证锁定。</summary>
+        public bool UseClubAccount;
 
         /// <summary>
         ///     指定在启动之后进入的存档名称。
@@ -1428,9 +1439,8 @@ public static class ModLaunch
         var worldName = currentLaunchOptions.WorldName;
         if (worldName is not null) finalArguments += $" --quickPlaySingleplayer \"{worldName}\"";
         // 进服
-        var server = string.IsNullOrEmpty(currentLaunchOptions.ServerIp)
-            ? Config.Instance.ServerToEnter[ModInstanceList.McMcInstanceSelected?.PathInstance]
-            : currentLaunchOptions.ServerIp;
+        var server = PCL.Core.Conduit.ClubCatalog.ResolveLaunchServer(currentLaunchOptions.ServerIp,
+            Config.Instance.ServerToEnter[ModInstanceList.McMcInstanceSelected?.PathInstance]);
         if (string.IsNullOrWhiteSpace(worldName) && !string.IsNullOrWhiteSpace(server))
         {
             if (ModInstanceList.McMcInstanceSelected.releaseTime > new DateTime(2023, 4, 4))

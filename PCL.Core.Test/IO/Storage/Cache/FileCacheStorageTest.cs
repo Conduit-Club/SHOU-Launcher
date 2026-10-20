@@ -242,6 +242,43 @@ public class FileCacheStorageTest
     }
 
     [TestMethod]
+    public async Task StoreWithCompressionEnabled_ShouldRoundTripContent()
+    {
+        // Use a separate root because the same hash must not be read once as
+        // compressed and once as uncompressed data.
+        using var compressedCache = new FileCacheStorage(
+            Path.Combine(_testCachePath, "compressed"), enableCompression: true);
+        var content = new byte[128 * 1024];
+        for (var i = 0; i < content.Length; i++)
+            content[i] = (byte)(i % 17);
+
+        var hash = await compressedCache.StoreAsync(new MemoryStream(content));
+        using var retrieved = compressedCache.Retrieve(hash);
+        Assert.IsNotNull(retrieved);
+
+        using var ms = new MemoryStream();
+        await retrieved.CopyToAsync(ms);
+
+        CollectionAssert.AreEqual(content, ms.ToArray());
+    }
+
+    [TestMethod]
+    public async Task StoreNonSeekableStream_ShouldRoundTripContent()
+    {
+        var content = "Content from a non-seekable source"u8.ToArray();
+        using var source = new NonSeekableReadStream(content);
+
+        var hash = await _fileCache.StoreAsync(source);
+        using var retrieved = _fileCache.Retrieve(hash);
+        Assert.IsNotNull(retrieved);
+
+        using var ms = new MemoryStream();
+        await retrieved.CopyToAsync(ms);
+
+        CollectionAssert.AreEqual(content, ms.ToArray());
+    }
+
+    [TestMethod]
     public async Task StoreWithKnownHash_ShouldUseProvidedHash()
     {
         // Arrange
@@ -397,6 +434,11 @@ public class FileCacheStorageTest
         var directory = Path.GetDirectoryName(filePath);
         var directoryName = new DirectoryInfo(directory!).Name;
         Assert.AreEqual(hash[..2], directoryName, "File should be in [hash:2] subdirectory");
+    }
+
+    private sealed class NonSeekableReadStream(byte[] buffer) : MemoryStream(buffer)
+    {
+        public override bool CanSeek => false;
     }
 
     #endregion

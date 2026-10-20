@@ -184,7 +184,7 @@ public static class ProfileUi
 #if DEBUG || DEBUGCI
         return true;
 #else
-        return ProfileService.HasMicrosoftProfile || (Lang.IsFeaturesUnrestricted && ProfileService.Profiles.Count > 0) || NetworkHelper.IsNetworkAvailable() is false;
+        return true; // 社团 MultiLogin 支持独立的第三方认证账户。
 #endif
     }
 
@@ -380,13 +380,7 @@ public static class ProfileUi
 
     public static string GetProfileInfo(McProfile profile)
     {
-        var info = profile.ProfileType switch
-        {
-            ProfileType.Authlib => Lang.Text("Launch.Account.Type.ThirdParty") + (string.IsNullOrWhiteSpace(profile.ServerName) ? "" : $" / {profile.ServerName}"),
-            ProfileType.YggdrasilConnect => Lang.Text("Launch.Account.Type.ThirdParty") + (string.IsNullOrWhiteSpace(profile.ServerName) ? " / Yggdrasil Connect" : $" / {profile.ServerName}"),
-            ProfileType.Microsoft => Lang.Text("Launch.Account.Type.Microsoft"),
-            _ => Lang.Text("Launch.Account.Type.Offline")
-        };
+        var info = PCL.Core.Conduit.ClubCatalog.AccountSource(profile);
         return string.IsNullOrWhiteSpace(profile.Description) ? info : $"{info}，{profile.Description}";
     }
 

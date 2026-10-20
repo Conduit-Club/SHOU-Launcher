@@ -1,4 +1,4 @@
-﻿using System.Collections;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -3560,29 +3560,11 @@ public static class ModBase
                                  Lang.Text("Common.Action.OpenFolder"),
                                  Lang.Text("Setup.Feedback.Reminder.NotNeeded")) ==
                              1)) OpenExplorer(exePath + @"PCL\Log\");
-        OpenWebsite("https://github.com/PCL-Community/PCL2-CE/issues/");
+        OpenWebsite(PCL.Core.Conduit.ClubCatalog.Repository + "/issues/");
     }
 
-    public static bool CanFeedback(bool showHint)
-    {
-        var stat = UpdateManager.GetVersionStatus();
-        if (stat == UpdateEnums.VersionStatus.Latest) return true;
-
-        if (!showHint) return false;
-
-        if (ModMain.MyMsgBox(
-                stat == UpdateEnums.VersionStatus.NotLatest
-                    ? Lang.Text("Setup.Feedback.Unavailable.NotLatest.Message")
-                    : Lang.Text("Setup.Feedback.Unavailable.CheckFailed.Message"),
-                Lang.Text("Setup.Feedback.Unavailable.Title"),
-                stat == UpdateEnums.VersionStatus.NotLatest
-                    ? Lang.Text("Setup.Feedback.Unavailable.NotLatest.Action")
-                    : Lang.Text("Setup.Feedback.Unavailable.CheckFailed.Action"),
-                Lang.Text("Common.Action.Cancel")) == 1)
-            ModMain.frmMain.PageChange(FormMain.PageType.Setup, FormMain.PageSubType.SetupUpdate);
-
-        return false;
-    }
+    // 社团反馈不依赖 CE 自动更新检查；离线检查失败也不应阻止反馈。
+    public static bool CanFeedback(bool showHint) => true;
 
     /// <summary>
     ///     在日志中输出系统诊断信息。

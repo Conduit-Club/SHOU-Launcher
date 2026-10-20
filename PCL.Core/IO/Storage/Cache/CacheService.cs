@@ -48,7 +48,7 @@ public class CacheService : ICacheService, IAsyncDisposable
             FileCacheRoot = Path.Combine(Paths.Temp, "Cache", "files")
         };
 
-        _schemaManager = new SchemaManager($"Data Source={_options.DatabasePath}");
+        _schemaManager = new SchemaManager($"Data Source={_options.DatabasePath};Pooling=True");
         _db = new SqliteCacheStorage(_options.DatabasePath);
         _files = new FileCacheStorage(_options.FileCacheRoot, _options.EnableCompression);
         _eviction = new CacheEvictionService(_db, _files, _options);
@@ -61,7 +61,7 @@ public class CacheService : ICacheService, IAsyncDisposable
     public CacheService(CacheOptions options)
     {
         _options = options;
-        _schemaManager = new SchemaManager($"Data Source={_options.DatabasePath}");
+        _schemaManager = new SchemaManager($"Data Source={_options.DatabasePath};Pooling=True");
         _db = new SqliteCacheStorage(_options.DatabasePath);
         _files = new FileCacheStorage(_options.FileCacheRoot, _options.EnableCompression);
         _eviction = new CacheEvictionService(_db, _files, _options);
@@ -318,7 +318,7 @@ public class CacheService : ICacheService, IAsyncDisposable
         }
 
         // 清空所有表
-        await using var conn = new SqliteConnection($"Data Source={_options.DatabasePath}");
+        await using var conn = new SqliteConnection($"Data Source={_options.DatabasePath};Pooling=True");
         await conn.OpenAsync().ConfigureAwait(false);
         await using var cmd = conn.CreateCommand();
         cmd.CommandText = """
@@ -432,11 +432,11 @@ public class CacheService : ICacheService, IAsyncDisposable
 
         _disposed = true;
 
-        _eviction.Stop();
+        await _eviction.StopAsync().ConfigureAwait(false);
 
         try
         {
-            await using var conn = new SqliteConnection($"Data Source={_options.DatabasePath}");
+            await using var conn = new SqliteConnection($"Data Source={_options.DatabasePath};Pooling=True");
             await conn.OpenAsync().ConfigureAwait(false);
 
             await using var cmd = conn.CreateCommand();

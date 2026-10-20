@@ -1,5 +1,8 @@
-﻿using System.Windows;
+using System.IO;
+using System.Net.Http;
+using System.Windows;
 using System.Windows.Controls;
+using PCL.Core.Minecraft.IdentityModel;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
 using PCL.Core.IO.Net.Http;
@@ -24,6 +27,7 @@ public partial class PageLoginAuth
 
     internal static readonly IReadOnlyDictionary<string, string> PredefinedAuthServers = new Dictionary<string, string>
     {
+        { "MUA Union", PCL.Core.Conduit.ClubCatalog.MuaAuth },
         { Lang.Text("Launch.Account.Auth.Preset.LittleSkin"), DefaultAuthServer },
         { Lang.Text("Common.Option.Customize"), "" }
     };
@@ -33,7 +37,20 @@ public partial class PageLoginAuth
     private bool? _oauthSupported;
     private bool _hasRegisterLink;
     private bool _loginModeInitialized;
+    private int _authServerGeneration;
     private string _authServerUrl = "";
+    public bool IsAuthenticating { get; private set; }
+
+    public void ClearEditing()
+    {
+        if (IsAuthenticating) return;
+        _authServerUrl = "";
+        _authServerGeneration++;
+        draggedAuthServer = null;
+        draggedAuthServerOAuthSupported = null;
+        TextName.Text = "";
+        TextPass.Password = "";
+    }
 
     public PageLoginAuth()
     {
@@ -52,26 +69,37 @@ public partial class PageLoginAuth
         BtnLink.Click += Btn_Click;
     }
 
-    private void Reload()
+    public void Reload()
     {
+        // Loaded can follow an explicit refresh. Do not consume the pending server twice.
+        if (draggedAuthServer is null || IsAuthenticating) return;
+        if (!string.Equals(_authServerUrl, draggedAuthServer, StringComparison.OrdinalIgnoreCase))
+        {
+            TextName.Text = "";
+            TextPass.Password = "";
+        }
         _authServerUrl = draggedAuthServer ?? "";
+        var generation = ++_authServerGeneration;
         var knownOAuthSupport = draggedAuthServerOAuthSupported;
         draggedAuthServer = null;
         draggedAuthServerOAuthSupported = null;
         _oauthSupported = knownOAuthSupport;
         _UpdateOAuthEntryVisibility();
-        _SetLoginMode(knownOAuthSupport == true);
+        // Password login remains the predictable default. OAuth is offered as
+        // an explicit alternative after the server advertises a client ID.
+        _SetLoginMode(false);
         if (knownOAuthSupport is null && !string.IsNullOrWhiteSpace(_authServerUrl))
         {
             var server = _authServerUrl;
             Dispatcher.BeginInvoke(new Func<Task>(async () =>
             {
                 var supported = await IsOAuthSupportedAsync(server).ConfigureAwait(true);
-                if (!string.Equals(_authServerUrl, server, StringComparison.OrdinalIgnoreCase))
+                if (generation != _authServerGeneration ||
+                    !string.Equals(_authServerUrl, server, StringComparison.OrdinalIgnoreCase) ||
+                    IsAuthenticating)
                     return;
                 _oauthSupported = supported;
                 _UpdateOAuthEntryVisibility();
-                _SetLoginMode(supported);
             }));
         }
     }
@@ -80,6 +108,7 @@ public partial class PageLoginAuth
     {
         ProfileService.IsCreatingProfile = false;
         _authServerUrl = "";
+        _authServerGeneration++;
         TextName.Text = null;
         TextPass.Password = null;
         ModMain.frmLaunchLeft.RefreshPage(true);
@@ -87,6 +116,7 @@ public partial class PageLoginAuth
 
     private void BtnLogin_Click(object sender, EventArgs e)
     {
+        if (IsAuthenticating) return;
         if (string.IsNullOrWhiteSpace(_authServerUrl))
         {
             HintService.Hint(Lang.Text("Launch.Account.Auth.EmptyFields"), HintType.Error);
@@ -99,6 +129,9 @@ public partial class PageLoginAuth
             return;
         }
 
+        var useOAuth = _isOAuthMode;
+        var authServerUrl = _authServerUrl;
+        IsAuthenticating = true;
         BtnLogin.IsEnabled = false;
         BtnOAuth.IsEnabled = false;
         BtnBack.IsEnabled = false;
@@ -113,9 +146,9 @@ public partial class PageLoginAuth
             try
             {
                 ProfileService.IsCreatingProfile = true;
-                if (_isOAuthMode)
+                if (useOAuth)
                 {
-                    if (!await _TryStartYggdrasilConnectAsync().ConfigureAwait(true))
+                    if (!await _TryStartYggdrasilConnectAsync(authServerUrl).ConfigureAwait(true))
                     {
                         HintService.Hint(Lang.Text("Launch.Account.Auth.LoginFailed"), HintType.Error);
                         return;
@@ -130,7 +163,7 @@ public partial class PageLoginAuth
                 }
                 var loginData = new ModLaunch.McLoginServer(ModLaunch.McLoginType.Auth)
                 {
-                    BaseUrl = await ApiLocation.TryRequestAsync(_authServerUrl).ConfigureAwait(true),
+                    BaseUrl = await ApiLocation.TryRequestAsync(authServerUrl).ConfigureAwait(true),
                     UserName = TextName.Text, Password = TextPass.Password, Description = "Authlib-Injector",
                     LoginType = ModLaunch.McLoginType.Auth
                 };
@@ -171,6 +204,10 @@ public partial class PageLoginAuth
                         Lang.Text("Launch.Account.Auth.LoginFailed.WithDetail",ex.Message.TrimStart('$')),
                         HintType.Error);
                 }
+                else if (ex is IdentityModelException identityModelException)
+                {
+                    _ShowIdentityModelFailure(identityModelException);
+                }
                 else
                 {
                     ModBase.Log(
@@ -189,7 +226,7 @@ public partial class PageLoginAuth
 
     private void _FinishLoginAttempt()
     {
-        ProfileService.IsCreatingProfile = false;
+        IsAuthenticating = false;
         BtnLogin.IsEnabled = true;
         BtnOAuth.IsEnabled = true;
         BtnBack.IsEnabled = true;
@@ -263,20 +300,22 @@ public partial class PageLoginAuth
         BtnPasswordWebsite.SetValue(Grid.ColumnSpanProperty, isOAuthAvailable ? 1 : 3);
     }
 
-    private async Task<bool> _TryStartYggdrasilConnectAsync()
+    private async Task<bool> _TryStartYggdrasilConnectAsync(string authServerUrl)
     {
-        var server = await ApiLocation.TryRequestAsync(_authServerUrl).ConfigureAwait(true);
+        var server = await ApiLocation.TryRequestAsync(authServerUrl).ConfigureAwait(true);
         using var response = await HttpRequest.Create(server).SendAsync().ConfigureAwait(true);
         if (!response.IsSuccess) return false;
-        var metadata = (JsonObject)ModBase.GetJson(await response.AsStringAsync().ConfigureAwait(true));
+        var metadata = await _TryReadJsonObjectAsync(response).ConfigureAwait(true);
+        if (metadata is null) return false;
         var discovery = metadata["meta"]?["feature.openid_configuration_url"]?.ToString()
                         ?? metadata["feature.openid_configuration_url"]?.ToString();
         if (string.IsNullOrWhiteSpace(discovery)) return false;
 
         using var discoveryResponse = await HttpRequest.Create(discovery).SendAsync().ConfigureAwait(true);
         if (!discoveryResponse.IsSuccess) return false;
-        var discoveryMetadata = (JsonObject)ModBase.GetJson(await discoveryResponse.AsStringAsync().ConfigureAwait(true));
-        var clientId = _GetClientId(server, discoveryMetadata);
+        var discoveryMetadata = await _TryReadJsonObjectAsync(discoveryResponse).ConfigureAwait(true);
+        if (discoveryMetadata is null) return false;
+        var clientId = _GetClientId(discoveryMetadata);
         if (string.IsNullOrWhiteSpace(clientId)) return false;
 
         ModBase.Log($"[Profile] Yggdrasil Connect client id resolved for {new Uri(server).Host}", ModBase.LogLevel.Debug);
@@ -298,6 +337,7 @@ public partial class PageLoginAuth
             }, existing: null, select: true, token: CancellationToken.None).ConfigureAwait(false);
             ModBase.RunInUi(() =>
             {
+                ProfileService.IsCreatingProfile = false;
                 ModMain.frmLaunchLeft.RefreshPage(true);
             });
             LogWrapper.Info("Profile","Yggdrasil Connect 登录成功：" + profile.UserName);
@@ -308,8 +348,11 @@ public partial class PageLoginAuth
         }
         catch (Exception ex)
         {
-            ModBase.Log(ex, Lang.Text("Launch.Account.Auth.LoginFailed"), ModBase.LogLevel.Msgbox,
-                userSummary: Lang.Text("Launch.Account.Auth.LoginFailed"));
+            if (ex is IdentityModelException identityModelException)
+                ModBase.RunInUi(() => _ShowIdentityModelFailure(identityModelException));
+            else
+                ModBase.Log(ex, Lang.Text("Launch.Account.Auth.LoginFailed"), ModBase.LogLevel.Msgbox,
+                    userSummary: Lang.Text("Launch.Account.Auth.LoginFailed"));
         }
         finally
         {
@@ -333,24 +376,22 @@ public partial class PageLoginAuth
 
     internal static async Task<bool> IsOAuthSupportedAsync(string authServerUrl)
     {
-        if (Uri.TryCreate(authServerUrl, UriKind.Absolute, out var serverUri) &&
-            YggdrasilConnectProvider.TryGetBuiltInClientId(serverUri.Host, out _))
-            return true;
-
         try
         {
             var server = await ApiLocation.TryRequestAsync(authServerUrl).ConfigureAwait(false);
             using var response = await HttpRequest.Create(server).SendAsync().ConfigureAwait(false);
             if (!response.IsSuccess) return false;
-            var metadata = (JsonObject)ModBase.GetJson(await response.AsStringAsync().ConfigureAwait(false));
+            var metadata = await _TryReadJsonObjectAsync(response).ConfigureAwait(false);
+            if (metadata is null) return false;
             var discovery = metadata["meta"]?["feature.openid_configuration_url"]?.ToString()
                             ?? metadata["feature.openid_configuration_url"]?.ToString();
             if (string.IsNullOrWhiteSpace(discovery)) return false;
 
             using var discoveryResponse = await HttpRequest.Create(discovery).SendAsync().ConfigureAwait(false);
             if (!discoveryResponse.IsSuccess) return false;
-            var discoveryMetadata = (JsonObject)ModBase.GetJson(await discoveryResponse.AsStringAsync().ConfigureAwait(false));
-            var clientId = _GetClientId(server, discoveryMetadata);
+            var discoveryMetadata = await _TryReadJsonObjectAsync(discoveryResponse).ConfigureAwait(false);
+            if (discoveryMetadata is null) return false;
+            var clientId = _GetClientId(discoveryMetadata);
             var deviceEndpoint = discoveryMetadata["device_authorization_endpoint"]?.ToString();
             var tokenEndpoint = discoveryMetadata["token_endpoint"]?.ToString();
             return !string.IsNullOrWhiteSpace(clientId) &&
@@ -364,12 +405,29 @@ public partial class PageLoginAuth
         }
     }
 
-    private static string? _GetClientId(string authServerUrl, JsonObject discoveryMetadata)
+    private static string? _GetClientId(JsonObject discoveryMetadata)
+        => discoveryMetadata["shared_client_id"]?.ToString();
+
+    private static async Task<JsonObject?> _TryReadJsonObjectAsync(HttpResponseMessage response)
     {
-        if (!Uri.TryCreate(authServerUrl, UriKind.Absolute, out var serverUri)) return null;
-        if (YggdrasilConnectProvider.TryGetBuiltInClientId(serverUri.Host, out var builtInClientId))
-            return builtInClientId;
-        return discoveryMetadata["shared_client_id"]?.ToString();
+        try
+        {
+            return await response.AsJsonAsync<JsonObject>().ConfigureAwait(false);
+        }
+        catch (InvalidDataException)
+        {
+            return null;
+        }
+    }
+
+    private static void _ShowIdentityModelFailure(IdentityModelException exception)
+    {
+        var detail = ExceptionDetails.GetUserReason(exception);
+        HintService.Hint(
+            string.IsNullOrWhiteSpace(detail)
+                ? Lang.Text("Launch.Account.Auth.LoginFailed")
+                : Lang.Text("Launch.Account.Auth.LoginFailed.WithDetail", detail),
+            HintType.Error);
     }
 
     // 链接处理
@@ -390,7 +448,9 @@ public partial class PageLoginAuth
 
     private void BtnWebsite_Click(object sender, EventArgs e)
     {
-        var websiteUri = new UriBuilder(new Uri(_authServerUrl))
+        if (!Uri.TryCreate(_authServerUrl, UriKind.Absolute, out var serverUri)
+            || serverUri.Scheme is not ("https" or "http")) return;
+        var websiteUri = new UriBuilder(serverUri)
         {
             Path = "/",
             Query = "",

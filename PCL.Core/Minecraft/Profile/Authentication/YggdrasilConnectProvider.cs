@@ -23,12 +23,6 @@ namespace PCL.Core.Minecraft.Profile.Authentication;
 
 public sealed class YggdrasilConnectProvider : IAuthenticateProvider
 {
-    private static readonly IReadOnlyDictionary<string, string> _BuiltInClientIds =
-        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-        {
-            ["littleskin.cn"] = "1514"
-        };
-
     private static readonly string[] _Scopes =
     [
         "openid",
@@ -43,26 +37,16 @@ public sealed class YggdrasilConnectProvider : IAuthenticateProvider
 
     public YggdrasilConnectProvider(string discoveryAddress, string? clientId = null, string? yggdrasilServer = null)
     {
-        var resolvedClientId = clientId;
-        if (string.IsNullOrWhiteSpace(resolvedClientId) &&
-            Uri.TryCreate(yggdrasilServer, UriKind.Absolute, out var serverUri) &&
-            TryGetBuiltInClientId(serverUri.Host, out var builtInClientId))
-            resolvedClientId = builtInClientId;
-
         _options = new YggdrasilOptions
         {
             OpenIdDiscoveryAddress = discoveryAddress,
-            ClientId = resolvedClientId?.Trim() ?? string.Empty,
+            // A client ID belongs to the application that registered it. Do
+            // not silently borrow a provider-specific ID from another client.
+            ClientId = clientId?.Trim() ?? string.Empty,
             OnlyDeviceAuthorize = true,
             GetClient = () => NetworkService.GetClient()
         };
         _yggdrasilServer = yggdrasilServer;
-    }
-
-    public static bool TryGetBuiltInClientId(string host, out string clientId)
-    {
-        var normalizedHost = host.Trim().TrimEnd('.');
-        return _BuiltInClientIds.TryGetValue(normalizedHost, out clientId!);
     }
 
     public Task InitializeAsync(CancellationToken token)

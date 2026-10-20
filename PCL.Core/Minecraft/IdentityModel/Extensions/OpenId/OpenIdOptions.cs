@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Threading;
@@ -66,9 +67,17 @@ public record OpenIdOptions
             .SendAsync(GetClient.Invoke(), cancellationToken: token)
             .ConfigureAwait(false);
 
-        Meta = await response
-            .AsJsonAsync<OpenIdMetadata>(cancellationToken: token)
-            .ConfigureAwait(false);
+        if (!response.IsSuccess)
+            throw new IdentityModelConfigurationException(
+                $"无法加载 OpenID 元数据（HTTP {(int)response.StatusCode}），请稍后重试。");
+        try
+        {
+            Meta = await response.AsJsonAsync<OpenIdMetadata>(cancellationToken: token).ConfigureAwait(false);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new IdentityModelConfigurationException("OpenID 元数据无法识别。", exception);
+        }
     }
     /// <summary>
     /// 获取 Json Web Key
@@ -85,9 +94,19 @@ public record OpenIdOptions
             .SendAsync(GetClient.Invoke(), cancellationToken: token)
             .ConfigureAwait(false);
 
-        var result = await response
-            .AsJsonAsync<JsonWebKeys>(cancellationToken: token)
-            .ConfigureAwait(false);
+        if (!response.IsSuccess)
+            throw new IdentityModelConfigurationException(
+                $"无法加载 OpenID 签名密钥（HTTP {(int)response.StatusCode}），请稍后重试。");
+
+        JsonWebKeys? result;
+        try
+        {
+            result = await response.AsJsonAsync<JsonWebKeys>(cancellationToken: token).ConfigureAwait(false);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new IdentityModelConfigurationException("OpenID 签名密钥响应无法识别。", exception);
+        }
         return result?.Keys.SingleOrDefault(k => k.Kid == kid)
                ?? throw new IdentityModelConfigurationException($"找不到匹配的 Jwk：{kid}");
     }

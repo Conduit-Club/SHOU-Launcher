@@ -6,6 +6,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using PCL.Core.Logging;
 
 namespace PCL.Core.App.EventBus;
 
@@ -30,12 +31,12 @@ public sealed partial class EventBusService
             var channelCount = _Channels.Count;
             var handlerCount = _Channels.Values.Sum(c => c.Values.Sum(h => h.Count));
             _Channels.Clear();
-            Context.Info($"EventBus stopping: cleared {channelCount} channels and {handlerCount} handlers.");
+            _LogInfo($"EventBus stopping: cleared {channelCount} channels and {handlerCount} handlers.");
             return Task.CompletedTask;
         }
         catch (Exception exception)
         {
-            Context.Error($"Exception while stopping EventBus: {exception}");
+            _LogError($"Exception while stopping EventBus: {exception}");
             return Task.FromException(exception);
         }
     }
@@ -66,7 +67,7 @@ public sealed partial class EventBusService
 
         if (!_Channels.TryGetValue(channel, out var dataHandler))
         {
-            Context.Trace($"Channel {channel} not found.");
+            _LogTrace($"Channel {channel} not found.");
             //throw new InvalidOperationException("No channel found for the given channel identification.");
 
             // create channel if not exist
@@ -105,7 +106,7 @@ public sealed partial class EventBusService
 
                 if (stillReferenced) return;
 
-                try { d.Dispose(); } catch (Exception ex) { Context.Error($"Exception disposing subscription owner: {ex}"); }
+                try { d.Dispose(); } catch (Exception ex) { _LogError($"Exception disposing subscription owner: {ex}"); }
             }
         });
 
@@ -134,7 +135,7 @@ public sealed partial class EventBusService
 
         if (!_Channels.TryGetValue(channel, out var dataHandler))
         {
-            Context.Trace($"Channel {channel} not found.");
+            _LogTrace($"Channel {channel} not found.");
             //throw new InvalidOperationException("No channel found for the given channel identification.");
 
             // create channel if not exist
@@ -183,7 +184,7 @@ public sealed partial class EventBusService
     {
         if (!_Channels.TryGetValue(channel, out var eventHandlers))
         {
-            Context.Error($"Channel {channel} not found.");
+            _LogError($"Channel {channel} not found.");
             throw new InvalidOperationException("No channel found for the given channel identification.");
         }
 
@@ -221,7 +222,7 @@ public sealed partial class EventBusService
 
         if (matching.Count == 0)
         {
-            Context.Trace($"No handler found for event data type {eventType.Name}");
+            _LogTrace($"No handler found for event data type {eventType.Name}");
             return Task.CompletedTask;
             // will not throw Exception
             //throw new InvalidOperationException("No handler found for the given event data type.");
@@ -235,11 +236,48 @@ public sealed partial class EventBusService
             }
             catch (Exception ex)
             {
-                Context.Error($"Event handler threw an exception: {ex}");
+                _LogError($"Event handler threw an exception: {ex}");
             }
         }).ToImmutableArray();
 
         return Task.WhenAll(tasks);
+    }
+
+    private static void _LogTrace(string message)
+    {
+        try
+        {
+            Context.Trace(message);
+        }
+        catch (InvalidOperationException)
+        {
+            // EventBus APIs are also usable before the lifecycle has initialized its context.
+            LogWrapper.Trace("EventBus", message);
+        }
+    }
+
+    private static void _LogInfo(string message)
+    {
+        try
+        {
+            Context.Info(message);
+        }
+        catch (InvalidOperationException)
+        {
+            LogWrapper.Info("EventBus", message);
+        }
+    }
+
+    private static void _LogError(string message)
+    {
+        try
+        {
+            Context.Error(message);
+        }
+        catch (InvalidOperationException)
+        {
+            LogWrapper.Error("EventBus", message);
+        }
     }
 
 

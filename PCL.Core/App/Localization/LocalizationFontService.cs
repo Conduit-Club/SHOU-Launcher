@@ -13,7 +13,6 @@ namespace PCL.Core.App.Localization;
 public static class LocalizationFontService
 {
     private const string PclEnglishFont = "./Resources/#PCL English";
-    private static readonly Uri _ApplicationPackUri = new("pack://application:,,,/");
 
     private static readonly IReadOnlyDictionary<string, LocalizationFontProfile> _ExactCultureProfiles =
         new Dictionary<string, LocalizationFontProfile>(StringComparer.OrdinalIgnoreCase)
@@ -54,7 +53,7 @@ public static class LocalizationFontService
             ? _GetDefaultFamilyNames(language.FontProfile)
             : _GetCustomFamilyNames(customFontName, language.FontProfile);
 
-        return new FontFamily(_ApplicationPackUri, string.Join(", ", familyNames));
+        return _BuildFontFamily(familyNames);
     }
 
     /// <summary>
@@ -70,7 +69,7 @@ public static class LocalizationFontService
     /// </summary>
     public static FontFamily BuildRepresentativeFontFamily(LocalizationFontProfile profile)
     {
-        return new FontFamily(_ApplicationPackUri, string.Join(", ", _GetDefaultFamilyNames(profile)));
+        return _BuildFontFamily(_GetDefaultFamilyNames(profile));
     }
 
     /// <summary>
@@ -116,6 +115,28 @@ public static class LocalizationFontService
         return string.IsNullOrWhiteSpace(value)
             ? string.Empty
             : value.Replace('_', '-').Trim();
+    }
+
+    private static FontFamily _BuildFontFamily(IReadOnlyList<string> familyNames)
+    {
+        var familyMap = string.Join(", ", familyNames);
+
+        try
+        {
+            // WPF registers the pack URI parser while the application is starting. Tests and
+            // early library callers can reach this service before that registration exists.
+            var applicationPackUri = new Uri("pack://application:,,,/", UriKind.Absolute);
+            return new FontFamily(applicationPackUri, familyMap);
+        }
+        catch (UriFormatException)
+        {
+            // The bundled font is unavailable without a pack URI; use the system fallback
+            // chain until WPF has initialized its application resource context.
+            var fallbackNames = familyNames
+                .Where(name => !string.Equals(name, PclEnglishFont, StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+            return new FontFamily(string.Join(", ", fallbackNames.Length == 0 ? familyNames : fallbackNames));
+        }
     }
 
     private static IReadOnlyList<string> _GetDefaultFamilyNames(LocalizationFontProfile profile)

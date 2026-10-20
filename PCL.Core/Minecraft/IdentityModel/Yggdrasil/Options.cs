@@ -25,6 +25,10 @@ public record YggdrasilLegacyAuthenticateOptions
     public string? ClientToken { get; set; }
     public required Func<HttpClient> GetClient { get; set; }
     /// <summary>
+    /// 是否附加启动器默认的请求元数据。测试客户端可关闭此项以隔离应用元数据资源。
+    /// </summary>
+    public bool AddRequestMetadata { get; set; } = true;
+    /// <summary>
     /// 请求头
     /// </summary>
     public Dictionary<string,string>? Headers { get; set; }

@@ -479,6 +479,7 @@ public class ModSetup
     public static void UiLogoType(int value)
     {
         if (ThemeService.CurrentTheme == ColorTheme.HmclBlue) value = 4;
+        ModMain.frmMain.ClubTitleLogo.Visibility = value == 1 ? Visibility.Visible : Visibility.Collapsed;
         switch (value)
         {
             case 0: // 无
@@ -500,7 +501,7 @@ public class ModSetup
             }
             case 1: // 默认
             {
-                ModMain.frmMain.ShapeTitleLogo.Visibility = Visibility.Visible;
+                ModMain.frmMain.ShapeTitleLogo.Visibility = Visibility.Collapsed;
                 ModMain.frmMain.BtnTitleHelp.Visibility = Visibility.Collapsed;
                 ModMain.frmMain.ShapeHMCLTitleLogo.Visibility = Visibility.Collapsed;
                 ModMain.frmMain.LabTitleLogo.Visibility = Visibility.Collapsed;

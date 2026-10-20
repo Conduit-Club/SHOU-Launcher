@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -36,8 +37,23 @@ public record YggdrasilOptions:OpenIdOptions
             .SendAsync(GetClient.Invoke(), cancellationToken: token)
             .ConfigureAwait(false);
 
-        var metadata = (await response.AsJsonAsync<YggdrasilConnectMetaData>(cancellationToken: token).ConfigureAwait(false))
-            ?? throw new IdentityModelConfigurationException("无法加载 Yggdrasil Connect 元数据");
+        if (!response.IsSuccess)
+            throw new IdentityModelConfigurationException(
+                $"无法加载 Yggdrasil Connect 元数据（HTTP {(int)response.StatusCode}），请稍后重试。");
+
+        YggdrasilConnectMetaData? metadata;
+        try
+        {
+            metadata = await response.AsJsonAsync<YggdrasilConnectMetaData>(cancellationToken: token)
+                .ConfigureAwait(false);
+        }
+        catch (InvalidDataException exception)
+        {
+            throw new IdentityModelConfigurationException("Yggdrasil Connect 元数据无法识别。", exception);
+        }
+
+        if (metadata is null)
+            throw new IdentityModelConfigurationException("无法加载 Yggdrasil Connect 元数据");
         Meta = metadata;
 
         _ValidateMetadata(discoveryUri, metadata);

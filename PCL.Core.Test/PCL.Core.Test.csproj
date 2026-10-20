@@ -53,6 +53,9 @@
     <ProjectReference Include="..\PCL.Core\PCL.Core.csproj" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="..\Plain Craft Launcher 2\metadata.json" LogicalName="PCL.metadata.json" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Remove="Net\**" />
   </ItemGroup>
   <ItemGroup>

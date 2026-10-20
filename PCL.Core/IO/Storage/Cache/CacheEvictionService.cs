@@ -26,18 +26,32 @@ internal class CacheEvictionService(SqliteCacheStorage db, FileCacheStorage file
         }
     }
 
-    public void Stop()
+    public async Task StopAsync()
     {
+        Task? loop;
         lock (_startLock)
         {
-            if (_cts is not null)
-            {
-                _cts.Cancel();
-                _cts.Dispose();
-                _cts = null;
-            }
-
+            _cts?.Cancel();
+            loop = _loop;
             _loop = null;
+        }
+
+        if (loop is not null)
+        {
+            try
+            {
+                await loop.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                // Cancellation is the normal shutdown path.
+            }
+        }
+
+        lock (_startLock)
+        {
+            _cts?.Dispose();
+            _cts = null;
         }
     }
 

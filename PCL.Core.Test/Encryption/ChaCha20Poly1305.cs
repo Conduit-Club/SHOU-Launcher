@@ -8,8 +8,21 @@ namespace PCL.Core.Test.Encryption;
 public class ChaCha20Poly1305
 {
     [TestMethod]
+    public void ChaCha20Poly1305_IsSupportedMatchesPlatform()
+    {
+        Assert.AreEqual(System.Security.Cryptography.ChaCha20Poly1305.IsSupported,
+            Core.Utils.Encryption.ChaCha20Poly1305Provider.Instance.IsSupported);
+    }
+
+    [TestMethod]
+    [TestCategory("HardwareCrypto")]
     public void TestChaCha20Simple()
     {
+        if (!Core.Utils.Encryption.ChaCha20Poly1305Provider.Instance.IsSupported)
+        {
+            Assert.Inconclusive("ChaCha20Poly1305 is not supported by this platform.");
+        }
+
         var randomData = new byte[1024];
         Random.Shared.NextBytes(randomData);
 

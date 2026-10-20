@@ -11,8 +11,15 @@ namespace PCL.Core.Test.Network;
 public class DohConnection
 {
     [TestMethod]
+    [TestCategory("Integration")]
     public async Task TestDohConnection()
     {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PCL_RUN_EXTERNAL_TESTS"), "1",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            Assert.Inconclusive("External DoH connection test requires PCL_RUN_EXTERNAL_TESTS=1.");
+        }
+
         using var client = new HttpClient(new SocketsHttpHandler()
             {
                 ConnectCallback = HostConnectionHandler.Instance.GetConnectionAsync

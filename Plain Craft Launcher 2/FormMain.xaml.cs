@@ -301,6 +301,11 @@ public partial class FormMain
                     ModBase.LogLevel.Feedback,
                     userSummary: Lang.Text("Main.Error.OperationFailed"));
             }
+            finally
+            {
+                // 社团更新日志仅在主窗口初始化后的后台线程检查一次，不阻塞启动、登录或游戏启动。
+                ModBase.RunInNewThread(ClubUpdates.CheckStartupNotice, "Conduit Update Notice", ThreadPriority.BelowNormal);
+            }
         }, "Start Loader", ThreadPriority.BelowNormal);
 
         ModBase.Log($"[Start] 第三阶段加载用时：{TimeUtils.GetTimeTick() - ModBase.applicationStartTick} ms");

@@ -1,4 +1,4 @@
-﻿using System.IO;
+using System.IO;
 using System.Globalization;
 using System.Reflection;
 using System.Windows;
@@ -34,12 +34,7 @@ public partial class PageLaunchRight : IRefreshable
         PanBack.ScrollToHome();
         PanScroll = PanBack; // 不知道为啥不能在 XAML 设置
         PanLog.Visibility = ModBase.modeDebug ? Visibility.Visible : Visibility.Collapsed;
-        // 社区版提示
-        PanHint.Visibility = States.Hint.CEMessage
-            ? Visibility.Visible
-            : Visibility.Collapsed;
-        LabHint1.Text = Lang.Text("Launch.Right.CommunityHint.Message");
-        LabHint2.Text = Lang.Text("Launch.Right.CommunityHint.HidePrompt");
+        PanHint.Visibility = Visibility.Collapsed;
         _EnsureHomepageLiveWatcher();
     }
 

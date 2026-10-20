@@ -58,6 +58,14 @@ public sealed partial class ThemeService
     [LifecycleStart]
     private static void _Start()
     {
+        // Apply the club default once when upgrading from a CE/early club configuration.
+        // Subsequent user choices are retained.
+        if (!Config.Preference.Theme.ClubDianaDefaultApplied)
+        {
+            Config.Preference.Theme.LightColor = ColorTheme.Diana;
+            Config.Preference.Theme.DarkColor = ColorTheme.Diana;
+            Config.Preference.Theme.ClubDianaDefaultApplied = true;
+        }
         IsDarkMode = _IsDarkMode();
         _LogStatus();
         _RefreshAll();
@@ -157,6 +165,7 @@ public sealed partial class ThemeService
             ColorTheme.CatBlue => (255, 0, -0.2),
             ColorTheme.DeathBlue => (268, -0.05, -0.1),
             ColorTheme.HmclBlue => (275, -0.03, -0.35),
+            ColorTheme.Diana => (15, 0, -0.4),
 #if DEBUG
             _ => ((int)theme, 0, 0)
 #else
@@ -240,7 +249,9 @@ public sealed partial class ThemeService
     /// </summary>
     public static void ApplyColorResources()
     {
+        ApplyGrayResources(); // Switching away from Diana must restore neutral colors too.
         var colors = _CalculateColors(CurrentTone, GetCurrentThemeArgs());
         foreach (var c in colors) c.Apply();
+        if (CurrentTheme == ColorTheme.Diana) DianaPalette.Apply(IsDarkMode);
     }
 }

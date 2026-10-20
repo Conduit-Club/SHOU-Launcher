@@ -1,12 +1,12 @@
-# Conduit-Club 基线构建
+# Conduit-Club 构建
 
-本项目是 Conduit-Club 基于 PCL-CE 独立维护的第三方社团 Minecraft 启动器。当前仅准备构建与发布设施，界面、更新源和社团功能尚未定制。
+本项目是 Conduit-Club 基于 PCL-CE 独立维护的第三方社团 Minecraft 启动器。当前已加入第一阶段社团定制，详见 CUSTOMIZATION.md；微软登录配置见 MICROSOFT-LOGIN.md。
 
 ## 上游
 
 - 只同步 `PCL-Community/PCL-CE` 的 `dev`，不直接同步 PCL。
 - 2026-10-02 基线：`a42a7699948aebd1e2563df025274af255c1f559`，相对原仓库快进 13 个提交，无合并冲突。
-- 上游元数据版本：`2.15.1-beta.1`；发行标签另加 `conduit-` 前缀，不冒充 CE 官方发行版。
+- 直接 PCL-CE 基线版本：`2.15.1`；社团首发元数据版本为 `1.0.0`，正式发行标签使用 `v` 前缀，同时兼容读取旧 `conduit-v` 标签，不冒充 CE 官方发行版。
 
 ## 环境
 
@@ -16,21 +16,32 @@ SDK 通过微软官方 `https://dot.net/v1/dotnet-install.ps1` 安装，使用 `
 
 ```powershell
 ./scripts/conduit/Publish.ps1 -Dotnet D:\Programs_Dev\dotnet\dotnet.exe
+./scripts/conduit/Publish.ps1 -Configuration Release -Dotnet D:\Programs_Dev\dotnet\dotnet.exe -OutputRoot artifacts/conduit-release
 dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64
 ```
 
-脚本默认构建 Windows x64、Beta、自包含单文件程序；输出到 `artifacts/conduit`，ZIP 内含 EXE、许可文件及构建信息。无需额外安装 .NET 运行时，不是 MSI/Setup 安装向导。重新构建前将旧输出目录移走，避免混入旧文件。可使用 `-Architecture ARM64` 交叉编译，但不能替代 ARM64 真机验证。
+脚本默认构建 Windows x64、Beta、自包含单文件程序；正式首发可传入 `-Configuration Release`，输出到 `artifacts/conduit`（或显式指定的新目录），ZIP 内含 EXE、许可文件及构建信息。无需额外安装 .NET 运行时，不是 MSI/Setup 安装向导。可通过 `-OutputRoot artifacts/conduit-club1` 指定新输出目录；保留旧目录可避免混入旧文件。可使用 `-Architecture ARM64` 交叉编译，但不能替代 ARM64 真机验证。
 
 ## 发布
 
-`Conduit Build` 工作流可在 GitHub Actions 手动运行，会上传 x64 构建产物，不使用上游密钥或镜像服务。本地构建后通过 `gh release create` 发布 ZIP 和 SHA-256 文件；先推送源码，再将 Release 固定到已验证的源码提交，开发基线标记为 prerelease。
+### 本地配置与 GitHub Secrets
+
+复制 `.env.example` 为仓库根目录 `.env`，填写 `PCL_MS_CLIENT_ID=应用程序GUID`。`.env` 及其变体被 Git 忽略，不能放入提交或上传为 artifact。`Publish.ps1` 自动读取它，进程环境中的同名变量优先；不执行文件内的命令、变量插值或表达式。
+
+当前构建入口只允许注入公开的 Microsoft Client ID 和源码 SHA。脚本会临时隔离其他 `PCL_*` 环境变量并在退出时还原，避免上游生成器把无关环境凭据带入客户端；不要填写 Client Secret、GitHub Token 或服务器私钥。每次构建会 clean 并关闭共享编译，防止环境配置变化后沿用旧生成代码。
+
+GitHub Actions 使用仓库 Secret `CLIENT_ID` 映射为 `PCL_MS_CLIENT_ID`。社团工作流在 PR、`dev` push 和手动运行时构建，分开运行社团回归与全量测试；全量测试失败仍保留失败状态和 TRX 报告。Fork PR 无法读取仓库 Secrets，仍可执行无 Client ID 编译。
+
+2026-10-02 已配置 `CLIENT_ID`。其他上游 Secrets（CurseForge、Natayark、联机、遥测等）没有社团自己的可用值，未配置假值，也未复制上游凭据。原 CE GPG / MirrorChyan 发行工作流在社团仓库保持禁用。微软应用注册及注入成功不等于 Minecraft API 审核通过，仍需完成审核与实际登录验证。
+
+`Conduit Build` 工作流可在 GitHub Actions 手动运行，会上传 x64 构建产物，不使用上游密钥或镜像服务。正式 v1.0.0 发布前，先完成 root 代理统一编译、专项测试和实际授权确认；随后再通过 `gh release create` 发布 ZIP 和 SHA-256 文件。当前尚未创建正式 tag 或 Release，不能把开发构建链接当作正式下载地址。
 
 原 CE Release 工作流仅在 `PCL-Community/PCL-CE` 仓库运行，避免重写社团 Release 说明、要求 CE 签名密钥或触发上游 MirrorChyan 上传。这是对上游工作流的少量必要差异，未来同步时需保留并检查。
 
 ## 当前限制
 
-- 本基线不嵌入外部服务凭据：Microsoft OAuth、CurseForge、Natayark/联机等依赖凭据的功能尚不可视为可用；后续应配置社团自己的合法凭据。
-- 未做社团 UI、服务器和更新源改造；现有更新行为仍来自 CE，社团正式发行前需要单独处理。
+- 微软公共 Client ID 可由上述构建入口注入；CurseForge、Natayark/联机等依赖凭据的功能尚不可视为可用，后续应配置社团自己的合法凭据。
+- 社团 UI、服务器入口和更新源已完成首轮接入；更新页手动追踪社团 GitHub Releases。
 - 未使用上游 GPG 私钥，也未做 Authenticode 签名；SHA-256 仅用于核对文件完整性。
 - 编译和单元测试不能替代登录、下载、安装游戏、启动 Minecraft 的端到端验证。
 

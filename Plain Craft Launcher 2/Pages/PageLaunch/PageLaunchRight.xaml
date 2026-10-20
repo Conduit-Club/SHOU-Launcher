@@ -2,8 +2,11 @@
                    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                    xmlns:local="clr-namespace:PCL"> <!-- 不知道为啥只有这个文件不能在 XAML 设置 PanScroll -->
+    <Grid ClipToBounds="True">
+    <local:ClubBackdrop />
     <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
         <StackPanel Name="PanMain" Margin="25,25,25,10" Grid.IsSharedSizeScope="True">
+            <local:ClubLaunchPanel />
             <StackPanel x:Name="PanCustom" />
             <local:MyCard Margin="0,0,0,15" Title="{DynamicResource Launch.Right.CommunityHint.Title}" x:Name="PanHint">
                 <local:MyIconButton LogoScale="1.1"
@@ -21,4 +24,5 @@
             </local:MyCard>
         </StackPanel>
     </local:MyScrollViewer>
+    </Grid>
 </local:MyPageRight>

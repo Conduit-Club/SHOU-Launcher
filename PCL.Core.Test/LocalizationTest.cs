@@ -3,30 +3,57 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
+using System.Windows;
 using System.Xml.Linq;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PCL.Core.App.Localization;
 
 namespace PCL.Core.Test;
 
-[TestClass]
+[STATestClass]
 public class LocalizationTest
 {
     private static readonly string[] LanguageFiles = LocalizationService.SupportedLanguages
         .Select(language => language.Code)
         .ToArray();
 
-    [TestMethod]
+    [STATestMethod]
     public void AllLanguageDictionariesShouldContainBaseKeys()
     {
         var baseKeys = LoadKeys("zh-CN");
+        var app = Application.Current ?? new Application();
+        var originalCulture = CultureInfo.CurrentCulture;
+        var originalUiCulture = CultureInfo.CurrentUICulture;
+        var originalDefaultCulture = CultureInfo.DefaultThreadCurrentCulture;
+        var originalDefaultUiCulture = CultureInfo.DefaultThreadCurrentUICulture;
 
-        foreach (var language in LanguageFiles.Where(language => language != "zh-CN"))
+        try
         {
-            var keys = LoadKeys(language);
-            var missing = baseKeys.Except(keys).ToArray();
+            foreach (var language in LanguageFiles)
+            {
+                // LocalizationService loads zh-CN first and overlays the selected language.
+                // Check the resulting ResourceDictionary so sparse translations correctly use
+                // the documented base-language fallback.
+                LocalizationService.Apply(language, LocalizationService.FormatCultureFollowLanguage, false);
+                var missing = baseKeys
+                    .Where(key => app.TryFindResource(key) is not string value || string.IsNullOrWhiteSpace(value))
+                    .ToArray();
 
-            Assert.IsEmpty(missing, $"{language} 缺少语言键：{string.Join(", ", missing)}");
+                Assert.IsEmpty(missing, $"{language} 合并后的语言资源缺少键：{string.Join(", ", missing)}");
+            }
+        }
+        finally
+        {
+            // Restore process-wide culture state changed by LocalizationService.Apply.
+            LocalizationService.Apply(LocalizationService.DefaultLanguageCode, originalCulture.Name, false);
+            CultureInfo.DefaultThreadCurrentCulture = originalDefaultCulture;
+            CultureInfo.DefaultThreadCurrentUICulture = originalDefaultUiCulture;
+            CultureInfo.CurrentCulture = originalCulture;
+            CultureInfo.CurrentUICulture = originalUiCulture;
+            Thread.CurrentThread.CurrentCulture = originalCulture;
+            Thread.CurrentThread.CurrentUICulture = originalUiCulture;
+            Lang.SyncCulture(originalCulture);
         }
     }
 
@@ -108,6 +135,19 @@ public class LocalizationTest
     {
         Assert.IsFalse(LocalizationService.IsLanguageSupported("zh-HK"));
         Assert.AreEqual(LocalizationService.DefaultLanguageCode, LocalizationService.ResolveLanguage("zh-HK").Code);
+    }
+
+    [TestMethod]
+    public void CustomFontShouldRemainFirstWhenPackFontIsUnavailable()
+    {
+        const string customFont = "Test Custom Font";
+
+        var fontFamily = LocalizationFontService.BuildLaunchFontFamily(
+            customFont,
+            LocalizationService.ResolveLanguage("en-US"));
+
+        Assert.IsTrue(fontFamily.ToString().StartsWith(customFont, StringComparison.Ordinal),
+            $"自定义字体应保留在字体链首位，实际字体链：{fontFamily}");
     }
 
     private static HashSet<string> LoadKeys(string language)

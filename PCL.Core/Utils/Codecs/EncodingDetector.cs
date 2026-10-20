@@ -20,11 +20,11 @@ public static class EncodingDetector
             throw new ArgumentException("流必须支持 Seek 操作");
 
         var originalPosition = stream.Position;
-        if (readFromBegin) stream.Seek(0, SeekOrigin.Begin);
+        var sampleStart = readFromBegin ? 0 : originalPosition;
 
         try
         {
-            return _DetectByBom(stream, originalPosition) ?? _DetectWithoutBOM(stream, originalPosition) ?? Encoding.Default;
+            return _DetectByBom(stream, sampleStart) ?? _DetectWithoutBOM(stream, sampleStart) ?? Encoding.Default;
         }
         finally
         {
@@ -51,16 +51,16 @@ public static class EncodingDetector
         if (actualRead != sampleLength) throw new Exception("无法获取样本长度");
 
         // 对样本进行分析
-        if (sampleLength >= 3 && buffer is [0xef, 0xbb, 0xbf])
+        if (sampleLength >= 3 && buffer[0] == 0xef && buffer[1] == 0xbb && buffer[2] == 0xbf)
             return Encoding.UTF8; // UTF-8
 
         if (sampleLength >= 2)
         {
-            if (buffer is [0xfe, 0xff])
+            if (buffer[0] == 0xfe && buffer[1] == 0xff)
                 return Encoding.BigEndianUnicode; // UTF-16 BE
-            if (buffer is [0xff, 0xfe])
+            if (buffer[0] == 0xff && buffer[1] == 0xfe)
             {
-                if (sampleLength >= 4 && buffer is [_, _, 0x00, 0x00])
+                if (sampleLength >= 4 && buffer[2] == 0x00 && buffer[3] == 0x00)
                     return Encoding.UTF32; // UTF-32 LE
                 return Encoding.Unicode;   // UTF-16 LE
             }
@@ -68,10 +68,8 @@ public static class EncodingDetector
 
         if (sampleLength >= 4)
         {
-            if (buffer is [0x00, 0x00, 0xfe, 0xff])
+            if (buffer[0] == 0x00 && buffer[1] == 0x00 && buffer[2] == 0xfe && buffer[3] == 0xff)
                 return Encoding.GetEncoding("utf-32BE"); // UTF-32 BE
-            if (buffer is [0xff, 0xfe, 0x00, 0x00])
-                return Encoding.UTF32; // UTF-32 LE
         }
 
         return null;
@@ -92,16 +90,38 @@ public static class EncodingDetector
     private static bool _IsValidUtf8(Stream stream, long originalPosition)
     {
         const int sampleSize = 1024;
-        var buffer = new byte[sampleSize];
         stream.Position = originalPosition;
 
         try
         {
-            var decoded = Encoding.UTF8.GetString(buffer);
-            var roundTrip = Encoding.UTF8.GetBytes(decoded);
-            return roundTrip.SequenceEqual(buffer);
+            var remaining = stream.Length - originalPosition;
+            if (remaining <= 0) return true;
+
+            var requestedLength = (int)Math.Min(sampleSize, remaining);
+            var buffer = new byte[requestedLength];
+            var bytesRead = 0;
+            while (bytesRead < requestedLength)
+            {
+                var read = stream.Read(buffer, bytesRead, requestedLength - bytesRead);
+                if (read == 0) break;
+                bytesRead += read;
+            }
+
+            if (bytesRead == 0) return true;
+
+            // Do not flush a sample that stops at the size limit: its final UTF-8 sequence
+            // may continue in the unread part of the stream. A complete stream, however,
+            // must reject an incomplete final sequence.
+            var flush = bytesRead >= remaining;
+            var strictUtf8 = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false,
+                throwOnInvalidBytes: true);
+            var decoder = strictUtf8.GetDecoder();
+            var chars = new char[strictUtf8.GetMaxCharCount(bytesRead)];
+            decoder.Convert(buffer, 0, bytesRead, chars, 0, chars.Length, flush,
+                out _, out _, out _);
+            return true;
         }
-        catch
+        catch (DecoderFallbackException)
         {
             return false;
         }

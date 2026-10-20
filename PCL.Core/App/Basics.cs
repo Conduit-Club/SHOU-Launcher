@@ -22,7 +22,28 @@ public static class Basics
     /// 启动器元数据。
     /// </summary>
     public static MetadataModel Metadata { get; } = JsonSerializer.Deserialize<MetadataModel>(
-        Assembly.GetEntryAssembly()!.GetManifestResourceStream("PCL.metadata.json")!, JsonCompat.SerializerOptions)!;
+        _GetMetadataStream(), JsonCompat.SerializerOptions)
+        ?? throw new InvalidOperationException("PCL.metadata.json is empty or invalid.");
+
+    private static Stream _GetMetadataStream()
+    {
+        const string resourceName = "PCL.metadata.json";
+
+        // The published launcher embeds metadata in its entry assembly. Test hosts,
+        // design tools, and other library consumers may use a different entry point,
+        // so locate the same contract in any already loaded assembly as a fallback.
+        var entryAssembly = Assembly.GetEntryAssembly();
+        if (entryAssembly?.GetManifestResourceStream(resourceName) is { } entryStream)
+            return entryStream;
+
+        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            if (assembly.GetManifestResourceStream(resourceName) is { } stream)
+                return stream;
+        }
+
+        throw new InvalidOperationException($"Required embedded resource '{resourceName}' was not found.");
+    }
 
     /// <summary>
     /// 版本名称。

@@ -349,3 +349,8 @@ MaskFiles/
 
 # Conduit-Club build outputs
 /artifacts/
+
+# Local build configuration (never commit credentials)
+.env
+.env.*
+!.env.example

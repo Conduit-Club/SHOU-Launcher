@@ -1,5 +1,7 @@
 using System;
 using System.Net;
+using System.Net.Http;
+using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Threading;
 using System.Threading.Tasks;
@@ -37,12 +39,10 @@ public sealed class YggdrasilLegacyClient(YggdrasilLegacyAuthenticateOptions opt
             .CreatePost(address)
             .WithHeaders(options.Headers ?? [])
             .WithJsonContent(credential)
-            .SendAsync(options.GetClient.Invoke(), cancellationToken: token)
+            .SendAsync(options.GetClient.Invoke(), addMetedata: options.AddRequestMetadata, cancellationToken: token)
             .ConfigureAwait(false);
 
-        return await response
-            .AsJsonAsync<YggdrasilAuthenticateResult>(cancellationToken: token)
-            .ConfigureAwait(false);
+        return await _ReadAuthenticateResultAsync(response, token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -67,12 +67,10 @@ public sealed class YggdrasilLegacyClient(YggdrasilLegacyAuthenticateOptions opt
             .CreatePost(address)
             .WithJsonContent(refreshData)
             .WithHeaders(options.Headers ?? [])
-            .SendAsync(options.GetClient.Invoke(), cancellationToken: token)
+            .SendAsync(options.GetClient.Invoke(), addMetedata: options.AddRequestMetadata, cancellationToken: token)
             .ConfigureAwait(false);
 
-        return await response
-            .AsJsonAsync<YggdrasilAuthenticateResult>(cancellationToken: token)
-            .ConfigureAwait(false);
+        return await _ReadAuthenticateResultAsync(response, token).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -95,7 +93,7 @@ public sealed class YggdrasilLegacyClient(YggdrasilLegacyAuthenticateOptions opt
             .CreatePost(address)
             .WithHeaders(options.Headers ?? [])
             .WithJsonContent(validateData)
-            .SendAsync(options.GetClient.Invoke(), cancellationToken: token)
+            .SendAsync(options.GetClient.Invoke(), addMetedata: options.AddRequestMetadata, cancellationToken: token)
             .ConfigureAwait(false);
 
         return response.StatusCode == HttpStatusCode.NoContent;
@@ -120,7 +118,7 @@ public sealed class YggdrasilLegacyClient(YggdrasilLegacyAuthenticateOptions opt
             .CreatePost(address)
             .WithHeaders(options.Headers ?? [])
             .WithJsonContent(validateData)
-            .SendAsync(options.GetClient.Invoke(), cancellationToken: token)
+            .SendAsync(options.GetClient.Invoke(), addMetedata: options.AddRequestMetadata, cancellationToken: token)
             .ConfigureAwait(false);
     }
 
@@ -144,7 +142,7 @@ public sealed class YggdrasilLegacyClient(YggdrasilLegacyAuthenticateOptions opt
             .CreatePost(address)
             .WithHeaders(options.Headers ?? [])
             .WithJsonContent(signoutData)
-            .SendAsync(options.GetClient.Invoke(), cancellationToken: token)
+            .SendAsync(options.GetClient.Invoke(), addMetedata: options.AddRequestMetadata, cancellationToken: token)
             .ConfigureAwait(false);
 
         if (response.StatusCode == HttpStatusCode.NoContent)
@@ -167,5 +165,50 @@ public sealed class YggdrasilLegacyClient(YggdrasilLegacyAuthenticateOptions opt
 
         var error = data?["errorMessage"]?.ToString() ?? string.Empty;
         return (false, error);
+    }
+
+    private static async Task<YggdrasilAuthenticateResult?> _ReadAuthenticateResultAsync(
+        HttpResponseMessage response, CancellationToken token)
+    {
+        var content = await response.AsStringAsync(token).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(content))
+            throw _CreateResponseException(response,
+                response.IsSuccess ? "认证服务器返回了空响应。" : null);
+
+        YggdrasilAuthenticateResult? result;
+        try
+        {
+            result = JsonSerializer.Deserialize<YggdrasilAuthenticateResult>(content, JsonCompat.SerializerOptions);
+        }
+        catch (JsonException exception)
+        {
+            // Do not attach the response body to the exception: gateways may
+            // return HTML containing request data or other sensitive details.
+            throw _CreateResponseException(response,
+                response.IsSuccess ? "认证服务器返回了无法识别的响应。" : null, exception);
+        }
+
+        if (result is null)
+        {
+            if (!response.IsSuccess)
+                throw _CreateResponseException(response);
+            throw new IdentityModelAuthenticationException("invalid_response", "认证服务器返回了空响应。");
+        }
+
+        if (!response.IsSuccess && string.IsNullOrWhiteSpace(result.Error) &&
+            string.IsNullOrWhiteSpace(result.ErrorMessage))
+            throw _CreateResponseException(response);
+
+        return result;
+    }
+
+    private static IdentityModelAuthenticationException _CreateResponseException(
+        HttpResponseMessage response, string? description = null, Exception? innerException = null)
+    {
+        var status = (int)response.StatusCode;
+        return new IdentityModelAuthenticationException(
+            response.IsSuccess ? "invalid_response" : $"http_{status}",
+            description ?? $"认证服务器暂时不可用（HTTP {status}），请稍后重试。",
+            innerException);
     }
 }

@@ -8,6 +8,7 @@ using System.Linq;
 using System.Threading;
 using PCL.Core.IO.Net.Http;
 using PCL.Core.Minecraft.IdentityModel;
+using PCL.Core.Utils;
 
 namespace PCL.Core.Minecraft.IdentityModel.OAuth;
 
@@ -62,11 +63,9 @@ public sealed class SimpleOAuthClient(OAuthClientOptions options):IOAuthClient
             .CreatePost(options.Meta.TokenEndpoint)
             .WithContent(content)
             .WithHeaders(options.Headers ?? [])
-            .SendAsync(client, cancellationToken: token)
+            .SendAsync(client, addMetedata: options.AddRequestMetadata, cancellationToken: token)
             .ConfigureAwait(false);
-        var result = await response
-            .AsJsonAsync<AuthorizeResult>(cancellationToken: token)
-            .ConfigureAwait(false);
+        var result = await _ReadJsonResponseAsync<AuthorizeResult>(response, token).ConfigureAwait(false);
         result?.Validate();
         return result;
     }
@@ -91,12 +90,10 @@ public sealed class SimpleOAuthClient(OAuthClientOptions options):IOAuthClient
             .CreatePost(options.Meta.DeviceEndpoint)
             .WithContent(content)
             .WithHeaders(options.Headers ?? [])
-            .SendAsync(client, cancellationToken: token)
+            .SendAsync(client, addMetedata: options.AddRequestMetadata, cancellationToken: token)
             .ConfigureAwait(false);
 
-        var data = await response
-            .AsJsonAsync<DeviceCodeData>(cancellationToken: token)
-            .ConfigureAwait(false);
+        var data = await _ReadJsonResponseAsync<DeviceCodeData>(response, token).ConfigureAwait(false);
         data?.Validate();
         return data;
     }
@@ -124,12 +121,10 @@ public sealed class SimpleOAuthClient(OAuthClientOptions options):IOAuthClient
             .CreatePost(options.Meta.TokenEndpoint)
             .WithContent(content)
             .WithHeaders(options.Headers ?? [])
-            .SendAsync(client, cancellationToken: token)
+            .SendAsync(client, addMetedata: options.AddRequestMetadata, cancellationToken: token)
             .ConfigureAwait(false);
 
-        var result = await response
-            .AsJsonAsync<AuthorizeResult>(cancellationToken: token)
-            .ConfigureAwait(false);
+        var result = await _ReadJsonResponseAsync<AuthorizeResult>(response, token).ConfigureAwait(false);
         result?.Validate();
         return result;
     }
@@ -156,13 +151,53 @@ public sealed class SimpleOAuthClient(OAuthClientOptions options):IOAuthClient
             .CreatePost(options.Meta.TokenEndpoint)
             .WithHeaders(options.Headers ?? [])
             .WithContent(content)
-            .SendAsync(client, cancellationToken: token)
+            .SendAsync(client, addMetedata: options.AddRequestMetadata, cancellationToken: token)
             .ConfigureAwait(false);
 
-        var result = await response
-            .AsJsonAsync<AuthorizeResult>(cancellationToken: token)
-            .ConfigureAwait(false);
+        var result = await _ReadJsonResponseAsync<AuthorizeResult>(response, token).ConfigureAwait(false);
         result?.Validate();
         return result;
     }
+
+    private static async Task<T?> _ReadJsonResponseAsync<T>(HttpResponseMessage response, CancellationToken token)
+    {
+        var content = await response.AsStringAsync(token).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(content))
+            throw _CreateResponseException(response,
+                response.IsSuccess ? "认证服务器返回了空响应。" : null);
+
+        try
+        {
+            var result = JsonSerializer.Deserialize<T>(content, JsonCompat.SerializerOptions);
+            if (result is null)
+                throw _CreateResponseException(response,
+                    response.IsSuccess ? "认证服务器返回了空响应。" : null);
+            if (!response.IsSuccess && result is not null && !_IsProtocolError(result))
+                throw _CreateResponseException(response);
+            return result;
+        }
+        catch (JsonException exception)
+        {
+            throw _CreateResponseException(response,
+                response.IsSuccess ? "认证服务器返回了无法识别的响应。" : null, exception);
+        }
+    }
+
+    private static IdentityModelAuthenticationException _CreateResponseException(
+        HttpResponseMessage response, string? description = null, Exception? innerException = null)
+    {
+        var status = (int)response.StatusCode;
+        return new IdentityModelAuthenticationException(
+            response.IsSuccess ? "invalid_response" : $"http_{status}",
+            description ?? $"认证服务器暂时不可用（HTTP {status}），请稍后重试。",
+            innerException);
+    }
+
+    private static bool _IsProtocolError<T>(T result)
+        => result switch
+        {
+            AuthorizeResult authorizeResult => authorizeResult.IsError,
+            DeviceCodeData deviceCodeData => deviceCodeData.IsError,
+            _ => false
+        };
 }

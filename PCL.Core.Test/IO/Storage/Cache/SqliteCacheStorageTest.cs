@@ -26,7 +26,7 @@ public class SqliteCacheStorageTest
         Directory.CreateDirectory(testDir);
 
         _testDbPath = Path.Combine(testDir, "test.db");
-        _schemaManager = new SchemaManager($"Data Source={_testDbPath}");
+        _schemaManager = new SchemaManager($"Data Source={_testDbPath};Pooling=True");
         _storage = new SqliteCacheStorage(_testDbPath);
 
         // Initialize schema
@@ -370,7 +370,11 @@ public class SqliteCacheStorageTest
     public async Task DeleteExpriedAsync_ShouldRemoveExpiredEntries()
     {
         // Arrange
-        var pastTime = DateTime.UtcNow.AddHours(-1);
+        // Use a fixed cutoff so the test verifies that DeleteExpiredAsync honors
+        // its `now` argument instead of depending on the wall clock at cleanup.
+        var cutoff = DateTime.UtcNow;
+        var pastTime = cutoff.AddMilliseconds(-100);
+        var futureTime = cutoff.AddMilliseconds(100);
 
         var expiredEntry = new CacheEntry
         {
@@ -392,12 +396,12 @@ public class SqliteCacheStorageTest
             EntryType = EntryType.Inline,
             Data = [1],
             ContentHash = "hash",
-            ExpiresAt = DateTime.UtcNow.AddHours(1)
+            ExpiresAt = futureTime
         };
         await _storage.UpsertAsync(validEntry, default);
 
         // Act
-        var deletedCount = await _storage.DeleteExpiredAsync(DateTime.UtcNow, default);
+        var deletedCount = await _storage.DeleteExpiredAsync(cutoff, default);
 
         // Assert
         Assert.IsTrue(deletedCount >= 1);

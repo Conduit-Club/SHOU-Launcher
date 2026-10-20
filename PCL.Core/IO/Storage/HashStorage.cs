@@ -35,17 +35,40 @@ public class HashStorage(string folder, IHashProvider hashProvider, bool compres
         if (hash is not null && hash.Length != hashProvider.Length)
             throw new ArgumentException("Provide hash is not correct", nameof(hash));
 
-        if (input.CanSeek) input.Position = 0;
+        // Hashing consumes the input stream. Rewind seekable streams before copying;
+        // otherwise a newly stored entry is silently written as an empty file.
+        // For non-seekable streams, buffer only when the hash must be computed so
+        // that both operations see the complete content.
+        Stream source = input;
+        MemoryStream? buffered = null;
+        try
+        {
+            if (!source.CanSeek && hash is null)
+            {
+                buffered = new MemoryStream();
+                await source.CopyToAsync(buffered).ConfigureAwait(false);
+                buffered.Position = 0;
+                source = buffered;
+            }
 
-        var fileHash = hash ?? (await hashProvider.ComputeHashAsync(input).ConfigureAwait(false)).ToHexString();
-        var destPath = _GetDestPath(fileHash);
-        //纠正: 由于之前错误设计导致的文件访问效率低下的文件结构
-        if (correctMisplacedFile && _CorrectMisplacedFile(fileHash)) LogWrapper.Info("HashStorage", "Move misplaced file into correct folder");
-        //检查是否已存在保存的文件
-        if (File.Exists(destPath)) return fileHash;
-        await using var destinationFs = _GetSaveStream(destPath);
-        await input.CopyToAsync(destinationFs).ConfigureAwait(false);
-        return fileHash;
+            if (source.CanSeek) source.Position = 0;
+
+            var fileHash = hash ?? (await hashProvider.ComputeHashAsync(source).ConfigureAwait(false)).ToHexString();
+            var destPath = _GetDestPath(fileHash);
+            //纠正: 由于之前错误设计导致的文件访问效率低下的文件结构
+            if (correctMisplacedFile && _CorrectMisplacedFile(fileHash)) LogWrapper.Info("HashStorage", "Move misplaced file into correct folder");
+            //检查是否已存在保存的文件
+            if (File.Exists(destPath)) return fileHash;
+
+            if (source.CanSeek) source.Position = 0;
+            await using var destinationFs = _GetSaveStream(destPath);
+            await source.CopyToAsync(destinationFs).ConfigureAwait(false);
+            return fileHash;
+        }
+        finally
+        {
+            buffered?.Dispose();
+        }
     }
 
     public Task<bool> DeleteAsync(string hash)

@@ -10,8 +10,15 @@ namespace PCL.Core.Test.Minecraft;
 public class McPingTest
 {
     [TestMethod]
+    [TestCategory("Integration")]
     public async Task PingTest()
     {
+        if (!string.Equals(Environment.GetEnvironmentVariable("PCL_RUN_EXTERNAL_TESTS"), "1",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            Assert.Inconclusive("External Minecraft server ping test requires PCL_RUN_EXTERNAL_TESTS=1.");
+        }
+
         using var so = new Socket(SocketType.Stream, ProtocolType.Tcp);
         using var ping2 = McPingServiceFactory.CreateService("mc.hypixel.net", 25565);
         var res = await ping2.PingAsync(TestContext.CancellationToken).ConfigureAwait(false);

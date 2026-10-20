@@ -36,7 +36,7 @@ public class SqliteCacheStorage(string dbPath) : IDisposable
         await using var conn = await _CreateConnectionAsync().ConfigureAwait(false);
         await using var cmd = conn.CreateCommand();
 
-        cmd.CommandText = "DELETE FROM cache_entries WHERE expires_at IS NOT NULL AND expires_at < datetime('now')";
+        cmd.CommandText = "DELETE FROM cache_entries WHERE expires_at IS NOT NULL AND julianday(expires_at) < julianday('now')";
         await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
 
         await using var walCmd = conn.CreateCommand();
@@ -128,7 +128,11 @@ public class SqliteCacheStorage(string dbPath) : IDisposable
         {
             await using var conn = await _CreateConnectionAsync().ConfigureAwait(false);
             await using var cmd = conn.CreateCommand();
-            cmd.CommandText = "DELETE FROM cache_entries WHERE expires_at IS NOT NULL AND datetime(expires_at) < datetime('now')";
+            // Use the caller's instant with sub-second precision. SQLite's
+            // datetime('now') is second-granular, which makes short expirations
+            // race with cleanup when both timestamps fall in the same second.
+            cmd.CommandText = "DELETE FROM cache_entries WHERE expires_at IS NOT NULL AND julianday(expires_at) < julianday(@now)";
+            cmd.Parameters.AddWithValue("@now", now.ToUniversalTime().ToString("O", CultureInfo.InvariantCulture));
             var affected = await cmd.ExecuteNonQueryAsync(ct).ConfigureAwait(false);
             return affected;
         }
@@ -212,7 +216,7 @@ public class SqliteCacheStorage(string dbPath) : IDisposable
     {
         await using var conn = await _CreateConnectionAsync().ConfigureAwait(false);
         await using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) AS total, COALESCE(SUM(data_size), 0) AS total_size, COALESCE(SUM(CASE WHEN expires_at < datetime('now') THEN 1 ELSE 0 END), 0) AS expired, COALESCE(SUM(CASE WHEN entry_type = 0 THEN 1 ELSE 0 END), 0) AS inline, COALESCE(SUM(CASE WHEN entry_type = 1 THEN 1 ELSE 0 END), 0) AS file_ref FROM cache_entries";
+        cmd.CommandText = "SELECT COUNT(*) AS total, COALESCE(SUM(data_size), 0) AS total_size, COALESCE(SUM(CASE WHEN expires_at IS NOT NULL AND julianday(expires_at) < julianday('now') THEN 1 ELSE 0 END), 0) AS expired, COALESCE(SUM(CASE WHEN entry_type = 0 THEN 1 ELSE 0 END), 0) AS inline, COALESCE(SUM(CASE WHEN entry_type = 1 THEN 1 ELSE 0 END), 0) AS file_ref FROM cache_entries";
         await using var reader = await cmd.ExecuteReaderAsync(ct).ConfigureAwait(false);
         if (await reader.ReadAsync(ct).ConfigureAwait(false))
         {
@@ -611,6 +615,12 @@ public class SqliteCacheStorage(string dbPath) : IDisposable
 
         _disposed = true;
         _writeLock.Dispose();
+
+        // Closing a pooled SqliteConnection only returns it to the pool. Clear
+        // this database's pool so Windows can release the file and WAL handles
+        // when the storage owner is disposed (especially for temporary caches).
+        using var poolConnection = new SqliteConnection(_connectionString);
+        SqliteConnection.ClearPool(poolConnection);
     }
 }
 

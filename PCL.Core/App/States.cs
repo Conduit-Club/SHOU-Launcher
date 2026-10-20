@@ -259,6 +259,11 @@ public static partial class States
         /// </summary>
         [ConfigItem<int>("SystemSystemActivity", 0, ConfigSource.Local)] public partial int AnnounceSolution { get; set; }
 
+        /// <summary>
+        /// 最近一次展示的社团网站更新记录标识（日期路径），使用本地配置持久化。
+        /// </summary>
+        [ConfigItem<string>("ConduitUpdateNoticeLastId", "", ConfigSource.Local)] public partial string ClubUpdateNoticeLastId { get; set; }
+
     }
 
     /// <summary>

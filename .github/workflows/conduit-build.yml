@@ -2,6 +2,10 @@ name: Conduit Build
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [dev]
+  push:
+    branches: [dev]
 
 permissions:
   contents: read
@@ -16,8 +20,10 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
-      - name: Publish baseline
+      - name: Publish club launcher
         shell: pwsh
+        env:
+          PCL_MS_CLIENT_ID: ${{ secrets.CLIENT_ID }}
         run: ./scripts/conduit/Publish.ps1
       - uses: actions/upload-artifact@v7
         with:
@@ -26,9 +32,13 @@ jobs:
             artifacts/conduit/*.zip
             artifacts/conduit/*.sha256
           if-no-files-found: error
-      - name: Test
+      - name: Club regression tests
         shell: pwsh
-        run: dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64 --blame-hang-timeout 2m --logger trx --results-directory artifacts/test-results
+        run: dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64 --filter 'FullyQualifiedName~Conduit|FullyQualifiedName~ProfileManagement|FullyQualifiedName~SemVer|FullyQualifiedName~Minecraft.Authentication' --logger 'trx;LogFileName=club.trx' --results-directory artifacts/test-results
+      - name: Core tests (offline; integrations separate)
+        if: ${{ !cancelled() }}
+        shell: pwsh
+        run: dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64 --filter 'TestCategory!=Integration' --blame-hang-timeout 2m --logger 'trx;LogFileName=full.trx' --results-directory artifacts/test-results
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
