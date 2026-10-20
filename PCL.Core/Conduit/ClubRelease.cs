@@ -30,6 +30,7 @@ public sealed record ClubRelease(string Tag, string Title, string Notes, string 
             var url = release.GetProperty("html_url").GetString() ?? "";
             if (!TryParseTag(tag, out _, out _)
                 || !(url.StartsWith(ClubCatalog.Repository + "/releases/tag/", StringComparison.Ordinal)
+                     || url.StartsWith(ClubCatalog.PreviousRepository + "/releases/tag/", StringComparison.Ordinal)
                      || url.StartsWith(ClubCatalog.LegacyRepository + "/releases/tag/", StringComparison.Ordinal))) continue;
             var candidate = new ClubRelease(tag, release.GetProperty("name").GetString() ?? tag, release.GetProperty("body").GetString() ?? "", url);
             if (latest is null || candidate.IsNewerThan(latest.Tag)) latest = candidate;

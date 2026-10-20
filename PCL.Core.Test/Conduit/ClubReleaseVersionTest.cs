@@ -52,9 +52,11 @@ public sealed class ClubReleaseVersionTest
     }
 
     [TestMethod]
+    [DataRow("https://github.com/Conduit-Club/SHOU-Launcher", true)]
     [DataRow("https://github.com/Conduit-Club/SHOU-PCL", true)]
     [DataRow("https://github.com/Conduit-Club/PCL-CE-SHOU", true)]
     [DataRow("https://github.com/Conduit-Club/SHOU-PCL-fake", false)]
+    [DataRow("https://github.com/Conduit-Club/SHOU-Launcher-fake", false)]
     public void ReleaseLinksSupportRepositoryRename(string repository, bool accepted)
     {
         var json = JsonSerializer.Serialize(new[]

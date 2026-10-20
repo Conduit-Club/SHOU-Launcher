@@ -26,7 +26,7 @@
                     <TextBlock x:Name="ClubReleaseIdentity" Margin="0,8,0,0" Opacity="0.72" TextWrapping="Wrap" />
                     <WrapPanel Margin="0,16,0,0">
                         <local:MyButton Text="社团主页" Height="35" Padding="14,0" Margin="0,0,12,0" local:CustomEventService.EventType="OpenUrl" local:CustomEventService.EventData="https://conduit-club.github.io/" />
-                        <local:MyButton Text="社团启动器源码" Height="35" Padding="14,0" local:CustomEventService.EventType="OpenUrl" local:CustomEventService.EventData="https://github.com/Conduit-Club/SHOU-PCL" />
+                        <local:MyButton Text="社团启动器源码" Height="35" Padding="14,0" local:CustomEventService.EventType="OpenUrl" local:CustomEventService.EventData="https://github.com/Conduit-Club/SHOU-Launcher" />
                     </WrapPanel>
                 </StackPanel>
             </local:MyCard>
@@ -110,7 +110,7 @@
                         Grid.Row="2"
                         Grid.Column="2"
                         Height="35"
-                        local:CustomEventService.EventData="https://github.com/Conduit-Club/SHOU-PCL"
+                        local:CustomEventService.EventData="https://github.com/Conduit-Club/SHOU-Launcher"
                         local:CustomEventService.EventType="OpenUrl"
                         Text="{DynamicResource Setup.About.SourceCode}" />
                 </Grid>

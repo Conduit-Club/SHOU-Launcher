@@ -59,6 +59,6 @@ GitHub Actions 使用仓库 Secret `CLIENT_ID` 映射为 `PCL_MS_CLIENT_ID`。�
 - LittleSkin 与 MUA 密码登录路线已由用户确认可用；账户刷新、令牌刷新、角色切换和 Minecraft 联机仍未完成全量真实服务联调。
 - 更新历史使用现有 `PanMsg` 原生弹层承载内容，不创建额外系统窗口；按钮和启动后提示路径已完成运行验证。
 
-## v1.2.0（zyf）候选发行
+## v1.2.0（zyf）发行
 
-候选包基于 `dev`，使用 Beta 配置并标记为预发布。当前仓库为 `Conduit-Club/SHOU-PCL`；产物命名为 `SHOU-PCL-win-x64.zip` 及旁置的 `.sha256`。构建信息包含版本、代号、源码 SHA、SDK、架构和配置。发布前应确认 `BUILD-INFO.txt` 中源码状态为 clean，且标签指向实际构建的 dev 提交。
+正式包基于合并后的 `main`，使用 Release 配置；`dev` 用于开发与验证。当前仓库为 `Conduit-Club/SHOU-Launcher`；产物命名为 `SHOU-Launcher-win-x64.zip` 及旁置的 `.sha256`。构建信息包含版本、代号、源码 SHA、SDK、架构和配置。发布前应确认 `BUILD-INFO.txt` 中源码状态为 clean，且标签指向实际构建的 main 提交。

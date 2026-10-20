@@ -20,7 +20,8 @@ public static class ClubCatalog
     public const string LegacyGameTypeInfo = "PCLCE";
 
     public const string Website = "https://conduit-club.github.io/";
-    public const string Repository = "https://github.com/Conduit-Club/SHOU-PCL";
+    public const string Repository = "https://github.com/Conduit-Club/SHOU-Launcher";
+    public const string PreviousRepository = "https://github.com/Conduit-Club/SHOU-PCL";
     public const string LegacyRepository = "https://github.com/Conduit-Club/PCL-CE-SHOU";
     // MUA Union is a server-side aggregation API. Players authenticate against
     // the member skin site, while the Union endpoint is retained for existing

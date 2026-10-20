@@ -8,7 +8,7 @@
 
 由 Conduit-Club 独立维护，为潮涌核心社定制的 Minecraft 启动器。
 
-[下载最新版](https://github.com/Conduit-Club/SHOU-PCL/releases/latest) · [社团主页](https://conduit-club.github.io/) · [问题反馈](https://github.com/Conduit-Club/SHOU-PCL/issues)
+[下载最新版](https://github.com/Conduit-Club/SHOU-Launcher/releases/latest) · [社团主页](https://conduit-club.github.io/) · [问题反馈](https://github.com/Conduit-Club/SHOU-Launcher/issues)
 
 </div>
 
@@ -24,9 +24,9 @@
 
 ## 开始使用
 
-从 [Releases](https://github.com/Conduit-Club/SHOU-PCL/releases/latest) 下载 Windows x64 启动器包，解压后运行，添加账户并选择游戏实例即可开始。运行启动器无需另装 .NET，启动 Minecraft 仍需 Java。
+从 [Releases](https://github.com/Conduit-Club/SHOU-Launcher/releases/latest) 下载 Windows x64 启动器包，解压后运行，添加账户并选择游戏实例即可开始。运行启动器无需另装 .NET，启动 Minecraft 仍需 Java。
 
-当前候选版本为 [v1.2.0 · zyf](docs/conduit/RELEASE-v1.2.0.md)。`main` 为稳定分支，`dev` 为开发分支；历史迁移与来源见 [历史说明](docs/conduit/HISTORY.md)。版本变化与已知限制见对应发行说明；源码构建请参阅[构建文档](docs/conduit/BUILD.md)。社团 QQ 群：**756155087**。
+当前版本为 [v1.2.0 · zyf](docs/conduit/RELEASE-v1.2.0.md)。`main` 为稳定分支，`dev` 为开发分支；历史迁移与来源见 [历史说明](docs/conduit/HISTORY.md)。版本变化与已知限制见对应发行说明；源码构建请参阅[构建文档](docs/conduit/BUILD.md)。社团 QQ 群：**756155087**。
 
 ## 社团实景
 

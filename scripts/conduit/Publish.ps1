@@ -42,7 +42,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "dotnet clean failed: $LASTEXITCODE" }
     & $Dotnet publish 'Plain Craft Launcher 2/Plain Craft Launcher 2.csproj' -c $Configuration "-p:Platform=$Architecture" -p:UseSharedCompilation=false --self-contained true -o $output
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed: $LASTEXITCODE" }
-    $name = "SHOU-PCL-win-$($Architecture.ToLowerInvariant())"
+    $name = "SHOU-Launcher-win-$($Architecture.ToLowerInvariant())"
     Move-Item -LiteralPath (Join-Path $output 'Plain Craft Launcher 2.exe') -Destination (Join-Path $output "$name.exe")
     Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination $output
     Copy-Item -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/LICENCE') -Destination $output
