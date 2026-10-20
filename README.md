@@ -4,9 +4,9 @@
 
 <img src="Plain%20Craft%20Launcher%202/Images/Conduit/club-logo.png" alt="潮涌核心社标志" width="96" height="96">
 
-# SHOU-PCL · 潮涌核心社启动器
+# 潮涌核心社启动器
 
-为潮涌核心社定制的 Minecraft 启动器，源自 PCL-CE，现独立维护。
+由 Conduit-Club 独立维护，为潮涌核心社定制的 Minecraft 启动器。
 
 [下载最新版](https://github.com/Conduit-Club/SHOU-PCL/releases/latest) · [社团主页](https://conduit-club.github.io/) · [问题反馈](https://github.com/Conduit-Club/SHOU-PCL/issues)
 
@@ -14,7 +14,7 @@
 
 ## 五湖四海之士，汇于东海之滨
 
-从校园还原到自由创造，SHOU-PCL 为社团玩家提供统一的游戏入口，让游玩、建设与分享更方便。
+从校园还原到自由创造，为社团玩家提供统一的游戏入口，让游玩、建设与分享更方便。
 
 ## 主要功能
 
@@ -34,9 +34,9 @@
 | --- | --- | --- |
 | ![校园湖畔](Plain%20Craft%20Launcher%202/Images/Conduit/campus-lake.jpg) | ![生存世界](Plain%20Craft%20Launcher%202/Images/Conduit/spawn-plaza.jpg) | ![创造建筑](Plain%20Craft%20Launcher%202/Images/Conduit/spawn-statues.jpg) |
 
-## 许可与鸣谢
+## 许可与致谢
 
-SHOU-PCL 是 Conduit-Club 基于 [PCL-Community/PCL-CE](https://github.com/PCL-Community/PCL-CE) 开发的独立第三方版本，不是 PCL、PCL-CE、Mojang 或 Microsoft 的官方发行物。
+本项目历史上基于 [PCL-Community/PCL-CE](https://github.com/PCL-Community/PCL-CE) 开发，现由 Conduit-Club 独立维护，不是 PCL、PCL-CE、Mojang 或 Microsoft 的官方发行物。
 
 感谢 PCL 原作者[龙腾猫跃](https://github.com/Meloong-Git/PCL)（[赞助入口](https://ifdian.net/a/LTCat)）与 PCL Community。项目保留原作者署名和第三方声明；`Plain Craft Launcher 2/` 遵循 [PCL 分发有限许可](Plain%20Craft%20Launcher%202/LICENCE)，其他目录遵循 [Apache License 2.0](LICENSE)。
 
