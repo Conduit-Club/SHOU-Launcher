@@ -8,7 +8,7 @@ public partial class PageSetupUpdate
     public PageSetupUpdate()
     {
         InitializeComponent();
-        CurrentVersion.Text = "Plain Craft Launcher 潮涌核心社版\n" + ClubRelease.CurrentTag;
+        CurrentVersion.Text = "潮涌核心社启动器\n" + ClubRelease.CurrentTag;
     }
     private void Check_Click(object sender, MouseButtonEventArgs e) => CheckUpdate();
     public async void CheckUpdate()
