@@ -3,16 +3,16 @@ name: Conduit Build
 on:
   workflow_dispatch:
   pull_request:
-    branches: [dev]
+    branches: [dev, main]
   push:
-    branches: [dev]
+    branches: [dev, main]
 
 permissions:
   contents: read
 
 jobs:
   build:
-    if: github.repository == 'Conduit-Club/PCL-CE-SHOU'
+    if: github.repository == 'Conduit-Club/SHOU-PCL'
     runs-on: windows-latest
     timeout-minutes: 20
     steps:
@@ -27,7 +27,7 @@ jobs:
         run: ./scripts/conduit/Publish.ps1
       - uses: actions/upload-artifact@v7
         with:
-          name: PCL-CE-SHOU-win-x64
+          name: SHOU-PCL-win-x64
           path: |
             artifacts/conduit/*.zip
             artifacts/conduit/*.sha256

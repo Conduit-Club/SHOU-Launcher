@@ -42,7 +42,7 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "dotnet clean failed: $LASTEXITCODE" }
     & $Dotnet publish 'Plain Craft Launcher 2/Plain Craft Launcher 2.csproj' -c $Configuration "-p:Platform=$Architecture" -p:UseSharedCompilation=false --self-contained true -o $output
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed: $LASTEXITCODE" }
-    $name = "PCL-CE-SHOU-win-$($Architecture.ToLowerInvariant())"
+    $name = "SHOU-PCL-win-$($Architecture.ToLowerInvariant())"
     Move-Item -LiteralPath (Join-Path $output 'Plain Craft Launcher 2.exe') -Destination (Join-Path $output "$name.exe")
     Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination $output
     Copy-Item -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/LICENCE') -Destination $output
@@ -53,7 +53,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve SDK version.' }
     $sourceState = if (git status --porcelain) { 'modified working tree (includes uncommitted changes)' } else { 'clean' }
     $appConfigured = -not [string]::IsNullOrWhiteSpace($clientId)
-    "Source base commit: $commit`nSource state: $sourceState`nSDK: $sdk`nConfiguration: $Configuration`nRuntime: win-$($Architecture.ToLowerInvariant())`nSelf-contained: true`nMicrosoft public Client ID configured: $appConfigured`nOther service credentials: not embedded" | Set-Content (Join-Path $output 'BUILD-INFO.txt') -Encoding utf8
+    $metadata = Get-Content -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/metadata.json') -Raw | ConvertFrom-Json
+    $releaseSource = Get-Content -LiteralPath (Join-Path $repo 'PCL.Core/Conduit/ClubRelease.cs') -Raw
+    $codename = [regex]::Match($releaseSource, 'CurrentCodename = "([^"]+)"').Groups[1].Value
+    "Version: $($metadata.version.base)`nCodename: $codename`nSource base commit: $commit`nSource state: $sourceState`nSDK: $sdk`nConfiguration: $Configuration`nRuntime: win-$($Architecture.ToLowerInvariant())`nSelf-contained: true`nMicrosoft public Client ID configured: $appConfigured`nOther service credentials: not embedded" | Set-Content (Join-Path $output 'BUILD-INFO.txt') -Encoding utf8
     $archive = Join-Path (Split-Path $output) "$name.zip"
     Compress-Archive -Path "$output/*" -DestinationPath $archive
     $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()

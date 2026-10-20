@@ -1,8 +1,8 @@
-﻿# 社团定制第一阶段
+# 社团定制第一阶段
 
 ## 基线与内容来源
 
-直接上游仍是 PCL-CE `dev` 的 `a42a7699948aebd1e2563df025274af255c1f559`。本轮开发前 fetch 确认没有新的上游提交，无合并冲突。
+初期社团定制基于 PCL-CE `dev` 的 `a42a7699948aebd1e2563df025274af255c1f559`。v1.2.0 最后纳入至 `f00b458e7bcf1368ea4e00148cf5db09bd1f5133`，之后转为独立维护，不再自动同步。历史迁移与来源声明见 [HISTORY.md](HISTORY.md)。
 
 - [社团首页](https://conduit-club.github.io/)：主页文案与 QQ 群。
 - [Velocity 文档](https://conduit-club.github.io/servers/velocity/)：认证服务、Minecraft 1.21.1 和三个公开入口，核对日期 2026-10-02。
@@ -25,13 +25,13 @@
 - 启动后默认后台检查社团更新日志总览页；只提示最新且尚未展示的日期记录，同日标题变化不会重复弹窗。提示与历史内容使用现有 `PanMsg` 原生弹层，不创建额外系统窗口；检查失败、链接不安全或启动/登录正忙时静默跳过并留待下次启动，可在“设置 → 个性化”关闭。
 - 关于页先介绍社团，开发署名 Moeary / Codex；新增指导老师-ZRY 与空间博士-ZST，链接按用户提供的校方页面配置。社团贡献者只列两位，上游作者、赞助链接、鸣谢及许可证另行保留。
 
-## 后续同步关注点
+## 维护关注点
 
 新增逻辑集中在 `PCL.Core/Conduit`、`Pages/Conduit`、`Modules/Conduit` 和 `DianaPalette.cs`。必要接入仍修改了配置枚举、主题资源入口、首页、账户创建门槛、启动参数、微软 Client ID 选择、关于页以及更新模块。
 
 更新管理器和更新页面已改为社团手动发行检查，属于与上游差异最大的部分。上游若调整这些文件，需按 AGENTS.md 逐项合并，不直接覆盖社团行为。账号缓存、实例认证优先级和主题索引是需要特别回归的接口。
 
-当前版本目标为 `v1.1.0`（sxj），已发布包以社团 Releases 页面为准；`v1.0.0`（zst）的[首发说明](RELEASE-v1.0.0.md)保留作历史记录。发布新版本时同步调整 `ClubRelease.CurrentTag`、`ClubRelease.CurrentCodename` 与 `metadata.json` 中的版本。旧 `conduit-v2.15.1-club.*` 标签仅作为迁移基线，不得让更新检查把它们判定为高于正式首发版本。
+当前版本目标为 `v1.2.0`（zyf），已发布包以社团 Releases 页面为准；`v1.0.0`（zst）的[首发说明](RELEASE-v1.0.0.md)保留作历史记录。发布新版本时同步调整 `ClubRelease.CurrentTag`、`ClubRelease.CurrentCodename` 与 `metadata.json` 中的版本。旧 `conduit-v2.15.1-club.*` 标签仅作为迁移基线，不得让更新检查把它们判定为高于正式首发版本。
 
 ## 验证边界
 

@@ -46,7 +46,7 @@ public static class ClubUpdates
     private static HttpClient CreateClient()
     {
         var client = new HttpClient { Timeout = TimeSpan.FromSeconds(20) };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("PCL-CE-SHOU/1.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("SHOU-PCL/" + ClubRelease.CurrentVersion);
         client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github+json");
         return client;
     }
@@ -57,14 +57,14 @@ public static class ClubUpdates
         {
             Timeout = TimeSpan.FromSeconds(8)
         };
-        client.DefaultRequestHeaders.UserAgent.ParseAdd("PCL-CE-SHOU/1.0");
+        client.DefaultRequestHeaders.UserAgent.ParseAdd("SHOU-PCL/" + ClubRelease.CurrentVersion);
         client.DefaultRequestHeaders.Accept.ParseAdd("text/html");
         return client;
     }
 
     public static async Task<ClubRelease> CheckAsync()
     {
-        var json = await Client.GetStringAsync("https://api.github.com/repos/Conduit-Club/PCL-CE-SHOU/releases?per_page=30");
+        var json = await Client.GetStringAsync("https://api.github.com/repos/Conduit-Club/SHOU-PCL/releases?per_page=30");
         return Latest = ClubRelease.ParseLatest(json);
     }
 
