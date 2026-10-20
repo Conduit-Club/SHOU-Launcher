@@ -7,8 +7,8 @@ namespace PCL.Core.Conduit;
 
 public sealed record ClubRelease(string Tag, string Title, string Notes, string PageUrl)
 {
-    public const string CurrentVersion = "1.1.0";
-    public const string CurrentCodename = "sxj";
+    public const string CurrentVersion = "1.2.0";
+    public const string CurrentCodename = "zyf";
     public const string CurrentTag = "v" + CurrentVersion;
 
     public bool IsNewerThan(string currentTag)
@@ -29,7 +29,8 @@ public sealed record ClubRelease(string Tag, string Title, string Notes, string 
             var tag = release.GetProperty("tag_name").GetString() ?? "";
             var url = release.GetProperty("html_url").GetString() ?? "";
             if (!TryParseTag(tag, out _, out _)
-                || !url.StartsWith(ClubCatalog.Repository + "/releases/tag/", StringComparison.Ordinal)) continue;
+                || !(url.StartsWith(ClubCatalog.Repository + "/releases/tag/", StringComparison.Ordinal)
+                     || url.StartsWith(ClubCatalog.LegacyRepository + "/releases/tag/", StringComparison.Ordinal))) continue;
             var candidate = new ClubRelease(tag, release.GetProperty("name").GetString() ?? tag, release.GetProperty("body").GetString() ?? "", url);
             if (latest is null || candidate.IsNewerThan(latest.Tag)) latest = candidate;
         }
