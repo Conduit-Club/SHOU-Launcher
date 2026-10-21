@@ -1,4 +1,4 @@
-using System.Windows;
+using System.Windows.Input;
 using System.Windows.Controls;
 using PCL.Core.App;
 using PCL.Core.Conduit;
@@ -70,7 +70,7 @@ public partial class ClubSourceSettings : UserControl
         return true;
     }
 
-    private void AddSource(object sender, RoutedEventArgs e)
+    private void AddSource(object sender, MouseButtonEventArgs e)
     {
         if (!ReadEditor()) return;
         _sources.Add(new DownloadSource());
@@ -79,15 +79,15 @@ public partial class ClubSourceSettings : UserControl
         Sources.SelectedItem = Sources.Items.Cast<ListBoxItem>().First(i => ReferenceEquals(i.Tag, added));
     }
 
-    private void DeleteSource(object sender, RoutedEventArgs e)
+    private void DeleteSource(object sender, MouseButtonEventArgs e)
     {
         if (_selected != null) _sources.Remove(_selected);
         RefreshList();
     }
 
-    private void ResetSources(object sender, RoutedEventArgs e) { _sources = DownloadSources.Defaults(); RefreshList(); Status.Text = "已载入默认值；保存后生效。"; }
+    private void ResetSources(object sender, MouseButtonEventArgs e) { _sources = DownloadSources.Defaults(); RefreshList(); Status.Text = "已载入默认值；保存后生效。"; }
 
-    private void SaveSources(object sender, RoutedEventArgs e)
+    private void SaveSources(object sender, MouseButtonEventArgs e)
     {
         if (!ReadEditor()) return;
         try

@@ -1,5 +1,5 @@
 using System.Net.Http;
-using System.Windows;
+using System.Windows.Input;
 using System.Windows.Controls;
 using PCL.Core.App;
 using PCL.Core.Conduit;
@@ -19,7 +19,7 @@ public partial class ClubAria2Settings : UserControl
         };
     }
 
-    private void Save(object sender, RoutedEventArgs e)
+    private void Save(object sender, MouseButtonEventArgs e)
     {
         try
         {
@@ -32,7 +32,7 @@ public partial class ClubAria2Settings : UserControl
         catch (Exception ex) { Status.Text = ex.Message; }
     }
 
-    private async void Test(object sender, RoutedEventArgs e)
+    private async void Test(object sender, MouseButtonEventArgs e)
     {
         if (sender is MyButton button) button.IsEnabled = false;
         try
