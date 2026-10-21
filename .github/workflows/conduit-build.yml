@@ -25,6 +25,9 @@ jobs:
         env:
           PCL_MS_CLIENT_ID: ${{ secrets.CLIENT_ID }}
         run: ./scripts/conduit/Publish.ps1
+      - name: WPF settings runtime regression
+        shell: pwsh
+        run: dotnet test PCL.Launcher.Test/PCL.Launcher.Test.csproj -c Beta -p:Platform=x64 --blame-hang-timeout 2m --logger 'trx;LogFileName=launcher-ui.trx' --results-directory artifacts/test-results
       - uses: actions/upload-artifact@v7
         with:
           name: SHOU-Launcher-win-x64
