@@ -13,14 +13,16 @@ namespace PCL;
 public partial class PageSetupUI
 {
     private ColorTheme[] AvailableThemes => Basics.IsAprilFool
-        ? [ColorTheme.SkyBlue, ColorTheme.CatBlue, ColorTheme.DeathBlue, ColorTheme.HmclBlue, ColorTheme.Diana]
-        : [ColorTheme.SkyBlue, ColorTheme.CatBlue, ColorTheme.DeathBlue, ColorTheme.Diana];
+        ? [ColorTheme.SkyBlue, ColorTheme.CatBlue, ColorTheme.DeathBlue, ColorTheme.HmclBlue, ColorTheme.Diana, ColorTheme.Aimisi, ColorTheme.Elegant]
+        : [ColorTheme.SkyBlue, ColorTheme.CatBlue, ColorTheme.DeathBlue, ColorTheme.Diana, ColorTheme.Aimisi, ColorTheme.Elegant];
     public string[] ThemeColors => AvailableThemes.Select(theme => theme switch
     {
         ColorTheme.SkyBlue => Lang.Text("Setup.Ui.Theme.Color.SkyBlue"),
         ColorTheme.CatBlue => Lang.Text("Setup.Ui.Theme.Color.CatBlue"),
         ColorTheme.DeathBlue => Lang.Text("Setup.Ui.Theme.Color.CrashBlue"),
         ColorTheme.HmclBlue => Lang.Text("Setup.Ui.Theme.Color.Hmcl"),
+        ColorTheme.Aimisi => "爱弥斯配色",
+        ColorTheme.Elegant => "高雅人士配色",
         _ => "嘉然配色"
     }).ToArray();
 

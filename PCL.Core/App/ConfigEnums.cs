@@ -38,7 +38,9 @@ public enum ColorTheme
     CatBlue = 1,
     DeathBlue = 2,
     HmclBlue = 3,
-    Diana = 4
+    Diana = 4,
+    Aimisi = 5,
+    Elegant = 6
 }
 
 /// <summary>
