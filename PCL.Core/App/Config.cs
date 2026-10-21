@@ -84,6 +84,9 @@ public static partial class Config
     {
         [ConfigItem<string>("ConduitDownloadSources", "", ConfigSource.Local)] public partial string Sources { get; set; }
         [ConfigItem<bool>("ConduitDownloadSourceOrder", true, ConfigSource.Local)] public partial bool UseSourceOrder { get; set; }
+        [ConfigItem<bool>("ConduitAria2Enabled", false, ConfigSource.Local)] public partial bool Aria2Enabled { get; set; }
+        [ConfigItem<string>("ConduitAria2Endpoint", "http://127.0.0.1:6800/jsonrpc", ConfigSource.Local)] public partial string Aria2Endpoint { get; set; }
+        [ConfigItem<string>("ConduitAria2Secret", "", ConfigSource.SharedEncrypt)] public partial string Aria2Secret { get; set; }
         // 保留原配置键，升级后仍沿用用户已设置的数值（值 + 1 为连接上限）。
         [ConfigItem<int>("ToolDownloadThread", 63)] public partial int ThreadLimit { get; set; }
         [ConfigItem<int>("ToolDownloadFileConnection", 7)] public partial int FileConnectionLimit { get; set; }

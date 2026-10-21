@@ -55,6 +55,12 @@ public static class FileDownloader
 
         Directory.CreateDirectory(Path.GetDirectoryName(localPath) ?? throw new ArgumentException("下载路径无效", nameof(localPath)));
 
+        if (Config.Download.Aria2Enabled)
+        {
+            await ClubAria2Download.DownloadAsync(urlList, localPath, useBrowserUserAgent, customUserAgent, trackedFile, cancellationToken).ConfigureAwait(false);
+            return;
+        }
+
         Exception? lastException = null;
         for (var retry = 0; retry <= MaxDownloadRetries; retry++)
         {
