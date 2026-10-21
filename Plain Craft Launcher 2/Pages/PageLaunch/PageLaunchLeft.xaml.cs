@@ -241,7 +241,8 @@ public partial class PageLaunchLeft
                     return;
                 }
 
-                var destination = PCL.Core.Conduit.ClubCatalog.FindServer(Config.System.ClubServer);
+                var destination = PCL.Core.Conduit.ClubCatalog.FindServer(
+                    Config.Preference.Homepage.ClubServers ? Config.System.ClubServer : "none");
                 if (destination.Id != "none" && ProfileService.Current is { } profile && !PCL.Core.Conduit.ClubCatalog.CanJoin(profile))
                 {
                     HintService.Hint("社团服务器需要微软正版、MUA Union 或 LittleSkin 账户，请先切换账户。", HintType.Error);

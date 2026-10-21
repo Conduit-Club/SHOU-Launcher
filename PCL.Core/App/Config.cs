@@ -324,6 +324,7 @@ public static partial class Config
         /// </summary>
         [ConfigGroup("Background")] partial class BackgroundConfigGroup
         {
+            [ConfigItem<string>("ConduitHomePictures", "", ConfigSource.Local)] public partial string ClubHomePictures { get; set; }
             [ConfigItem<bool>("ConduitHomeSlideshow", true, ConfigSource.Local)] public partial bool ClubHomeSlideshow { get; set; }
             /// <summary>
             /// 彩色底部填充。
@@ -387,6 +388,8 @@ public static partial class Config
         /// </summary>
         [ConfigGroup("Homepage")] partial class HomepageConfigGroup
         {
+            [ConfigItem<bool>("ConduitHomeIntro", true, ConfigSource.Local)] public partial bool ClubIntro { get; set; }
+            [ConfigItem<bool>("ConduitHomeServers", true, ConfigSource.Local)] public partial bool ClubServers { get; set; }
             /// <summary>
             /// 主页来源类型。
             /// </summary>
