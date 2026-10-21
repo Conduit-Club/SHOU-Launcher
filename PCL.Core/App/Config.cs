@@ -82,6 +82,11 @@ public static partial class Config
     /// </summary>
     [ConfigGroup("Download")] partial class DownloadConfigGroup
     {
+        [ConfigItem<string>("ConduitDownloadSources", "", ConfigSource.Local)] public partial string Sources { get; set; }
+        [ConfigItem<bool>("ConduitDownloadSourceOrder", true, ConfigSource.Local)] public partial bool UseSourceOrder { get; set; }
+        [ConfigItem<bool>("ConduitAria2Enabled", false, ConfigSource.Local)] public partial bool Aria2Enabled { get; set; }
+        [ConfigItem<string>("ConduitAria2Endpoint", "http://127.0.0.1:6800/jsonrpc", ConfigSource.Local)] public partial string Aria2Endpoint { get; set; }
+        [ConfigItem<string>("ConduitAria2Secret", "", ConfigSource.SharedEncrypt)] public partial string Aria2Secret { get; set; }
         // 保留原配置键，升级后仍沿用用户已设置的数值（值 + 1 为连接上限）。
         [ConfigItem<int>("ToolDownloadThread", 63)] public partial int ThreadLimit { get; set; }
         [ConfigItem<int>("ToolDownloadFileConnection", 7)] public partial int FileConnectionLimit { get; set; }
@@ -324,6 +329,7 @@ public static partial class Config
         /// </summary>
         [ConfigGroup("Background")] partial class BackgroundConfigGroup
         {
+            [ConfigItem<string>("ConduitHomePictures", "", ConfigSource.Local)] public partial string ClubHomePictures { get; set; }
             [ConfigItem<bool>("ConduitHomeSlideshow", true, ConfigSource.Local)] public partial bool ClubHomeSlideshow { get; set; }
             /// <summary>
             /// 彩色底部填充。
@@ -387,6 +393,8 @@ public static partial class Config
         /// </summary>
         [ConfigGroup("Homepage")] partial class HomepageConfigGroup
         {
+            [ConfigItem<bool>("ConduitHomeIntro", true, ConfigSource.Local)] public partial bool ClubIntro { get; set; }
+            [ConfigItem<bool>("ConduitHomeServers", true, ConfigSource.Local)] public partial bool ClubServers { get; set; }
             /// <summary>
             /// 主页来源类型。
             /// </summary>

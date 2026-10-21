@@ -41,6 +41,16 @@ public static class ThemeManager
     // 主页面背景
     private static void RefreshBackground()
     {
+        if (ThemeService.CurrentTheme is ColorTheme.Aimisi or ColorTheme.Elegant)
+        {
+            var palette = CharacterPalettes.Colors(ThemeService.CurrentTheme, IsDarkMode);
+            var characterBackground = new LinearGradientBrush { StartPoint = new Point(0, 0), EndPoint = new Point(1, 1) };
+            foreach (var (key, offset) in new[] { ("Background", 0d), ("7", 0.55d), ("8", 1d) })
+                characterBackground.GradientStops.Add(new GradientStop((Color)ColorConverter.ConvertFromString(palette[key]), offset));
+            characterBackground.Freeze();
+            ModMain.frmMain.PanForm.Background = characterBackground;
+            return;
+        }
         if (ThemeService.CurrentTheme == ColorTheme.Diana)
         {
             var colors = IsDarkMode ? new[] { "#241D20", "#402B31", "#33262A" } : new[] { "#FDF9F3", "#FDEBED", "#F9EFE4" };

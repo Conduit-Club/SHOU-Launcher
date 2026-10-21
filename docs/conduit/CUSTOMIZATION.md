@@ -27,11 +27,13 @@
 
 ## 维护关注点
 
+v1.3.0（dxy）新增首页纯净模式、自定义轮播、下载源优先级与 SHOU-MCMirror、外部 aria2 RPC、爱弥斯/高雅人士深浅配色。入口、使用方式与验证边界见 [RELEASE-v1.3.0.md](RELEASE-v1.3.0.md)。
+
 新增逻辑集中在 `PCL.Core/Conduit`、`Pages/Conduit`、`Modules/Conduit` 和 `DianaPalette.cs`。必要接入仍修改了配置枚举、主题资源入口、首页、账户创建门槛、启动参数、微软 Client ID 选择、关于页以及更新模块。
 
 更新管理器和更新页面已改为社团手动发行检查，属于与上游差异最大的部分。上游若调整这些文件，需按 AGENTS.md 逐项合并，不直接覆盖社团行为。账号缓存、实例认证优先级和主题索引是需要特别回归的接口。
 
-当前版本目标为 `v1.2.0`（zyf），已发布包以社团 Releases 页面为准；`v1.0.0`（zst）的[首发说明](RELEASE-v1.0.0.md)保留作历史记录。发布新版本时同步调整 `ClubRelease.CurrentTag`、`ClubRelease.CurrentCodename` 与 `metadata.json` 中的版本。旧 `conduit-v2.15.1-club.*` 标签仅作为迁移基线，不得让更新检查把它们判定为高于正式首发版本。
+当前版本目标为 `v1.3.0`（dxy），已发布包以社团 Releases 页面为准；`v1.0.0`（zst）的[首发说明](RELEASE-v1.0.0.md)保留作历史记录。发布新版本时同步调整 `ClubRelease.CurrentTag`、`ClubRelease.CurrentCodename` 与 `metadata.json` 中的版本。旧 `conduit-v2.15.1-club.*` 标签仅作为迁移基线，不得让更新检查把它们判定为高于正式首发版本。
 
 ## 验证边界
 

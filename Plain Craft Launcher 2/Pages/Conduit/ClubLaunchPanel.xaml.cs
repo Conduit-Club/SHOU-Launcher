@@ -46,12 +46,14 @@ public partial class ClubLaunchPanel : UserControl
         InitializeComponent();
         Loaded += (_, _) =>
         {
+            IntroCard.Visibility = Config.Preference.Homepage.ClubIntro ? Visibility.Visible : Visibility.Collapsed;
+            ServersCard.Visibility = Config.Preference.Homepage.ClubServers ? Visibility.Visible : Visibility.Collapsed;
             var selected = ClubCatalog.FindServer(Config.System.ClubServer);
             _serverChoices = ClubCatalog.Servers.Select(s => new ServerChoice(s, s.Id == selected.Id)).ToArray();
             Servers.ItemsSource = _serverChoices;
             UpdateDestination(selected);
             _ready = true;
-            StartStatusRefresh();
+            if (Config.Preference.Homepage.ClubIntro) StartStatusRefresh();
         };
         _statusTimer.Tick += (_, _) =>
         {

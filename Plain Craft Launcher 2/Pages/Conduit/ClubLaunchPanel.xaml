@@ -53,7 +53,7 @@
   </Style>
  </UserControl.Resources>
  <StackPanel>
-  <local:MyCard Margin="0,0,0,15">
+  <local:MyCard x:Name="IntroCard" Margin="0,0,0,15">
    <StackPanel Margin="20,18">
     <DockPanel>
      <Border x:Name="ClubOnlineBadge" DockPanel.Dock="Right" Margin="12,0,0,0" Padding="10,4" Background="{DynamicResource ColorBrush8}" CornerRadius="6"
@@ -77,7 +77,7 @@
     </WrapPanel>
    </StackPanel>
   </local:MyCard>
-  <local:MyCard Title="启动后前往" Margin="0,0,0,15">
+  <local:MyCard x:Name="ServersCard" Title="启动后前往" Margin="0,0,0,15">
    <StackPanel Margin="20,40,12,18">
     <ItemsControl x:Name="Servers">
      <ItemsControl.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>

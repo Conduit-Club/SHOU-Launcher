@@ -6,7 +6,7 @@
 
 - 自 2026-10-20 起独立维护，不再自动同步原上游；默认分支为 `main`，开发与候选发行分支为 `dev`，通过 `dev → main` PR 审查。
 - 最后纳入的 PCL-CE 基线：`f00b458e7bcf1368ea4e00148cf5db09bd1f5133`（2026-10-15），此次同步新增 9 个提交；旧发布工作流的两处删除冲突已按社团独立发行策略处理。历史迁移见 [HISTORY.md](HISTORY.md)。
-- 直接 PCL-CE 基线版本：`2.15.1`；当前版本目标为 `v1.2.0`（zyf），已发布包以社团 Releases 页面显示的版本为准。`v1.0.0`（zst）首发说明保留作历史记录。正式发行标签使用 `v` 前缀，同时兼容读取旧 `conduit-v` 标签，不冒充 CE 官方发行版。
+- 直接 PCL-CE 基线版本：`2.15.1`；当前版本目标为 `v1.3.0`（dxy），已发布包以社团 Releases 页面显示的版本为准。`v1.0.0`（zst）首发说明保留作历史记录。正式发行标签使用 `v` 前缀，同时兼容读取旧 `conduit-v` 标签，不冒充 CE 官方发行版。
 
 ## 环境
 
@@ -34,7 +34,7 @@ GitHub Actions 使用仓库 Secret `CLIENT_ID` 映射为 `PCL_MS_CLIENT_ID`。�
 
 2026-10-03 已配置并审核通过 `CLIENT_ID`。其他上游 Secrets（CurseForge、Natayark、联机、遥测等）没有社团自己的可用值，未配置假值，也未复制上游凭据。原 CE GPG / MirrorChyan 发行工作流在社团仓库保持禁用。微软应用注入已验证，真实账户授权与 Minecraft 服务联调仍需单独确认。
 
-`Conduit Build` 工作流可在 GitHub Actions 手动运行，会上传 x64 构建产物，不使用上游密钥或镜像服务。当前版本目标为 v1.2.0（zyf），正式包、历史 v1.0.0 包和对应说明均以社团 Releases 页面为准；发行包使用 ZIP 旁的 SHA-256 文件校验，不把 PR 或开发构建链接当作已发布包。
+`Conduit Build` 工作流可在 GitHub Actions 手动运行，会上传 x64 构建产物，不使用上游密钥或镜像服务。当前版本目标为 v1.3.0（dxy），正式包、历史 v1.0.0 包和对应说明均以社团 Releases 页面为准；发行包使用 ZIP 旁的 SHA-256 文件校验，不把 PR 或开发构建链接当作已发布包。
 
 原 CE Release 与 MirrorChyan 工作流仅允许在 `PCL-Community/PCL-CE` 仓库运行，避免重写社团发行说明或调用上游服务；独立维护后继续保留此隔离。
 

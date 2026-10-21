@@ -5,6 +5,7 @@ namespace PCL.Network;
 
 public struct FetchParam
 {
+    public bool BypassSourceOrder { get; set; }
     public string Method { get; set; }
     
     /// <summary>
