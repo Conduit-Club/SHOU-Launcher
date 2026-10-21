@@ -5,6 +5,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using PCL.Core.Conduit;
 
 
 namespace PCL.Network;
@@ -45,6 +46,8 @@ public static class FileDownloader
     private static async Task DownloadCoreAsync(IEnumerable<string> urls, string localPath, bool useBrowserUserAgent,
         string customUserAgent, CancellationToken cancellationToken, bool enableParallelChunks, DownloadFile? trackedFile)
     {
+        if (Config.Download.UseSourceOrder)
+            urls = DownloadSources.Resolve(ClubSourceRequests.ExpandVersionMetadata(urls), DownloadSources.Parse(Config.Download.Sources)).Select(s => s.Url);
         var urlList = urls.Select(url => RequestSigning.SecretCdnSign(url.Trim())).Where(url => !string.IsNullOrWhiteSpace(url))
             .Distinct().ToList();
         if (urlList.Count == 0)

@@ -7,6 +7,8 @@ using Downloader;
 using System.Text.Json.Nodes;
 using PCL.Core.IO.Net;
 using PCL.Core.IO.Net.Http;
+using PCL.Core.App;
+using PCL.Core.Conduit;
 
 namespace PCL.Network;
 
@@ -28,7 +30,8 @@ public static class Requester
             UseBrowserUserAgent = param.UseBrowserUserAgent,
             Timeout = param.Timeout,
             Encoding = param.Encoding,
-            MakeLog = true
+            MakeLog = true,
+            BypassSourceOrder = param.BypassSourceOrder
         }, Math.Max(1, param.Retries == 0 ? 1 : param.Retries)).ConfigureAwait(false);
     }
 
@@ -39,6 +42,23 @@ public static class Requester
 
     public static async Task<JsonNode> FetchJsonAsync(string url, RequestParam param = default)
     {
+        if (Config.Download.UseSourceOrder && !param.BypassSourceOrder)
+        {
+            var sources = DownloadSources.Resolve([url], DownloadSources.Parse(Config.Download.Sources));
+            var failures = new List<Exception>();
+            param.BypassSourceOrder = true;
+            foreach (var source in sources)
+                try
+                {
+                    var json = ModBase.GetJson(await FetchStringAsync(source.Url, param).ConfigureAwait(false));
+                    // An empty loader list means this source has not synced the requested version yet.
+                    if (json is JsonArray { Count: 0 } && (url.Contains("/forge/") || url.Contains("/neoforge/") || url.Contains("/v2/versions/")))
+                        throw new KeyNotFoundException("此源尚未收录目标加载器版本。");
+                    return json;
+                }
+                catch (Exception ex) { failures.Add(ex); }
+            throw new AggregateException("所有 JSON 下载源均不可用。", failures);
+        }
         return ModBase.GetJson(await FetchStringAsync(url, param).ConfigureAwait(false));
     }
 
@@ -74,7 +94,10 @@ public static class Requester
 
     private static async Task<string> FetchAsync(string url, FetchParam param, int retries)
     {
-        var urls = new[] { url, param.FallbackUrl }.Where(u => !string.IsNullOrWhiteSpace(u)).Cast<string>().ToList();
+        var originals = new[] { url, param.FallbackUrl }.Where(u => !string.IsNullOrWhiteSpace(u)).Cast<string>().ToList();
+        var urls = Config.Download.UseSourceOrder && !param.BypassSourceOrder && ParseMethod(param.Method) == HttpMethod.Get
+            ? DownloadSources.Resolve(originals, DownloadSources.Parse(Config.Download.Sources)).Select(s => s.Url).ToList()
+            : originals;
         Exception? lastException = null;
         foreach (var currentUrl in urls)
         {

@@ -82,6 +82,8 @@ public static partial class Config
     /// </summary>
     [ConfigGroup("Download")] partial class DownloadConfigGroup
     {
+        [ConfigItem<string>("ConduitDownloadSources", "", ConfigSource.Local)] public partial string Sources { get; set; }
+        [ConfigItem<bool>("ConduitDownloadSourceOrder", true, ConfigSource.Local)] public partial bool UseSourceOrder { get; set; }
         // 保留原配置键，升级后仍沿用用户已设置的数值（值 + 1 为连接上限）。
         [ConfigItem<int>("ToolDownloadThread", 63)] public partial int ThreadLimit { get; set; }
         [ConfigItem<int>("ToolDownloadFileConnection", 7)] public partial int FileConnectionLimit { get; set; }

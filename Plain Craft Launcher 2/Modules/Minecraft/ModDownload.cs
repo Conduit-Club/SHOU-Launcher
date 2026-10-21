@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.IO;
 using System.Net;
 using System.Text;
@@ -287,6 +287,12 @@ public static class ModDownload
 
     private static void DlClientListMain(ModLoader.LoaderTask<string, DlClientListResult> loader)
     {
+        if (Config.Download.UseSourceOrder)
+        {
+            loader.output = ClubSourceRequests.MinecraftManifest(loader.input);
+        }
+        else
+        {
         switch (Config.Download.VersionListSource)
         {
             case 0:
@@ -316,6 +322,8 @@ public static class ModDownload
             }
         }
 
+        }
+
         // 提取所有 Drop 序数
         var drops = new List<int>();
         foreach (JsonObject version in loader.output.Value["versions"].AsArray())
@@ -342,7 +350,7 @@ public static class ModDownload
         try
         {
             var versions = (JsonArray)json["versions"];
-            if (versions.Count < 200)
+            if (versions.Count == 0)
                 throw new Exception(Lang.Text("Minecraft.Download.Error.VersionListOperationFailed", "Mojang", json));
             // 添加 UVMC 项
             var cacheFilePath = ModBase.pathTemp + @"Cache\uvmc-download.json";
@@ -427,7 +435,7 @@ public static class ModDownload
         try
         {
             var versions = (JsonArray)json["versions"];
-            if (versions.Count < 200)
+            if (versions.Count == 0)
                 throw new Exception(Lang.Text("Minecraft.Download.Error.VersionListOperationFailed", "BMCLAPI", json));
             // 添加 UVMC 项
             var cacheFilePath = ModBase.pathTemp + @"Cache\uvmc-download.json";
@@ -1982,6 +1990,11 @@ public static class ModDownload
     /// </summary>
     public static T DlModRequest<T>(string url)
     {
+        if (Config.Download.UseSourceOrder)
+        {
+            var response = Requester.FetchJson(url, new RequestParam { Timeout = 15000, UseBrowserUserAgent = true });
+            return typeof(T) == typeof(string) ? (T)(object)response.ToJsonString() : (T)(object)response;
+        }
         var urls = new List<KeyValuePair<string, int>>();
         var mcimUrl = DlSourceModGet(url);
         if ((mcimUrl ?? "") != (url ?? ""))
@@ -2272,6 +2285,27 @@ public static class ModDownload
     private static void DlSourceLoader<InputType, OutputType>(ModLoader.LoaderTask<InputType, OutputType> mainLoader,
         List<KeyValuePair<ModLoader.LoaderTask<InputType, OutputType>, int>> loaderList, bool isForceRestart = false)
     {
+        if (Config.Download.UseSourceOrder)
+        {
+            var sources = PCL.Core.Conduit.DownloadSources.Parse(Config.Download.Sources);
+            int Rank(bool mirror) => sources.Where(s => s.Enabled && s.Category == PCL.Core.Conduit.SourceCategory.Loader
+                && s.Layout == (mirror ? PCL.Core.Conduit.SourceLayout.Bmclapi : PCL.Core.Conduit.SourceLayout.Official))
+                .Select(s => s.Priority).DefaultIfEmpty(int.MaxValue).Min();
+            var errors = new List<Exception>();
+            foreach (var entry in loaderList.OrderBy(l => Rank(l.Key.name.Contains("Bmclapi", StringComparison.OrdinalIgnoreCase))))
+            {
+                entry.Key.Start(mainLoader.input, isForceRestart);
+                while (entry.Key.State == ModBase.LoadState.Loading)
+                {
+                    if (mainLoader.IsAborted) { DlSourceLoaderAbort(loaderList); return; }
+                    Thread.Sleep(10);
+                }
+                if (mainLoader.IsAborted) return;
+                if (entry.Key.State == ModBase.LoadState.Finished) { mainLoader.output = entry.Key.output; return; }
+                if (entry.Key.Error != null) errors.Add(entry.Key.Error);
+            }
+            throw new AggregateException("所有加载器源均不可用或缺少目标版本。", errors);
+        }
         var waitCycle = 0;
         while (true)
         {
