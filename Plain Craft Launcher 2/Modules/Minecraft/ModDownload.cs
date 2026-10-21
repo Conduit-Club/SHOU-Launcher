@@ -2289,7 +2289,10 @@ public static class ModDownload
         {
             var sources = PCL.Core.Conduit.DownloadSources.Parse(Config.Download.Sources);
             int Rank(bool mirror) => sources.Where(s => s.Enabled && s.Category == PCL.Core.Conduit.SourceCategory.Loader
-                && s.Layout == (mirror ? PCL.Core.Conduit.SourceLayout.Bmclapi : PCL.Core.Conduit.SourceLayout.Official))
+                && (s.Layout == (mirror ? PCL.Core.Conduit.SourceLayout.Bmclapi : PCL.Core.Conduit.SourceLayout.Official)
+                    || (s.Layout == PCL.Core.Conduit.SourceLayout.Prefix
+                        && mirror == sources.Where(b => b.Layout == PCL.Core.Conduit.SourceLayout.Bmclapi)
+                            .Any(b => PCL.Core.Conduit.DownloadSources.Matches(s.OriginPrefix, b.BaseUrl)))))
                 .Select(s => s.Priority).DefaultIfEmpty(int.MaxValue).Min();
             var errors = new List<Exception>();
             foreach (var entry in loaderList.OrderBy(l => Rank(l.Key.name.Contains("Bmclapi", StringComparison.OrdinalIgnoreCase))))
