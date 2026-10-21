@@ -10,8 +10,8 @@ public sealed class ClubReleaseVersionTest
     [TestMethod]
     public void CurrentFormalReleaseStartsAboveLegacyClubBaseline()
     {
-        Assert.AreEqual("v1.2.0", ClubRelease.CurrentTag);
-        Assert.AreEqual("zyf", ClubRelease.CurrentCodename);
+        Assert.AreEqual("v1.3.0", ClubRelease.CurrentTag);
+        Assert.AreEqual("dxy", ClubRelease.CurrentCodename);
 
         var formal = new ClubRelease("v1.1.0", "formal", "", "");
         var legacy = new ClubRelease("conduit-v2.15.1-club.10", "legacy", "", "");
@@ -27,11 +27,11 @@ public sealed class ClubReleaseVersionTest
     [TestMethod]
     public void FormalSeriesUsesSemVerOrdering()
     {
-        Assert.IsTrue(new ClubRelease("v1.2.1", "patch", "", "")
+        Assert.IsTrue(new ClubRelease("v1.3.1", "patch", "", "")
             .IsNewerThan(ClubRelease.CurrentTag));
-        Assert.IsFalse(new ClubRelease("v1.2.0-rc.1", "rc", "", "")
+        Assert.IsFalse(new ClubRelease("v1.3.0-rc.1", "rc", "", "")
             .IsNewerThan(ClubRelease.CurrentTag));
-        Assert.IsTrue(new ClubRelease("v1.2.1-rc.1", "rc", "", "")
+        Assert.IsTrue(new ClubRelease("v1.3.1-rc.1", "rc", "", "")
             .IsNewerThan(ClubRelease.CurrentTag));
         Assert.IsTrue(new ClubRelease("v2.15.1", "formal", "", "")
             .IsNewerThan("v2.0.0"));
