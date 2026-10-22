@@ -43,6 +43,8 @@ public sealed class SettingsXamlTest
                 (nameof(ClubHomeSettings), () => new ClubHomeSettings()),
                 (nameof(ClubSourceSettings), () => new ClubSourceSettings()),
                 (nameof(ClubAria2Settings), () => new ClubAria2Settings()),
+                (nameof(ClubJavaTrustSettings), () => new ClubJavaTrustSettings()),
+                (nameof(PageSetupJava), () => new PageSetupJava()),
                 (nameof(PageSetupUI), () => new PageSetupUI()),
                 (nameof(PageSetupGameManage), () => new PageSetupGameManage())
             })
@@ -77,6 +79,24 @@ public sealed class SettingsXamlTest
             ((MyTextBox)aria.FindName("Endpoint")).Text = "http://127.0.0.1:16800/jsonrpc";
             ClickBoundButton(aria, "保存 RPC 设置");
             Assert.AreEqual("http://127.0.0.1:16800/jsonrpc", Config.Download.Aria2Endpoint);
+
+            var trust = pages[nameof(ClubJavaTrustSettings)];
+            ((MyCheckBox)trust.FindName("AutoRepair")).Checked = false;
+            ClickBoundButton(trust, "保存自动修复设置");
+            Assert.IsFalse(Config.Download.JavaTrustAutoRepair);
+            ClickBoundButton(trust, "重新扫描 Java 证书");
+            StringAssert.Contains(((TextBlock)trust.FindName("Status")).Text, "尚未就绪");
+            ClickBoundButton(trust, "修复所选");
+            StringAssert.Contains(((TextBlock)trust.FindName("Status")).Text, "请先选择");
+            ClickBoundButton(trust, "修复全部可处理项");
+            StringAssert.Contains(((TextBlock)trust.FindName("Status")).Text, "没有可处理");
+            ClickBoundButton(trust, "恢复所选备份");
+            StringAssert.Contains(((TextBlock)trust.FindName("Status")).Text, "有备份");
+
+            var download = ModJava.GetJavaDownloadLoader();
+            Assert.HasCount(3, download.loaders);
+            Assert.AreEqual("检查并修复 Java 证书", download.loaders[^1].name);
+            Assert.IsTrue(download.loaders[^1].block, "证书检查必须阻塞下载任务完成。");
         }
         finally { ModAnimation.AniControlEnabled -= 1; config.StopAsync().GetAwaiter().GetResult(); }
     }

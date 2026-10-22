@@ -82,6 +82,7 @@ public static partial class Config
     /// </summary>
     [ConfigGroup("Download")] partial class DownloadConfigGroup
     {
+        [ConfigItem<bool>("ConduitJavaTrustAutoRepair", true, ConfigSource.Local)] public partial bool JavaTrustAutoRepair { get; set; }
         [ConfigItem<string>("ConduitDownloadSources", "", ConfigSource.Local)] public partial string Sources { get; set; }
         [ConfigItem<bool>("ConduitDownloadSourceOrder", true, ConfigSource.Local)] public partial bool UseSourceOrder { get; set; }
         [ConfigItem<bool>("ConduitAria2Enabled", false, ConfigSource.Local)] public partial bool Aria2Enabled { get; set; }
