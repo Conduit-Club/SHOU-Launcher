@@ -10,6 +10,7 @@ using PCL.Core.App;
 using PCL.Core.App.Configuration;
 using PCL.Core.App.IoC;
 using PCL.Core.App.Localization;
+using PCL.Core.Conduit;
 
 namespace PCL.Launcher.Test;
 
@@ -31,6 +32,15 @@ public sealed class SettingsXamlTest
         var app = new PCL.Application();
         Lifecycle.CurrentApplication = app;
         app.InitializeComponent();
+        // The early startup path must also use Chinese before configuration is initialized.
+        var initialUiCulture = CultureInfo.CurrentUICulture;
+        try
+        {
+            CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+            LocalizationService.ApplyFromConfig();
+            Assert.AreEqual("zh-CN", LocalizationService.CurrentLanguage.Code);
+        }
+        finally { CultureInfo.CurrentUICulture = initialUiCulture; }
         var config = new ConfigService();
         config.StartAsync().GetAwaiter().GetResult();
 
@@ -60,6 +70,7 @@ public sealed class SettingsXamlTest
             {
                 (nameof(ClubHomeSettings), () => new ClubHomeSettings()),
                 (nameof(ClubSourceSettings), () => new ClubSourceSettings()),
+                (nameof(ClubSourceCategorySettings), () => new ClubSourceCategorySettings()),
                 (nameof(ClubAria2Settings), () => new ClubAria2Settings()),
                 (nameof(ClubJavaTrustSettings), () => new ClubJavaTrustSettings()),
                 (nameof(PageSetupJava), () => new PageSetupJava()),
@@ -81,16 +92,86 @@ public sealed class SettingsXamlTest
 
             var sources = pages[nameof(ClubSourceSettings)];
             sources.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
-            var sourceList = (ListBox)sources.FindName("Sources");
-            var count = sourceList.Items.Count;
-            Assert.IsGreaterThan(0, count);
-            ClickBoundButton(sources, "添加源");
-            Assert.HasCount(count + 1, sourceList.Items);
-            ClickBoundButton(sources, "删除所选");
-            Assert.HasCount(count, sourceList.Items);
-            ClickBoundButton(sources, "恢复默认");
+            var tabs = (TabControl)sources.FindName("CategoryTabs");
+            Assert.HasCount(3, tabs.Items);
+            var categories = new[] { SourceCategory.Minecraft, SourceCategory.Mod, SourceCategory.Loader };
+            var sourcePages = new[] { "MinecraftSources", "ModSources", "LoaderSources" }
+                .Select(name => (ClubSourceCategorySettings)sources.FindName(name)).ToArray();
+            for (var index = 0; index < sourcePages.Length; index++)
+            {
+                tabs.SelectedIndex = index;
+                var page = sourcePages[index];
+                var sourceList = (ListBox)page.FindName("Sources");
+                var count = sourceList.Items.Count;
+                Assert.IsGreaterThan(0, count);
+                Assert.IsTrue(sourceList.Items.Cast<ListBoxItem>().All(i => ((DownloadSource)i.Tag).Category == categories[index]));
+                ClickBoundButton(sources, "添加源");
+                Assert.HasCount(count + 1, sourceList.Items);
+                Assert.AreEqual(categories[index], ((DownloadSource)((ListBoxItem)sourceList.SelectedItem).Tag).Category);
+                ClickBoundButton(sources, "删除所选");
+                Assert.HasCount(count, sourceList.Items);
+                ((MyTextBox)page.FindName("SourceName")).Text = "分类测试-" + categories[index];
+                ((MyTextBox)page.FindName("Priority")).Text = (41 + index).ToString();
+            }
+            // Resetting the loader page must preserve pending Minecraft and Mod edits.
+            ClickBoundButton(sources, "恢复本页默认");
+            Assert.AreEqual("分类测试-Minecraft", ((MyTextBox)sourcePages[0].FindName("SourceName")).Text);
+            Assert.AreEqual("分类测试-Mod", ((MyTextBox)sourcePages[1].FindName("SourceName")).Text);
             ClickBoundButton(sources, "保存下载源设置");
             StringAssert.Contains(((TextBlock)sources.FindName("Status")).Text, "已保存");
+            var savedSources = DownloadSources.Parse(Config.Download.Sources);
+            Assert.HasCount(DownloadSources.Defaults().Count, savedSources);
+            Assert.IsTrue(savedSources.Any(s => s.Category == SourceCategory.Minecraft && s.Name == "分类测试-Minecraft" && s.Priority == 41));
+            Assert.IsTrue(savedSources.Any(s => s.Category == SourceCategory.Mod && s.Name == "分类测试-Mod" && s.Priority == 42));
+            Assert.IsFalse(savedSources.Any(s => s.Name == "分类测试-Loader"));
+
+            // Validation on another tab must expose its editor without writing a partial configuration.
+            var previousConfig = Config.Download.Sources;
+            ((MyTextBox)sourcePages[1].FindName("Priority")).Text = "invalid";
+            tabs.SelectedIndex = 2;
+            ClickBoundButton(sources, "保存下载源设置");
+            Assert.AreEqual(1, tabs.SelectedIndex);
+            Assert.AreEqual(previousConfig, Config.Download.Sources);
+            StringAssert.Contains(((TextBlock)sources.FindName("Status")).Text, "优先级必须为整数");
+            ((MyTextBox)sourcePages[1].FindName("Priority")).Text = "42";
+            ClickBoundButton(sources, "保存下载源设置");
+
+            var reloaded = new ClubSourceSettings();
+            reloaded.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+            var reloadedMod = (ClubSourceCategorySettings)reloaded.FindName("ModSources");
+            Assert.AreEqual("分类测试-Mod", ((MyTextBox)reloadedMod.FindName("SourceName")).Text);
+            Assert.HasCount(2, ((MyComboBox)reloadedMod.FindName("Layout")).Items);
+
+            tabs.SelectedIndex = 1;
+            ClickBoundButton(sources, "添加源");
+            ((MyTextBox)sourcePages[1].FindName("SourceName")).Text = "自定义 Mod 镜像";
+            ((MyTextBox)sourcePages[1].FindName("BaseUrl")).Text = "https://mods.example.test";
+            ((MyTextBox)sourcePages[1].FindName("Origin")).Text = "https://api.modrinth.com";
+            tabs.SelectedIndex = 0;
+            ClickBoundButton(sources, "保存下载源设置");
+            var addedMod = DownloadSources.Parse(Config.Download.Sources).Single(s => s.Name == "自定义 Mod 镜像");
+            Assert.AreEqual(SourceCategory.Mod, addedMod.Category);
+            Assert.AreEqual("https://mods.example.test", addedMod.BaseUrl);
+            Assert.HasCount(DownloadSources.Defaults().Count + 1, DownloadSources.Parse(Config.Download.Sources));
+
+            var previewDirectory = Environment.GetEnvironmentVariable("SHOU_SETTINGS_PREVIEW_DIRECTORY");
+            if (!string.IsNullOrWhiteSpace(previewDirectory))
+            {
+                Directory.CreateDirectory(previewDirectory);
+                for (var index = 0; index < 3; index++)
+                {
+                    tabs.SelectedIndex = index;
+                    sources.Measure(new Size(900, 1000));
+                    sources.Arrange(new Rect(0, 0, 900, 1000));
+                    sources.UpdateLayout();
+                    var bitmap = new System.Windows.Media.Imaging.RenderTargetBitmap(900, 1000, 96, 96, PixelFormats.Pbgra32);
+                    bitmap.Render(sources);
+                    var encoder = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                    encoder.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bitmap));
+                    using var file = File.Create(Path.Combine(previewDirectory, $"sources-{categories[index]}.png"));
+                    encoder.Save(file);
+                }
+            }
 
             var aria = pages[nameof(ClubAria2Settings)];
             aria.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -124,6 +205,7 @@ public sealed class SettingsXamlTest
         var element = (FrameworkElement)root;
         element.Measure(new Size(1000, 1600));
         element.Arrange(new Rect(0, 0, 1000, 1600));
+        element.UpdateLayout();
         var buttons = Descendants(root).OfType<MyButton>().ToArray();
         var button = buttons.SingleOrDefault(b => b.Text == text);
         Assert.IsNotNull(button, $"找不到按钮 {text}；已加载：{string.Join(", ", buttons.Select(b => b.Text))}");
