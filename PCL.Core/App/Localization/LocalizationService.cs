@@ -98,7 +98,7 @@ public sealed partial class LocalizationService
     {
         if (!ConfigService.IsInitialized)
         {
-            Apply(Auto, Auto, false);
+            Apply(DefaultLanguageCode, Auto, false);
             return;
         }
 

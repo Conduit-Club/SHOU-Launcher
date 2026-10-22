@@ -3,6 +3,7 @@ using System.Text.Json;
 using PCL.Core.App;
 using PCL.Core.IO;
 using PCL.Core.Minecraft;
+using PCL.Core.Minecraft.Java;
 using PCL.Core.Minecraft.Java.UserPreference;
 using PCL.Network;
 using PCL.Network.Loaders;
@@ -382,6 +383,7 @@ public static class ModJava
     /// </summary>
     public static ModLoader.LoaderCombo<string> GetJavaDownloadLoader()
     {
+        string? downloadRoot = null;
         var javaDownloadLoader = new LoaderDownload(
             Lang.Text("Minecraft.Launch.Java.Task.DownloadFiles"),
             [])
@@ -394,11 +396,26 @@ public static class ModJava
             [
                 new ModLoader.LoaderTask<string, List<DownloadFile>>(
                     Lang.Text("Minecraft.Launch.Java.Task.GetDownloadInfo"),
-                    JavaFileList)
+                    task => JavaFileList(task, root => downloadRoot = root))
                 {
                     ProgressWeight = 2d
                 },
-                javaDownloadLoader
+                javaDownloadLoader,
+                new ModLoader.LoaderTask<List<DownloadFile>, List<DownloadFile>>(
+                    "检查并修复 Java 证书", task =>
+                    {
+                        if (downloadRoot is null) throw new InvalidOperationException("Java 下载目录未知。");
+                        var reports = JavaTrustRepair.RepairDownload(downloadRoot, Config.Download.JavaTrustAutoRepair);
+                        var failures = reports.Where(r => !r.CanRepair || r.NeedsRepair).ToArray();
+                        if (failures.Length > 0)
+                        {
+                            foreach (var report in failures) ModBase.Log("[Java] 证书自动修复未完成：" + report, ModBase.LogLevel.Normal);
+                            // Do not report this runtime as ready for launch after an incomplete security repair.
+                            throw new IOException("Java 已下载，但证书自动修复未完成。请在设置 → Java 中查看并处理；下载文件已保留。");
+                        }
+                        Javas.ScanJavaAsync(force: true).GetAwaiter().GetResult();
+                        task.output = task.input;
+                    }) { ProgressWeight = 1d }
             ]);
 
         javaDownloadLoader.OnStateChangedThread += (_, newState, _) =>
@@ -406,16 +423,12 @@ public static class ModJava
             switch (newState)
             {
                 case ModBase.LoadState.Failed or ModBase.LoadState.Aborted
-                    when lastJavaBaseDir is not null:
+                    when downloadRoot is not null:
                     ModBase.Log(
-                        $"[Java] 由于下载未完成，清理未下载完成的 Java 文件：{lastJavaBaseDir}",
+                        $"[Java] 由于下载未完成，清理未下载完成的 Java 文件：{downloadRoot}",
                         ModBase.LogLevel.Debug);
 
-                    ModBase.DeleteDirectory(lastJavaBaseDir);
-                    break;
-                case ModBase.LoadState.Finished:
-                    Javas.ScanJavaAsync().GetAwaiter().GetResult();
-                    lastJavaBaseDir = null;
+                    ModBase.DeleteDirectory(downloadRoot);
                     break;
             }
         };
@@ -424,15 +437,13 @@ public static class ModJava
         return loader;
     }
 
-    private static string lastJavaBaseDir; // 用于在下载中断或失败时删除未完成下载的 Java 文件夹，防止残留只下了一半但 -version 能跑的 Java
-
     private static readonly HashSet<string> ignoreHash = new[]
     {
         "12976a6c2b227cbac58969c1455444596c894656", "c80e4bab46e34d02826eab226a4441d0970f2aba",
         "84d2102ad171863db04e7ee22a259d1f6c5de4a5"
     }.ToHashSet();
 
-    private static void JavaFileList(ModLoader.LoaderTask<string, List<DownloadFile>> loader)
+    private static void JavaFileList(ModLoader.LoaderTask<string, List<DownloadFile>> loader, Action<string> setDownloadRoot)
     {
         ModBase.Log("[Java] 开始获取 Java 下载信息");
         var indexFileStr = ModNet.NetGetCodeByLoader(
@@ -474,8 +485,9 @@ public static class ModJava
         var listFileStr = (JsonObject)Requester.FetchJson(
             ModDownload.DlSourceOrder(new[] { address },
                 new[] { address.Replace("piston-meta.mojang.com", "bmclapi2.bangbang93.com") }).First(), RequestParam.WithRetry);
-        lastJavaBaseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+        var javaBaseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
             ".minecraft", "runtime", targetName);
+        setDownloadRoot(javaBaseDir);
         var results = new List<DownloadFile>(listFileStr["files"].AsObject().Count);
         foreach (var File in listFileStr["files"].AsObject())
         {
@@ -488,9 +500,9 @@ public static class ModJava
                 continue; // 跳过 3 个无意义大量重复文件（#3827）
 
             var checker = new ModBase.FileChecker(actualSize: (long)info["size"], hash: (string)info["sha1"]);
-            var filePath = Path.GetFullPath(Path.Combine(lastJavaBaseDir, File.Key));
-            if (!Files.IsPathWithinDirectory(filePath, lastJavaBaseDir))
-                throw new Exception($"{filePath} 不在 {lastJavaBaseDir} 中");
+            var filePath = Path.GetFullPath(Path.Combine(javaBaseDir, File.Key));
+            if (!Files.IsPathWithinDirectory(filePath, javaBaseDir))
+                throw new Exception($"{filePath} 不在 {javaBaseDir} 中");
 
             if (checker.Check(filePath) is null)
                 continue; // 跳过已存在的文件
@@ -501,7 +513,7 @@ public static class ModJava
         }
 
         loader.output = results;
-        ModBase.Log($"[Java] 需要下载 {results.Count} 个文件，目标文件夹：{lastJavaBaseDir}");
+        ModBase.Log($"[Java] 需要下载 {results.Count} 个文件，目标文件夹：{javaBaseDir}");
     }
 
     #endregion

@@ -82,6 +82,7 @@ public static partial class Config
     /// </summary>
     [ConfigGroup("Download")] partial class DownloadConfigGroup
     {
+        [ConfigItem<bool>("ConduitJavaTrustAutoRepair", true, ConfigSource.Local)] public partial bool JavaTrustAutoRepair { get; set; }
         [ConfigItem<string>("ConduitDownloadSources", "", ConfigSource.Local)] public partial string Sources { get; set; }
         [ConfigItem<bool>("ConduitDownloadSourceOrder", true, ConfigSource.Local)] public partial bool UseSourceOrder { get; set; }
         [ConfigItem<bool>("ConduitAria2Enabled", false, ConfigSource.Local)] public partial bool Aria2Enabled { get; set; }
@@ -257,9 +258,9 @@ public static partial class Config
         [ConfigGroup("Localization", ConfigSource.Local)] partial class LocalizationConfigGroup
         {
             /// <summary>
-            /// UI 语言。auto 表示跟随系统语言。
+            /// UI 语言，默认简体中文。auto 表示用户主动选择跟随系统语言。
             /// </summary>
-            [ConfigItem<string>("UiLanguage", "auto")] public partial string Language { get; set; }
+            [ConfigItem<string>("UiLanguage", "zh-CN")] public partial string Language { get; set; }
 
             /// <summary>
             /// UI 展示格式所使用的区域性。auto 表示跟随系统区域格式。

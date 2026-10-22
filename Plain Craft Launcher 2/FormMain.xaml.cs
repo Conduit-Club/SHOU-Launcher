@@ -248,23 +248,6 @@ public partial class FormMain
 
 
 #endif
-                // EULA 提示
-                if (!States.System.LauncherEula)
-                    switch (ModMain.MyMsgBox(Lang.Text("Main.Eula.Message"), Lang.Text("Main.Eula.Title"), Lang.Text("Common.Action.Agree"), Lang.Text("Common.Action.Decline"), Lang.Text("Main.Eula.View"),
-                                button3Action: () => ModBase.OpenWebsite("https://shimo.im/docs/rGrd8pY8xWkt6ryW")))
-                    {
-                        case 1:
-                            {
-                                States.System.LauncherEula = true;
-                                break;
-                            }
-                        case 2:
-                            {
-                                EndProgram(false);
-                                break;
-                            }
-                    }
-
                 // 遥测提示
                 if (Config.System.TelemetryConfig.IsDefault())
                 {

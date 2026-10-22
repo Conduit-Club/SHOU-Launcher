@@ -25,6 +25,17 @@ jobs:
         env:
           PCL_MS_CLIENT_ID: ${{ secrets.CLIENT_ID }}
         run: ./scripts/conduit/Publish.ps1
+      - name: WPF settings runtime regression
+        shell: pwsh
+        run: dotnet test PCL.Launcher.Test/PCL.Launcher.Test.csproj -c Beta -p:Platform=x64 --blame-hang-timeout 2m --logger 'trx;LogFileName=launcher-ui.trx' --results-directory artifacts/test-results
+      - name: Java trust repair and keytool regression
+        shell: pwsh
+        run: |
+          $javaTestHome = if ($env:JAVA_HOME_17_X64) { $env:JAVA_HOME_17_X64 } else { $env:JAVA_HOME }
+          if (-not $javaTestHome -or -not (Test-Path -LiteralPath (Join-Path $javaTestHome 'bin/keytool.exe'))) {
+            throw 'A preinstalled JDK with keytool is required for the Java trust repair gate.'
+          }
+          dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64 --filter 'FullyQualifiedName~JavaTrustRepairTest' --blame-hang-timeout 2m --logger 'trx;LogFileName=java-trust.trx' --results-directory artifacts/test-results
       - uses: actions/upload-artifact@v7
         with:
           name: SHOU-Launcher-win-x64

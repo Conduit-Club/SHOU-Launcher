@@ -1,4 +1,4 @@
-using System.Windows;
+using System.Windows.Input;
 using System.Windows.Controls;
 using Microsoft.Win32;
 using PCL.Core.App;
@@ -28,7 +28,7 @@ public partial class ClubHomeSettings : UserControl
         Config.Preference.Homepage.ClubServers = Servers.Checked == true;
     }
 
-    private void ChoosePictures(object sender, RoutedEventArgs e)
+    private void ChoosePictures(object sender, MouseButtonEventArgs e)
     {
         var dialog = new OpenFileDialog { Multiselect = true, Filter = "图片|*.png;*.jpg;*.jpeg;*.webp;*.bmp" };
         if (dialog.ShowDialog() != true) return;
@@ -36,7 +36,7 @@ public partial class ClubHomeSettings : UserControl
         UpdateStatus();
     }
 
-    private void ResetPictures(object sender, RoutedEventArgs e)
+    private void ResetPictures(object sender, MouseButtonEventArgs e)
     {
         Config.Preference.Background.ClubHomePictures = "";
         UpdateStatus();
