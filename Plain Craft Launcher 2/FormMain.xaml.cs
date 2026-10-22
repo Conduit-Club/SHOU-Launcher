@@ -67,19 +67,16 @@ public partial class FormMain
         ModMain.frmMain = this;
         ModMain.frmLaunchLeft = new PageLaunchLeft();
         ModMain.frmLaunchRight = new PageLaunchRight();
+        // 遥测已移除。已保存的开启状态不再表示授权，启动时清掉。
+        if (!Config.System.TelemetryConfig.IsDefault() && Config.System.Telemetry)
+        {
+            Config.System.TelemetryConfig.Reset();
+            ModBase.Log("[Start] 遥测已移除，已保存的开启状态已重置");
+        }
         // 版本号改变
         var lastVersion = States.System.LastVersion;
         if (lastVersion < ModBase.versionCode)
         {
-            // 旧遥测策略的授权不沿用；保持关闭，由用户在设置中主动开启。
-            if (lastVersion <= 511)
-            {
-                if (!Config.System.TelemetryConfig.IsDefault() && Config.System.Telemetry)
-                {
-                    Config.System.TelemetryConfig.Reset();
-                    ModBase.Log("[Start] 遥测策略变更：旧授权已重置为关闭，可在设置中手动开启");
-                }
-            }
             // 触发升级
             UpgradeSub(lastVersion);
         }

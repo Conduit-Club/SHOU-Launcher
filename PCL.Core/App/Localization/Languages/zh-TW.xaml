@@ -1637,6 +1637,7 @@
     <sys:String x:Key="Launch.Homepage.News.Loading">載入中……</sys:String>
     <sys:String x:Key="Launch.Homepage.News.ViewDetail">檢視詳情</sys:String>
     <sys:String x:Key="Launch.Homepage.Preset.EchoCave.Removed">回聲洞 因為只有空殼因此已被移除，請前往設定選擇其他預設首頁</sys:String>
+    <sys:String x:Key="Launch.Homepage.Preset.PclAnnouncement.Removed">PCL CE 公告已移除，不會再從原專案伺服器載入首頁。請前往設定選擇其他預設首頁</sys:String>
     <sys:String x:Key="Launch.Homepage.SlowWarning">首頁載入過於緩慢（花費了 {0} 秒），請向首頁作者回饋此問題，或暫時停止使用該首頁</sys:String>
     <sys:String x:Key="Launch.Homepage.Task.Download">下載首頁</sys:String>
 

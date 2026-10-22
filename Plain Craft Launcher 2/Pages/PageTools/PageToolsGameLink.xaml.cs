@@ -1,10 +1,9 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Collections.Specialized;
 using System.Windows;
 using System.Windows.Input;
 using PCL.Core.App;
 using PCL.Core.Link;
-using PCL.Core.Link.EasyTier;
 using PCL.Core.Link.Lobby;
 using PCL.Core.Link.McPing;
 using PCL.Core.Link.Natayark;
@@ -12,7 +11,6 @@ using PCL.Core.Link.Scaffolding.Client.Models;
 using PCL.Core.Link.Scaffolding.EasyTier;
 using PCL.Core.Logging;
 using PCL.Core.Utils.Validate;
-using PCL.Network;
 using PCL.Core.App.Localization;
 using PCL.Core.Utils;
 
@@ -55,12 +53,7 @@ public partial class PageToolsGameLink
         if (lobbyAnnouncementLoader is null)
         {
             var loaders = new List<ModLoader.LoaderBase>();
-            loaders.Add(new ModLoader.LoaderTask<int, int>(Lang.Text("Link.Mod.Task.InitLobbyUi"), _ => ModBase.RunInUi(() =>
-            {
-                HintAnnounce.Visibility = Visibility.Visible;
-                HintAnnounce.Theme = MyHint.Themes.Blue;
-                HintAnnounce.Text = Lang.Text("Tools.GameLink.Loading.ConnectingServer");
-            })));
+            loaders.Add(new ModLoader.LoaderTask<int, int>(Lang.Text("Link.Mod.Task.InitLobbyUi"), _ => { }));
             loaders.Add(new ModLoader.LoaderTask<int, int>(Lang.Text("Link.Mod.Task.FetchAnnouncement"), _ => GetAnnouncement()) { ProgressWeight = 0.5d });
             lobbyAnnouncementLoader = new ModLoader.LoaderCombo<int>("Lobby Announcement", loaders) { show = false };
         }
@@ -92,14 +85,11 @@ public partial class PageToolsGameLink
 
     public async void Reload()
     {
-        HintAnnounce.Visibility = Visibility.Visible;
-        HintAnnounce.Text = Lang.Text("Tools.GameLink.Loading.ConnectingServer");
-        HintAnnounce.Theme = MyHint.Themes.Blue;
+        HintAnnounce.Visibility = Visibility.Collapsed;
 
         if (_linkAnnounceUpdateCancelSource is not null)
             _linkAnnounceUpdateCancelSource.Cancel();
         _linkAnnounceUpdateCancelSource = new CancellationTokenSource();
-        BeginAnnouncementRequest();
         _linkAnnounces.Clear();
 
         // 加载公告
@@ -302,8 +292,6 @@ public partial class PageToolsGameLink
     private readonly ObservableCollection<LinkAnnounceInfo> _linkAnnounces = new();
 
     private CancellationTokenSource _linkAnnounceUpdateCancelSource;
-    private readonly object _announcementRequestLock = new();
-    private int _announcementRequestId;
     private AnnouncementLoadState _announcementLoadState;
 
     private enum AnnouncementLoadState
@@ -380,222 +368,47 @@ public partial class PageToolsGameLink
         }
     }
 
-    // 获取公告信息
+    // 联机策略由本机决定，不再向原项目服务器拉取公告或功能开关。
     private void GetAnnouncement()
     {
-        var requestId = Volatile.Read(ref _announcementRequestId);
-        ModBase.RunInNewThread(() =>
+        LobbyInfoProvider.IsLobbyAvailable = true;
+        LobbyInfoProvider.AllowCustomName = true;
+        LobbyInfoProvider.RequiresLogin = false;
+        LobbyInfoProvider.RequiresRealName = false;
+
+        if (string.IsNullOrWhiteSpace(States.Link.NaidRefreshToken))
         {
-            try
-            {
-                var serverNumber = 0;
-                JsonObject jObj = null;
-
-                #region 多服务器轮询获取公告
-
-                while (serverNumber < Secrets.LinkServers.Length)
-                    try
+            ModBase.RunInUi(() => LabNatayarkUserName.Text = Lang.Text("Tools.GameLink.Natayark.Login"));
+        }
+        else
+        {
+            ModBase.RunInUi(() => LabNatayarkUserName.Text = Lang.Text("Tools.GameLink.Natayark.Loading"));
+            if (string.IsNullOrEmpty(NatayarkProfileManager.NaidProfile.Username))
+                ReloadNaidData();
+            else
+                ModBase.RunInUi(() =>
+                {
+                    if (NatayarkProfileManager.NaidProfile.Status == 0)
                     {
-                        // 获取缓存版本号
-                        var cacheRes = Requester.Fetch($"{Secrets.LinkServers[serverNumber]}/api/link/v2/cache.ini",
-                            new FetchParam
-                            {
-                                Method = "GET",
-                                ContentType = "application/json",
-                                Timeout = 7000
-                            }).Trim();
-                        var cacheVer = int.Parse(cacheRes);
-
-                        if (cacheVer == States.Link.AnnounceCacheVer)
-                        {
-                            LogWrapper.Info("[Link] Using cached announcement data");
-                            jObj = (JsonObject)ModBase.GetJson(States.Link.AnnounceCache);
-                        }
-                        else
-                        {
-                            LogWrapper.Info("[Link] Fetching new announcement data");
-                            var received = Requester.Fetch(
-                                $"{Secrets.LinkServers[serverNumber]}/api/link/v2/announce.json",
-                                new FetchParam
-                                {
-                                    Method = "GET",
-                                    ContentType = "application/json",
-                                    Timeout = 7000
-                                });
-                            jObj = (JsonObject)ModBase.GetJson(received);
-
-                            // 更新缓存
-                            if (!TryApplyCurrentAnnouncementRequest(requestId, () =>
-                                {
-                                    States.Link.AnnounceCache = received;
-                                    States.Link.AnnounceCacheVer = cacheVer;
-                                })) return;
-                        }
-
-                        break; // 成功获取，跳出轮询
+                        LabNatayarkUserName.Text = NatayarkProfileManager.NaidProfile.Username;
+                        LabNatayarkUserName.Opacity = 1;
                     }
-                    catch (Exception ex)
-                    {
-                        LogWrapper.Error(ex, $"[Link] Failed to get announcement from server {serverNumber}");
-                        if (!TryApplyCurrentAnnouncementRequest(requestId, () =>
-                            {
-                                States.Link.AnnounceCacheConfig.Reset();
-                                States.Link.AnnounceCacheVerConfig.Reset();
-                            })) return;
-                        serverNumber++;
-                    }
-
-                #endregion
-
-                if (jObj is null) throw new Exception("Failed to fetch lobby data");
-                if (!IsCurrentAnnouncementRequest(requestId)) return;
-
-                #region 解析基础状态与版本限制
-
-                LobbyInfoProvider.IsLobbyAvailable = (bool)jObj["available"];
-                LobbyInfoProvider.AllowCustomName = (bool)jObj["allowCustomName"];
-                LobbyInfoProvider.RequiresLogin = (bool)jObj["requireLogin"];
-                LobbyInfoProvider.RequiresRealName = (bool)jObj["requireRealname"];
-
-                if (jObj["version"].ToObject<double>() > LobbyInfoProvider.ProtocolVersion)
-                {
-                    ModBase.RunInUi(() =>
-                    {
-                        if (!IsCurrentAnnouncementRequest(requestId)) return;
-                        _announcementLoadState = AnnouncementLoadState.Failed;
-                        HintAnnounce.Visibility = Visibility.Visible;
-                        HintAnnounce.Theme = MyHint.Themes.Red;
-                        HintAnnounce.Text = Lang.Text("Tools.GameLink.Error.UpdateRequired");
-                        LobbyInfoProvider.IsLobbyAvailable = false;
-                    });
-                    return;
-                }
-
-                #endregion
-
-                #region 解析公告列表 (Notices)
-
-                var notices = (JsonArray)jObj["notices"];
-                var announcements = new List<LinkAnnounceInfo>();
-                foreach (JsonObject notice in notices)
-                {
-                    if (!IsCurrentAnnouncementRequest(requestId)) return;
-                    var content = notice["content"]?.ToString();
-                    if (string.IsNullOrWhiteSpace(content)) continue;
-
-                    // 版本过滤
-                    var minVer = notice["minVer"].ToObject<double>();
-                    var maxVer = notice["maxVer"].ToObject<double>();
-                    if (ModBase.versionCode < minVer || ModBase.versionCode > maxVer) continue;
-
-                    // 类型映射
-                    var type = LinkAnnounceType.Notice;
-                    var typeStr = notice["type"]?.ToString().ToLower();
-                    if (typeStr == "important" || typeStr == "red") type = LinkAnnounceType.Important;
-                    else if (typeStr == "warning" || typeStr == "yellow") type = LinkAnnounceType.Warning;
-
-                    // 按行拆分公告
-                    foreach (var announce in content.Split('\n'))
-                    {
-                        if (string.IsNullOrWhiteSpace(announce)) continue;
-                        announcements.Add(new LinkAnnounceInfo(type, announce));
-                    }
-                }
-
-                #endregion
-
-                #region 解析中继服务器 (Relays)
-
-                var relays = (JsonArray)jObj["relays"];
-                ETRelay.RelayList = new List<ETRelay>();
-                foreach (var relay in relays)
-                    ETRelay.RelayList.Add(new ETRelay
-                    {
-                        Name = relay["name"]?.ToString(),
-                        Url = relay["url"]?.ToString(),
-                        Type = relay["type"]?.ToString() == "official" ? ETRelayType.Selfhosted : ETRelayType.Community
-                    });
-
-                #endregion
-
-                #region 处理账户登录状态显示
-
-                if (string.IsNullOrWhiteSpace(States.Link.NaidRefreshToken))
-                {
-                    ModBase.RunInUi(() => LabNatayarkUserName.Text = Lang.Text("Tools.GameLink.Natayark.Login"));
-                }
-                else
-                {
-                    ModBase.RunInUi(() => LabNatayarkUserName.Text = Lang.Text("Tools.GameLink.Natayark.Loading"));
-                    if (string.IsNullOrEmpty(NatayarkProfileManager.NaidProfile.Username))
-                        ReloadNaidData();
                     else
-                        ModBase.RunInUi(() =>
-                        {
-                            if (NatayarkProfileManager.NaidProfile.Status == 0)
-                            {
-                                LabNatayarkUserName.Text = NatayarkProfileManager.NaidProfile.Username;
-                                LabNatayarkUserName.Opacity = 1;
-                            }
-                            else
-                            {
-                                LabNatayarkUserName.Text = $"{NatayarkProfileManager.NaidProfile.Username} {Lang.Text("Tools.GameLink.Natayark.Abnormal")}";
-                                LabNatayarkUserName.Opacity = 0.6;
-                            }
-                        });
-                }
-
-                #endregion
-
-                ModBase.RunInUi(() =>
-                {
-                    if (!IsCurrentAnnouncementRequest(requestId)) return;
-                    _linkAnnounces.Clear();
-                    foreach (var announcement in announcements)
-                        _linkAnnounces.Add(announcement);
-                    _announcementLoadState = AnnouncementLoadState.Loaded;
-                    if (_linkAnnounces.Count == 0)
-                        HintAnnounce.Visibility = Visibility.Collapsed;
+                    {
+                        LabNatayarkUserName.Text = $"{NatayarkProfileManager.NaidProfile.Username} {Lang.Text("Tools.GameLink.Natayark.Abnormal")}";
+                        LabNatayarkUserName.Opacity = 0.6;
+                    }
                 });
-            }
-            catch (Exception ex)
-            {
-                if (!IsCurrentAnnouncementRequest(requestId)) return;
-                LobbyInfoProvider.IsLobbyAvailable = false;
-                ModBase.RunInUi(() =>
-                {
-                    if (!IsCurrentAnnouncementRequest(requestId)) return;
-                    _announcementLoadState = AnnouncementLoadState.Failed;
-                    HintAnnounce.Visibility = Visibility.Visible;
-                    HintAnnounce.Theme = MyHint.Themes.Red;
-                    HintAnnounce.Text = Lang.Text("Tools.GameLink.Error.ConnectFailed");
-                });
-                LogWrapper.Error(ex, "[Link] Failed to get lobby announcement");
-            }
+        }
+
+        ModBase.RunInUi(() =>
+        {
+            _linkAnnounces.Clear();
+            _announcementLoadState = AnnouncementLoadState.Loaded;
+            HintAnnounce.Visibility = Visibility.Collapsed;
         });
     }
 
-    private void BeginAnnouncementRequest()
-    {
-        lock (_announcementRequestLock)
-            _announcementRequestId++;
-    }
-
-    private bool IsCurrentAnnouncementRequest(int requestId)
-    {
-        lock (_announcementRequestLock)
-            return requestId == _announcementRequestId;
-    }
-
-    private bool TryApplyCurrentAnnouncementRequest(int requestId, Action action)
-    {
-        lock (_announcementRequestLock)
-        {
-            if (requestId != _announcementRequestId) return false;
-            action();
-            return true;
-        }
-    }
 
     #endregion
 
