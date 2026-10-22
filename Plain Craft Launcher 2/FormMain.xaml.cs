@@ -71,13 +71,13 @@ public partial class FormMain
         var lastVersion = States.System.LastVersion;
         if (lastVersion < ModBase.versionCode)
         {
-            // 重新询问是否启用遥测数据收集
+            // 旧遥测策略的授权不沿用；保持关闭，由用户在设置中主动开启。
             if (lastVersion <= 511)
             {
                 if (!Config.System.TelemetryConfig.IsDefault() && Config.System.Telemetry)
                 {
                     Config.System.TelemetryConfig.Reset();
-                    ModBase.Log("[Start] 遥测策略变更：由旧版本升级到含新版遥测的版本，已重置遥测设置");
+                    ModBase.Log("[Start] 遥测策略变更：旧授权已重置为关闭，可在设置中手动开启");
                 }
             }
             // 触发升级
@@ -248,14 +248,6 @@ public partial class FormMain
 
 
 #endif
-                // 遥测提示
-                if (Config.System.TelemetryConfig.IsDefault())
-                {
-                    var selection = ModMain.MyMsgBox(
-                                Lang.Text("Main.Telemetry.Message"),
-                                Lang.Text("Main.Telemetry.Title"), Lang.Text("Common.Action.Agree"), Lang.Text("Common.Action.Decline"));
-                    Config.System.TelemetryConfig.SetValue(selection == 1, forceNewValue: true);
-                }
                 // 启动加载器池
                 try
                 {

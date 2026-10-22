@@ -43,6 +43,8 @@ public sealed class SettingsXamlTest
         finally { CultureInfo.CurrentUICulture = initialUiCulture; }
         var config = new ConfigService();
         config.StartAsync().GetAwaiter().GetResult();
+        Assert.IsFalse(Config.System.Telemetry, "新配置必须默认关闭遥测，不能因移除弹窗而自动同意。");
+        Assert.IsTrue(Config.System.TelemetryConfig.IsDefault(), "默认关闭无需写入用户授权。");
 
         var failures = new List<string>();
         var pages = new Dictionary<string, FrameworkElement>();
