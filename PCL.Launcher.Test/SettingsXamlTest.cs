@@ -1,5 +1,6 @@
 using System.IO;
 using System.Reflection;
+using System.Globalization;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -8,6 +9,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using PCL.Core.App;
 using PCL.Core.App.Configuration;
 using PCL.Core.App.IoC;
+using PCL.Core.App.Localization;
 
 namespace PCL.Launcher.Test;
 
@@ -38,6 +40,22 @@ public sealed class SettingsXamlTest
         ModAnimation.AniControlEnabled += 1;
         try
         {
+            var previousUiCulture = CultureInfo.CurrentUICulture;
+            try
+            {
+                CultureInfo.CurrentUICulture = CultureInfo.GetCultureInfo("en-US");
+                Assert.AreEqual("zh-CN", Config.Preference.Localization.Language);
+                LocalizationService.ApplyFromConfig();
+                Assert.AreEqual("zh-CN", LocalizationService.CurrentLanguage.Code);
+                Config.Preference.Localization.Language = "en-US";
+                LocalizationService.ApplyFromConfig();
+                Assert.AreEqual("en-US", LocalizationService.CurrentLanguage.Code);
+                Config.Preference.Localization.LanguageConfig.SetDefaultValue();
+                LocalizationService.ApplyFromConfig();
+                Assert.AreEqual("zh-CN", LocalizationService.CurrentLanguage.Code);
+            }
+            finally { CultureInfo.CurrentUICulture = previousUiCulture; }
+
             foreach (var (name, construct) in new (string, Func<FrameworkElement>)[]
             {
                 (nameof(ClubHomeSettings), () => new ClubHomeSettings()),
