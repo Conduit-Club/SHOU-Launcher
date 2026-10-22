@@ -1644,6 +1644,7 @@
     <sys:String x:Key="Launch.Homepage.News.Loading">Loading...</sys:String>
     <sys:String x:Key="Launch.Homepage.News.ViewDetail">View details</sys:String>
     <sys:String x:Key="Launch.Homepage.Preset.EchoCave.Removed">The Echo Cave preset has been removed as it only had a shell. Please go to Settings and select another homepage preset.</sys:String>
+    <sys:String x:Key="Launch.Homepage.Preset.PclAnnouncement.Removed">The PCL CE announcements preset has been removed and no longer loads a homepage from the original project. Please go to Settings and select another homepage preset.</sys:String>
     <sys:String x:Key="Launch.Homepage.SlowWarning">The homepage is loading too slowly ({0} seconds). Please report this issue to the homepage author, or temporarily stop using this homepage.</sys:String>
     <sys:String x:Key="Launch.Homepage.Task.Download">Download homepage</sys:String>
 
