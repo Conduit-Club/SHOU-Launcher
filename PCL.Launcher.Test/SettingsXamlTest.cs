@@ -76,6 +76,8 @@ public sealed class SettingsXamlTest
                 (nameof(ClubAria2Settings), () => new ClubAria2Settings()),
                 (nameof(ClubJavaTrustSettings), () => new ClubJavaTrustSettings()),
                 (nameof(PageSetupJava), () => new PageSetupJava()),
+                (nameof(PageSetupGameLink), () => new PageSetupGameLink()),
+                (nameof(PageSetupFeedback), () => new PageSetupFeedback()),
                 (nameof(PageSetupUI), () => new PageSetupUI()),
                 (nameof(PageSetupGameManage), () => new PageSetupGameManage())
             })
@@ -84,6 +86,18 @@ public sealed class SettingsXamlTest
                 catch (Exception ex) { failures.Add($"{name}: {ex}"); }
             }
             Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures));
+            var linkSettings = (PageSetupGameLink)pages[nameof(PageSetupGameLink)];
+            Config.Link.ServerType = 2;
+            linkSettings.Reload();
+            Assert.AreEqual(1, ((MyComboBox)linkSettings.FindName("LocalPeerMode")).SelectedIndex);
+            Config.Link.ServerType = 1;
+            Config.Link.Username = " local-player ";
+            Assert.AreEqual("local-player", PCL.Core.Link.Lobby.LobbyInfoProvider.GetUsername());
+            var feedback = (PageSetupFeedback)pages[nameof(PageSetupFeedback)];
+            feedback.Loader.output = [new PageSetupFeedback.Feedback { Title = "Club issue", State = "open" }];
+            feedback.RefreshList();
+            Assert.AreEqual(1, ((StackPanel)feedback.FindName("PanListWaitingProcess")).Children.Count,
+                "Club issues without legacy label IDs must still be visible.");
 
             var home = pages[nameof(ClubHomeSettings)];
             home.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -136,7 +150,7 @@ public sealed class SettingsXamlTest
             Assert.AreEqual(previousConfig, Config.Download.Sources);
             StringAssert.Contains(((TextBlock)sources.FindName("Status")).Text, "优先级必须为整数");
             ((MyTextBox)sourcePages[1].FindName("Priority")).Text = "42";
-            ClickBoundButton(sources, "保存下载源设置");
+            VerifySourceChangeDuringRequest(sources);
 
             var reloaded = new ClubSourceSettings();
             reloaded.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -200,6 +214,35 @@ public sealed class SettingsXamlTest
             Assert.IsTrue(download.loaders[^1].block, "证书检查必须阻塞下载任务完成。");
         }
         finally { ModAnimation.AniControlEnabled -= 1; config.StopAsync().GetAwaiter().GetResult(); }
+    }
+
+    private static void VerifySourceChangeDuringRequest(DependencyObject settings)
+    {
+        var original = ModDownload.dlClientListLoader;
+        using var started = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var pending = new ModLoader.LoaderTask<string, ModDownload.DlClientListResult>("Old source response", _ =>
+        {
+            started.Set();
+            Assert.IsTrue(release.Wait(TimeSpan.FromSeconds(5)));
+        });
+        try
+        {
+            ModDownload.dlClientListLoader = pending;
+            pending.Start();
+            Assert.IsTrue(started.Wait(TimeSpan.FromSeconds(5)));
+            var oldRequest = pending.lastRunningTask!;
+            ClickBoundButton(settings, "保存下载源设置");
+            release.Set();
+            Assert.IsTrue(oldRequest.Wait(TimeSpan.FromSeconds(5)));
+            Assert.AreEqual(ModBase.LoadState.Waiting, pending.State,
+                "An old response completing after settings change must not become the cached Finished result.");
+        }
+        finally
+        {
+            release.Set();
+            ModDownload.dlClientListLoader = original;
+        }
     }
 
     private static void ClickBoundButton(DependencyObject root, string text)

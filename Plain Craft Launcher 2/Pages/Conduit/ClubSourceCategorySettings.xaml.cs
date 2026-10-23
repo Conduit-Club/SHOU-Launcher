@@ -24,7 +24,7 @@ public partial class ClubSourceCategorySettings : UserControl
         _sources = sources.Where(s => s.Category == Category).ToList();
         CategoryHint.Text = Category switch
         {
-            SourceCategory.Minecraft => "管理游戏版本清单、客户端、依赖库与资源。社团 SHOU-MCMirror 只提供选定的 Minecraft 版本。",
+            SourceCategory.Minecraft => "文件按优先级下载（数字越小越优先）。版本浏览优先使用完整清单；社团 SHOU-MCMirror 仅提供精选版本清单，作为备用。",
             SourceCategory.Mod => "管理 Mod、整合包与资源的 API / 文件镜像；可以分别添加 Modrinth 与 CurseForge 的前缀规则。",
             _ => "管理 Fabric、Forge、NeoForge、Quilt 等加载器的元数据与安装文件。"
         };

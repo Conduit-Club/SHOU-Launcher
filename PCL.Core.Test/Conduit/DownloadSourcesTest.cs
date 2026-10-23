@@ -75,4 +75,47 @@ public sealed class DownloadSourcesTest
         Assert.AreEqual(unknown, DownloadSources.Resolve([unknown], DownloadSources.Defaults()).Single().Url);
         Assert.AreEqual("https://edge.forgecdn.net/files/123/a.jar", DownloadSources.Resolve(["https://mod.mcimirror.top/files/123/a.jar"], DownloadSources.Defaults())[0].Url);
     }
+
+    [TestMethod]
+    public void BrowsingFallsBackToFullCatalogBeforeCuratedMirror()
+    {
+        var sources = DownloadSources.Resolve([DownloadSources.ManifestUrl], DownloadSources.Defaults());
+        var visited = new List<string>();
+        var result = DownloadSources.FindManifest(sources, url =>
+        {
+            visited.Add(url);
+            if (url.StartsWith(DownloadSources.BmclRoot)) throw new TimeoutException("BMCLAPI temporarily unavailable");
+            return SmallManifest;
+        });
+        Assert.AreEqual(DownloadSources.ManifestUrl, result.Source.Url,
+            "A temporary BMCLAPI failure must not shrink the game browser to SHOU's curated subset while Mojang is available.");
+        Assert.HasCount(2, visited);
+    }
+
+    [TestMethod]
+    public void HealthyPreferredMirrorDoesNotContactOtherCatalogs()
+    {
+        var visited = new List<string>();
+        var result = DownloadSources.FindManifest(DownloadSources.Resolve([DownloadSources.ManifestUrl], DownloadSources.Defaults()), url =>
+        {
+            visited.Add(url);
+            return SmallManifest;
+        });
+        Assert.IsTrue(result.Source.Url.StartsWith(DownloadSources.BmclRoot));
+        Assert.HasCount(1, visited);
+    }
+
+    [TestMethod]
+    public void CuratedCatalogStillWorksAloneAndKeepsFilePriority()
+    {
+        var settings = DownloadSources.Defaults();
+        var shou = settings.Single(s => s.Layout == SourceLayout.Shou);
+        shou.Priority = -10;
+        var sources = DownloadSources.Resolve([DownloadSources.ManifestUrl], settings);
+        Assert.IsTrue(sources[0].IsPartialCatalog);
+        var perVersion = DownloadSources.FindManifest(sources, _ => SmallManifest, "1.21.1");
+        Assert.AreEqual(shou.Name, perVersion.Source.Name);
+        var curatedOnly = DownloadSources.FindManifest(sources.Where(s => s.IsPartialCatalog).ToArray(), _ => SmallManifest);
+        Assert.AreEqual(shou.Name, curatedOnly.Source.Name);
+    }
 }

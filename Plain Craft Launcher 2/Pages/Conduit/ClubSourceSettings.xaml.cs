@@ -43,10 +43,9 @@ public partial class ClubSourceSettings : UserControl
         {
             Config.Download.Sources = JsonSerializer.Serialize(sources);
             Config.Download.UseSourceOrder = UseOrder.Checked == true;
-            if (ModDownload.dlClientListLoader.State != ModBase.LoadState.Loading)
-                ModDownload.dlClientListLoader.State = ModBase.LoadState.Waiting;
+            ClubSourceRequests.InvalidateManifest();
             foreach (var page in Pages) page.LoadSources(sources);
-            Status.Text = "已保存三个分类的下载源，新下载任务生效；已打开的加载器列表可通过刷新重新获取。";
+            Status.Text = "已保存下载源并清除旧版本列表缓存。版本浏览优先使用完整清单，社团精选清单仅作备用；文件按设置顺序下载。";
         }
         catch (Exception ex) { Status.Text = ex.Message; }
     }
