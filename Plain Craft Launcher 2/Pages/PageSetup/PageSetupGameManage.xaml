@@ -7,10 +7,9 @@
     PanScroll="{Binding ElementName=PanBack}">
     <local:MyScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" x:Name="PanBack">
         <StackPanel x:Name="PanMain" Margin="25,10">
-            <local:ClubSourceSettings />
-            <local:ClubAria2Settings />
             <local:MyCard Margin="0,15" Title="{DynamicResource Setup.GameManage.Source.Title}">
                 <StackPanel Margin="25,37,25,15">
+                    <TextBlock x:Name="LegacySourceHint" TextWrapping="Wrap" Opacity="0.75" Margin="0,0,0,10" />
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" SharedSizeGroup="Name" />
@@ -92,6 +91,7 @@
                     </Grid>
                 </StackPanel>
             </local:MyCard>
+            <local:ClubSourceSettings x:Name="SourceSettings" />
             <local:MyCard Margin="0,0,0,15" Title="{DynamicResource Setup.GameManage.Community.Title}">
                 <StackPanel Margin="25,37,25,12">
                     <Grid>
@@ -197,6 +197,7 @@
                                       ToolTip="{DynamicResource Setup.GameManage.Accessibility.ReadClipboard.ToolTip}" />
                 </Grid>
             </local:MyCard>
+            <local:ClubAria2Settings x:Name="AriaSettings" />
         </StackPanel>
     </local:MyScrollViewer>
 </local:MyPageRight>

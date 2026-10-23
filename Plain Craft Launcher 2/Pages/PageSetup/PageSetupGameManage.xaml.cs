@@ -14,6 +14,7 @@ public partial class PageSetupGameManage
     public PageSetupGameManage()
     {
         InitializeComponent();
+        SourceSettings.Saved += (_, _) => UpdateSourceMode();
         Loaded += PageSetupSystem_Loaded;
     }
 
@@ -74,6 +75,16 @@ public partial class PageSetupGameManage
 
         // 辅助设置
         CheckHelpLauncherLanguage.Checked = Config.Tool.AutoChangeLanguage;
+        UpdateSourceMode();
+    }
+
+    private void UpdateSourceMode()
+    {
+        var custom = Config.Download.UseSourceOrder;
+        ComboDownloadSource.IsEnabled = ComboDownloadVersion.IsEnabled = ComboDownloadMod.IsEnabled = !custom;
+        LegacySourceHint.Text = custom
+            ? "已启用下方自定义源顺序；文件、版本列表与 Mod 来源的常规选项暂不生效。"
+            : "当前使用本区的下载来源设置；可在下方启用自定义源顺序。";
     }
 
     // 初始化
@@ -96,6 +107,8 @@ public partial class PageSetupGameManage
         }
 
         Reload();
+        SourceSettings.ReloadFromConfig();
+        AriaSettings.ReloadFromConfig();
     }
 
     // 将控件改变路由到设置改变
