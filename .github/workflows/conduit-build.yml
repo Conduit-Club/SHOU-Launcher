@@ -2,6 +2,22 @@ name: Conduit Build
 
 on:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        default: ''
+      release_tag:
+        type: string
+        default: ''
+    secrets:
+      CLIENT_ID:
+        required: false
+      CURSEFORGE_API_KEY:
+        required: false
+    outputs:
+      artifact_name:
+        value: ${{ jobs.build.outputs.artifact_name }}
   pull_request:
     branches: [dev, main]
   push:
@@ -15,16 +31,29 @@ jobs:
     if: github.repository == 'Conduit-Club/SHOU-Launcher'
     runs-on: windows-latest
     timeout-minutes: 20
+    outputs:
+      artifact_name: ${{ steps.publish.outputs.artifact_name }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.x'
       - name: Publish club launcher
+        id: publish
         shell: pwsh
         env:
           PCL_MS_CLIENT_ID: ${{ secrets.CLIENT_ID }}
-        run: ./scripts/conduit/Publish.ps1
+          PCL_CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: |
+          if ($env:RELEASE_TAG) {
+            ./scripts/conduit/Publish.ps1 -Configuration Release -ReleaseTag $env:RELEASE_TAG
+          } else {
+            ./scripts/conduit/Publish.ps1
+          }
       - name: WPF settings runtime regression
         shell: pwsh
         run: dotnet test PCL.Launcher.Test/PCL.Launcher.Test.csproj -c Beta -p:Platform=x64 --blame-hang-timeout 2m --logger 'trx;LogFileName=launcher-ui.trx' --results-directory artifacts/test-results
@@ -36,13 +65,6 @@ jobs:
             throw 'A preinstalled JDK with keytool is required for the Java trust repair gate.'
           }
           dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64 --filter 'FullyQualifiedName~JavaTrustRepairTest' --blame-hang-timeout 2m --logger 'trx;LogFileName=java-trust.trx' --results-directory artifacts/test-results
-      - uses: actions/upload-artifact@v7
-        with:
-          name: SHOU-Launcher-win-x64
-          path: |
-            artifacts/conduit/*.zip
-            artifacts/conduit/*.sha256
-          if-no-files-found: error
       - name: Club regression tests
         shell: pwsh
         run: dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64 --filter 'FullyQualifiedName~Conduit|FullyQualifiedName~ProfileManagement|FullyQualifiedName~SemVer|FullyQualifiedName~Minecraft.Authentication' --logger 'trx;LogFileName=club.trx' --results-directory artifacts/test-results
@@ -50,6 +72,14 @@ jobs:
         if: ${{ !cancelled() }}
         shell: pwsh
         run: dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64 --filter 'TestCategory!=Integration' --blame-hang-timeout 2m --logger 'trx;LogFileName=full.trx' --results-directory artifacts/test-results
+      - name: Upload verified club package
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.publish.outputs.artifact_name }}
+          path: |
+            artifacts/conduit/*.zip
+            artifacts/conduit/*.sha256
+          if-no-files-found: error
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v7
