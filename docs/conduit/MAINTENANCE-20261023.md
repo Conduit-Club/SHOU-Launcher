@@ -55,4 +55,6 @@ BMCLAPI 的公开 Minecraft 下载接口不需要申请 API Key。CurseForge 是
 - 测试使用 `TestMethod` 替代弃用的 `DataTestMethod`；删除常量对常量的无效断言，用真实迁移和压缩后缓存数据校验代替。测试专用构造函数的 CS0618 只在两个测试调用点局部豁免，生产调用仍会告警。
 - 未关闭 nullable、降低 WarningLevel 或批量设置 NoWarn。旧代码的可空引用、相等性/哈希契约、未使用字段和事件等 warning 仍保留，需按模块另行审查。
 
-本轮复验：离线核心 355 通过、1 项平台能力跳过；WPF 与 warning 行为回归 5 通过；x64 Beta 自包含打包及 ZIP SHA-256 校验通过。测试项目重新编译无 warning，启动器仍有上述历史 warning。报告在 `artifacts/warning-tests/`，日志为 `artifacts/warnings-*.log`，本机包在 `artifacts/warnings-publish/`，均不纳入 Git。ARM64 仅交叉编译，不代表真机验证。
+本轮复验：离线核心 355 通过、1 项平台能力跳过；WPF 与 warning 行为回归 5 通过；x64 Beta 自包含打包及 ZIP SHA-256 校验通过；ARM64 CI 编译 0 错误，仍有历史 warning。测试项目重新编译无 warning，启动器仍有上述历史 warning。报告在 `artifacts/warning-tests/`，日志为 `artifacts/warnings-*.log`，本机包在 `artifacts/warnings-publish/`，均不纳入 Git。ARM64 仅交叉编译，不代表真机验证。
+
+最终检查同时修正社团回归筛选条件：明确排除 `Integration`，避免新加入的在线清单探测成为离线门禁的外网依赖；对应 101 项测试与 actionlint 均通过。在线清单测试仍可显式单独执行。
