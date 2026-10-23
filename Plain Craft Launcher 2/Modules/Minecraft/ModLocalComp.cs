@@ -2136,7 +2136,7 @@ public static class ModLocalComp
                         }
                     }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     ModBase.Log("获取 META-INF 中的版本信息失败（" + path + "）", ModBase.LogLevel.Developer);
                     Version = null;

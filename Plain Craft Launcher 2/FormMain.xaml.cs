@@ -1161,11 +1161,11 @@ public partial class FormMain
                     ModModpack.ModpackInstall(filePath);
                     return;
                 }
-                catch (ModBase.CancelledException ex)
+                catch (ModBase.CancelledException)
                 {
                     return; // 用户主动取消
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     // 安装失败，继续往后尝试
                 }

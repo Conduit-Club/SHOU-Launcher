@@ -2620,7 +2620,7 @@ public static class ModBase
             {
                 action();
             }
-            catch (ThreadInterruptedException ex)
+            catch (ThreadInterruptedException)
             {
                 Log(name + "：线程已中止");
             }
@@ -2882,7 +2882,7 @@ public static class ModBase
                     success = true;
                     break;
                 }
-                catch (Exception ex) when (attempt < 5)
+                catch (Exception) when (attempt < 5)
                 {
                     Thread.Sleep(20);
                 }

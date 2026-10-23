@@ -10,9 +10,6 @@ public sealed class ClubReleaseVersionTest
     [TestMethod]
     public void CurrentFormalReleaseStartsAboveLegacyClubBaseline()
     {
-        Assert.AreEqual("v1.3.0", ClubRelease.CurrentTag);
-        Assert.AreEqual("dxy", ClubRelease.CurrentCodename);
-
         var formal = new ClubRelease("v1.1.0", "formal", "", "");
         var legacy = new ClubRelease("conduit-v2.15.1-club.10", "legacy", "", "");
 

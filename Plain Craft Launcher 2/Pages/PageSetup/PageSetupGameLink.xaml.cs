@@ -12,7 +12,7 @@ public partial class PageSetupGameLink
 {
     private bool isFirstLoad = true;
 
-    private new bool isLoaded;
+    private bool isLoaded;
 
     public PageSetupGameLink()
     {

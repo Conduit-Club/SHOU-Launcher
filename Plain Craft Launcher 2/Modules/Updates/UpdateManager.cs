@@ -16,6 +16,8 @@ public static class UpdateManager
         => ModBase.OpenWebsite(ClubUpdates.Latest?.PageUrl ?? ClubCatalog.Repository + "/releases");
     public static void UpdateRestart(bool triggerRestartAndByEnd, bool triggerRestart = true) { }
     public static void ShowCEAnnounce() { }
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("SingleFile", "IL3000",
+        Justification = "The empty Assembly.Location of a bundled assembly is deliberately used to reject standalone distribution of development apphosts.")]
     internal static void DownloadLatestPCL(ModLoader.LoaderBase loaderToSyncProgress = null)
     {
         // A development apphost depends on adjacent DLLs and cannot be shipped on its own.

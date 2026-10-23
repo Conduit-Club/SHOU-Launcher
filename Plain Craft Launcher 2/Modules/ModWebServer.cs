@@ -96,7 +96,7 @@ public static class ModWebServer
             {
                 _webServers[name].Dispose();
             }
-            catch (ObjectDisposedException ex)
+            catch (ObjectDisposedException)
             {
                 return false;
             }

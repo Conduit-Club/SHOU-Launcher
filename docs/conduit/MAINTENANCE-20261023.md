@@ -1,6 +1,6 @@
 # 遗漏清理、下载源与 CI 产物调整
 
-基于 `dev` 的 `18ad0e73`，本轮不处理已有编译 warning，也不提交、推送或正式发布。
+基于 `dev` 的 `18ad0e73`。首轮验证后，按用户要求分批提交清理、下载源和 CI 改动，再单独修整 warning，提交到面向 `dev` 的 PR；不合并或正式发布。
 
 ## 下载源
 
@@ -42,4 +42,17 @@ BMCLAPI 的公开 Minecraft 下载接口不需要申请 API Key。CurseForge 是
 - x64 Beta 自包含 ZIP 成功，旁置 SHA-256 与文件实算值一致；ARM64 CI 编译 0 错误。没有进行 ARM64 真机运行验证。
 - actionlint、PowerShell 语法、错误构建后缀／标签拒绝检查及本地化 XML 检查通过。新的 GitHub Actions 尚未执行。
 
-测试报告保存在本机 `artifacts/cleanup-source-tests/`；候选包在 `artifacts/cleanup-publish-final/`。这些产物来自未提交工作区，不是正式发行。
+首轮测试报告保存在本机 `artifacts/cleanup-source-tests/`；候选包在 `artifacts/cleanup-publish-final/`。这些产物来自当时未提交的工作区，不是正式发行。
+
+## 后续 warning 修整与凭据状态
+
+- CurseForge API 申请已由项目维护者自行提交，尚待审批；误填的 `CURSEFORGE_API_KEY` 已按维护者授权删除。当前仅保留 `CLIENT_ID`，取得真实 Key 后再添加，缺少 Key 仍可编译。
+- 对照 `dev` 最新成功的 Conduit Build（run `39797922414`）与本机构建日志，移除 .NET 10 已提供的冗余包引用（NU1510）。参见 [NuGet 说明](https://learn.microsoft.com/en-us/nuget/reference/errors-and-warnings/nu1510)。
+- 图片加载器检查真实的目标对象，修复误将 `nameof(imageElement)` 用于判空的问题（CA2264），增加空参数回归。
+- 去掉实例描述自赋值、不可达的末尾返回、无用异常变量与多余的 `new`；保留原异常捕获类型与行为。CI 禁用购买提示使用预处理条件，避免在无条件返回后编译不可达分支。
+- 离线 UUID 的字节拼接显式转换为 `long`，消除符号扩展提示（CS0675）；通过 Notch / Steve 的 Java 离线 UUID 和带连字符格式回归。
+- 单文件分发检测有意依赖 `Assembly.Location` 的空值语义；给该方法单独标注 IL3000 豁免理由，保留开发 apphost 禁止单独分发的保护并增加回归。[Microsoft 说明](https://learn.microsoft.com/en-us/dotnet/core/deploying/single-file/warnings/il3000)确认单文件内程序集返回空路径。
+- 测试使用 `TestMethod` 替代弃用的 `DataTestMethod`；删除常量对常量的无效断言，用真实迁移和压缩后缓存数据校验代替。测试专用构造函数的 CS0618 只在两个测试调用点局部豁免，生产调用仍会告警。
+- 未关闭 nullable、降低 WarningLevel 或批量设置 NoWarn。旧代码的可空引用、相等性/哈希契约、未使用字段和事件等 warning 仍保留，需按模块另行审查。
+
+本轮复验：离线核心 355 通过、1 项平台能力跳过；WPF 与 warning 行为回归 5 通过；x64 Beta 自包含打包及 ZIP SHA-256 校验通过。测试项目重新编译无 warning，启动器仍有上述历史 warning。报告在 `artifacts/warning-tests/`，日志为 `artifacts/warnings-*.log`，本机包在 `artifacts/warnings-publish/`，均不纳入 Git。ARM64 仅交叉编译，不代表真机验证。
