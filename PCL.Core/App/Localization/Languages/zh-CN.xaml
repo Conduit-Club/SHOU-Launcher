@@ -1848,7 +1848,7 @@
     <sys:String x:Key="Link.Mod.Task.InitLobby">大厅初始化</sys:String>
     <sys:String x:Key="Link.Mod.Task.InitLobbyUi">大厅界面初始化</sys:String>
     <sys:String x:Key="Link.Mod.Task.RefreshUi">刷新界面</sys:String>
-    <sys:String x:Key="Link.Mod.UsernameOrLogin">请先前往设置输入一个用户名，或登录至 Natayark Network 再进行联机！</sys:String>
+    <sys:String x:Key="Link.Mod.UsernameOrLogin">请在联机设置填写昵称，或选择游戏账户。</sys:String>
 
     <!-- Link.Nat -->
 
@@ -1925,8 +1925,6 @@
     <sys:String x:Key="Main.Tab.Launch">启动</sys:String>
     <sys:String x:Key="Main.Tab.Settings">设置</sys:String>
     <sys:String x:Key="Main.Tab.Tools">工具</sys:String>
-    <sys:String x:Key="Main.Telemetry.Message">启用遥测数据收集后，启动器将会收集并上报错误与设备环境信息，这可以帮助开发者修复潜在的问题、更好的进行规划和开发。&#xA;若启用此功能，我们将会收集以下信息：&#xA;&#xA;- 启动器内出现的错误&#xA;- 启动器版本信息与识别码&#xA;- Windows 系统版本与架构&#xA;- 已安装的物理内存大小&#xA;- NAT 与 IPv6 支持情况&#xA;- 是否使用过原版 PCL、HMCL 或 BakaXL&#xA;&#xA;这些数据均不与你关联，我们也绝不会向第三方出售数据。&#xA;如果不希望启用遥测，可以选择拒绝。这不会影响其他功能的正常使用，但可能会影响开发者修复潜在 Bug。&#xA;你可以随时在启动器设置中调整这项设置。</sys:String>
-    <sys:String x:Key="Main.Telemetry.Title">启用遥测数据收集</sys:String>
     <sys:String x:Key="Main.Title.GameLog">实时日志</sys:String>
     <sys:String x:Key="Main.Title.InstanceSelect">实例选择</sys:String>
     <sys:String x:Key="Main.Title.InstanceSetup">实例设置 - {0}</sys:String>
@@ -2565,13 +2563,13 @@
 
     <!-- Setup.About.Legal -->
 
-    <sys:String x:Key="Setup.About.Legal.CommunityLobbyPrivacy">PCL CE 联机大厅隐私政策</sys:String>
+    <sys:String x:Key="Setup.About.Legal.CommunityLobbyPrivacy">联机与隐私说明</sys:String>
     <sys:String x:Key="Setup.About.Legal.CommunitySource">PCL CE 开源代码</sys:String>
     <sys:String x:Key="Setup.About.Legal.CopyrightText">Copyright © 2026 PCL Community &amp; 龙腾猫跃.&#xD;非 MINECRAFT 官方产品。未经 MOJANG 或 MICROSOFT 批准，也不与 MOJANG 或 MICROSOFT 关联。</sys:String>
     <sys:String x:Key="Setup.About.Legal.NatayarkTerms">Natayark OpenID 服务条款</sys:String>
     <sys:String x:Key="Setup.About.Legal.OtherInfo">其他信息</sys:String>
     <sys:String x:Key="Setup.About.Legal.PrivacyNotice">隐私说明</sys:String>
-    <sys:String x:Key="Setup.About.Legal.PrivacyText">本软件的 User Agent 中包含启动器的版本号，以统计各版本的用户数量。&#xD;除此之外，本软件不会向开发者上传任何其他信息。&#xD;* 联机与软硬件调查相关功能遵循其自身的隐私政策，与上述说明不通用。</sys:String>
+    <sys:String x:Key="Setup.About.Legal.PrivacyText">启动器已移除设备遥测、错误自动上报和原项目远程联机开关。联机使用本机设置的昵称与节点，不需要 Natayark 账户。连接节点和大厅成员可接触到联机所需的网络地址、昵称和本次启动随机生成的会话标识；本地硬件识别码不再作为联机标识发送。日志保存在本机，反馈时由用户自行选择是否分享。</sys:String>
     <sys:String x:Key="Setup.About.Legal.Title">版权声明与法律信息</sys:String>
 
     <!-- Setup.About.SpecialThanks -->
@@ -3020,8 +3018,6 @@
     <sys:String x:Key="Setup.Misc.System.StopUsingPclCe.Message.Final">你确定要继续操作吗？这是最后警告！&#xA;与 PCL CE 有关的一切数据将被永久消除！（真的很久！）</sys:String>
     <sys:String x:Key="Setup.Misc.System.StopUsingPclCe.Message">即将删除此电脑上与 PCL CE 有关的全部配置、缓存、已保存的账户信息及其他相关数据，并撤销已接受的许可协议。完成后，软件将自动关闭。&#xA;&#xA;但请注意，以下内容无法自动删除或注销：&#xA;- 此电脑上其他 PCL CE 实例的本地数据&#xA;- Natayark 账户&#xA;&#xA;如需同时删除 Minecraft 实例中的 PCL CE 配置文件，请选择“继续并清理实例文件夹”，这不会影响你的游戏配置、模组、存档，以及其他数据。&#xA;&#xA;此操作无法撤销。您确定要继续吗？</sys:String>
     <sys:String x:Key="Setup.Misc.System.StopUsingPclCe.Title">停止使用 PCL CE？</sys:String>
-    <sys:String x:Key="Setup.Misc.System.Telemetry">启用遥测数据收集</sys:String>
-    <sys:String x:Key="Setup.Misc.System.Telemetry.ToolTip">启用此功能后，启动器将会收集并上报错误与设备环境信息，这可以帮助开发者修复潜在的问题、更好的进行规划和开发。&#xA;若启用此功能，我们将会收集以下信息：启动器内出现的错误，启动器版本信息与识别码，使用的 Windows 系统版本与架构，已安装的物理内存大小，NAT 与 IPv6 支持情况，是否使用过原版 PCL、HMCL 或 BakaXL。&#xA;&#xA;这些数据均不与你关联，我们也绝不会向第三方出售数据。不启用此功能不会影响你使用其他功能，但可能会影响开发者修复潜在 Bug。&#xA;&#xA;此项更改将在重新启动启动器后生效。</sys:String>
     <sys:String x:Key="Setup.Misc.System.Title">系统</sys:String>
 
     <!-- Setup.Ui -->
@@ -3378,7 +3374,7 @@
     <sys:String x:Key="Tools.GameLink.Link.Disable">停用联机功能</sys:String>
     <sys:String x:Key="Tools.GameLink.Link.EasyTier">EasyTier 工具官网</sys:String>
     <sys:String x:Key="Tools.GameLink.Link.Friends">友情链接：</sys:String>
-    <sys:String x:Key="Tools.GameLink.Link.Privacy">大厅隐私协议</sys:String>
+    <sys:String x:Key="Tools.GameLink.Link.Privacy">联机与隐私说明</sys:String>
     <sys:String x:Key="Tools.GameLink.Link.Report">违法违规举报</sys:String>
     <sys:String x:Key="Tools.GameLink.Link.Terms">Natayark Network 用户协议与隐私政策</sys:String>
     <sys:String x:Key="Tools.GameLink.Loading.ConnectingServer">正在连接到大厅服务器...</sys:String>
@@ -3399,12 +3395,12 @@
     <!-- Tools.GameLink.Agreement -->
 
     <sys:String x:Key="Tools.GameLink.Agreement.Accept">我已阅读并同意</sys:String>
-    <sys:String x:Key="Tools.GameLink.Agreement.Body">使用大厅功能即代表你同意下列条款：&#xA;&#xA;我承诺严格遵守中国大陆相关法律法规，不会将大厅功能用于违法违规用途。&#xA;我承诺使用大厅功能带来的一切风险自行承担。&#xA;我已知晓并同意 PCL CE 收集经处理的本机识别码、Natayark ID 与其他信息并在必要时提供给执法部门。&#xA;为保护未成年人个人信息，使用联机大厅前，我确认我已满十四周岁。&#xA;&#xA;另外，你还需要同意 PCL CE 大厅相关隐私政策及《Natayark OpenID 服务条款》。</sys:String>
+    <sys:String x:Key="Tools.GameLink.Agreement.Body">联机通过 EasyTier 连接自定义或公共节点，不再由原 PCL CE 服务器下发功能策略，也不向其上报设备与账户信息。请仅与信任的玩家和节点建立连接，遵守服务器规则。详细的数据使用说明见项目隐私文档。</sys:String>
     <sys:String x:Key="Tools.GameLink.Agreement.Description">此处列出了 PCL CE 大厅使用的相关服务文档及介绍</sys:String>
     <sys:String x:Key="Tools.GameLink.Agreement.NatayarkTerms">Natayark OpenID 服务条款</sys:String>
     <sys:String x:Key="Tools.GameLink.Agreement.NatayarkTermsInfo">查看 Natayark OpenID 服务条款</sys:String>
-    <sys:String x:Key="Tools.GameLink.Agreement.PrivacyPolicy">PCL CE 大厅相关隐私政策</sys:String>
-    <sys:String x:Key="Tools.GameLink.Agreement.PrivacyPolicyInfo">了解 PCL CE 如何处理您的个人信息</sys:String>
+    <sys:String x:Key="Tools.GameLink.Agreement.PrivacyPolicy">联机与隐私说明</sys:String>
+    <sys:String x:Key="Tools.GameLink.Agreement.PrivacyPolicyInfo">联机与隐私说明</sys:String>
     <sys:String x:Key="Tools.GameLink.Agreement.Title">PCL CE 联机大厅说明与条款</sys:String>
 
     <!-- Tools.GameLink.Finish -->

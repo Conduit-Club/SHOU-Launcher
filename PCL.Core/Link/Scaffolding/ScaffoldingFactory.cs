@@ -23,7 +23,7 @@ public static class ScaffoldingFactory
     public static async Task<ScaffoldingClientEntity> CreateClientAsync
         (string playerName, string lobbyCode, LobbyType from, CancellationToken ct = default)
     {
-        var machineId = Utils.Secret.Identify.LauncherId;
+        var machineId = PCL.Core.Link.Lobby.LobbyRelayPolicy.PeerId;
 
         if (!LobbyCodeGenerator.TryParse(lobbyCode, out var info))
         {

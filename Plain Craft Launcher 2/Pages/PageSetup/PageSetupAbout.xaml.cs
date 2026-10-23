@@ -50,25 +50,7 @@ public partial class PageSetupAbout
         // 社团贡献者为固定署名；上游归属与许可证另行保留。
     }
 
-    private async void LoadContributersAsync()
-    {
-        try
-        {
-            using (var response = await HttpRequest
-                       .Create("https://api.github.com/repos/PCL-Community/PCL2-CE/contributors").SendAsync())
-            {
-                response.EnsureSuccessStatusCode();
-                var cos = await response.AsJsonAsync<List<GitHubContributor>>(JsonCompat.SerializerOptions);
-                Contributors.Clear();
-                foreach (var item in cos)
-                    Contributors.Add((GitHubContributor)item);
-            }
-        }
-        catch (Exception ex)
-        {
-            ModBase.Log(ex, Lang.Text("Setup.About.Error.LoadContributorsFailed"));
-        }
-    }
+
 
     private void ImgPCLCommunity_Click(object sender, MouseButtonEventArgs e)
     {

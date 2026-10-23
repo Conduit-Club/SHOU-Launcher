@@ -3,7 +3,6 @@ using System.Net;
 using System.Net.Http;
 using PCL.Core.App;
 using PCL.Core.IO.Net.Http;
-using PCL.Core.Link.Natayark;
 
 namespace PCL;
 
@@ -306,41 +305,7 @@ public static class ModWebServer
         return true;
     }
 
-    public static void StartNaidAuthorize(Action? completeCallback = null)
-    {
-        Exception? resultEx = null;
-        StartOAuthWaitingCallback("NatayarkID",
-            $"https://account.naids.com/oauth2/authorize?response_type=code&client_id={Secrets.NatayarkClientId}&redirect_uri=%r",
-            (success, parameters, content) =>
-            {
-                OAuthCompleteStatus? status;
-                if (!success)
-                {
-                    ModMain.MyMsgBox(content, isWarn: true);
-                    completeCallback?.Invoke();
-                    return null;
-                }
 
-
-                var code = parameters["code"];
-
-                try
-                {
-                    NatayarkProfileManager.GetNaidDataAsync(code, port: ushort.Parse(parameters["Port"])).Wait();
-                }
-                catch (AggregateException ex)
-                {
-                    resultEx = ex.InnerExceptions[0];
-                }
-
-                if (resultEx is null)
-                    status = OAuthCompleteStatus.Complete(NatayarkProfileManager.NaidProfile.Username);
-                else
-                    status = OAuthCompleteStatus.Failed("获取用户信息失败，请尝试重新登录", resultEx);
-                completeCallback?.Invoke();
-                return status;
-            });
-    }
 
     #endregion
 }

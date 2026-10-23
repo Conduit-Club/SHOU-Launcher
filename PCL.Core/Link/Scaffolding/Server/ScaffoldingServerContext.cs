@@ -64,11 +64,11 @@ public class ScaffoldingServerContext : IServerContext
     /// <param name="mcPort">Minecraft shared port.</param>
     public static ScaffoldingServerContext Create(string playerName, int mcPort)
     {
-        var machineId = Utils.Secret.Identify.LauncherId;
+        var machineId = PCL.Core.Link.Lobby.LobbyRelayPolicy.PeerId;
         var profile = new PlayerProfile
         {
             Name = playerName,
-            MachineId = Utils.Secret.Identify.LauncherId,
+            MachineId = PCL.Core.Link.Lobby.LobbyRelayPolicy.PeerId,
             // Please update ScaffoldingFactory.cs at the same time.
             Vendor = $"PCL CE {Basics.VersionName}, EasyTier {EasyTierMetadata.CurrentEasyTierVer}",
             Kind = PlayerKind.HOST
