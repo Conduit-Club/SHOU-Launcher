@@ -34,7 +34,9 @@ public class CacheSystemIntegrationTest
             EnableCompression = false
         };
 
+#pragma warning disable CS0618 // This test intentionally uses the constructor reserved for tests.
         _cache = new CacheService(_options);
+#pragma warning restore CS0618
         await _cache.InitializeAsync();
     }
 

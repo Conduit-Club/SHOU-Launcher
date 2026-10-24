@@ -1,4 +1,5 @@
 using PCL.Core.App;
+using PCL.Core.Link.Lobby;
 using PCL.Core.Link.EasyTier;
 using PCL.Core.Link.Scaffolding.Client.Models;
 using PCL.Core.Logging;
@@ -177,7 +178,7 @@ public class EasyTierEntity
             .Add("network-name", _lobby.NetworkName)
             .Add("network-secret", _lobby.NetworkSecret)
             //.Add("relay-network-whitelist", _lobby.NetworkName)
-            .Add("machine-id", Utils.Secret.Identify.LauncherId)
+            .Add("machine-id", PCL.Core.Link.Lobby.LobbyRelayPolicy.PeerId)
             .Add("rpc-portal", _rpcPort.ToString())
             .Add("private-mode", "true")
             .AddFlag("p2p-only");
@@ -204,22 +205,8 @@ public class EasyTierEntity
                 .Add("l", "udp://0.0.0.0:0");
         }
 
-        foreach (var address in ETRelay.RelayList
-            .Select(static x => x.Url)
-            .Concat(_fallbackNodeLinks))
-        {
+        foreach (var address in LobbyRelayPolicy.GetPeers(Config.Link.CustomRelayServer, Config.Link.ServerType == 2))
             args.Add("p", address);
-        }
-        
-        // foreach (var address in await _GetEtRelayListAsync().ConfigureAwait(false))
-        // {
-        //     args.Add("p", address);
-        // }
-
-        // if (Config.Link.RelayType == 1)
-        // {
-        //     args.AddFlag("disable-p2p");
-        // }
 
         process.StartInfo.Arguments = args.GetResult();
 
@@ -227,83 +214,6 @@ public class EasyTierEntity
 
         return process;
     }
-
-    private async Task<IReadOnlyList<string>> _GetEtRelayListAsync()
-    {
-        var relays = ETRelay.RelayList;
-        var customedNodes = Config.Link.CustomRelayServer.Split(';', StringSplitOptions.RemoveEmptyEntries);
-        foreach (var node in customedNodes)
-        {
-            if (node.Contains("tcp://", StringComparison.OrdinalIgnoreCase) ||
-                node.Contains("udp://", StringComparison.OrdinalIgnoreCase))
-            {
-                relays.Add(new ETRelay
-                {
-                    Url = node,
-                    Name = "Custom",
-                    Type = ETRelayType.Custom
-                });
-            }
-            else
-            {
-                LogWrapper.Warn("EasyTier", $"Invalid custom node URL: {node}.");
-            }
-        }
-
-        var setupRelayList = relays.Select(relay => new { relay, serverType = Config.Link.ServerType })
-            .Where(rl =>
-                (rl.relay.Type == ETRelayType.Selfhosted && rl.serverType != 2) ||
-                (rl.relay.Type == ETRelayType.Community && rl.serverType == 1) ||
-                rl.relay.Type == ETRelayType.Custom)
-            .Select(rl => rl.relay.Url).ToImmutableList();
-
-        var pubNode = await _GetPublicNodeAsync().ConfigureAwait(false);
-
-        var result = setupRelayList
-            .Concat(pubNode)
-            .Take(6)
-            .ToImmutableList();
-
-        LogWrapper.Debug($"Get public node:\n{string.Join("\n\t", result)}");
-
-        return result;
-    }
-
-    private readonly string[] _fallbackNodeLinks =
-    [
-        "tcp://public.easytier.top:11010",
-        "tcp://public2.easytier.cn:54321",
-        "https://etnode.zkitefly.eu.org/node1",
-        "https://etnode.zkitefly.eu.org/node2",
-        "https://etnode.zkitefly.eu.org/-node1",
-        "https://etnode.zkitefly.eu.org/-node2"
-    ];
-
-
-    private async Task<IReadOnlyList<string>> _GetPublicNodeAsync()
-    {
-        using var rep = await HttpRequest
-            .Create("https://uptime.easytier.cn/api/nodes?page=1&per_page=50&is_active=true")
-            .SendAsync()
-            .ConfigureAwait(false);
-
-        rep.EnsureSuccessStatusCode();
-
-        var dto = await rep
-            .AsJsonAsync<PublicNodeDto>()
-            .ConfigureAwait(false);
-
-        ArgumentNullException.ThrowIfNull(dto);
-
-        var result = dto.Data.Items
-            .Where(it => it is { IsActive: true, IsAllowRelay: true })
-            .Select(it => it.Host)
-            .Union(_fallbackNodeLinks)
-            .ToImmutableList();
-
-        return result;
-    }
-
 
     #region Information
 

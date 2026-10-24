@@ -1,0 +1,56 @@
+name: Conduit Release Draft
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing main-based tag matching the source version (e.g. v1.3.1)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: github.repository == 'Conduit-Club/SHOU-Launcher'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - name: Validate release tag and source
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: ./scripts/conduit/Get-BuildIdentity.ps1 -Configuration Release -ReleaseTag $env:RELEASE_TAG
+  build:
+    needs: validate
+    uses: ./.github/workflows/conduit-build.yml
+    with:
+      source_ref: ${{ inputs.tag }}
+      release_tag: ${{ inputs.tag }}
+    secrets: inherit
+  draft:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: ${{ needs.build.outputs.artifact_name }}
+          path: package
+      - name: Create reviewable release draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ inputs.tag }}
+        shell: pwsh
+        run: |
+          gh release create $env:RELEASE_TAG --verify-tag --draft --title $env:RELEASE_TAG --generate-notes
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot create release draft; an existing release is never overwritten.' }
+          $files = Get-ChildItem package -File | ForEach-Object FullName
+          gh release upload $env:RELEASE_TAG @files
+          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed.' }

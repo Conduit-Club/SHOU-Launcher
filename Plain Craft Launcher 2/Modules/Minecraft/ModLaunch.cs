@@ -141,9 +141,7 @@ public static class ModLaunch
         }
 #endif
         
-        #if DEBUG || DEBUGCI
-        return;
-        #endif
+        #if !DEBUG && !DEBUGCI
 
         // 正版购买提示
         if (!ProfileService.HasMicrosoftProfile &&
@@ -184,6 +182,7 @@ public static class ModLaunch
             }
 
         }
+        #endif
     }
 
     #endregion

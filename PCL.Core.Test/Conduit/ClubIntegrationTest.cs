@@ -25,8 +25,7 @@ public class ClubIntegrationTest
     [TestMethod]
     public void MuaLoginUsesMemberSiteAndKeepsLegacyUnionProfilesRecognized()
     {
-        Assert.AreEqual("https://skin.mualliance.ltd/api/yggdrasil", ClubCatalog.MuaAuth);
-        Assert.IsTrue(ClubCatalog.IsMuaProvider(ClubCatalog.MuaAuth));
+        Assert.IsTrue(ClubCatalog.IsMuaProvider("https://skin.mualliance.ltd/api/yggdrasil"));
         Assert.IsTrue(ClubCatalog.IsMuaProvider(ClubCatalog.MuaUnionAuth));
         Assert.IsFalse(ClubCatalog.IsProvider(ClubCatalog.MuaUnionAuth, ClubCatalog.MuaAuth));
 

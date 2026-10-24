@@ -1004,7 +1004,7 @@ public static class ModLoader
     /// </summary>
     public class LoaderCombo<InputType> : LoaderCombo
     {
-        public new InputType typedInput;
+        public InputType typedInput;
 
         public LoaderCombo(string name, IEnumerable<LoaderBase> loaders) : base(name, loaders) { }
 

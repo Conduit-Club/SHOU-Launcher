@@ -60,7 +60,7 @@ public partial class PageSetupFeedback
     public void FeedbackListGet(ModLoader.LoaderTask<bool, List<Feedback>> task)
     {
         var list = Requester.FetchJson(
-            "https://api.github.com/repos/PCL-Community/PCL2-CE/issues?state=all&sort=created&per_page=200",
+            "https://api.github.com/repos/Conduit-Club/SHOU-Launcher/issues?state=all&sort=created&per_page=200",
             new RequestParam
             {
                 Retries = 3,
@@ -158,6 +158,12 @@ public partial class PageSetupFeedback
                 var (panel, icon) = TagMap[tag];
                 panel(this).Children.Add(CreateFeedbackItem(item, icon));
             }
+            else
+            {
+                // Club issues do not share the old repository's numeric label IDs.
+                var panel = item.State == "closed" ? PanListCompleted : PanListWaitingProcess;
+                panel.Children.Add(CreateFeedbackItem(item, item.State == "closed" ? "Blocks/Grass.png" : "Blocks/RedstoneBlock.png"));
+            }
         }
 
         SetPanelVisibility(PanListProcessing, PanContentProcessing);
@@ -186,6 +192,8 @@ public partial class PageSetupFeedback
         public DateTime Time { get; init; }
         [JsonPropertyName("body")]
         public string Content { get; init; } = string.Empty;
+        [JsonPropertyName("state")]
+        public string State { get; init; } = "open";
         [JsonPropertyName("html_url")]
         public string Url { get; init; } = string.Empty;
         [JsonIgnore]

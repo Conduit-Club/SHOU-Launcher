@@ -83,12 +83,7 @@
                             <local:MyListItem Title="{DynamicResource Tools.GameLink.Agreement.PrivacyPolicy}"
                                               Info="{DynamicResource Tools.GameLink.Agreement.PrivacyPolicyInfo}"
                                               Type="Clickable" local:CustomEventService.EventType="OpenUrl"
-                                              local:CustomEventService.EventData="https://www.pclc.cc/privacy/personal-info-brief.html"
-                                              Logo="pack://application:,,,/images/Blocks/Grass.png" />
-                            <local:MyListItem Title="{DynamicResource Tools.GameLink.Agreement.NatayarkTerms}"
-                                              Info="{DynamicResource Tools.GameLink.Agreement.NatayarkTermsInfo}"
-                                              Type="Clickable" local:CustomEventService.EventType="OpenUrl"
-                                              local:CustomEventService.EventData="https://account.naids.com/policy"
+                                              local:CustomEventService.EventData="https://github.com/Conduit-Club/SHOU-Launcher/blob/main/docs/conduit/PRIVACY.md"
                                               Logo="pack://application:,,,/images/Blocks/Grass.png" />
                             <TextBlock TextWrapping="Wrap" Margin="0,10,0,0"
                                        Text="{DynamicResource Tools.GameLink.Agreement.Body}" />
@@ -115,25 +110,6 @@
                                              Icon="lucide/ethernet-port" />
                                 <TextBlock x:Name="LabNatType" IsHitTestVisible="False"
                                            Text="{DynamicResource Tools.GameLink.Nat.Test}" VerticalAlignment="Center"
-                                           Foreground="{DynamicResource ColorBrushGray1}" Margin="0,0,12,0" />
-                            </StackPanel>
-                        </local:MyCard>
-
-                        <local:MyCard x:Name="BtnNatayarkUserName">
-                            <StackPanel Orientation="Horizontal"
-                                        Background="{StaticResource ColorBrushSemiTransparent}"
-                                        ToolTip="{DynamicResource Tools.GameLink.Natayark.Account}"
-                                        ToolTipService.Placement="Center"
-                                        ToolTipService.InitialShowDelay="100" ToolTipService.VerticalOffset="-35">
-                                <svgIcon:SvgIcon IsHitTestVisible="False"
-                                             Width="14" Stretch="Uniform"
-                                             IconBrush="{DynamicResource ColorBrushGray1}"
-                                             Margin="12,0,7,0"
-                                             Icon="lucide/user" />
-                                <TextBlock x:Name="LabNatayarkUserName"
-                                           MouseLeftButtonUp="LabNatayarkUserName_MouseLeftButtonUp"
-                                           Text="{DynamicResource Tools.GameLink.Natayark.Login}"
-                                           VerticalAlignment="Center"
                                            Foreground="{DynamicResource ColorBrushGray1}" Margin="0,0,12,0" />
                             </StackPanel>
                         </local:MyCard>
@@ -190,15 +166,11 @@
                                     Orientation="Horizontal">
                             <local:MyTextButton Text="{DynamicResource Tools.GameLink.Link.Report}"
                                                 local:CustomEventService.EventType="OpenUrl"
-                                                local:CustomEventService.EventData="https://qm.qq.com/q/zfml1KaPWS" />
-                            <TextBlock Text=" | " />
-                            <local:MyTextButton Text="{DynamicResource Tools.GameLink.Link.Terms}"
-                                                local:CustomEventService.EventType="OpenUrl"
-                                                local:CustomEventService.EventData="https://account.naids.com/policy" />
+                                                local:CustomEventService.EventData="https://github.com/Conduit-Club/SHOU-Launcher/issues" />
                             <TextBlock Text=" | " />
                             <local:MyTextButton Text="{DynamicResource Tools.GameLink.Link.Privacy}"
                                                 local:CustomEventService.EventType="OpenUrl"
-                                                local:CustomEventService.EventData="https://www.pclc.cc/privacy/personal-info-brief.html" />
+                                                local:CustomEventService.EventData="https://github.com/Conduit-Club/SHOU-Launcher/blob/main/docs/conduit/PRIVACY.md" />
                             <TextBlock Text=" | " />
                             <local:MyTextButton Text="{DynamicResource Tools.GameLink.Link.Disable}"
                                                 x:Name="BtnEulaStop" Click="BtnEulaStop_Click" />

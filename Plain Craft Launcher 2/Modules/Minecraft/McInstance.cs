@@ -898,11 +898,7 @@ public class McInstance
                     }
 
                 // 确定实例描述
-                if (state == McInstanceState.Error)
-                {
-                    Desc = Desc;
-                }
-                else
+                if (state != McInstanceState.Error)
                 {
                     Desc = States.Instance.CustomInfo[PathInstance];
                     if ((Desc ?? "") == (GetDefaultDescription() ?? ""))

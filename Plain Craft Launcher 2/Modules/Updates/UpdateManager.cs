@@ -8,8 +8,6 @@ namespace PCL;
 public static class UpdateManager
 {
     public static bool isUpdateWaitingRestart => false;
-    // 保留旧公告模块的接口，但不注册任何上游源，也不启动公告请求。
-    public static UpdatesWrapperModel remoteServer = new(new List<IUpdateSource>());
     public static ModLoader.LoaderTask<int, int> serverLoader = new("Conduit updates", _ => { });
     public static UpdateEnums.VersionStatus GetVersionStatus() => ClubUpdates.Latest is not { } latest
         ? UpdateEnums.VersionStatus.Unknown
@@ -18,6 +16,8 @@ public static class UpdateManager
         => ModBase.OpenWebsite(ClubUpdates.Latest?.PageUrl ?? ClubCatalog.Repository + "/releases");
     public static void UpdateRestart(bool triggerRestartAndByEnd, bool triggerRestart = true) { }
     public static void ShowCEAnnounce() { }
+    [System.Diagnostics.CodeAnalysis.UnconditionalSuppressMessage("SingleFile", "IL3000",
+        Justification = "The empty Assembly.Location of a bundled assembly is deliberately used to reject standalone distribution of development apphosts.")]
     internal static void DownloadLatestPCL(ModLoader.LoaderBase loaderToSyncProgress = null)
     {
         // A development apphost depends on adjacent DLLs and cannot be shipped on its own.

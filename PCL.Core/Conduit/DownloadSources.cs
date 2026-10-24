@@ -21,7 +21,7 @@ public sealed class DownloadSource
     public bool Enabled { get; set; } = true;
 }
 
-public sealed record SourceAddress(string Url, string Name, int Priority);
+public sealed record SourceAddress(string Url, string Name, int Priority, bool IsPartialCatalog = false);
 
 public static class DownloadSources
 {
@@ -153,7 +153,7 @@ public static class DownloadSources
                     if (hasShouMetadata && url != ManifestUrl) continue;
                     var mapped = url == ManifestUrl ? source.BaseUrl.TrimEnd('/') + "/metadata/version_manifest_v2.json"
                         : source.BaseUrl.TrimEnd('/') + "/upstream/" + new Uri(url).Host + new Uri(url).PathAndQuery;
-                    result.Add(new(mapped, source.Name, source.Priority));
+                    result.Add(new(mapped, source.Name, source.Priority, url == ManifestUrl));
                 }
             }
             // Unknown URLs (including rewritten manifest URLs) are never lost. Explicitly disabled built-ins stay disabled.
@@ -192,13 +192,19 @@ public static class DownloadSources
     }
 
     public static (SourceAddress Source, JsonObject Manifest) FindManifest(IReadOnlyList<SourceAddress> sources,
-        Func<string, string> fetch, string? requiredVersion = null)
+        Func<string, string> fetch, string? requiredVersion = null,
+        Action<SourceAddress, Exception>? onFailure = null)
     {
         var failures = new List<Exception>();
-        foreach (var source in sources)
+        // A curated mirror is useful for files and per-version fallback, but must not
+        // hide the full catalog after a transient failure of the preferred mirror.
+        var ordered = string.IsNullOrEmpty(requiredVersion)
+            ? sources.OrderBy(s => s.IsPartialCatalog).ThenBy(s => s.Priority)
+            : sources.OrderBy(s => s.Priority);
+        foreach (var source in ordered)
             try { return (source, ValidateManifest(fetch(source.Url), requiredVersion)); }
             catch (OperationCanceledException) { throw; }
-            catch (Exception ex) { failures.Add(ex); }
+            catch (Exception ex) { failures.Add(ex); onFailure?.Invoke(source, ex); }
         throw new AggregateException("所有 Minecraft 清单源均不可用或缺少目标版本。", failures);
     }
 }
