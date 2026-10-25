@@ -1,22 +1,28 @@
 <UserControl x:Class="PCL.ClubJavaTrustSettings"
  xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:PCL">
- <local:MyCard Title="Java 证书检查与修复" Margin="0,0,0,15">
+ <StackPanel>
+ <local:MyCard Title="Java 证书保护" Margin="0,0,0,15">
+  <StackPanel Margin="25,40,25,18">
+   <local:MyCheckBox x:Name="AutoRepair" Text="自动修复新下载 Java 的已知证书问题（推荐）" Height="28" Change="SavePreference" />
+   <TextBlock x:Name="Status" Text="尚未检查；展开下方详情或点击重新检查。" TextWrapping="Wrap" Margin="0,6,0,8" />
+   <TextBlock x:Name="PreferenceStatus" TextWrapping="Wrap" Opacity="0.75" />
+   <local:MyButton x:Name="ScanButton" Text="重新扫描 Java 证书" Height="30" Padding="10,0" HorizontalAlignment="Left" Click="Refresh" Margin="0,6,0,0" />
+  </StackPanel>
+ </local:MyCard>
+ <local:MyCard x:Name="DetailsCard" Title="证书检查详情与修复" CanSwap="True" IsSwapped="True" Swap="DetailsExpanded" Margin="0,0,0,15">
   <StackPanel Margin="25,40,25,20">
    <TextBlock Text="自动检查已发现的 JDK / JRE，按 SHA-256 指纹移除 emSign ECC Root CA - G3 与已泄露的中间证书，并补充 Java 阻止名单。每次写入前保留备份；已有 Java 需要手动点击修复。" TextWrapping="Wrap" />
-   <local:MyCheckBox x:Name="AutoRepair" Text="自动检查并修复启动器新下载的 Java（推荐）" Height="28" Margin="0,10,0,4" />
    <WrapPanel x:Name="Actions" Margin="0,4,0,10">
-    <local:MyButton Text="保存自动修复设置" Height="32" Padding="10,0" Margin="0,0,8,8" Click="Save" />
-    <local:MyButton Text="重新扫描 Java 证书" Height="32" Padding="10,0" Margin="0,0,8,8" Click="Refresh" />
-    <local:MyButton Text="修复所选" Height="32" Padding="10,0" Margin="0,0,8,8" Click="RepairSelected" />
-    <local:MyButton Text="修复全部可处理项" Height="32" Padding="10,0" Margin="0,0,8,8" Click="RepairAll" />
-    <local:MyButton Text="恢复所选备份" Height="32" Padding="10,0" Margin="0,0,8,8" Click="RestoreSelected" />
+    <local:MyButton x:Name="RepairButton" Text="修复所选" Height="32" Padding="10,0" Margin="0,0,8,8" Click="RepairSelected" IsEnabled="False" />
+    <local:MyButton x:Name="RepairAllButton" Text="修复全部可处理项" Height="32" Padding="10,0" Margin="0,0,8,8" Click="RepairAll" IsEnabled="False" />
+    <local:MyButton x:Name="RestoreButton" Text="恢复所选备份" Height="32" Padding="10,0" Margin="0,0,8,8" Click="RestoreSelected" IsEnabled="False" />
    </WrapPanel>
-   <ListBox x:Name="Results" MaxHeight="330" Background="{DynamicResource ColorBrushWhite}" Foreground="{DynamicResource ColorBrushGray1}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+   <ListBox x:Name="Results" MaxHeight="260" SelectionChanged="SelectionChanged" Background="{DynamicResource ColorBrushWhite}" Foreground="{DynamicResource ColorBrushGray1}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
     <ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding}" TextWrapping="Wrap" Margin="4" /></DataTemplate></ListBox.ItemTemplate>
    </ListBox>
-   <TextBlock x:Name="Status" Text="尚未检查" TextWrapping="Wrap" Margin="0,8,0,8" />
    <TextBlock Text="规则日期：2026-10-22。修复后请重启正在运行的 Java / 游戏。此功能只检查默认 cacerts、jssecacerts 和 Java 阻止名单，不覆盖 JVM 参数指定的自定义信任库。链接到系统证书库的 Java 请通过系统包管理器更新；特殊格式、非默认密码或无写入权限会明确报告。恢复备份会重新引入原证书。建议同时更新到厂商最新 Java。" TextWrapping="Wrap" Opacity="0.75" />
   </StackPanel>
  </local:MyCard>
+ </StackPanel>
 </UserControl>

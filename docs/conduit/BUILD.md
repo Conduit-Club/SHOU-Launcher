@@ -6,7 +6,7 @@
 
 - 自 2026-10-20 起独立维护，不再自动同步原上游；默认分支为 `main`，开发与候选发行分支为 `dev`，通过 `dev → main` PR 审查。
 - 最后纳入的 PCL-CE 基线：`f00b458e7bcf1368ea4e00148cf5db09bd1f5133`（2026-10-15），此次同步新增 9 个提交；旧发布工作流的两处删除冲突已按社团独立发行策略处理。历史迁移见 [HISTORY.md](HISTORY.md)。
-- 直接 PCL-CE 基线版本：`2.15.1`；当前版本目标为 `v1.3.0`（dxy），已发布包以社团 Releases 页面显示的版本为准。`v1.0.0`（zst）首发说明保留作历史记录。正式发行标签使用 `v` 前缀，同时兼容读取旧 `conduit-v` 标签，不冒充 CE 官方发行版。
+- 直接 PCL-CE 基线版本：`2.15.1`；当前版本目标为 `v1.4.0`（lzj），已发布包以社团 Releases 页面显示的版本为准。`v1.0.0`（zst）首发说明保留作历史记录。正式发行标签使用 `v` 前缀，同时兼容读取旧 `conduit-v` 标签，不冒充 CE 官方发行版。
 
 ## 环境
 
@@ -28,19 +28,19 @@ dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64
 
 复制 `.env.example` 为仓库根目录 `.env`，填写 `PCL_MS_CLIENT_ID=应用程序GUID`。`.env` 及其变体被 Git 忽略，不能放入提交或上传为 artifact。`Publish.ps1` 自动读取它，进程环境中的同名变量优先；不执行文件内的命令、变量插值或表达式。
 
-当前构建入口只允许注入公开的 Microsoft Client ID 和源码 SHA。脚本会临时隔离其他 `PCL_*` 环境变量并在退出时还原，避免上游生成器把无关环境凭据带入客户端；不要填写 Client Secret、GitHub Token 或服务器私钥。每次构建会 clean 并关闭共享编译，防止环境配置变化后沿用旧生成代码。
+当前构建入口只允许注入公开的 Microsoft Client ID、项目获准的 CurseForge API Key 和源码 SHA。脚本会临时隔离其他 `PCL_*` 环境变量并在退出时还原，避免上游生成器把无关环境凭据带入客户端；不要填写 Client Secret、GitHub Token 或服务器私钥。每次构建会 clean 并关闭共享编译，防止环境配置变化后沿用旧生成代码。
 
-GitHub Actions 使用仓库 Secret `CLIENT_ID` 映射为 `PCL_MS_CLIENT_ID`。社团工作流在面向 `main` / `dev` 的 PR、这两个分支的 push 和手动运行时构建，分开运行社团回归与全量测试；全量测试失败仍保留失败状态和 TRX 报告。Fork PR 无法读取仓库 Secrets，仍可执行无 Client ID 编译。
+GitHub Actions 使用仓库 Secret `CLIENT_ID` 映射为 `PCL_MS_CLIENT_ID`；可选的 `CURSEFORGE_API_KEY` 映射为 `PCL_CURSEFORGE_API_KEY`，也可在本地 `.env` 中填写同名变量。社团工作流在面向 `main` / `dev` 的 PR、这两个分支的 push 和手动运行时构建，分开运行社团回归与全量测试；全量测试失败仍保留失败状态和 TRX 报告。Fork PR 无法读取仓库 Secrets，仍可执行无 Client ID 编译。
 
 2026-10-03 已配置并审核通过 `CLIENT_ID`。其他上游 Secrets（CurseForge、Natayark、联机、遥测等）没有社团自己的可用值，未配置假值，也未复制上游凭据。原 CE GPG / MirrorChyan 发行工作流在社团仓库保持禁用。微软应用注入已验证，真实账户授权与 Minecraft 服务联调仍需单独确认。
 
-`Conduit Build` 工作流可在 GitHub Actions 手动运行，会上传 x64 构建产物，不使用上游密钥或镜像服务。当前版本目标为 v1.3.0（dxy），正式包、历史 v1.0.0 包和对应说明均以社团 Releases 页面为准；发行包使用 ZIP 旁的 SHA-256 文件校验，不把 PR 或开发构建链接当作已发布包。
+`Conduit Build` 工作流可在 GitHub Actions 手动运行，会上传 x64 构建产物，不使用上游密钥或镜像服务。当前版本目标为 v1.4.0（lzj），正式包、历史 v1.0.0 包和对应说明均以社团 Releases 页面为准；发行包使用 ZIP 旁的 SHA-256 文件校验，不把 PR 或开发构建链接当作已发布包。
 
 原 CE Release 与 MirrorChyan 工作流仅允许在 `PCL-Community/PCL-CE` 仓库运行，避免重写社团发行说明或调用上游服务；独立维护后继续保留此隔离。
 
 ## 当前限制
 
-- 微软公共 Client ID 可由上述构建入口注入；CurseForge、Natayark/联机等依赖凭据的功能尚不可视为可用，后续应配置社团自己的合法凭据。
+- 微软公共 Client ID 可由上述构建入口注入；官方 CurseForge API 尚待获准的项目 Key 与真实服务验证。联机不再依赖 Natayark 凭据；仍需真实两端验证。
 - 社团 UI、服务器入口和更新源已完成首轮接入；更新页手动追踪社团 GitHub Releases。
 - 未使用上游 GPG 私钥，也未做 Authenticode 签名；SHA-256 仅用于核对文件完整性。
 - 编译和单元测试不能替代登录、下载、安装游戏、启动 Minecraft 的端到端验证。
@@ -62,3 +62,7 @@ GitHub Actions 使用仓库 Secret `CLIENT_ID` 映射为 `PCL_MS_CLIENT_ID`。�
 ## v1.2.0（zyf）发行
 
 正式包基于合并后的 `main`，使用 Release 配置；`dev` 用于开发与验证。当前仓库为 `Conduit-Club/SHOU-Launcher`；产物命名为 `SHOU-Launcher-win-x64.zip` 及旁置的 `.sha256`。构建信息包含版本、代号、源码 SHA、SDK、架构和配置。发布前应确认 `BUILD-INFO.txt` 中源码状态为 clean，且标签指向实际构建的 main 提交。
+
+## 当前开发构建与手动草稿发行
+
+打包默认使用带版本、构建号和源码短 SHA 的候选名；显式 `-Configuration Release -ReleaseTag v<版本>` 才生成正式文件名，并校验标签指向当前源码且属于 `origin/main`。`Conduit Release Draft` 手动工作流在测试通过后创建草稿，不自动公开或覆盖已有发行。当前源码已删除原 CE / MirrorChyan 发行工作流；上文关于原发行链路的描述保留为历史。详细命名、凭据与验证边界见 [MAINTENANCE-20261023.md](MAINTENANCE-20261023.md)。

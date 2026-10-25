@@ -11,7 +11,7 @@ namespace PCL;
 
 public partial class PageSetupJava
 {
-    private bool isLoad = false;
+    private JavaEntry[] _entries = [];
 
     public ModLoader.LoaderTask<bool, List<JavaEntry>> loader;
 
@@ -43,7 +43,12 @@ public partial class PageSetupJava
     }
 
     private void OnLoadFinished()
+        => RenderJavaList(ModJava.Javas.GetSortedJavaList());
+
+    private void RenderJavaList(IEnumerable<JavaEntry> entries)
     {
+        var javas = entries.ToArray();
+        _entries = javas;
         PanContent.Children.Clear();
         var itemAuto = new MyListItem
         {
@@ -51,20 +56,50 @@ public partial class PageSetupJava
             Title = Lang.Text("Setup.Java.AutoSelect.Title"),
             Info = Lang.Text("Setup.Java.AutoSelect.Info")
         };
-        itemAuto.Check += (sender, e) => Config.Launch.SelectedJava = "";
+        itemAuto.Check += (_, _) => { Config.Launch.SelectedJava = ""; UpdateSelectionSummary(javas); };
         PanContent.Children.Add(itemAuto);
         var currentSetJava = Config.Launch.SelectedJava;
-        foreach (var entry in ModJava.Javas.GetSortedJavaList())
+        foreach (var entry in javas)
         {
             var item = ItemBuild(entry);
             PanContent.Children.Add(item);
-            if (entry.Installation.JavaExePath == currentSetJava)
+            if (string.Equals(entry.Installation.JavaExePath, currentSetJava, StringComparison.OrdinalIgnoreCase))
                 item.SetChecked(true, false, false);
         }
 
         if (string.IsNullOrEmpty(currentSetJava))
             itemAuto.SetChecked(true, false, false);
+        UpdateSelectionSummary(javas);
     }
+
+    private void UpdateSelectionSummary(IEnumerable<JavaEntry> entries)
+    {
+        var javas = entries.ToArray();
+        var selected = Config.Launch.SelectedJava;
+        JavaListCard.Title = $"已发现的 Java（{javas.Length}）";
+        if (string.IsNullOrEmpty(selected))
+        {
+            SelectionSummary.Text = "自动选择 Java（推荐）";
+            SelectionDetail.Text = "启动游戏时按实例要求选择兼容版本。全局选择可被实例单独设置覆盖。";
+            JavaListCard.IsSwapped = true;
+        }
+        else
+        {
+            var entry = javas.FirstOrDefault(j => string.Equals(j.Installation.JavaExePath, selected, StringComparison.OrdinalIgnoreCase));
+            var valid = entry is { IsEnabled: true } && entry.Installation.IsStillAvailable;
+            SelectionSummary.Text = valid ? $"手动选择：Java {entry!.Installation.Version}" : "指定的 Java 不可用";
+            SelectionDetail.Text = valid ? selected : $"{selected}\n请重新选择、添加 Java，或恢复自动选择。";
+            JavaListCard.IsSwapped = false;
+        }
+    }
+
+    private void SelectAutomatic(object sender, System.Windows.Input.MouseButtonEventArgs e)
+    {
+        Config.Launch.SelectedJava = "";
+        RenderJavaList(_entries);
+    }
+
+    private void ShowJavaList(object sender, System.Windows.Input.MouseButtonEventArgs e) => JavaListCard.IsSwapped = false;
     
     private MyListItem ItemBuild(JavaEntry j)
     {
@@ -86,12 +121,17 @@ public partial class PageSetupJava
         {
             if (!j.Installation.IsStillAvailable)
             {
+                e.handled = true;
                 HintService.Hint(Lang.Text("Setup.Java.Unavailable"));
                 return;
             }
 
             if (j.IsEnabled)
+            {
                 Config.Launch.SelectedJava = j.Installation.JavaExePath;
+                SelectionSummary.Text = $"手动选择：Java {j.Installation.Version}";
+                SelectionDetail.Text = j.Installation.JavaExePath;
+            }
             else
             {
                 HintService.Hint(Lang.Text("Setup.Java.EnableBeforeSelect"));
@@ -171,7 +211,7 @@ public partial class PageSetupJava
                     return;
                 }
 
-                if (target.IsEnabled && Config.Launch.SelectedJava == target.Installation.JavaExePath)
+                if (target.IsEnabled && string.Equals(Config.Launch.SelectedJava, target.Installation.JavaExePath, StringComparison.OrdinalIgnoreCase))
                 {
                     HintService.Hint(Lang.Text("Setup.Java.DeselectBeforeDisable"));
                     return;

@@ -1,6 +1,5 @@
 using PCL.Core.App;
 using PCL.Core.App.Localization;
-using PCL.Core.Link.Natayark;
 using PCL.Core.Link.Scaffolding;
 using PCL.Core.Link.Scaffolding.Client.Models;
 using PCL.Core.Link.Scaffolding.EasyTier;
@@ -151,23 +150,6 @@ public class LobbyService() : GeneralService("lobby", "LobbyService")
                 LogWrapper.Info("LobbyService", "EasyTier files check completed.");
             }
 
-            // refresh naid token
-            var naidRefreshToken = States.Link.NaidRefreshToken;
-            if (!string.IsNullOrWhiteSpace(naidRefreshToken))
-            {
-                var expTime = States.Link.NaidRefreshExpireTime;
-                if (!string.IsNullOrWhiteSpace(expTime) &&
-                    Convert.ToDateTime(expTime).CompareTo(DateTime.Now) < 0)
-                {
-                    States.Link.NaidRefreshToken = string.Empty;
-                    HintWrapper.Show(Lang.Text("Tools.GameLink.Natayark.TokenExpired"), HintTheme.Error);
-                }
-                else
-                {
-                    await NatayarkProfileManager.GetNaidDataAsync(naidRefreshToken, true).ConfigureAwait(false);
-                }
-            }
-
             _SetState(LobbyState.Initialized);
             LogWrapper.Info("LobbyService", "Lobby service initialized successfully.");
 
@@ -242,9 +224,6 @@ public class LobbyService() : GeneralService("lobby", "LobbyService")
         _SetState(LobbyState.Initialized);
     }
 
-    private static bool _NotHaveNaid() =>
-        LobbyInfoProvider.RequiresLogin &&
-        string.IsNullOrWhiteSpace(NatayarkProfileManager.NaidProfile.AccessToken);
 
     /// <summary>
     /// Create a new lobby.
@@ -253,12 +232,6 @@ public class LobbyService() : GeneralService("lobby", "LobbyService")
     /// <param name="username">Player name.</param>
     public static async Task<bool> CreateLobbyAsync(int port, string username)
     {
-        if (_NotHaveNaid())
-        {
-            HintWrapper.Show(Lang.Text("Link.Lobby.LoginRequired"), HintTheme.Error);
-            return false;
-        }
-
         await _discoveringCts.CancelAsync().ConfigureAwait(false);
 
         _SetState(LobbyState.Creating);

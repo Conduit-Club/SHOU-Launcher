@@ -12,7 +12,7 @@ public partial class PageSetupGameLink
 {
     private bool isFirstLoad = true;
 
-    private new bool isLoaded;
+    private bool isLoaded;
 
     public PageSetupGameLink()
     {
@@ -42,6 +42,8 @@ public partial class PageSetupGameLink
     public void Reload()
     {
         TextLinkUsername.Text = Config.Link.Username;
+        CustomPeers.Text = Config.Link.CustomRelayServer;
+        LocalPeerMode.SelectedIndex = Config.Link.ServerType == 2 ? 1 : 0;
         // TextLinkRelay.Text = Config.Link.RelayServer
         // ComboRelayType.SelectedIndex = Config.Link.RelayType
         // ComboServerType.SelectedIndex = Config.Link.ServerType
@@ -104,10 +106,11 @@ public partial class PageSetupGameLink
             SetByTag(sender.Tag?.ToString(), sender.Text);
     }
 
-    private static void ComboBoxChange(MyComboBox sender, object e)
+    private void LocalPeerModeChanged(object senderRaw, SelectionChangedEventArgs e)
     {
+        var sender = (MyComboBox)senderRaw;
         if (ModAnimation.AniControlEnabled == 0)
-            SetByTag(sender.Tag?.ToString(), sender.SelectedIndex);
+            SetByTag(sender.Tag?.ToString(), sender.SelectedIndex == 1 ? 2 : 1);
     }
 
     private void CheckBoxChange(object senderRaw, bool user)

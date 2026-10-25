@@ -43,7 +43,7 @@ public sealed class SettingsXamlTest
         finally { CultureInfo.CurrentUICulture = initialUiCulture; }
         var config = new ConfigService();
         config.StartAsync().GetAwaiter().GetResult();
-        Assert.IsFalse(Config.System.Telemetry, "新配置必须默认关闭遥测，不能因移除弹窗而自动同意。");
+        Assert.IsFalse(Config.System.Telemetry, "遥测已移除，新配置必须保持关闭。");
         Assert.IsTrue(Config.System.TelemetryConfig.IsDefault(), "默认关闭无需写入用户授权。");
 
         var failures = new List<string>();
@@ -76,6 +76,8 @@ public sealed class SettingsXamlTest
                 (nameof(ClubAria2Settings), () => new ClubAria2Settings()),
                 (nameof(ClubJavaTrustSettings), () => new ClubJavaTrustSettings()),
                 (nameof(PageSetupJava), () => new PageSetupJava()),
+                (nameof(PageSetupGameLink), () => new PageSetupGameLink()),
+                (nameof(PageSetupFeedback), () => new PageSetupFeedback()),
                 (nameof(PageSetupUI), () => new PageSetupUI()),
                 (nameof(PageSetupGameManage), () => new PageSetupGameManage())
             })
@@ -84,6 +86,18 @@ public sealed class SettingsXamlTest
                 catch (Exception ex) { failures.Add($"{name}: {ex}"); }
             }
             Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures));
+            var linkSettings = (PageSetupGameLink)pages[nameof(PageSetupGameLink)];
+            Config.Link.ServerType = 2;
+            linkSettings.Reload();
+            Assert.AreEqual(1, ((MyComboBox)linkSettings.FindName("LocalPeerMode")).SelectedIndex);
+            Config.Link.ServerType = 1;
+            Config.Link.Username = " local-player ";
+            Assert.AreEqual("local-player", PCL.Core.Link.Lobby.LobbyInfoProvider.GetUsername());
+            var feedback = (PageSetupFeedback)pages[nameof(PageSetupFeedback)];
+            feedback.Loader.output = [new PageSetupFeedback.Feedback { Title = "Club issue", State = "open" }];
+            feedback.RefreshList();
+            Assert.AreEqual(1, ((StackPanel)feedback.FindName("PanListWaitingProcess")).Children.Count,
+                "Club issues without legacy label IDs must still be visible.");
 
             var home = pages[nameof(ClubHomeSettings)];
             home.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -99,6 +113,16 @@ public sealed class SettingsXamlTest
             var categories = new[] { SourceCategory.Minecraft, SourceCategory.Mod, SourceCategory.Loader };
             var sourcePages = new[] { "MinecraftSources", "ModSources", "LoaderSources" }
                 .Select(name => (ClubSourceCategorySettings)sources.FindName(name)).ToArray();
+            VerifySourceEditing((ClubSourceSettings)sources, sourcePages[0]);
+            var gameSettings = (PageSetupGameManage)pages[nameof(PageSetupGameManage)];
+            var nestedSources = (ClubSourceSettings)gameSettings.FindName("SourceSettings");
+            nestedSources.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+            var useOrder = (MyCheckBox)nestedSources.FindName("UseOrder");
+            SetCheck(useOrder, false);
+            Assert.IsTrue(((MyComboBox)gameSettings.FindName("ComboDownloadSource")).IsEnabled);
+            SetCheck(useOrder, true);
+            Assert.IsFalse(((MyComboBox)gameSettings.FindName("ComboDownloadSource")).IsEnabled);
+            Assert.IsFalse(((MyComboBox)gameSettings.FindName("ComboDownloadMod")).IsEnabled);
             for (var index = 0; index < sourcePages.Length; index++)
             {
                 tabs.SelectedIndex = index;
@@ -133,10 +157,12 @@ public sealed class SettingsXamlTest
             tabs.SelectedIndex = 2;
             ClickBoundButton(sources, "保存下载源设置");
             Assert.AreEqual(1, tabs.SelectedIndex);
+            Assert.IsTrue(((Expander)sourcePages[1].FindName("AdvancedEditor")).IsExpanded,
+                "A validation error must expose the advanced field that needs correction.");
             Assert.AreEqual(previousConfig, Config.Download.Sources);
             StringAssert.Contains(((TextBlock)sources.FindName("Status")).Text, "优先级必须为整数");
             ((MyTextBox)sourcePages[1].FindName("Priority")).Text = "42";
-            ClickBoundButton(sources, "保存下载源设置");
+            VerifySourceChangeDuringRequest(sources);
 
             var reloaded = new ClubSourceSettings();
             reloaded.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
@@ -177,14 +203,29 @@ public sealed class SettingsXamlTest
 
             var aria = pages[nameof(ClubAria2Settings)];
             aria.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+            Assert.IsFalse(((Expander)aria.FindName("RpcDetails")).IsExpanded);
+            var savedEndpoint = Config.Download.Aria2Endpoint;
             ((MyTextBox)aria.FindName("Endpoint")).Text = "http://127.0.0.1:16800/jsonrpc";
+            aria.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+            Assert.AreEqual("http://127.0.0.1:16800/jsonrpc", ((MyTextBox)aria.FindName("Endpoint")).Text,
+                "Returning to settings must preserve the RPC draft.");
+            StringAssert.Contains(((TextBlock)aria.FindName("PendingStatus")).Text, "未保存");
+            SetCheck((MyCheckBox)aria.FindName("Enabled"), true);
+            Assert.IsTrue(Config.Download.Aria2Enabled);
+            Assert.AreEqual(savedEndpoint, Config.Download.Aria2Endpoint, "Enabling must use the saved endpoint, without silently applying a draft.");
+            Assert.IsTrue(((Expander)aria.FindName("RpcDetails")).IsExpanded);
             ClickBoundButton(aria, "保存 RPC 设置");
             Assert.AreEqual("http://127.0.0.1:16800/jsonrpc", Config.Download.Aria2Endpoint);
+            SetCheck((MyCheckBox)aria.FindName("Enabled"), false);
+            Assert.IsFalse(Config.Download.Aria2Enabled);
 
             var trust = pages[nameof(ClubJavaTrustSettings)];
-            ((MyCheckBox)trust.FindName("AutoRepair")).Checked = false;
-            ClickBoundButton(trust, "保存自动修复设置");
+            trust.RaiseEvent(new RoutedEventArgs(FrameworkElement.LoadedEvent));
+            Assert.IsTrue(((MyCard)trust.FindName("DetailsCard")).IsSwapped);
+            StringAssert.Contains(((TextBlock)trust.FindName("Status")).Text, "尚未检查");
+            SetCheck((MyCheckBox)trust.FindName("AutoRepair"), false);
             Assert.IsFalse(Config.Download.JavaTrustAutoRepair);
+            StringAssert.Contains(((TextBlock)trust.FindName("PreferenceStatus")).Text, "即时保存");
             ClickBoundButton(trust, "重新扫描 Java 证书");
             StringAssert.Contains(((TextBlock)trust.FindName("Status")).Text, "尚未就绪");
             ClickBoundButton(trust, "修复所选");
@@ -193,6 +234,8 @@ public sealed class SettingsXamlTest
             StringAssert.Contains(((TextBlock)trust.FindName("Status")).Text, "没有可处理");
             ClickBoundButton(trust, "恢复所选备份");
             StringAssert.Contains(((TextBlock)trust.FindName("Status")).Text, "有备份");
+            VerifyJavaSummary((PageSetupJava)pages[nameof(PageSetupJava)]);
+
 
             var download = ModJava.GetJavaDownloadLoader();
             Assert.HasCount(3, download.loaders);
@@ -200,6 +243,90 @@ public sealed class SettingsXamlTest
             Assert.IsTrue(download.loaders[^1].block, "证书检查必须阻塞下载任务完成。");
         }
         finally { ModAnimation.AniControlEnabled -= 1; config.StopAsync().GetAwaiter().GetResult(); }
+    }
+
+    private static void VerifySourceEditing(ClubSourceSettings settings, ClubSourceCategorySettings page)
+    {
+        var editor = (Expander)page.FindName("AdvancedEditor");
+        Assert.IsFalse(editor.IsExpanded);
+        var list = (ListBox)page.FindName("Sources");
+        var first = ((ListBoxItem)list.Items[0]).Tag;
+        var previous = Config.Download.Sources;
+        ClickBoundButton(page, "下移");
+        Assert.AreSame(first, ((ListBoxItem)list.Items[1]).Tag);
+        Assert.AreEqual(1, list.SelectedIndex);
+        Assert.AreEqual(previous, Config.Download.Sources);
+        StringAssert.Contains(((TextBlock)settings.FindName("PendingStatus")).Text, "未保存");
+        ClickBoundButton(page, "上移");
+        Assert.AreSame(first, ((ListBoxItem)list.Items[0]).Tag);
+        var row = (StackPanel)((ListBoxItem)list.Items[0]).Content;
+        SetCheck((MyCheckBox)row.Children[0], false);
+        Assert.IsFalse(page.GetValidatedSources()[0].Enabled);
+        SetCheck((MyCheckBox)row.Children[0], true);
+        list.SelectedIndex = list.Items.Count - 1;
+        Assert.AreEqual(Visibility.Collapsed, ((MyTextBox)page.FindName("BaseUrl")).Visibility);
+        Assert.AreEqual(Visibility.Collapsed, ((MyTextBox)page.FindName("Origin")).Visibility);
+        list.SelectedIndex = 0;
+        ClickBoundButton(settings, "保存下载源设置");
+        Assert.AreEqual("没有未保存的修改", ((TextBlock)settings.FindName("PendingStatus")).Text);
+    }
+
+    private static void VerifyJavaSummary(PageSetupJava page)
+    {
+        var render = typeof(PageSetupJava).GetMethod("RenderJavaList", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Config.Launch.SelectedJava = @"Z:\missing-java\java.exe";
+        render.Invoke(page, [Array.Empty<PCL.Core.Minecraft.JavaEntry>()]);
+        Assert.IsFalse(((MyCard)page.FindName("JavaListCard")).IsSwapped);
+        StringAssert.Contains(((TextBlock)page.FindName("SelectionSummary")).Text, "不可用");
+        Assert.AreEqual(@"Z:\missing-java\java.exe", Config.Launch.SelectedJava);
+        ClickBoundButton(page, "使用自动选择");
+        Assert.AreEqual("", Config.Launch.SelectedJava);
+        Assert.IsTrue(((MyCard)page.FindName("JavaListCard")).IsSwapped);
+        StringAssert.Contains(((TextBlock)page.FindName("SelectionSummary")).Text, "自动选择");
+        ClickBoundButton(page, "管理已发现的 Java");
+        Assert.IsFalse(((MyCard)page.FindName("JavaListCard")).IsSwapped);
+        ClickBoundButton(page, "使用自动选择");
+    }
+
+    private static void VerifySourceChangeDuringRequest(DependencyObject settings)
+    {
+        var original = ModDownload.dlClientListLoader;
+        using var started = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var pending = new ModLoader.LoaderTask<string, ModDownload.DlClientListResult>("Old source response", _ =>
+        {
+            started.Set();
+            Assert.IsTrue(release.Wait(TimeSpan.FromSeconds(5)));
+        });
+        try
+        {
+            ModDownload.dlClientListLoader = pending;
+            pending.Start();
+            Assert.IsTrue(started.Wait(TimeSpan.FromSeconds(5)));
+            var oldRequest = pending.lastRunningTask!;
+            ClickBoundButton(settings, "保存下载源设置");
+            release.Set();
+            Assert.IsTrue(oldRequest.Wait(TimeSpan.FromSeconds(5)));
+            Assert.AreEqual(ModBase.LoadState.Waiting, pending.State,
+                "An old response completing after settings change must not become the cached Finished result.");
+        }
+        finally
+        {
+            release.Set();
+            ModDownload.dlClientListLoader = original;
+        }
+    }
+
+    private static void SetCheck(MyCheckBox control, bool value)
+    {
+        control.Checked = value;
+        if (!control.IsLoaded)
+        {
+            var handler = (MyCheckBox.ChangeEventHandler?)typeof(MyCheckBox)
+                .GetField("Change", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(control);
+            Assert.IsNotNull(handler);
+            handler(control, true);
+        }
     }
 
     private static void ClickBoundButton(DependencyObject root, string text)

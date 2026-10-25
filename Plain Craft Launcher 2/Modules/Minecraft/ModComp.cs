@@ -277,7 +277,7 @@ public static class ModComp
                     {
                         rawList = JsonSerializer.Deserialize<List<FavData>>(rawData, JsonCompat.SerializerOptions);
                     }
-                    catch (Exception ex1)
+                    catch (Exception)
                     {
                         // 尝试作为旧格式（HashSet）迁移
                         try
@@ -285,7 +285,7 @@ public static class ModComp
                             var migrate = JsonSerializer.Deserialize<HashSet<string>>(rawData, JsonCompat.SerializerOptions);
                             if (migrate is not null) rawList = new List<FavData> { GetNewFav(Lang.Text("Download.Comp.Detail.Favorites.DefaultName"), migrate) };
                         }
-                        catch (Exception ex2)
+                        catch (Exception)
                         {
                             // 两种都失败，使用默认
                         }

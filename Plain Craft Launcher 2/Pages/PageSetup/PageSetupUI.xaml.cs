@@ -26,7 +26,7 @@ public partial class PageSetupUI
         _ => "嘉然配色"
     }).ToArray();
 
-    public new bool isLoaded;
+    public bool isLoaded;
 
     public PageSetupUI()
     {

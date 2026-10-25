@@ -78,7 +78,7 @@ internal static class SvgIconParser
                 _ => null
             };
         }
-        catch (Exception ex)
+        catch (Exception)
         {
 #if DEBUG
             var descriptor = name;

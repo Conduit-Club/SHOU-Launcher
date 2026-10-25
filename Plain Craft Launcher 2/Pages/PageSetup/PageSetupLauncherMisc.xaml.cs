@@ -17,7 +17,7 @@ public partial class PageSetupLauncherMisc
 {
     private bool isFirstLoad = true;
 
-    private new bool isLoaded;
+    private bool isLoaded;
 
     public PageSetupLauncherMisc()
     {
@@ -49,7 +49,6 @@ public partial class PageSetupLauncherMisc
         CheckSystemDisableHardwareAcceleration.Checked = Config.System.DisableHardwareAcceleration;
         SliderAniFPS.Value = Config.System.AnimationFpsLimit;
         SliderMaxLog.Value = Config.System.MaxGameLog;
-        CheckSystemTelemetry.Checked = Config.System.Telemetry;
 
         // 网络
         TextSystemHttpProxy.Text = Config.Network.HttpProxy.CustomAddress;

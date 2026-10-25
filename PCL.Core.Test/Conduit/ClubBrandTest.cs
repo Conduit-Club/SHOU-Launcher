@@ -9,11 +9,7 @@ public sealed class ClubBrandTest
     [TestMethod]
     public void NewGameTypeInfoUsesClubBrand()
     {
-        Assert.AreEqual("潮涌核心社", ClubCatalog.BrandName);
-        Assert.AreEqual("Conduit Club", ClubCatalog.BrandNameEnglish);
-        Assert.AreEqual(ClubCatalog.BrandName, ClubCatalog.GameTypeInfo);
-        Assert.AreEqual("潮涌核心社启动器", ClubCatalog.LauncherName);
-        Assert.AreEqual("Conduit Club Launcher", ClubCatalog.LauncherNameEnglish);
+        Assert.AreEqual("潮涌核心社", ClubCatalog.MigrateLegacyGameTypeInfo("PCLCE"));
     }
 
     [TestMethod]

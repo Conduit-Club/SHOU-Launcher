@@ -3,8 +3,14 @@
  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:local="clr-namespace:PCL">
  <local:MyCard Title="自定义下载源与优先级" Margin="0,15,0,15">
   <StackPanel Margin="25,40,25,20">
-   <local:MyCheckBox x:Name="UseOrder" Text="按下列优先级下载，并在失败或版本缺失时回退" Height="26" />
-   <TextBlock Text="数值越小越优先：BMCLAPI (0) → 社团镜像 (100) → 官方 (200) → 其他 (300)。分别管理三类下载源，修改后点击下方保存。" TextWrapping="Wrap" Opacity="0.75" Margin="0,4,0,14" />
+   <local:MyCheckBox x:Name="UseOrder" Text="使用自定义源顺序（开关即时生效）" Height="26" Change="ChangeMode" />
+   <TextBlock x:Name="EffectivePolicy" TextWrapping="Wrap" Margin="0,5,0,8" />
+   <TextBlock Text="勾选启用的源，用上移／下移调整文件下载顺序；每类至少保留一个启用的源。地址等高级参数按需编辑。" TextWrapping="Wrap" Opacity="0.75" Margin="0,0,0,8" />
+   <WrapPanel Margin="0,0,0,6">
+    <local:MyButton Text="保存下载源设置" Height="32" Padding="14,0" Click="SaveSources" Margin="0,0,12,4" />
+    <TextBlock x:Name="PendingStatus" Text="没有未保存的修改" VerticalAlignment="Center" TextWrapping="Wrap" />
+   </WrapPanel>
+   <TextBlock x:Name="Status" TextWrapping="Wrap" Margin="0,0,0,10" />
    <TabControl x:Name="CategoryTabs" SelectedIndex="0" Background="Transparent" BorderThickness="0">
     <TabControl.Template>
      <ControlTemplate TargetType="{x:Type TabControl}">
@@ -40,8 +46,6 @@
     <TabItem Header="Mod / 整合包"><local:ClubSourceCategorySettings x:Name="ModSources" Category="Mod" /></TabItem>
     <TabItem Header="Mod Loader"><local:ClubSourceCategorySettings x:Name="LoaderSources" Category="Loader" /></TabItem>
    </TabControl>
-   <local:MyButton Text="保存下载源设置" Height="32" HorizontalAlignment="Left" Padding="14,0" Click="SaveSources" Margin="0,14,0,0" />
-   <TextBlock x:Name="Status" TextWrapping="Wrap" Margin="0,8,0,0" />
   </StackPanel>
  </local:MyCard>
 </UserControl>

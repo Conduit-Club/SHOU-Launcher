@@ -96,7 +96,6 @@ public static class McVersionComparer
             i += 1;
         }
 
-        return 0;
     }
 
     /// <summary>

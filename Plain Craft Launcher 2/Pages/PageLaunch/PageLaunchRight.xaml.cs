@@ -188,10 +188,11 @@ public partial class PageLaunchRight : IRefreshable
                     break;
 
                 case 8:
-                    LogWrapper.Info("[Page] 主页预设：PCL GitHub 仪表盘");
-                    url = "https://ddf.pcl-community.org/Custom.xaml";
-                    content = LoadFromNetwork(url);
-                    break;
+                    LogWrapper.Info("[Page] 原项目 GitHub 仪表盘预设已移除，恢复默认主页");
+                    Config.Preference.Homepage.SelectedPreset = 0;
+                    Config.Preference.Homepage.Type = 0;
+                    PanCustom.Children.Clear();
+                    return;
 
                 case 9:
                     LogWrapper.Info("[Page] 主页预设：Minecraft 更新摘要");
@@ -224,10 +225,11 @@ public partial class PageLaunchRight : IRefreshable
                     break;
                 
                 case 14:
-                    LogWrapper.Info("[Page] 主页预设：PCL CE 公告栏");
-                    url = "https://s3.pysio.online/pcl2-ce/apiv2/pages/announce.xaml";
-                    content = LoadFromNetwork(url);
-                    break;
+                    LogWrapper.Info("[Page] 主页预设：PCL CE 公告栏 已被移除");
+                    Config.Preference.Homepage.SelectedPreset = 0;
+                    Config.Preference.Homepage.Type = 0;
+                    PanCustom.Children.Clear();
+                    return;
                 
                 case 15:
                     LogWrapper.Info("[Page] 主页预设：Minecraft 信息流");

@@ -31,7 +31,7 @@ public static class ClubCatalog
     public const string LittleSkinAuth = "https://littleskin.cn/api/yggdrasil";
     // The public client ID is configured and the club application has passed
     // Microsoft's review. Actual account login still needs to be verified.
-    public const bool MicrosoftApiReady = true;
+    public static bool MicrosoftApiReady { get; } = true;
     public static IReadOnlyList<ClubServer> Servers { get; } = Array.AsReadOnly(new[]
     {
         new ClubServer("none", "只启动游戏", ""),

@@ -1,4 +1,4 @@
-﻿using System.ComponentModel;
+using System.ComponentModel;
 using System.IO;
 using System.Net;
 using System.Runtime.InteropServices;
@@ -47,7 +47,7 @@ public partial class FormMain
                 changelog = Lang.Text("Main.UpdateLog.Empty");
             if (ModMain.MyMsgBoxMarkdown(changelog,
                     Lang.Text("Main.UpdateLog.Title", ModBase.versionBranchName, ModBase.versionBaseName), Lang.Text("Common.Action.Confirm"), Lang.Text("Main.UpdateLog.FullChangelog")) ==
-                2) ModBase.OpenWebsite("https://github.com/PCL-Community/PCL2-CE/releases");
+                2) ModBase.OpenWebsite("https://github.com/Conduit-Club/SHOU-Launcher/releases");
         }, "UpdateLog Output");
     }
 
@@ -67,19 +67,16 @@ public partial class FormMain
         ModMain.frmMain = this;
         ModMain.frmLaunchLeft = new PageLaunchLeft();
         ModMain.frmLaunchRight = new PageLaunchRight();
+        // 遥测已移除。已保存的开启状态不再表示授权，启动时清掉。
+        if (!Config.System.TelemetryConfig.IsDefault() && Config.System.Telemetry)
+        {
+            Config.System.TelemetryConfig.Reset();
+            ModBase.Log("[Start] 遥测已移除，已保存的开启状态已重置");
+        }
         // 版本号改变
         var lastVersion = States.System.LastVersion;
         if (lastVersion < ModBase.versionCode)
         {
-            // 旧遥测策略的授权不沿用；保持关闭，由用户在设置中主动开启。
-            if (lastVersion <= 511)
-            {
-                if (!Config.System.TelemetryConfig.IsDefault() && Config.System.Telemetry)
-                {
-                    Config.System.TelemetryConfig.Reset();
-                    ModBase.Log("[Start] 遥测策略变更：旧授权已重置为关闭，可在设置中手动开启");
-                }
-            }
             // 触发升级
             UpgradeSub(lastVersion);
         }
@@ -241,7 +238,7 @@ public partial class FormMain
                         $"{hint}{"\r\n"}{"\r\n"}{Lang.Text("Main.SpecialVersion.HideHintNotice")}",
                         Lang.Text("Main.SpecialVersion.Title"), Lang.Text("Main.SpecialVersion.IUnderstand"), Lang.Text("Main.SpecialVersion.OpenDownloadPageAndExit"), isWarn: true, button2Action: () =>
                         {
-                            ModBase.OpenWebsite("https://github.com/PCL-Community/PCL2-CE/releases/latest");
+                            ModBase.OpenWebsite("https://github.com/Conduit-Club/SHOU-Launcher/releases/latest");
                             EndProgram(false);
                         });
                 }
@@ -565,7 +562,7 @@ public partial class FormMain
             if (!isLogShown)
             {
                 ModBase.FeedbackInfo();
-                ModBase.Log("请在 https://github.com/PCL-Community/PCL2-CE/issues 提交错误报告，以便于社区解决此问题！（这也有可能是原版 PCL 的问题）");
+                ModBase.Log("请在 https://github.com/Conduit-Club/SHOU-Launcher/issues 提交错误报告，以便于社区解决此问题！（这也有可能是原版 PCL 的问题）");
                 isLogShown = true;
                 ModBase.ShellOnly(LogWrapper.CurrentLogger.CurrentLogFiles.Last());
             }
@@ -1164,11 +1161,11 @@ public partial class FormMain
                     ModModpack.ModpackInstall(filePath);
                     return;
                 }
-                catch (ModBase.CancelledException ex)
+                catch (ModBase.CancelledException)
                 {
                     return; // 用户主动取消
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
                     // 安装失败，继续往后尝试
                 }
