@@ -24,12 +24,14 @@ public sealed class ClubReleaseVersionTest
     [TestMethod]
     public void FormalSeriesUsesSemVerOrdering()
     {
+        // Compare fixed releases so a version bump does not change the test's meaning.
+        const string stable = "v1.3.0";
         Assert.IsTrue(new ClubRelease("v1.3.1", "patch", "", "")
-            .IsNewerThan(ClubRelease.CurrentTag));
+            .IsNewerThan(stable));
         Assert.IsFalse(new ClubRelease("v1.3.0-rc.1", "rc", "", "")
-            .IsNewerThan(ClubRelease.CurrentTag));
+            .IsNewerThan(stable));
         Assert.IsTrue(new ClubRelease("v1.3.1-rc.1", "rc", "", "")
-            .IsNewerThan(ClubRelease.CurrentTag));
+            .IsNewerThan(stable));
         Assert.IsTrue(new ClubRelease("v2.15.1", "formal", "", "")
             .IsNewerThan("v2.0.0"));
     }
