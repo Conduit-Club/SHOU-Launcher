@@ -26,11 +26,13 @@ dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64
 
 ### 本地配置与 GitHub Secrets
 
-复制 `.env.example` 为仓库根目录 `.env`，填写 `PCL_MS_CLIENT_ID=应用程序GUID`。`.env` 及其变体被 Git 忽略，不能放入提交或上传为 artifact。`Publish.ps1` 自动读取它，进程环境中的同名变量优先；不执行文件内的命令、变量插值或表达式。
+复制 `.env.example` 为仓库根目录 `.env`，填写 `PCL_MS_CLIENT_ID=应用程序GUID`。`.env` 及其变体被 Git 忽略，不能放入提交或上传为 artifact。`Publish.ps1` 自动读取它，进程环境优先；不执行文件内的命令、变量插值或表达式。值支持不加引号或使用一对单/双引号，CurseForge Key 中的 `$` 按原样保留。
 
 当前构建入口只允许注入公开的 Microsoft Client ID、项目获准的 CurseForge API Key 和源码 SHA。脚本会临时隔离其他 `PCL_*` 环境变量并在退出时还原，避免上游生成器把无关环境凭据带入客户端；不要填写 Client Secret、GitHub Token 或服务器私钥。每次构建会 clean 并关闭共享编译，防止环境配置变化后沿用旧生成代码。
 
 GitHub Actions 使用仓库 Secret `CLIENT_ID` 映射为 `PCL_MS_CLIENT_ID`；可选的 `CURSEFORGE_API_KEY` 映射为 `PCL_CURSEFORGE_API_KEY`，也可在本地 `.env` 中填写同名变量。社团工作流在面向 `main` / `dev` 的 PR、这两个分支的 push 和手动运行时构建，分开运行社团回归与全量测试；全量测试失败仍保留失败状态和 TRX 报告。Fork PR 无法读取仓库 Secrets，仍可执行无 Client ID 编译。
+
+本地还兼容 `CURSEFORGE_API_KEY`、`CURSEFORGE_API` 两个别名；同一来源中，`PCL_CURSEFORGE_API_KEY` 优先，其次依上述顺序取值。2026-10-30 已使用本机 `.env` 的真实 Key 验证官方 API；此操作不自动更新 GitHub Secrets。构建配置解析回归使用 `./scripts/conduit/Test-BuildEnvironment.ps1`，不输出 Key。
 
 2026-10-03 已配置并审核通过 `CLIENT_ID`。其他上游 Secrets（CurseForge、Natayark、联机、遥测等）没有社团自己的可用值，未配置假值，也未复制上游凭据。原 CE GPG / MirrorChyan 发行工作流在社团仓库保持禁用。微软应用注入已验证，真实账户授权与 Minecraft 服务联调仍需单独确认。
 
@@ -40,7 +42,7 @@ GitHub Actions 使用仓库 Secret `CLIENT_ID` 映射为 `PCL_MS_CLIENT_ID`；�
 
 ## 当前限制
 
-- 微软公共 Client ID 可由上述构建入口注入；官方 CurseForge API 尚待获准的项目 Key 与真实服务验证。联机不再依赖 Natayark 凭据；仍需真实两端验证。
+- 微软公共 Client ID 和获准的 CurseForge 项目 Key 可由上述构建入口注入；缺少 Key 的构建仍需依赖可用的镜像回退。联机不再依赖 Natayark 凭据；仍需真实两端验证。
 - 社团 UI、服务器入口和更新源已完成首轮接入；更新页手动追踪社团 GitHub Releases。
 - 未使用上游 GPG 私钥，也未做 Authenticode 签名；SHA-256 仅用于核对文件完整性。
 - 编译和单元测试不能替代登录、下载、安装游戏、启动 Minecraft 的端到端验证。

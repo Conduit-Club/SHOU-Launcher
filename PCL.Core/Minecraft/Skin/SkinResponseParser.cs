@@ -6,6 +6,11 @@ using System.Text.Json.Nodes;
 
 namespace PCL.Core.Minecraft.Skin;
 
+public sealed record SkinTextures(string? SkinUrl, string? CapeUrl, bool IsSlim)
+{
+    public static SkinTextures Empty { get; } = new(null, null, false);
+}
+
 /// <summary>
 ///     Parses the profile response returned by a Minecraft session server.
 /// </summary>
@@ -17,7 +22,12 @@ public static class SkinResponseParser
     /// <exception cref="InvalidDataException">
     ///     The response is not a profile response or contains invalid texture data.
     /// </exception>
-    public static string? TryGetSkinUrl(string response)
+    public static string? TryGetSkinUrl(string response) => Parse(response, includeCape: false).SkinUrl;
+
+    /// <summary>Reads the equipped skin, model and cape from a session-server profile.</summary>
+    public static SkinTextures ParseTextures(string response) => Parse(response, includeCape: true);
+
+    private static SkinTextures Parse(string response, bool includeCape)
     {
         if (string.IsNullOrWhiteSpace(response))
             throw new InvalidDataException("Skin response is empty.");
@@ -51,7 +61,7 @@ public static class SkinResponseParser
             var propertiesNode = GetProperty(profile, "properties");
             if (propertiesNode is null)
             {
-                if (hasProfileIdentity) return null;
+                if (hasProfileIdentity) return SkinTextures.Empty;
                 throw new InvalidDataException("Skin response has no properties.");
             }
 
@@ -75,7 +85,7 @@ public static class SkinResponseParser
 
         if (string.IsNullOrWhiteSpace(textureValue))
         {
-            if (hasProfileIdentity) return null;
+            if (hasProfileIdentity) return SkinTextures.Empty;
             throw new InvalidDataException("Skin response has no textures property.");
         }
 
@@ -98,19 +108,27 @@ public static class SkinResponseParser
         }
 
         var texturesNode = GetProperty(texturesResponse, "textures");
-        if (texturesNode is null) return null;
+        if (texturesNode is null) return SkinTextures.Empty;
         if (texturesNode is not JsonObject textures)
             throw new InvalidDataException("Skin texture data has an invalid textures object.");
 
-        var skinNode = GetProperty(textures, "skin");
-        if (skinNode is null) return null;
-        if (skinNode is not JsonObject skin)
-            throw new InvalidDataException("Skin texture data has an invalid skin object.");
+        var skinUrl = GetTextureUrl(textures, "skin");
+        var skin = GetProperty(textures, "skin") as JsonObject;
+        var metadata = GetProperty(skin, "metadata") as JsonObject;
+        var isSlim = string.Equals(GetText(metadata, "model"), "slim", StringComparison.OrdinalIgnoreCase);
+        return new SkinTextures(skinUrl, includeCape ? GetTextureUrl(textures, "cape") : null, isSlim);
+    }
 
-        var urlNode = GetProperty(skin, "url");
+    private static string? GetTextureUrl(JsonObject textures, string name)
+    {
+        var node = GetProperty(textures, name);
+        if (node is null) return null;
+        if (node is not JsonObject texture)
+            throw new InvalidDataException($"Skin texture data has an invalid {name} object.");
+        var urlNode = GetProperty(texture, "url");
         if (urlNode is null) return null;
         if (urlNode is not JsonValue urlValue || !urlValue.TryGetValue<string>(out var url))
-            throw new InvalidDataException("Skin texture data has an invalid skin URL.");
+            throw new InvalidDataException($"Skin texture data has an invalid {name} URL.");
 
         return string.IsNullOrWhiteSpace(url) ? null : url;
     }

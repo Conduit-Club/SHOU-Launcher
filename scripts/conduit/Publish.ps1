@@ -15,19 +15,11 @@ if (Test-Path $output) {
     throw "Output already exists: $output. Move it aside before publishing again."
 }
 # Read only the explicitly supported client credentials. Never evaluate .env as code.
-$clientId = $env:PCL_MS_CLIENT_ID
-$curseForgeApiKey = $env:PCL_CURSEFORGE_API_KEY
+. (Join-Path $PSScriptRoot 'BuildEnvironment.ps1')
 $envPath = Join-Path $repo $EnvFile
-if (Test-Path -LiteralPath $envPath) {
-    foreach ($line in Get-Content -LiteralPath $envPath) {
-        if ([string]::IsNullOrWhiteSpace($line) -or $line.TrimStart().StartsWith('#')) { continue }
-        if ($line -notmatch '^\s*(PCL_MS_CLIENT_ID|PCL_CURSEFORGE_API_KEY)\s*=\s*([^\s]*)\s*$') {
-            throw '.env supports only unquoted PCL_MS_CLIENT_ID or PCL_CURSEFORGE_API_KEY assignments.'
-        }
-        if ($Matches[1] -eq 'PCL_MS_CLIENT_ID' -and -not $clientId) { $clientId = $Matches[2] }
-        if ($Matches[1] -eq 'PCL_CURSEFORGE_API_KEY' -and -not $curseForgeApiKey) { $curseForgeApiKey = $Matches[2] }
-    }
-}
+$credentials = Read-ConduitBuildCredentials -EnvPath $envPath
+$clientId = $credentials.MicrosoftClientId
+$curseForgeApiKey = $credentials.CurseForgeApiKey
 if ($clientId -and -not [guid]::TryParse($clientId, [ref]([guid]::Empty))) {
     throw 'PCL_MS_CLIENT_ID must be an application GUID.'
 }
@@ -43,6 +35,10 @@ try {
     $env:PCL_CURSEFORGE_API_KEY = $curseForgeApiKey
     $env:PCL_GITHUB_SHA = git rev-parse HEAD
     if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve source commit.' }
+    # A preceding build for another architecture may have replaced project.assets.json.
+    # Restore this target before clean, which also resolves the runtime-specific assets.
+    & $Dotnet restore 'Plain Craft Launcher 2/Plain Craft Launcher 2.csproj' "-p:Platform=$Architecture" -v quiet
+    if ($LASTEXITCODE -ne 0) { throw "dotnet restore failed: $LASTEXITCODE" }
     # Force regeneration when .env changes; compiler servers can retain stale environment values.
     & $Dotnet clean 'Plain Craft Launcher 2/Plain Craft Launcher 2.csproj' -c $Configuration "-p:Platform=$Architecture" -v quiet
     if ($LASTEXITCODE -ne 0) { throw "dotnet clean failed: $LASTEXITCODE" }

@@ -5,6 +5,7 @@ using System.Text;
 using System.Text.Json.Nodes;
 using PCL.Core.App;
 using PCL.Core.App.Localization;
+using PCL.Core.Conduit;
 using PCL.Core.IO.Net.Http;
 using PCL.Core.Utils;
 using PCL.Network;
@@ -1989,62 +1990,7 @@ public static class ModDownload
     ///     调用 NetGetCodeByRequest，会进行重试。
     /// </summary>
     public static T DlModRequest<T>(string url)
-    {
-        if (Config.Download.UseSourceOrder)
-        {
-            var response = Requester.FetchJson(url, new RequestParam { Timeout = 15000, UseBrowserUserAgent = true });
-            return typeof(T) == typeof(string) ? (T)(object)response.ToJsonString() : (T)(object)response;
-        }
-        var urls = new List<KeyValuePair<string, int>>();
-        var mcimUrl = DlSourceModGet(url);
-        if ((mcimUrl ?? "") != (url ?? ""))
-            switch (Config.Download.Comp.CompSourceSolution)
-            {
-                case 0:
-                {
-                    urls.Add(new KeyValuePair<string, int>(mcimUrl, 5));
-                    urls.Add(new KeyValuePair<string, int>(mcimUrl, 10));
-                    urls.Add(new KeyValuePair<string, int>(url, 15));
-                    break;
-                }
-                case 1:
-                {
-                    urls.Add(new KeyValuePair<string, int>(url, 5));
-                    urls.Add(new KeyValuePair<string, int>(mcimUrl, 5));
-                    urls.Add(new KeyValuePair<string, int>(url, 15));
-                    urls.Add(new KeyValuePair<string, int>(mcimUrl, 10));
-                    break;
-                }
-
-                default:
-                {
-                    urls.Add(new KeyValuePair<string, int>(url, 5));
-                    urls.Add(new KeyValuePair<string, int>(url, 15));
-                    urls.Add(new KeyValuePair<string, int>(mcimUrl, 10));
-                    break;
-                }
-            }
-
-        var exs = "";
-        foreach (var Source in urls)
-            try
-            {
-                var json = Requester.FetchString(Source.Key, new RequestParam
-                {
-                    Timeout = Source.Value * 1000,
-                    UseBrowserUserAgent = true
-                });
-                if (typeof(T) == typeof(string)) return (T)(object)json;
-                return (T)(object)ModBase.GetJson(json);
-            }
-            catch (Exception ex)
-            {
-                // 镜像源可能随机爆炸，忽略就好
-                if (!ex.Message.ContainsF("mcimirror")) exs += ex.Message + "\r\n";
-            }
-
-        throw new Exception(exs);
-    }
+        => DlModRequest<T>(url, "GET", null, "application/json", allowMirror: true);
 
     /// <summary>
     ///     非泛型版本的 DlModRequest，返回 string
@@ -2058,60 +2004,38 @@ public static class ModDownload
     ///     对可能涉及 Mod 镜像源的请求进行处理。
     ///     调用 NetRequest，会进行重试。
     /// </summary>
-    public static T DlModRequest<T>(string url, string method, string data, string contentType,
+    public static T DlModRequest<T>(string url, string method, string? data, string contentType,
         bool allowMirror = false)
     {
-        var urls = new List<KeyValuePair<string, int>>();
-        var mcimUrl = DlSourceModGet(url);
-        if ((mcimUrl ?? "") != (url ?? ""))
-            switch (allowMirror ? Config.Download.Comp.CompSourceSolution : 2)
-            {
-                case 0:
-                {
-                    urls.Add(new KeyValuePair<string, int>(mcimUrl, 5));
-                    urls.Add(new KeyValuePair<string, int>(mcimUrl, 10));
-                    urls.Add(new KeyValuePair<string, int>(url, 15));
-                    break;
-                }
-                case 1:
-                {
-                    urls.Add(new KeyValuePair<string, int>(url, 5));
-                    urls.Add(new KeyValuePair<string, int>(mcimUrl, 5));
-                    urls.Add(new KeyValuePair<string, int>(url, 15));
-                    urls.Add(new KeyValuePair<string, int>(mcimUrl, 10));
-                    break;
-                }
-
-                default:
-                {
-                    urls.Add(new KeyValuePair<string, int>(url, 5));
-                    urls.Add(new KeyValuePair<string, int>(url, 15));
-                    urls.Add(new KeyValuePair<string, int>(mcimUrl, 10));
-                    break;
-                }
-            }
-
-        var exs = "";
-        foreach (var Source in urls)
+        var failures = new List<Exception>();
+        foreach (var source in GetModSourceUrls(url, allowMirror))
             try
             {
-                string json = Requester.Fetch(Source.Key, new FetchParam
+                var json = Requester.Fetch(source, new FetchParam
                 {
                     Method = method,
                     Content = data, 
                     ContentType = contentType,
-                    Timeout = Source.Value * 1000
+                    Timeout = 15000,
+                    UseBrowserUserAgent = true,
+                    // The policy above already selected the exact order, including batch POSTs.
+                    BypassSourceOrder = true
                 });
-                if (typeof(T) == typeof(string)) return (T)(object)json; // 沟槽的，为什么不能写 T is string
-                return (T)(object)ModBase.GetJson(json);
+                var parsed = ModBase.GetJson(json);
+                return typeof(T) == typeof(string) ? (T)(object)json : (T)(object)parsed;
             }
             catch (Exception ex)
             {
-                if (!ex.Message.ContainsF("mcimirror")) exs += ex.Message + "\r\n";
+                failures.Add(ex);
             }
 
-        throw new Exception(exs);
+        throw new AggregateException("所有已启用的 Mod 下载源均不可用，请检查网络与下载源设置。", failures);
     }
+
+    private static IReadOnlyList<string> GetModSourceUrls(string url, bool allowMirror = true)
+        => ModDownloadSources.Resolve(url,
+            Config.Download.UseSourceOrder ? DownloadSources.Parse(Config.Download.Sources) : null,
+            Config.Download.Comp.CompSourceSolution, allowMirror);
 
     #endregion
 
@@ -2242,44 +2166,7 @@ public static class ModDownload
     /// <param name="original"></param>
     /// <returns></returns>
     public static List<string> DlSourceModDownloadGet(string original)
-    {
-        var res = new List<string>();
-        var mirrorDl = original.Replace("https://cdn.modrinth.com", "https://mod.mcimirror.top")
-            .Replace("https://edge.forgecdn.net",
-                "https://mod.mcimirror.top"); // like https://cdn.modrinth.com/data/P7dR8mSH/versions/X2hTodix/fabric-api-0.129.0%2B1.21.8.jar
-        // like https://edge.forgecdn.net/files/6767/951/jei-1.21.5-neoforge-21.4.0.27.jar
-        switch (Config.Download.Comp.CompSourceSolution)
-        {
-            case 0: // 镜像源
-            {
-                res.Add(mirrorDl);
-                res.Add(mirrorDl);
-                break;
-            }
-            case 1: // 平衡
-            {
-                res.Add(original);
-                res.Add(mirrorDl);
-                break;
-            }
-            case 2: // 官方源
-            {
-                res.Add(original);
-                res.Add(original); // 错误
-                break;
-            }
-
-            default:
-            {
-                Config.Download.Comp.CompSourceSolution = 1;
-                res.Add(original);
-                break;
-            }
-        }
-
-        res.Add(original);
-        return res;
-    }
+        => GetModSourceUrls(original).ToList();
 
     // Loader 自动切换
     private static void DlSourceLoader<InputType, OutputType>(ModLoader.LoaderTask<InputType, OutputType> mainLoader,

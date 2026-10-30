@@ -710,6 +710,7 @@ public partial class FormMain
                         ? () => login.Btn3_Click(sender, null)
                         : () => login.Btn1_Click(sender, null),
                     ClubUpdateHistoryWindow history => history.CloseHistory,
+                    ClubSkinPreviewWindow preview => preview.ClosePreview,
                     _ => null
                 };
                 escapeAction?.Invoke();
