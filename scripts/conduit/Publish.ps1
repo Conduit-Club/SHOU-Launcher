@@ -28,7 +28,7 @@ $identity = & (Join-Path $PSScriptRoot 'Get-BuildIdentity.ps1') -Architecture $A
 Get-ChildItem Env:PCL_* | ForEach-Object { $savedPclEnvironment[$_.Name] = $_.Value }
 Push-Location $repo
 try {
-    # The upstream generator embeds every PCL_* variable. Isolate its inputs.
+    # Isolate the three approved client-build inputs and restore the caller's environment on exit.
     Get-ChildItem Env:PCL_* | ForEach-Object { [Environment]::SetEnvironmentVariable($_.Name, $null, 'Process') }
     $env:PCL_WRITE_SECRET = '1'
     $env:PCL_MS_CLIENT_ID = $clientId
@@ -44,6 +44,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw "dotnet clean failed: $LASTEXITCODE" }
     & $Dotnet publish 'Plain Craft Launcher 2/Plain Craft Launcher 2.csproj' -c $Configuration "-p:Platform=$Architecture" -p:UseSharedCompilation=false --self-contained true -o $output
     if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed: $LASTEXITCODE" }
+    $coreAssembly = Join-Path $repo "PCL.Core/bin/$Configuration-$Architecture/net10.0-windows/PCL.Core.dll"
+    $credentialCheck = & (Join-Path $PSScriptRoot 'Assert-ClientCredentials.ps1') -AssemblyPath $coreAssembly
     $name = "SHOU-Launcher-win-$($Architecture.ToLowerInvariant())"
     Move-Item -LiteralPath (Join-Path $output 'Plain Craft Launcher 2.exe') -Destination (Join-Path $output "$name.exe")
     Copy-Item -LiteralPath (Join-Path $repo 'LICENSE') -Destination $output
@@ -58,7 +60,7 @@ try {
     $metadata = Get-Content -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/metadata.json') -Raw | ConvertFrom-Json
     $releaseSource = Get-Content -LiteralPath (Join-Path $repo 'PCL.Core/Conduit/ClubRelease.cs') -Raw
     $codename = [regex]::Match($releaseSource, 'CurrentCodename = "([^"]+)"').Groups[1].Value
-    "Version: $($metadata.version.base)`nBuild label: $($identity.Label)`nCodename: $codename`nSource base commit: $commit`nSource state: $sourceState`nSDK: $sdk`nConfiguration: $Configuration`nRuntime: win-$($Architecture.ToLowerInvariant())`nSelf-contained: true`nMicrosoft public Client ID configured: $appConfigured`nCurseForge API key configured: $(-not [string]::IsNullOrWhiteSpace($curseForgeApiKey))`nOther service credentials: not embedded" | Set-Content (Join-Path $output 'BUILD-INFO.txt') -Encoding utf8
+    "Version: $($metadata.version.base)`nBuild label: $($identity.Label)`nCodename: $codename`nSource base commit: $commit`nSource state: $sourceState`nSDK: $sdk`nConfiguration: $Configuration`nRuntime: win-$($Architecture.ToLowerInvariant())`nSelf-contained: true`nMicrosoft public Client ID configured: $appConfigured`nCurseForge API key configured: $(-not [string]::IsNullOrWhiteSpace($curseForgeApiKey))`nCurseForge API key embedding verified: $($credentialCheck.CURSEFORGE_API_KEYEmbedded)`nOther service credentials: not embedded" | Set-Content (Join-Path $output 'BUILD-INFO.txt') -Encoding utf8
     $archiveName = "$($identity.ArchiveStem).zip"
     $archive = Join-Path (Split-Path $output) $archiveName
     Compress-Archive -Path "$output/*" -DestinationPath $archive
