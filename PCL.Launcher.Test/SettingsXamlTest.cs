@@ -86,6 +86,7 @@ public sealed class SettingsXamlTest
                 catch (Exception ex) { failures.Add($"{name}: {ex}"); }
             }
             Assert.IsEmpty(failures, string.Join(Environment.NewLine, failures));
+            AccountSkinUiRegression.Verify();
             var linkSettings = (PageSetupGameLink)pages[nameof(PageSetupGameLink)];
             Config.Link.ServerType = 2;
             linkSettings.Reload();

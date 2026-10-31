@@ -79,7 +79,8 @@ public partial class NetworkService
 
         services.AddHttpClient(CurseForgeApi).ConfigureHttpClient(c =>
         {
-            c.DefaultRequestHeaders.Add("x-api-key", Secrets.CurseForgeAPIKey);
+            if (!string.IsNullOrWhiteSpace(Secrets.CurseForgeAPIKey))
+                c.DefaultRequestHeaders.Add("x-api-key", Secrets.CurseForgeAPIKey);
             c.BaseAddress = new Uri(CurseForgeApiServer);
         });
         

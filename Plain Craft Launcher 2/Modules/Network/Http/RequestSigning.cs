@@ -1,6 +1,7 @@
 using System.Net;
 using System.Net.Http;
 using PCL.Core.App;
+using PCL.Core.Conduit;
 
 namespace PCL.Network;
 
@@ -21,10 +22,7 @@ public static class RequestSigning
     {
         client.Version = HttpVersion.Version20;
         client.VersionPolicy = HttpVersionPolicy.RequestVersionOrLower;
-        if (Uri.TryCreate(url, UriKind.Absolute, out var parsedUri) 
-            && (parsedUri.Host == "api.curseforge.com"
-            || parsedUri.Host == "edge.forgecdn.net"
-            || parsedUri.Host == "mediafilez.forgecdn.net"))
+        if (CurseForgeAccess.RequiresApiKey(url) && !string.IsNullOrWhiteSpace(Secrets.CurseForgeAPIKey))
         {
             client.Headers.Add("x-api-key", Secrets.CurseForgeAPIKey);
         }

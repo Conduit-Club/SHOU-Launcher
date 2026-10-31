@@ -55,7 +55,9 @@ public static class FileDownloader
 
         Directory.CreateDirectory(Path.GetDirectoryName(localPath) ?? throw new ArgumentException("下载路径无效", nameof(localPath)));
 
-        if (Config.Download.Aria2Enabled)
+        // aria2 applies one header set to every URI in a task. Keep authenticated
+        // CurseForge downloads on the internal backend so mirror fallbacks never receive the key.
+        if (Config.Download.Aria2Enabled && !urlList.Any(CurseForgeAccess.RequiresApiKey))
         {
             await ClubAria2Download.DownloadAsync(urlList, localPath, useBrowserUserAgent, customUserAgent, trackedFile, cancellationToken).ConfigureAwait(false);
             return;
@@ -366,8 +368,7 @@ public static class FileDownloader
 
     internal static HttpClient GetHttpClient(string url)
     {
-        if (Uri.TryCreate(url, UriKind.Absolute, out var parsedUri)
-            && parsedUri.Host is "edge.forgecdn.net" or "mediafilez.forgecdn.net" or "forgecdn.net" or "api.curseforge.com")
+        if (CurseForgeAccess.RequiresApiKey(url))
         {
             return NetworkService.GetClient(NetworkService.CurseForgeApi);
         }

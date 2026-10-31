@@ -16,15 +16,15 @@ public class EnvironmentInteropGenerator : IIncrementalGenerator
     {
         var secretProvider = context.CompilationProvider.Select(static (_, _) =>
         {
-            // 判断 PCL_WRITE_SECRET 是否存在并遍历转换环境变量
-            // 打死也不会用 MSBuild Properties 这种非人类设计出来的垃圾
+            // These three values are deliberately distributed with the client.
+            // Never capture unrelated service tokens or private keys from the build environment.
 #pragma warning disable RS1035
             var envs = Environment.GetEnvironmentVariables();
 #pragma warning restore RS1035
             var secretPairs = envs.Contains("PCL_WRITE_SECRET") ? (
                 from key in (
                     from key in envs.Keys.Cast<string>()
-                    where !string.IsNullOrWhiteSpace(key) && key.StartsWith("PCL_") && key != "PCL_WRITE_SECRET"
+                    where key is "PCL_MS_CLIENT_ID" or "PCL_CURSEFORGE_API_KEY" or "PCL_GITHUB_SHA"
                     select key
                 )
                 let value = envs[key]?.ToString()

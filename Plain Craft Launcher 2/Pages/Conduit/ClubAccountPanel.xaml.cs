@@ -68,9 +68,10 @@ public partial class ClubAccountPanel : UserControl
         _snapshot = snapshot;
         if (_filter == "all" && ModMain.frmLaunchLeft?.IsShowingAllProfiles == true)
             ModMain.frmLoginProfile?.RefreshProfileList();
-        MuaButton.Content = $"MUA ({profiles.Count(p => Provider(p) == "mua")})";
-        LittleButton.Content = $"LittleSkin ({profiles.Count(p => Provider(p) == "littleskin")})";
-        MicrosoftButton.Content = $"微软(正版) ({profiles.Count(p => Provider(p) == "microsoft")})";
+        MuaButton.Content = $"MUA 登录 ({profiles.Count(p => Provider(p) == "mua")})";
+        LittleButton.Content = $"LittleSkin 登录 ({profiles.Count(p => Provider(p) == "littleskin")})";
+        MicrosoftButton.Content = $"微软正版登录 ({profiles.Count(p => Provider(p) == "microsoft")})";
+        OfflineButton.Content = $"盗版登录 ({profiles.Count(p => Provider(p) == "offline")})";
         var filtered = _filter == "all" ? profiles : profiles.Where(p => Provider(p) == _filter).ToArray();
         _suppressAccountSelection = true;
         try
@@ -90,11 +91,12 @@ public partial class ClubAccountPanel : UserControl
         AccountSelector.Visibility = allMode ? Visibility.Collapsed : Visibility.Visible;
         AccountSelector.IsEnabled = accountSelectionEnabled;
         RemoveSelectedButton.IsEnabled = accountSelectionEnabled && GetSelectedProfile() is not null;
-        AccountSummary.Text = $"{_filter switch { "mua" => "MUA Union", "littleskin" => "LittleSkin", "microsoft" => "微软正版", "all" => "全部账户", _ => "其他账户" }}（{filtered.Length} 个角色）";
+        AccountSummary.Text = $"{_filter switch { "mua" => "MUA Union", "littleskin" => "LittleSkin", "microsoft" => "微软正版", "offline" => "离线（盗版）", "all" => "全部账户", _ => "其他账户" }}（{filtered.Length} 个角色）";
         EmptyHint.Visibility = filtered.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static string Provider(McProfile p) => p.ProfileType == ProfileType.Microsoft ? "microsoft"
+        : p.ProfileType == ProfileType.Offline ? "offline"
         : ClubCatalog.IsMuaProvider(p.Server) ? "mua"
         : ClubCatalog.IsProvider(p.Server, ClubCatalog.LittleSkinAuth) ? "littleskin" : "other";
     private void Provider_Click(object sender, RoutedEventArgs e)
@@ -191,14 +193,22 @@ public partial class ClubAccountPanel : UserControl
             });
             return;
         }
-        _editingProvider = provider == "microsoft" ? "微软正版" : provider == "mua" ? "MUA Union" : "LittleSkin";
+        _editingProvider = provider switch
+        {
+            "microsoft" => "微软正版", "mua" => "MUA Union", "offline" => "离线（盗版）", _ => "LittleSkin"
+        };
         ProfileService.IsCreatingProfile = true;
-        if (provider != "microsoft")
+        if (provider is "mua" or "littleskin")
         {
             PageLoginAuth.draggedAuthServer = provider == "mua" ? ClubCatalog.MuaAuth : ClubCatalog.LittleSkinAuth;
             PageLoginAuth.draggedAuthServerOAuthSupported = null;
         }
-        ModMain.frmLaunchLeft.RefreshPage(false, provider == "microsoft" ? ModLaunch.McLoginType.Ms : ModLaunch.McLoginType.Auth);
+        ModMain.frmLaunchLeft.RefreshPage(false, provider switch
+        {
+            "microsoft" => ModLaunch.McLoginType.Ms,
+            "offline" => ModLaunch.McLoginType.Legacy,
+            _ => ModLaunch.McLoginType.Auth
+        });
         RefreshAccounts();
     }
     private static bool AuthenticationBusy => ModMain.frmLoginMs?.IsAuthenticating == true
