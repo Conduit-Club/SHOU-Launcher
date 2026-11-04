@@ -83,7 +83,7 @@ public sealed class InstancesPageViewModel : PageViewModel
     private bool CanLaunch() => CanEdit && SelectedInstance?.Installed == true && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId && (a.Kind != AccountKind.Offline || Owner.Home.SelectedServerId == "none"));
     private async Task SaveRuntimeAsync()
     {
-        if (MemoryMiB is < 512 or > 65536 || decimal.Truncate(MemoryMiB) != MemoryMiB) { Owner.ShowError("内存须为 512–65536 MiB 的整数。"); return; }
+        if (MemoryMiB is < 512 or > 32768 || decimal.Truncate(MemoryMiB) != MemoryMiB) { Owner.ShowError("内存须为 512–32768 MiB 的整数。"); return; }
         var java = JavaExecutable.Trim();
         if (java.Length > 0 && !Path.IsPathFullyQualified(java)) { Owner.ShowError("Java 路径须为绝对路径；留空使用自动选择。"); return; }
         if (await Owner.RunAsync("保存全局 Java 与内存", ct => Service.SaveSettingsAsync(Owner.Snapshot.Settings with { JavaExecutable = java.Length == 0 ? null : java, MemoryMiB = (int)MemoryMiB }, ct)))

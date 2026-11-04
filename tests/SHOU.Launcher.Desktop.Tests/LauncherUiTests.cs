@@ -59,7 +59,7 @@ public sealed class LauncherUiTests
         var window = Open(vm);
         try
         {
-            vm.Accounts.PlayerName = "忙锁测试角色";
+            vm.Accounts.PlayerName = "BusyFixture";
             Assert.True(vm.Accounts.AddOfflineCommand.CanExecute(null));
             vm.SelectedPage = vm.Instances; Pump(window);
             var install = Find<Button>(window, "InstallInstanceButton");
@@ -140,7 +140,7 @@ public sealed class LauncherUiTests
         var fake = new FakeLauncherService();
         using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
         vm.Settings.Aria2Enabled = true; vm.Settings.Aria2Secret = "fixture-rpc-secret";
-        vm.Settings.ProxyMode = ProxyMode.Custom; vm.Settings.ProxyAddress = "http://localhost:7890"; vm.Settings.ProxySecret = "fixture-proxy-secret";
+        vm.Settings.ProxyMode = ProxyMode.Custom; vm.Settings.ProxyAddress = "http://localhost:7890"; vm.Settings.ProxySecret = "fixture-user:fixture-proxy-secret";
         await vm.Settings.SaveCommand.ExecuteAsync(null);
         Assert.Equal(new[] { "aria2", "proxy" }, fake.SavedSecretKinds);
         Assert.Equal("aria2-fixed-key", fake.Snapshot.Settings.Aria2!.CredentialKey);

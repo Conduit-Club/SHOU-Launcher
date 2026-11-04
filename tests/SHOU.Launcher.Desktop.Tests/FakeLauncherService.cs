@@ -23,6 +23,12 @@ internal sealed class FakeLauncherService : ILauncherService
     public string? LastLaunchServerId { get; private set; }
     public string? LastYggdrasilPassword { get; private set; }
     public Uri? LastYggdrasilServer { get; private set; }
+    public IReadOnlyList<AuthenticationProfileChoice> UnboundYggdrasilProfiles { get; set; } = [];
+    public bool ProfileSelectionOnWorker { get; set; }
+    public int ProfileSelectorCalls { get; private set; }
+    private int _outstandingProfileSelections;
+    public int OutstandingProfileSelections => Volatile.Read(ref _outstandingProfileSelections);
+    public string? LastSelectedProfileId { get; private set; }
     public int StopCalls { get; private set; }
     public int DisposeCalls { get; private set; }
     public int SaveCalls { get; private set; }
@@ -99,6 +105,33 @@ internal sealed class FakeLauncherService : ILauncherService
         var profile = new AccountProfile("ygg-fixture", AccountKind.Yggdrasil, username, "00000000000000000000000000000003", server.AbsoluteUri);
         Publish(Snapshot with { Accounts = [.. Snapshot.Accounts, profile], SelectedAccountId = profile.Id });
         return Task.FromResult<IReadOnlyList<AccountProfile>>([profile]);
+    }
+    public async Task<IReadOnlyList<AccountProfile>> LoginYggdrasilWithProfileSelectionAsync(Uri server, string username, string password,
+        Func<IReadOnlyList<AuthenticationProfileChoice>, CancellationToken, Task<string?>> selectProfile, CancellationToken cancellationToken = default)
+    {
+        LastYggdrasilPassword = password; LastYggdrasilServer = server;
+        if (UnboundYggdrasilProfiles.Count == 0) return await LoginYggdrasilAsync(server, username, password, cancellationToken);
+        Publish(Snapshot with { State = "Authenticating" });
+        ProfileSelectorCalls++;
+        Interlocked.Increment(ref _outstandingProfileSelections);
+        try
+        {
+            var selectedId = ProfileSelectionOnWorker
+                ? await Task.Run(() => selectProfile(UnboundYggdrasilProfiles, cancellationToken), cancellationToken).ConfigureAwait(false)
+                : await selectProfile(UnboundYggdrasilProfiles, cancellationToken).ConfigureAwait(false);
+            cancellationToken.ThrowIfCancellationRequested();
+            if (selectedId is null) throw new OperationCanceledException(cancellationToken);
+            var selected = UnboundYggdrasilProfiles.Single(p => p.Id == selectedId);
+            LastSelectedProfileId = selected.Id;
+            var profile = new AccountProfile("ygg-fixture:" + selected.Id, AccountKind.Yggdrasil, selected.Name, selected.Id, server.AbsoluteUri);
+            Publish(Snapshot with { Accounts = [.. Snapshot.Accounts, profile], SelectedAccountId = profile.Id, State = "Ready" });
+            return [profile];
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _outstandingProfileSelections);
+            if (Snapshot.State == "Authenticating") Publish(Snapshot with { State = "Ready" });
+        }
     }
     public Task RefreshAccountAsync(string accountId, CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task SelectAccountAsync(string accountId, CancellationToken cancellationToken = default) { LastSelectedAccountId = accountId; Publish(Snapshot with { SelectedAccountId = accountId }); return Task.CompletedTask; }

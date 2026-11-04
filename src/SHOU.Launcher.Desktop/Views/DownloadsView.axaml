@@ -1,12 +1,12 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.DownloadsView">
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="14"><TextBlock Text="{Binding Summary}" Classes="muted" />
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="14"><TextBlock Text="{Binding Summary}" Classes="muted" /><TextBlock Text="取消或重试会作用于该任务所属实例的整次安装。" Classes="muted" FontSize="12" />
     <Border Classes="card" IsVisible="{Binding IsEmpty}"><StackPanel Spacing="8"><TextBlock Text="还没有下载任务" Classes="sectionTitle" /><TextBlock Text="在实例页安装游戏后，可在这里查看真实进度与来源。" Classes="muted" /></StackPanel></Border>
     <ItemsControl Name="DownloadTasks" ItemsSource="{Binding Tasks}"><ItemsControl.ItemTemplate><DataTemplate>
       <Border Classes="card" Margin="0,0,0,12"><StackPanel Spacing="10"><DockPanel><TextBlock DockPanel.Dock="Right" Text="{Binding State}" Classes="muted" /><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" /></DockPanel>
         <ProgressBar Value="{Binding Progress}" IsIndeterminate="{Binding IsIndeterminate}" Minimum="0" Maximum="100" Height="6" />
         <TextBlock Text="{Binding Transfer}" /><TextBlock Text="{Binding Source}" Classes="muted" FontSize="12" />
         <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}" Foreground="{DynamicResource ClubErrorForeground}" TextWrapping="Wrap" />
-        <StackPanel Orientation="Horizontal" Spacing="8"><Button Name="CancelDownloadButton" Content="取消下载" Command="{Binding CancelCommand}" /><Button Name="RetryDownloadButton" Content="重试" Command="{Binding RetryCommand}" /></StackPanel>
+        <StackPanel Orientation="Horizontal" Spacing="8"><Button Name="CancelDownloadButton" Content="取消所属安装" Command="{Binding CancelCommand}" /><Button Name="RetryDownloadButton" Content="重试所属安装" Command="{Binding RetryCommand}" /></StackPanel>
       </StackPanel></Border>
     </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
   </StackPanel></ScrollViewer>

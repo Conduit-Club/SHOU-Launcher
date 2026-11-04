@@ -11,6 +11,17 @@
       <StackPanel IsVisible="{Binding IsOffline}" Spacing="10"><TextBox Name="OfflinePlayerName" Text="{Binding PlayerName}" PlaceholderText="离线角色名称" IsEnabled="{Binding CanEdit}" /><TextBlock Text="离线角色可用于单机测试，不能进入需认证的社团服。" Classes="muted" /><Button Name="AddOfflineButton" Content="添加离线角色" Command="{Binding AddOfflineCommand}" /></StackPanel>
       <StackPanel IsVisible="{Binding IsMicrosoft}" Spacing="10"><TextBlock Text="使用社团应用的设备代码授权，在微软官网完成登录；启动器不会询问微软密码。" Classes="muted" /><Button Name="LoginMicrosoftButton" Classes="primary" Content="开始微软设备授权" Command="{Binding LoginMicrosoftCommand}" /></StackPanel>
       <StackPanel IsVisible="{Binding IsYggdrasil}" Spacing="10"><TextBlock Text="用户名与密码仅提交给当前选择的皮肤站。" Classes="muted" /><TextBox Name="YggdrasilUsername" Text="{Binding Username}" PlaceholderText="皮肤站邮箱 / 用户名" IsEnabled="{Binding CanEdit}" /><TextBox Name="YggdrasilPassword" Text="{Binding Password}" PasswordChar="●" PlaceholderText="皮肤站密码" IsEnabled="{Binding CanEdit}" /><Button Name="LoginYggdrasilButton" Classes="primary" Content="登录并获取角色" Command="{Binding LoginYggdrasilCommand}" /></StackPanel>
+      <ContentControl Name="AuthenticationProfileChallenge" Content="{Binding ProfileChallenge}" IsVisible="{Binding HasProfileChallenge}" HorizontalContentAlignment="Stretch">
+        <ContentControl.ContentTemplate><DataTemplate>
+          <Border BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="8" Padding="18"><StackPanel Spacing="12">
+            <TextBlock Text="选择本次登录的角色" Classes="sectionTitle" />
+            <TextBlock Text="认证服务尚未绑定角色。请明确选择一个；其他可用角色不会自动获得本次授权。" Classes="muted" />
+            <ListBox Name="AuthenticationProfileSelector" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="3"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" /><TextBlock Text="{Binding Id}" FontSize="11" Classes="muted" /></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
+            <StackPanel Orientation="Horizontal" Spacing="8"><Button Name="ConfirmAuthenticationProfileButton" Classes="primary" Content="确认所选角色" Command="{Binding ConfirmCommand}" /><Button Name="CancelAuthenticationProfileButton" Content="取消本次登录" Command="{Binding CancelCommand}" /></StackPanel>
+            <TextBlock Text="离开账户页、关闭窗口或取消操作都会结束本次等待。" Classes="muted" FontSize="12" />
+          </StackPanel></Border>
+        </DataTemplate></ContentControl.ContentTemplate>
+      </ContentControl>
       <Border Name="DeviceCodePanel" IsVisible="{Binding HasDeviceChallenge}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="8" Padding="18"><StackPanel Spacing="10"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" FontSize="30" FontWeight="SemiBold" LetterSpacing="3" /><TextBlock Text="{Binding DeviceInstructions}" Classes="muted" /><WrapPanel><Button Content="打开微软授权页" Command="{Binding OpenVerificationCommand}" Margin="0,0,8,4" /><Button Content="复制授权代码" Click="CopyDeviceCode_Click" Margin="0,0,8,4" /></WrapPanel><TextBlock Text="可在底部取消当前授权。" Classes="muted" /></StackPanel></Border>
     </StackPanel></Border>
     <TextBlock Text="头像与跨平台 3D 皮肤预览尚未接入。账户列表以独立档案 ID 切换，不合并同名角色。" Classes="muted" FontSize="12" />

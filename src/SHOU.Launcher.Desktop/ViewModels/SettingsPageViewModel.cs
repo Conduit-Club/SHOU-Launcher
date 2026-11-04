@@ -64,11 +64,12 @@ public sealed class SettingsPageViewModel : PageViewModel
         var gameRoot = GameRoot.Trim();
         var java = JavaExecutable.Trim();
         if ((gameRoot.Length > 0 && !Path.IsPathFullyQualified(gameRoot)) || (java.Length > 0 && !Path.IsPathFullyQualified(java))) { Owner.ShowError("游戏与 Java 路径须为绝对路径；留空使用默认选择。"); return; }
-        if (MemoryMiB is < 512 or > 65536 || decimal.Truncate(MemoryMiB) != MemoryMiB) { Owner.ShowError("内存须为 512–65536 MiB 的整数。"); return; }
+        if (MemoryMiB is < 512 or > 32768 || decimal.Truncate(MemoryMiB) != MemoryMiB) { Owner.ShowError("内存须为 512–32768 MiB 的整数。"); return; }
         if (!string.IsNullOrWhiteSpace(MicrosoftClientId) && !Guid.TryParse(MicrosoftClientId.Trim(), out _)) { Owner.ShowError("Microsoft Client ID 必须是有效 GUID。"); return; }
         try { if (!string.IsNullOrWhiteSpace(DownloadSourcesJson)) using (JsonDocument.Parse(DownloadSourcesJson)) { } }
         catch (JsonException) { Owner.ShowError("下载源 JSON 格式无效；请修正后保存。"); return; }
         if (IsCustomProxy && !IsHttpEndpoint(ProxyAddress)) { Owner.ShowError("自定义代理需要有效的 HTTP/HTTPS 地址；凭据请填入独立密钥字段。"); return; }
+        if (ProxySecret.Length > 0 && !ProxySecret.Contains(':')) { Owner.ShowError("代理凭据须使用 username:password 格式，不会以明文保存。"); return; }
         if (Aria2Enabled && !IsHttpEndpoint(Aria2Endpoint)) { Owner.ShowError("aria2 RPC 地址需要有效的 HTTP/HTTPS URL，不能包含明文凭据。"); return; }
         if (ProxyMode == ProxyMode.System && !Service.Capabilities.SupportsSystemProxy) { Owner.ShowError("当前平台尚不支持系统代理，请明确选择直连或自定义代理。"); return; }
         var proxySecret = ProxySecret;

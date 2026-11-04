@@ -75,7 +75,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         Logs = new(this);
         Pages = [Home, Instances, Downloads, Accounts, Settings, Logs];
         _selectedPage = Home;
-        CancelOperationCommand = new(() => { _operation?.Cancel(); NotifyState(); }, () => _operation is { IsCancellationRequested: false });
+        CancelOperationCommand = new(CancelCurrentOperation, () => _operation is { IsCancellationRequested: false });
         DismissErrorCommand = new(() => ShowError(null));
         StopGameCommand = new(() => RunControlAsync("停止游戏", ct => Service.StopGameAsync(ct)), () => HasRunningGame);
         Service.SnapshotChanged += OnSnapshotChanged;
@@ -83,7 +83,16 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         ApplySnapshot(Snapshot);
     }
 
-    public PageViewModel SelectedPage { get => _selectedPage; set { if (value is not null) SetProperty(ref _selectedPage, value); } }
+    public PageViewModel SelectedPage
+    {
+        get => _selectedPage;
+        set
+        {
+            if (value is null || ReferenceEquals(value, _selectedPage)) return;
+            var leavingAccounts = ReferenceEquals(_selectedPage, Accounts);
+            if (SetProperty(ref _selectedPage, value) && leavingAccounts) Accounts.OnNavigatingAway();
+        }
+    }
     public string WindowTitle => Snapshot.Build.Name;
     public string BuildSummary => $"{Snapshot.Build.Version} · {Snapshot.Build.Codename} · {Snapshot.Build.Configuration}";
     public string SourceSummary => Snapshot.Build.SourceSha.Length > 12 ? Snapshot.Build.SourceSha[..12] : Snapshot.Build.SourceSha;
@@ -201,6 +210,13 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         StopGameCommand.NotifyCanExecuteChanged();
         foreach (var page in Pages) page.NotifyCommands();
     }
+    private void CancelCurrentOperation()
+    {
+        var operation = _operation;
+        operation?.Cancel();
+        Accounts.CancelAuthenticationState(operation?.Token ?? new CancellationToken(true));
+        NotifyState();
+    }
     public void Dispose()
     {
         if (_disposed) return;
@@ -209,6 +225,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         Service.LogReceived -= OnLogReceived;
         _operation?.Cancel();
         _lifetime.Cancel();
+        Accounts.CancelAuthenticationState(_lifetime.Token);
         _lifetime.Dispose();
         // Bootstrap owns the service, its processes, pending writes and data lease.
     }

@@ -21,8 +21,8 @@ public sealed class DownloadRowViewModel : ObservableObject
     public DownloadRowViewModel(MainWindowViewModel owner, DownloadTaskSnapshot task)
     {
         Task = task;
-        CancelCommand = new(() => owner.RunControlAsync("取消下载", ct => owner.Service.CancelDownloadAsync(Task.Id, ct)), () => Task.State is "Queued" or "Downloading");
-        RetryCommand = new(() => owner.RunAsync("重试下载", ct => owner.Service.RetryDownloadAsync(Task.Id, ct)), () => owner.CanMutate && Task.State is "Failed" or "Cancelled");
+        CancelCommand = new(() => owner.RunControlAsync("取消所属安装", ct => owner.Service.CancelDownloadAsync(Task.Id, ct)), () => Task.State is "Queued" or "Downloading");
+        RetryCommand = new(() => owner.RunAsync("重试所属安装", ct => owner.Service.RetryDownloadAsync(Task.Id, ct)), () => owner.CanMutate && Task.State is "Failed" or "Cancelled");
     }
     internal void Update(DownloadTaskSnapshot task)
     {
@@ -34,7 +34,7 @@ public sealed class DownloadRowViewModel : ObservableObject
     private static string FormatBytes(long bytes) => bytes >= 1048576 ? $"{bytes / 1048576d:0.0} MiB" : bytes >= 1024 ? $"{bytes / 1024d:0.0} KiB" : $"{bytes} B";
 }
 
-public sealed class DownloadsPageViewModel(MainWindowViewModel owner) : PageViewModel(owner, "下载任务", "跟踪真实进度、来源与失败原因；可取消或重试任务。")
+public sealed class DownloadsPageViewModel(MainWindowViewModel owner) : PageViewModel(owner, "下载任务", "跟踪真实进度、来源与失败原因；可取消或重试任务所属安装。")
 {
     public ObservableCollection<DownloadRowViewModel> Tasks { get; } = [];
     public bool IsEmpty => Tasks.Count == 0;

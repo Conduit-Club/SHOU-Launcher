@@ -27,6 +27,7 @@ public sealed record DownloadTaskSnapshot(string Id, string Name, string State, 
     long? TotalBytes = null, string? Source = null, string? Error = null, double BytesPerSecond = 0);
 public sealed record LauncherLog(DateTimeOffset Timestamp, string Level, string Message);
 public sealed record DeviceCodeChallenge(string UserCode, Uri VerificationUri, DateTimeOffset ExpiresAt, string Message);
+public sealed record AuthenticationProfileChoice(string Id, string Name);
 public sealed record LauncherSnapshot(BuildIdentity Build, PlatformContext Platform, LauncherSettings Settings,
     IReadOnlyList<GameInstance> Instances, IReadOnlyList<AccountProfile> Accounts,
     IReadOnlyList<JavaInstallation> JavaInstallations, IReadOnlyList<ClubServer> Servers,
@@ -34,8 +35,8 @@ public sealed record LauncherSnapshot(BuildIdentity Build, PlatformContext Platf
     string? SelectedInstanceId = null, string State = "Ready", string? Error = null,
     int? GameProcessId = null, bool CanPersistAccounts = true);
 public sealed record LaunchPlan(string JavaExecutable, RuntimeArchitecture JavaRuntimeArchitecture,
-    string WorkingDirectory, IReadOnlyList<string> Arguments,
-    IReadOnlyDictionary<string, string?> EnvironmentOverrides, IReadOnlyList<string> ClasspathEntries,
+    string WorkingDirectory, [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<string> Arguments,
+    [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyDictionary<string, string?> EnvironmentOverrides, IReadOnlyList<string> ClasspathEntries,
     IReadOnlyList<string> ResolvedLibraries, IReadOnlyList<string> LegacyNativeExtractions,
     IReadOnlyList<string> RedactedDiagnostics)
 {
@@ -65,6 +66,8 @@ public interface ILauncherService : IAsyncDisposable
     Task<AccountProfile> AddOfflineAccountAsync(string playerName, CancellationToken cancellationToken = default);
     Task<AccountProfile> LoginMicrosoftAsync(IProgress<DeviceCodeChallenge> challenge, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<AccountProfile>> LoginYggdrasilAsync(Uri server, string username, string password, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<AccountProfile>> LoginYggdrasilWithProfileSelectionAsync(Uri server, string username, string password,
+        Func<IReadOnlyList<AuthenticationProfileChoice>, CancellationToken, Task<string?>> selectProfile, CancellationToken cancellationToken = default);
     Task RefreshAccountAsync(string accountId, CancellationToken cancellationToken = default);
     Task SelectAccountAsync(string accountId, CancellationToken cancellationToken = default);
     Task RemoveAccountAsync(string accountId, CancellationToken cancellationToken = default);

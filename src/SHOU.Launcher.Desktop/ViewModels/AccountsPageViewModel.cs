@@ -15,6 +15,9 @@ public sealed class AccountsPageViewModel : PageViewModel
     private string _username = "";
     private string _password = "";
     private DeviceCodeChallenge? _challenge;
+    private AuthenticationProfileChallengeViewModel? _profileChallenge;
+    private long _authenticationGeneration;
+    private bool _authenticationActive;
     private bool _confirmRemoval;
     public ObservableCollection<AccountProfile> Accounts { get; } = [];
     public IReadOnlyList<LoginProviderChoice> Providers { get; } =
@@ -64,6 +67,13 @@ public sealed class AccountsPageViewModel : PageViewModel
     public bool HasDeviceChallenge => _challenge is not null;
     public string DeviceCode => _challenge?.UserCode ?? "";
     public string DeviceInstructions => _challenge is { } challenge ? $"在微软官网输入此代码，有效至 {challenge.ExpiresAt.ToLocalTime():HH:mm:ss}。\n{UiPrivacy.Redact(challenge.Message)}" : "";
+    public AuthenticationProfileChallengeViewModel? ProfileChallenge
+    {
+        get => _profileChallenge;
+        private set { if (SetProperty(ref _profileChallenge, value)) OnPropertyChanged(nameof(HasProfileChallenge)); }
+    }
+    public bool HasProfileChallenge => ProfileChallenge is { IsPending: true };
+    public bool IsAuthenticating => _authenticationActive;
     public AsyncRelayCommand AddOfflineCommand { get; }
     public AsyncRelayCommand LoginMicrosoftCommand { get; }
     public AsyncRelayCommand LoginYggdrasilCommand { get; }
@@ -88,13 +98,19 @@ public sealed class AccountsPageViewModel : PageViewModel
     }
     private async Task LoginMicrosoftAsync()
     {
-        SetChallenge(null);
+        var generation = BeginAuthentication();
         try
         {
-            var progress = new DispatchProgress<DeviceCodeChallenge>(challenge => Owner.Dispatch(() => SetChallenge(challenge)));
-            await Owner.RunAsync("微软设备授权", async ct => { await Service.LoginMicrosoftAsync(progress, ct); });
+            await Owner.RunAsync("微软设备授权", async ct =>
+            {
+                var progress = new DispatchProgress<DeviceCodeChallenge>(challenge => Owner.Dispatch(() =>
+                {
+                    if (IsCurrentAuthentication(generation) && !ct.IsCancellationRequested) SetChallenge(challenge);
+                }));
+                await Service.LoginMicrosoftAsync(progress, ct);
+            });
         }
-        finally { SetChallenge(null); }
+        finally { EndAuthentication(generation); }
     }
     private async Task LoginYggdrasilAsync()
     {
@@ -102,11 +118,81 @@ public sealed class AccountsPageViewModel : PageViewModel
         var username = Username.Trim();
         var password = Password;
         Password = "";
-        await Owner.RunAsync("登录 " + SelectedProvider.Name, async ct =>
+        var generation = BeginAuthentication();
+        try
         {
-            var accounts = await Service.LoginYggdrasilAsync(server, username, password, ct);
-            if (accounts.Count == 0) throw new InvalidOperationException("认证服务没有返回可用角色。");
-        }, false, password);
+            await Owner.RunAsync("登录 " + SelectedProvider.Name, async ct =>
+            {
+                var accounts = await Service.LoginYggdrasilWithProfileSelectionAsync(server, username, password,
+                    (choices, selectionToken) => SelectProfileAsync(choices, generation, ct, selectionToken), ct);
+                if (accounts.Count == 0) throw new InvalidOperationException("认证服务没有返回可用角色。");
+            }, false, password);
+        }
+        finally { EndAuthentication(generation); }
+    }
+    private long BeginAuthentication()
+    {
+        var generation = ++_authenticationGeneration;
+        _authenticationActive = true;
+        ClearProfileChallenge(new CancellationToken(true));
+        SetChallenge(null);
+        OnPropertyChanged(nameof(IsAuthenticating));
+        return generation;
+    }
+    private bool IsCurrentAuthentication(long generation) => _authenticationActive && generation == _authenticationGeneration;
+    private void EndAuthentication(long generation)
+    {
+        if (!IsCurrentAuthentication(generation)) return;
+        _authenticationActive = false;
+        ClearProfileChallenge(new CancellationToken(true));
+        SetChallenge(null);
+        OnPropertyChanged(nameof(IsAuthenticating));
+    }
+    private async Task<string?> SelectProfileAsync(IReadOnlyList<AuthenticationProfileChoice> choices, long generation,
+        CancellationToken authenticationToken, CancellationToken selectionToken)
+    {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(authenticationToken, selectionToken);
+        var token = cancellation.Token;
+        token.ThrowIfCancellationRequested();
+        if (choices.Count == 0) throw new InvalidOperationException("认证服务没有提供可选择的角色。");
+        AuthenticationProfileChallengeViewModel challenge = null!;
+        challenge = new(choices,
+            () => IsCurrentAuthentication(generation) && ReferenceEquals(ProfileChallenge, challenge) && !token.IsCancellationRequested,
+            () => Owner.CancelOperationCommand.Execute(null));
+        using var registration = token.Register(() =>
+        {
+            challenge.Cancel(token);
+            Owner.Dispatch(() => ClearProfileChallenge(token, challenge));
+        });
+        Owner.Dispatch(() =>
+        {
+            if (!IsCurrentAuthentication(generation) || token.IsCancellationRequested) { challenge.Cancel(token); return; }
+            ClearProfileChallenge(new CancellationToken(true));
+            ProfileChallenge = challenge;
+        });
+        try { return await challenge.Completion.ConfigureAwait(false); }
+        finally { Owner.Dispatch(() => ClearProfileChallenge(token, challenge)); }
+    }
+    private void ClearProfileChallenge(CancellationToken token, AuthenticationProfileChallengeViewModel? expected = null)
+    {
+        if (ProfileChallenge is not { } current || (expected is not null && !ReferenceEquals(current, expected))) return;
+        current.Cancel(token);
+        current.NotifyCompleted();
+        ProfileChallenge = null;
+    }
+    internal void OnNavigatingAway()
+    {
+        if (_authenticationActive) Owner.CancelOperationCommand.Execute(null);
+    }
+    internal void CancelAuthenticationState(CancellationToken token)
+    {
+        if (!_authenticationActive && ProfileChallenge is null && _challenge is null) return;
+        ++_authenticationGeneration;
+        _authenticationActive = false;
+        ClearProfileChallenge(token);
+        SetChallenge(null);
+        Password = "";
+        OnPropertyChanged(nameof(IsAuthenticating));
     }
     private void SetChallenge(DeviceCodeChallenge? challenge)
     {
