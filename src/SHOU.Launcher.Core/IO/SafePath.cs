@@ -2,19 +2,14 @@ namespace SHOU.Launcher.Core.IO;
 
 public static class SafePath
 {
+    /// <summary>Compare normalized paths after the caller resolves links. macOS never uses Path.GetRelativePath's case folding.</summary>
+    public static bool IsWithin(string root, string path)
+    {
+        return Java.JavaPathBoundary.ContainsCanonical(root, path);
+    }
     public static string Canonical(string path)
     {
-        var full = Path.GetFullPath(path);
-        var root = Path.GetPathRoot(full)!;
-        var current = root;
-        foreach (var part in full[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
-        {
-            current = Path.Combine(current, part);
-            FileSystemInfo info = Directory.Exists(current) ? new DirectoryInfo(current) : new FileInfo(current);
-            if (info.LinkTarget is not null) current = info.ResolveLinkTarget(true)?.FullName
-                ?? throw new IOException("Cannot resolve symbolic link.");
-        }
-        return Path.GetFullPath(current);
+        return Java.JavaPathBoundary.Canonical(Path.GetFullPath(path));
     }
     public static string Within(string root, string relative)
     {
@@ -24,8 +19,7 @@ public static class SafePath
         if (parts.Any(p => p is ".." or ".")) throw new IOException("Parent path traversal is not allowed.");
         var canonicalRoot = Canonical(root);
         var result = Canonical(Path.Combine(canonicalRoot, Path.Combine(parts)));
-        var rel = Path.GetRelativePath(canonicalRoot, result);
-        if (Path.IsPathRooted(rel) || rel == ".." || rel.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        if (!IsWithin(canonicalRoot, result))
             throw new IOException("Path or symbolic link escapes installation root.");
         return result;
     }

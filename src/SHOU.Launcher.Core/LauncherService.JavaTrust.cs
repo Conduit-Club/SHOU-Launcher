@@ -51,19 +51,14 @@ public sealed partial class LauncherService
             throw new InvalidDataException("派生Java的版本或架构验证失败，未选择该副本。");
         var derived = SafePath.Canonical(DerivedJavaRoot);
         var home = SafePath.Canonical(result.Java.JavaHome);
-        var relative = Path.GetRelativePath(derived, home);
-        if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        if (!SafePath.IsWithin(derived, home) || !SafePath.IsWithin(derived, SafePath.Canonical(result.Java.ExecutablePath)))
             throw new IOException("派生Java越过受控runtime根，未选择该副本。");
         return result;
     }
     private bool IsDerivedJava(JavaInstallation java, string? selectedPath = null)
     {
         var root = SafePath.Canonical(DerivedJavaRoot);
-        static bool Inside(string boundary, string path)
-        {
-            var relative = Path.GetRelativePath(boundary, path);
-            return !Path.IsPathRooted(relative) && relative != ".." && !relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal);
-        }
+        static bool Inside(string boundary, string path) => SafePath.IsWithin(boundary, path);
         var home = SafePath.Canonical(java.JavaHome);
         var executable = SafePath.Canonical(java.ExecutablePath);
         var actualHomeInside = Inside(root, home); var actualExecutableInside = Inside(root, executable);

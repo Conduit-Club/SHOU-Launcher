@@ -449,8 +449,7 @@ public sealed partial class LauncherService : ILauncherService
     {
         if (!Path.IsPathFullyQualified(path)) throw new InvalidDataException("实例游戏路径必须为绝对路径。");
         if (!Paths.IsIsolated) return;
-        var relative = Path.GetRelativePath(SafePath.Canonical(Paths.DataDirectory), SafePath.Canonical(path));
-        if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        if (!SafePath.IsWithin(SafePath.Canonical(Paths.DataDirectory), SafePath.Canonical(path)))
             throw new InvalidDataException("隔离模式的游戏目录不能越出数据根；请先显式重新映射旧路径。");
     }
     private string SafeError(Exception ex) => ex switch
@@ -474,10 +473,12 @@ public sealed partial class LauncherService : ILauncherService
                     if (!PathEquals(SafePath.Canonical(launcherLogPath), launcherLogPath) || info.LinkTarget is not null
                         || info.Exists && (info.Attributes & FileAttributes.ReparsePoint) != 0)
                         throw new IOException("Observational log path is not a regular owned path.");
+                    if (info.Exists) JavaTrustTree.EnsureSingleRegularFile(launcherLogPath);
                     File.AppendAllText(launcherLogPath, $"{log.Timestamp:O} [{log.Level}] {log.Message}\n");
                 }
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException
+                or PlatformNotSupportedException or DllNotFoundException or EntryPointNotFoundException)
             { /* Observational logging cannot turn an already committed operation into a reported failure. */ }
         }
         if (LogReceived is { } received) foreach (EventHandler<LauncherLog> subscriber in received.GetInvocationList()) { try { subscriber(this, log); } catch { } }

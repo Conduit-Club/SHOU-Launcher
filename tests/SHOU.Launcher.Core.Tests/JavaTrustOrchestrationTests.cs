@@ -81,10 +81,28 @@ public sealed class JavaTrustOrchestrationTests
         Assert.AreEqual("independent protected bytes", await File.ReadAllTextAsync(protectedFile));
     }
 
+    [TestMethod, TestCategory("JavaTrustPosixLinks")]
+    public async Task ObservationalLogHardLinkCannotModifyAnIndependentFixture()
+    {
+        if (OperatingSystem.IsWindows()) Assert.Inconclusive("Native Windows hard-link creation is a separate gate.");
+        await using var fixture = await Fixture.CreateAsync();
+        var log = Path.Combine(fixture.Service.Paths.LogsDirectory, "launcher.log");
+        if (File.Exists(log)) File.Move(log, log + ".fixture-preserved");
+        var protectedFile = Path.Combine(TestFiles.Root(), "protected-hard-link-fixture");
+        await File.WriteAllTextAsync(protectedFile, "independent protected hard-link bytes");
+        var link = await fixture.Processes.RunAsync(new("/bin/ln", [protectedFile, log], fixture.Service.Paths.DataDirectory,
+            Timeout: TimeSpan.FromSeconds(5)));
+        Assert.AreEqual(0, link.ExitCode, "The explicit owned POSIX hard-link fixture must be created.");
+        var result = await fixture.Service.CreateRepairedJavaCopyAsync(fixture.Java.Source.ExecutablePath);
+        Assert.AreEqual(result.Java.ExecutablePath, fixture.Service.Snapshot.Settings.JavaExecutable);
+        Assert.AreEqual("independent protected hard-link bytes", await File.ReadAllTextAsync(protectedFile));
+    }
+
     [TestMethod]
     [DataRow("major")]
     [DataRow("architecture")]
     [DataRow("outside")]
+    [DataRow("outside_executable")]
     public async Task InvalidDerivationCannotBecomeSelected(string kind)
     {
         await using var fixture = await Fixture.CreateAsync();
@@ -92,10 +110,11 @@ public sealed class JavaTrustOrchestrationTests
         {
             "major" => java with { MajorVersion = 25 },
             "architecture" => java with { RuntimeArchitecture = java.RuntimeArchitecture == RuntimeArchitecture.X64 ? RuntimeArchitecture.Arm64 : RuntimeArchitecture.X64 },
+            "outside_executable" => java with { ExecutablePath = Path.Combine(TestFiles.Root(), "bin/java") },
             _ => java with { JavaHome = TestFiles.Root(), ExecutablePath = Path.Combine(TestFiles.Root(), "bin/java") }
         };
         var before = fixture.Service.Snapshot.Settings;
-        if (kind == "outside")
+        if (kind is "outside" or "outside_executable")
             await Assert.ThrowsExactlyAsync<IOException>(() => fixture.Service.CreateRepairedJavaCopyAsync(fixture.Java.Source.ExecutablePath));
         else
             await Assert.ThrowsExactlyAsync<InvalidDataException>(() => fixture.Service.CreateRepairedJavaCopyAsync(fixture.Java.Source.ExecutablePath));

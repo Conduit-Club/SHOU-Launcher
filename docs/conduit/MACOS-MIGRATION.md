@@ -96,3 +96,12 @@ N3顺序应用UI `90c9706`和platform `de23f5d`的精确增量：联机后端尚
 主亲写扫描/派生/持久设置编排、CLI隔离入口与事务回归。自动修复偏好默认true，只为新下载官方Java创建派生副本；不写隐藏实例覆盖。无显式Java时优先匹配metadata的完成变体，显式原路径可以选回，既有实例显式覆盖保持。派生变体即使auto=false也必须验provenance，字面路径/实际home逃逸不降成普通Java；观察性日志失败不把已提交切换变成假失败，日志链接不写独立fixture。
 
 集成Core181 PASS、3显式SKIPPED（OnlineJava1、trust interop默认2）、0FAIL；Headless34/34，.NET编译0warning/error。真实副本互操作由worker另表，不与集成重复相加。证据在`reports/night/B8`及platform B8 handoff。已发现macOS Path.GetRelativePath默认大小写比较不适合严格卷边界，B9将独立硬化；本节不宣称已验证case-sensitive卷。最终候选重包与GUI/Windows/外部账户门禁仍按真实层级单列。
+
+
+## B9 路径与日志边界收束
+
+Java/Platform内不再用macOS默认忽略大小写的Path.GetRelativePath作root门禁。共享JavaPathBoundary复用B4固定arity getattrlist取得现存祖先的实际case/Unicode，再用明确POSIX Ordinal边界；未知后缀不折叠。Core.SafePath委托同一实现，不新增第二份Mac PInvoke；隔离游戏根、派生home/exe返回、literal逃逸归属均重核。当前FS同inode大小写别名、内外链接与相邻前缀已实测；独立case-sensitive卷仍NOT_RUN。
+
+观察性Log在append前拒绝symlink/reparse/父逃逸，也复用单regular+nlink==1身份检查；真实ln负例证明独立保护fixture不会被日志追加。磁盘/权限/PInvoke不可用只保留内存日志，不把已完成配置事务显示为失败。主新增测试首次因漏using无法编译，失败日志保留；仅补导入后全量通过，没有降低生产拒绝语义。平台B9旧broken-link异常断言同样保留首轮FAIL后精确修正。
+
+最终集成Release Core188 passed、3显式skipped（OnlineJava1/trustInterop默认2），Headless34/34；无Secrets的本地CI配置Core187/187并真实编译同一Desktop，均0.NET warning/error。重叠worker专项不累加。证据`reports/night/B9`与两worker只读review/handoff。功能范围到此冻结，仅做同源码B07、最终统一候选、产品包实际验证和交付报告。

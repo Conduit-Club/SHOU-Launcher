@@ -7,6 +7,7 @@ using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Core.Authentication;
 using SHOU.Launcher.Core.Configuration;
 using SHOU.Launcher.Core.Downloads;
+using SHOU.Launcher.Core.IO;
 using SHOU.Launcher.Core.Minecraft;
 using SHOU.Launcher.Desktop.Platform;
 
@@ -15,6 +16,16 @@ namespace SHOU.Launcher.Core.Tests;
 [TestClass]
 public sealed class CoreSafetyTests
 {
+    [TestMethod] public void BoundaryComparisonNeverCaseFoldsMacOrLinuxRoots()
+    {
+        var parent = TestFiles.Root(); var root = Path.Combine(parent, "OwnedHome");
+        Assert.AreEqual(OperatingSystem.IsWindows(), SafePath.IsWithin(root, Path.Combine(parent, "ownedhome", "client.jar")),
+            "macOS Path.GetRelativePath ignores case even on a case-sensitive volume; it must not be a boundary guard.");
+        Assert.IsTrue(SafePath.IsWithin(root, root));
+        Assert.IsTrue(SafePath.IsWithin(root, Path.Combine(root, "libraries/client.jar")));
+        Assert.IsFalse(SafePath.IsWithin(root, Path.Combine(parent, "OwnedHomeSibling", "client.jar")));
+        Assert.IsFalse(SafePath.IsWithin(root, parent));
+    }
     [TestMethod] public async Task ConfigurationSymlinkCannotReadOrOverwriteAnotherRoot()
     {
         if (OperatingSystem.IsWindows()) return; // Native Windows reparse policy is a separate gate.
