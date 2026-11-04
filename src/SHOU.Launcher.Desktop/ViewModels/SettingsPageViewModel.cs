@@ -5,6 +5,8 @@ using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
+public sealed record JavaTrustFindingViewModel(string Path, string Hash, string Summary, string Details);
+
 public sealed class SettingsPageViewModel : PageViewModel
 {
     private bool _loading;
@@ -12,6 +14,10 @@ public sealed class SettingsPageViewModel : PageViewModel
     private bool _isDirty;
     private string _gameRoot = "";
     private string _javaExecutable = "";
+    private bool _conduitJavaTrustAutoRepair = true;
+    private long _javaTrustSelectionGeneration;
+    private string _javaTrustStatus = "尚未扫描。请明确选择一个 Java 可执行文件。";
+    private string _javaTrustProvenance = "";
     private decimal _memoryMiB = 2048;
     private string _language = "zh-CN";
     private string _theme = "System";
@@ -25,7 +31,25 @@ public sealed class SettingsPageViewModel : PageViewModel
     private string _microsoftClientId = "";
     private string _feedback = "";
     public string GameRoot { get => _gameRoot; set { if (SetProperty(ref _gameRoot, value)) MarkDirty(); } }
-    public string JavaExecutable { get => _javaExecutable; set { if (SetProperty(ref _javaExecutable, value)) MarkDirty(); } }
+    public string JavaExecutable
+    {
+        get => _javaExecutable;
+        set
+        {
+            if (!SetProperty(ref _javaExecutable, value)) return;
+            ++_javaTrustSelectionGeneration;
+            JavaTrustFindings.Clear(); JavaTrustProvenance = "";
+            JavaTrustStatus = "尚未扫描当前 Java。请先只读扫描，或创建独立修复副本。";
+            OnPropertyChanged(nameof(HasExplicitJava));
+            MarkDirty(); NotifyCommands();
+        }
+    }
+    public bool ConduitJavaTrustAutoRepair { get => _conduitJavaTrustAutoRepair; set { if (SetProperty(ref _conduitJavaTrustAutoRepair, value)) MarkDirty(); } }
+    public bool HasExplicitJava => !string.IsNullOrWhiteSpace(JavaExecutable) && Path.IsPathFullyQualified(JavaExecutable.Trim());
+    public ObservableCollection<JavaTrustFindingViewModel> JavaTrustFindings { get; } = [];
+    public string JavaTrustStatus { get => _javaTrustStatus; private set => SetProperty(ref _javaTrustStatus, value); }
+    public string JavaTrustProvenance { get => _javaTrustProvenance; private set { SetProperty(ref _javaTrustProvenance, value); OnPropertyChanged(nameof(HasJavaTrustProvenance)); } }
+    public bool HasJavaTrustProvenance => JavaTrustProvenance.Length > 0;
     public decimal MemoryMiB { get => _memoryMiB; set { if (SetProperty(ref _memoryMiB, value)) MarkDirty(); } }
     public string Language { get => _language; set { if (!string.IsNullOrWhiteSpace(value) && SetProperty(ref _language, value)) MarkDirty(); } }
     public string Theme { get => _theme; set { if (!string.IsNullOrWhiteSpace(value) && SetProperty(ref _theme, value)) MarkDirty(); } }
@@ -51,12 +75,16 @@ public sealed class SettingsPageViewModel : PageViewModel
     public AsyncRelayCommand SaveCommand { get; }
     public RelayCommand DiscardDraftCommand { get; }
     public AsyncRelayCommand OpenDataDirectoryCommand { get; }
+    public AsyncRelayCommand InspectJavaTrustCommand { get; }
+    public AsyncRelayCommand CreateRepairedJavaCopyCommand { get; }
 
     public SettingsPageViewModel(MainWindowViewModel owner) : base(owner, "设置", "游戏路径、运行时、界面与网络配置。保存后用于后续操作。")
     {
         SaveCommand = AsyncCommand(SaveAsync, () => CanEdit && IsDirty);
         DiscardDraftCommand = Command(() => { Load(Owner.Snapshot.Settings); Feedback = "已恢复为已保存的设置。"; }, () => CanEdit && IsDirty);
         OpenDataDirectoryCommand = AsyncCommand(() => Owner.RunControlAsync("打开数据目录", ct => Owner.ExternalLauncher.OpenDirectoryAsync(DataDirectory, ct)));
+        InspectJavaTrustCommand = AsyncCommand(InspectJavaTrustAsync, () => Owner.CanReadRemote && HasExplicitJava);
+        CreateRepairedJavaCopyCommand = AsyncCommand(CreateRepairedJavaCopyAsync, () => CanEdit && HasExplicitJava);
     }
     private void MarkDirty() { if (!_loading) { IsDirty = true; Feedback = ""; } }
     private async Task SaveAsync()
@@ -84,7 +112,7 @@ public sealed class SettingsPageViewModel : PageViewModel
                 (int)MemoryMiB, Language, Theme, DownloadSourcesJson,
                 new ProxySettings(ProxyMode, string.IsNullOrWhiteSpace(ProxyAddress) ? null : ProxyAddress.Trim(), latest.Proxy?.CredentialKey),
                 new Aria2Settings(Aria2Enabled, Aria2Endpoint.Trim(), latest.Aria2?.CredentialKey),
-                string.IsNullOrWhiteSpace(MicrosoftClientId) ? null : MicrosoftClientId.Trim());
+                string.IsNullOrWhiteSpace(MicrosoftClientId) ? null : MicrosoftClientId.Trim(), ConduitJavaTrustAutoRepair);
             await Service.SaveSettingsAsync(settings, ct);
         }, false, proxySecret, ariaSecret);
         if (saved) { Load(Service.Snapshot.Settings); Feedback = "设置已保存。"; }
@@ -94,12 +122,72 @@ public sealed class SettingsPageViewModel : PageViewModel
     private static bool IsLocalAria2Endpoint(string address) => Uri.TryCreate(address.Trim(), UriKind.Absolute, out var uri)
         && uri.Scheme is "http" or "https" && uri.IsLoopback && string.IsNullOrEmpty(uri.UserInfo)
         && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
+    private bool TryGetTrustJava(out string path)
+    {
+        path = JavaExecutable.Trim();
+        if (path.Length > 0 && Path.IsPathFullyQualified(path)) return true;
+        JavaTrustStatus = "未开始：请先填写所选 Java 可执行文件的绝对路径；留空的自动选择不能作为扫描或修复目标。";
+        Owner.ShowError("Java 信任操作需要明确的 Java 绝对路径。");
+        return false;
+    }
+    private async Task InspectJavaTrustAsync()
+    {
+        if (!TryGetTrustJava(out var path)) return;
+        var generation = _javaTrustSelectionGeneration;
+        JavaTrustFindings.Clear(); JavaTrustStatus = "正在只读扫描所选 Java 的信任配置…";
+        IReadOnlyList<JavaTrustFinding>? findings = null;
+        var completed = await Owner.RunAsync("只读扫描 Java 信任配置", async ct =>
+        {
+            findings = await Service.InspectJavaTrustAsync(path, ct);
+            ct.ThrowIfCancellationRequested();
+        }, true);
+        if (generation != _javaTrustSelectionGeneration) return;
+        if (!completed) { JavaTrustStatus = "扫描失败或已取消，无法据此确认信任配置；请查看错误或重试。"; return; }
+        ShowTrustFindings(findings ?? []);
+        JavaTrustStatus = findings is { Count: > 0 }
+            ? $"只读扫描完成，共 {findings.Count} 项；{(findings.Any(f => f.NeedsRepair) ? "存在需检查 / 修复项，可创建独立副本。" : "未报告需修复项。结果仅针对所选 Java 的信任配置。") }"
+            : "扫描未返回检查项，无法据此确认信任配置。";
+    }
+    private async Task CreateRepairedJavaCopyAsync()
+    {
+        if (!TryGetTrustJava(out var path)) return;
+        var hadDraft = IsDirty;
+        JavaTrustFindings.Clear(); JavaTrustProvenance = "";
+        JavaTrustStatus = "正在创建独立修复副本；原始 Java 不会被修改…";
+        JavaTrustDerivation? derivation = null;
+        var completed = await Owner.RunAsync("创建 Java 修复副本并选用", async ct =>
+        {
+            derivation = await Service.CreateRepairedJavaCopyAsync(path, ct);
+            if (!derivation.Java.IsUsable || !Path.IsPathFullyQualified(derivation.Java.ExecutablePath))
+                throw new InvalidDataException("服务未返回通过运行时探测的 Java 修复副本。");
+        });
+        if (!completed || derivation is null)
+        {
+            JavaTrustStatus = "创建失败或已取消，未选用新副本；请查看错误或重试。";
+            return;
+        }
+        if (hadDraft) JavaExecutable = derivation.Java.ExecutablePath;
+        else Load(Service.Snapshot.Settings);
+        ShowTrustFindings(derivation.Findings);
+        JavaTrustProvenance = UiPrivacy.Redact($"策略：{derivation.PolicyId}\n原始 Java：{derivation.SourceJavaExecutable}\n选用副本：{derivation.Java.ExecutablePath}\n来源树 SHA-256：{derivation.SourceTreeSha256}\n副本树 SHA-256：{derivation.OutputTreeSha256}\n来源记录：{derivation.ProvenancePath}");
+        JavaTrustStatus = "已创建并选用通过运行时探测的独立修复副本，Java 设置已保存；原始 Java 未修改。";
+        Feedback = hadDraft ? "修复副本已选用；其余未保存设置仍保留在草稿中。" : "修复副本已创建，新的全局 Java 路径已保存。";
+    }
+    private void ShowTrustFindings(IReadOnlyList<JavaTrustFinding> findings)
+    {
+        JavaTrustFindings.Clear();
+        foreach (var finding in findings)
+            JavaTrustFindings.Add(new(UiPrivacy.Redact(finding.Path), UiPrivacy.Redact(finding.Hash),
+                (finding.IsTrustStore ? "证书信任库 · " : "信任配置 · ") + (finding.NeedsRepair ? finding.CanRepair ? "可在独立副本中修复" : "需检查，当前策略无法修复" : "未报告需修复项"),
+                UiPrivacy.Redact(finding.Details)));
+    }
     private void Load(LauncherSettings settings)
     {
         _loading = true;
         try
         {
             GameRoot = settings.GameRoot ?? ""; JavaExecutable = settings.JavaExecutable ?? ""; MemoryMiB = settings.MemoryMiB;
+            ConduitJavaTrustAutoRepair = settings.ConduitJavaTrustAutoRepair;
             if (!string.IsNullOrWhiteSpace(settings.Language) && !Languages.Contains(settings.Language)) Languages.Add(settings.Language);
             if (!string.IsNullOrWhiteSpace(settings.Theme) && !Themes.Contains(settings.Theme)) Themes.Add(settings.Theme);
             Language = settings.Language; Theme = settings.Theme; DownloadSourcesJson = settings.DownloadSourcesJson;
