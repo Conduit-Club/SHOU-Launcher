@@ -124,6 +124,7 @@ public sealed class JavaDiscovery : IJavaDiscovery
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var (directory, depth) = queue.Dequeue();
+                if (Path.GetFileName(directory) == ".staging" || MojangJavaRuntimeInstaller.IsIncompleteRuntime(directory)) continue;
                 AddHome(directory, source);
                 if (Path.GetFileName(directory) == "bin") Add(Path.Combine(directory, JavaFilename), source);
                 if (depth >= 7) continue;
