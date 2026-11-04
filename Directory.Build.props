@@ -1,0 +1,23 @@
+<Project>
+  <PropertyGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('SHOU.Launcher.'))">
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Configurations>Debug;CI;Beta;Release</Configurations>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <Deterministic>true</Deterministic>
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <Version>1.5.0</Version>
+    <Authors>Conduit Club; PCL Community contributors</Authors>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'CI'">
+    <DefineConstants>CI;TRACE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Beta'">
+    <DefineConstants>BETA;PUBLISH</DefineConstants>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DefineConstants>RELEASE;PUBLISH</DefineConstants>
+  </PropertyGroup>
+</Project>

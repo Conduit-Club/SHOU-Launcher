@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../SHOU.Launcher.Generators/SHOU.Launcher.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <AdditionalFiles Include="Configuration/settings.schema" />
+    <AdditionalFiles Include="Configuration/lifecycle.registry" />
+    <EmbeddedResource Include="../../Plain Craft Launcher 2/metadata.json" LogicalName="PCL.metadata.json" />
+  </ItemGroup>
+</Project>

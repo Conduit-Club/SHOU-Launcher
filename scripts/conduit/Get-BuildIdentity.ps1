@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [ValidateSet('x64', 'ARM64')][string]$Architecture = 'x64',
+    [ValidateSet('win-x64','win-arm64','osx-arm64')][string]$RuntimeIdentifier = '',
     [ValidateSet('Beta', 'Release', 'CI')][string]$Configuration = 'Beta',
     [string]$BuildSuffix = '',
     [string]$ReleaseTag = ''
@@ -36,5 +37,5 @@ $label = "v$version" + $(if ($BuildSuffix) { "-$BuildSuffix" } else { '' })
     Version = $version
     Commit = $commit
     Label = $label
-    ArchiveStem = "SHOU-Launcher-win-$($Architecture.ToLowerInvariant())-$label"
+    ArchiveStem = "SHOU-Launcher-$(if ($RuntimeIdentifier) { $RuntimeIdentifier } else { 'win-' + $Architecture.ToLowerInvariant() })-$label"
 }

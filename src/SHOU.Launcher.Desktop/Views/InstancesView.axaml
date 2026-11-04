@@ -1,0 +1,21 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.InstancesView">
+  <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="18">
+    <Border Classes="card"><StackPanel Spacing="10">
+      <TextBlock Classes="sectionTitle" Text="当前实例" />
+      <ComboBox Name="InstanceSelector" ItemsSource="{Binding Instances}" SelectedItem="{Binding SelectedInstance}" IsEnabled="{Binding CanEdit}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+      <TextBlock Text="{Binding InstanceSummary}" Classes="muted" />
+      <WrapPanel><Button Name="InstallInstanceButton" Content="安装 / 校验" Command="{Binding InstallCommand}" Margin="0,4,8,4" /><Button Name="LaunchGameButton" Classes="primary" Content="启动 Minecraft" Command="{Binding LaunchCommand}" Margin="0,4,8,4" /><Button Name="StopGameButton" Content="停止游戏" Command="{Binding StopGameCommand}" Margin="0,4,8,4" /><Button Content="检查启动计划" Command="{Binding InspectPlanCommand}" Margin="0,4,8,4" /></WrapPanel>
+      <TextBlock Text="{Binding LaunchPrerequisite}" Classes="muted" /><TextBox IsVisible="{Binding HasPlanDiagnostics}" Text="{Binding PlanDiagnostics}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="110" />
+    </StackPanel></Border>
+    <Border Classes="card"><StackPanel Spacing="10"><TextBlock Classes="sectionTitle" Text="新建实例" /><Grid ColumnDefinitions="*,180" RowDefinitions="Auto,Auto" IsEnabled="{Binding CanEdit}">
+      <TextBlock Text="实例名称" Classes="label" /><TextBlock Grid.Column="1" Text="Minecraft 版本" Classes="label" Margin="12,8,0,4" />
+      <TextBox Name="NewInstanceName" Grid.Row="1" Text="{Binding InstanceName}" PlaceholderText="实例名称" /><TextBox Name="NewVersionId" Grid.Row="1" Grid.Column="1" Text="{Binding VersionId}" PlaceholderText="例如 1.21.1" Margin="12,0,0,0" />
+    </Grid><Button Name="CreateInstanceButton" Content="创建实例" Command="{Binding CreateInstanceCommand}" /><TextBlock Text="1.21.1 为首个验证版本；其他版本的支持取决于安装与运行链。" Classes="muted" FontSize="12" /></StackPanel></Border>
+    <Border Classes="card"><StackPanel Spacing="10"><DockPanel><Button DockPanel.Dock="Right" Content="发现 Java" Command="{Binding DiscoverJavaCommand}" /><TextBlock Classes="sectionTitle" Text="全局 Java 与内存" VerticalAlignment="Center" /></DockPanel>
+      <StackPanel IsEnabled="{Binding CanEdit}" Spacing="8"><ComboBox Name="JavaSelector" ItemsSource="{Binding JavaInstallations}" SelectedItem="{Binding SelectedJava}"><ComboBox.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding FullVersion}" /><TextBlock Text="{Binding ExecutablePath}" FontSize="11" Classes="muted" /></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+      <Grid ColumnDefinitions="*,Auto"><TextBox Name="JavaPath" Text="{Binding JavaExecutable}" PlaceholderText="留空自动选择 Java，或填写绝对路径" /><Button Grid.Column="1" Content="浏览…" Click="PickJava_Click" Margin="8,0,0,0" /></Grid>
+      <Grid ColumnDefinitions="Auto,160,*"><TextBlock Text="最大内存（MiB）" VerticalAlignment="Center" Margin="0,0,12,0" /><NumericUpDown Grid.Column="1" Name="MemoryMiB" Minimum="512" Maximum="65536" Increment="256" Value="{Binding MemoryMiB}" /><TextBlock Grid.Column="2" Text="已有实例的独立覆盖仍优先。" Classes="muted" VerticalAlignment="Center" Margin="12,0,0,0" /></Grid></StackPanel>
+      <TextBlock Text="{Binding RuntimeDraftSummary}" Classes="muted" FontSize="12" /><WrapPanel><Button Content="应用 Java 与内存" Command="{Binding SaveRuntimeCommand}" Margin="0,4,8,4" /><Button Content="恢复自动选择" Command="{Binding AutomaticJavaCommand}" Margin="0,4,8,4" /></WrapPanel>
+    </StackPanel></Border>
+  </StackPanel></ScrollViewer>
+</UserControl>

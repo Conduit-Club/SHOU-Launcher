@@ -1,0 +1,11 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SHOU.Launcher.Core/SHOU.Launcher.Core.csproj" />
+    <Project Path="src/SHOU.Launcher.Desktop/SHOU.Launcher.Desktop.csproj" />
+    <Project Path="src/SHOU.Launcher.Generators/SHOU.Launcher.Generators.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SHOU.Launcher.Core.Tests/SHOU.Launcher.Core.Tests.csproj" />
+    <Project Path="tests/SHOU.Launcher.Desktop.Tests/SHOU.Launcher.Desktop.Tests.csproj" />
+  </Folder>
+</Solution>
