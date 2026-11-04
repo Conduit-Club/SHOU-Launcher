@@ -79,6 +79,13 @@ public sealed class JavaTrustSettingsTests
             Assert.Equal(1, Find<ItemsControl>(window, "JavaTrustFindings").ItemCount);
             Assert.Contains("独立副本", vm.Settings.JavaTrustFindings[0].Summary);
             Assert.Equal(0, fake.SaveCalls); Assert.Equal(SourceJava, fake.Snapshot.Settings.JavaExecutable);
+            fake.JavaTrustInspectBehavior = (_, _) => Task.FromResult<IReadOnlyList<JavaTrustFinding>>(
+                [new(FixturePath("source", "missing-cacerts"), true, "", false, false, "未找到默认证书库，未能检查")]);
+            await vm.Settings.InspectJavaTrustCommand.ExecuteAsync(null); Pump(window);
+            Assert.Contains("无法确认", Find<TextBlock>(window, "JavaTrustStatusText").Text);
+            Assert.Contains("结果未知", vm.Settings.JavaTrustFindings.Single().Summary);
+            Assert.DoesNotContain("未报告需修复项", vm.Settings.JavaTrustStatus);
+            Assert.Equal(0, fake.SaveCalls); Assert.Equal(SourceJava, fake.Snapshot.Settings.JavaExecutable);
             fake.JavaTrustInspectBehavior = (_, _) => throw new InvalidDataException("扫描失败 password=fixture-scan-password");
             await vm.Settings.InspectJavaTrustCommand.ExecuteAsync(null); Pump(window);
             Assert.Empty(vm.Settings.JavaTrustFindings); Assert.Contains("扫描失败或已取消", vm.Settings.JavaTrustStatus);

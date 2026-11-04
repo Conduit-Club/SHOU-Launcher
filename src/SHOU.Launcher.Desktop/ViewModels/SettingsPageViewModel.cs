@@ -144,9 +144,9 @@ public sealed class SettingsPageViewModel : PageViewModel
         if (generation != _javaTrustSelectionGeneration) return;
         if (!completed) { JavaTrustStatus = "扫描失败或已取消，无法据此确认信任配置；请查看错误或重试。"; return; }
         ShowTrustFindings(findings ?? []);
-        JavaTrustStatus = findings is { Count: > 0 }
-            ? $"只读扫描完成，共 {findings.Count} 项；{(findings.Any(f => f.NeedsRepair) ? "存在需检查 / 修复项，可创建独立副本。" : "未报告需修复项。结果仅针对所选 Java 的信任配置。") }"
-            : "扫描未返回检查项，无法据此确认信任配置。";
+        JavaTrustStatus = findings is not { Count: > 0 } ? "扫描未返回检查项，无法据此确认信任配置。"
+            : findings.Any(f => !f.CanRepair) ? $"只读扫描返回 {findings.Count} 项；存在未能完整检查或当前策略不支持的条目，无法确认信任配置。"
+            : $"只读扫描完成，共 {findings.Count} 项；{(findings.Any(f => f.NeedsRepair) ? "存在需检查 / 修复项，可创建独立副本。" : "未报告需修复项。结果仅针对所选 Java 的信任配置。")}";
     }
     private async Task CreateRepairedJavaCopyAsync()
     {
@@ -178,7 +178,7 @@ public sealed class SettingsPageViewModel : PageViewModel
         JavaTrustFindings.Clear();
         foreach (var finding in findings)
             JavaTrustFindings.Add(new(UiPrivacy.Redact(finding.Path), UiPrivacy.Redact(finding.Hash),
-                (finding.IsTrustStore ? "证书信任库 · " : "信任配置 · ") + (finding.NeedsRepair ? finding.CanRepair ? "可在独立副本中修复" : "需检查，当前策略无法修复" : "未报告需修复项"),
+                (finding.IsTrustStore ? "证书信任库 · " : "信任配置 · ") + (finding.NeedsRepair ? finding.CanRepair ? "可在独立副本中修复" : "需检查，当前策略无法修复" : finding.CanRepair ? "未报告需修复项" : "未能检查，结果未知"),
                 UiPrivacy.Redact(finding.Details)));
     }
     private void Load(LauncherSettings settings)
