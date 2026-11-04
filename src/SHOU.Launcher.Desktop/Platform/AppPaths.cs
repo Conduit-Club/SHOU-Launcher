@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Desktop.Platform.MacOS;
 
 namespace SHOU.Launcher.Desktop.Platform;
 
@@ -74,6 +75,20 @@ public sealed class AppPaths : IAppPaths
 
         RuntimesDirectory = Path.Combine(DataDirectory, "runtimes");
         InstancesDirectory = Path.Combine(DataDirectory, "instances");
+        if (OperatingSystem.IsMacOS())
+        {
+            // Normalize stored case/Unicode through the actual filesystem, including ancestors of new roots.
+            // Do not merge Foo/foo or Unicode spellings on a filesystem where they identify distinct objects.
+            DataDirectory = ResolveExistingLinks(DataDirectory);
+            SharedDataDirectory = ResolveExistingLinks(SharedDataDirectory);
+            LocalDataDirectory = ResolveExistingLinks(LocalDataDirectory);
+            CacheDirectory = ResolveExistingLinks(CacheDirectory);
+            LogsDirectory = ResolveExistingLinks(LogsDirectory);
+            RuntimesDirectory = ResolveExistingLinks(RuntimesDirectory);
+            InstancesDirectory = ResolveExistingLinks(InstancesDirectory);
+            TempDirectory = ResolveExistingLinks(TempDirectory);
+            ResourcesDirectory = ResolveExistingLinks(ResourcesDirectory);
+        }
         LockFile = Path.Combine(LocalDataDirectory, "instance.lock");
         if (IsIsolated)
             foreach (var path in new[] { SharedDataDirectory, LocalDataDirectory, CacheDirectory, LogsDirectory,
@@ -101,7 +116,8 @@ public sealed class AppPaths : IAppPaths
                 current = info.ResolveLinkTarget(true)?.FullName
                     ?? throw new IOException("The data directory contains an unresolved symbolic link.");
         }
-        return Path.TrimEndingDirectorySeparator(Path.GetFullPath(current));
+        var normalized = Path.TrimEndingDirectorySeparator(Path.GetFullPath(current));
+        return OperatingSystem.IsMacOS() ? MacFileSystemPaths.CanonicalDirectory(normalized) : normalized;
     }
 
     internal static void EnsureContained(string root, string path)
