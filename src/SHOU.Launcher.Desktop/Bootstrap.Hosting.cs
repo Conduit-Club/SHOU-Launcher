@@ -49,7 +49,7 @@ public static partial class Bootstrap
         if (data is null && OperatingSystem.IsWindows())
             data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SHOU-Launcher-Preview");
         networkOptions = new();
-        httpClient = new(new ConfigurableNetworkHandler(networkOptions)) { Timeout = TimeSpan.FromSeconds(40) };
+        httpClient = new(new ConfigurableNetworkHandler(networkOptions)) { Timeout = TimeSpan.FromSeconds(40), MaxResponseContentBufferSize = 4 * 1024 * 1024 };
         httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("SHOU-Launcher/1.5.0");
         verifiedDownloader = new DownloadCoordinator(httpClient, new VerifiedDownloader(httpClient), networkOptions,
             warning => Console.Error.WriteLine(warning));
@@ -57,8 +57,10 @@ public static partial class Bootstrap
         // Constructors above do not create data or read credentials. The lease is the first write.
         dataLease = platformServices.DataLock.Acquire(platformServices.Paths);
         ExternalLauncher = platformServices.ExternalLauncher;
-        Launcher = new LauncherService(platformServices, httpClient, verifiedDownloader, networkOptions);
+        productJavaBootstrap = DescribeJavaBootstrap(platformServices.Paths);
+        Launcher = new LauncherService(platformServices, httpClient, verifiedDownloader, networkOptions, javaBootstrap: productJavaBootstrap);
         await Launcher.InitializeAsync().ConfigureAwait(false);
+        if (productJavaBootstrap is not null) await InstallJavaBootstrapAsync(productJavaBootstrap).ConfigureAwait(false);
     }
     private static async Task ShutdownHostAsync()
     {
@@ -72,7 +74,7 @@ public static partial class Bootstrap
     private static void ValidateArguments()
     {
         var switches = new HashSet<string>(["--diagnostics","--smoke-test","--prepare-minecraft","--launch-minecraft","--official-downloads"], StringComparer.Ordinal);
-        var valued = new HashSet<string>(["--data-dir","--result-file","--run-id","--exit-after","--java-path","--version","--offline-profile","--dry-run-launch","--credential-smoke"], StringComparer.Ordinal);
+        var valued = new HashSet<string>(["--data-dir","--result-file","--run-id","--exit-after","--java-path","--version","--loader","--loader-version","--offline-profile","--dry-run-launch","--credential-smoke"], StringComparer.Ordinal);
         for (var i = 0; i < Arguments.Length; i++)
         {
             var option = Arguments[i];

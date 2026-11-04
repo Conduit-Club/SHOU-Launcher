@@ -9,5 +9,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="Fixtures/**/*" CopyToOutputDirectory="PreserveNewest" />
+    <Compile Include="../../PCL.Core.Test/Conduit/DownloadSourcesTest.cs" Link="ExistingRegressions/DownloadSourcesTest.cs" />
+    <Compile Include="../../PCL.Core.Test/Conduit/ModDownloadSourcesTest.cs" Link="ExistingRegressions/ModDownloadSourcesTest.cs" />
   </ItemGroup>
 </Project>

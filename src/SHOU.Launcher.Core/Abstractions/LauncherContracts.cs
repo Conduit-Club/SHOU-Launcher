@@ -38,11 +38,11 @@ public sealed record LaunchPlan(string JavaExecutable, RuntimeArchitecture JavaR
     string WorkingDirectory, [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<string> Arguments,
     [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyDictionary<string, string?> EnvironmentOverrides, IReadOnlyList<string> ClasspathEntries,
     IReadOnlyList<string> ResolvedLibraries, IReadOnlyList<string> LegacyNativeExtractions,
-    IReadOnlyList<string> RedactedDiagnostics)
+    IReadOnlyList<string> RedactedDiagnostics, int MainClassIndex = -1, string? BootstrapSha256 = null)
 {
     // Launch arguments contain runtime credentials. Only this explicitly redacted view is reportable.
     public object ToRedactedReport() => new { JavaExecutable, JavaRuntimeArchitecture, WorkingDirectory,
-        ClasspathEntries, ResolvedLibraries, LegacyNativeExtractions, RedactedDiagnostics };
+        ClasspathEntries, ResolvedLibraries, LegacyNativeExtractions, RedactedDiagnostics, BootstrapSha256 };
 }
 public interface ILauncherService : IAsyncDisposable
 {
@@ -53,6 +53,7 @@ public interface ILauncherService : IAsyncDisposable
     event EventHandler<LauncherLog>? LogReceived;
     Task InitializeAsync(CancellationToken cancellationToken = default);
     Task<GameInstance> CreateInstanceAsync(string name, string versionId, CancellationToken cancellationToken = default);
+    Task<GameInstance> CreateFabricInstanceAsync(string name, string gameVersionId, string loaderVersion, CancellationToken cancellationToken = default);
     Task SelectInstanceAsync(string instanceId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<JavaInstallation>> DiscoverJavaAsync(CancellationToken cancellationToken = default);
     Task InstallInstanceAsync(string instanceId, CancellationToken cancellationToken = default);

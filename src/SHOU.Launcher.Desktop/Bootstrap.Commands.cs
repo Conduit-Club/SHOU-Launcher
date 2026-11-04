@@ -26,6 +26,7 @@ public static partial class Bootstrap
                     launcher.Paths.LockFile, launcher.Paths.IsIsolated },
                 configurationAssembly = typeof(BuildConfiguration).Assembly.Location, dataLockAcquired = dataLease is not null,
                 java, generatedSettings = GeneratedSettingsSchema.Entries, lifecycle = GeneratedLifecycle.Entries,
+                javaBootstrap = new { available = productJavaBootstrap is not null, sha256 = productJavaBootstrap?.Sha256 },
                 capabilities = new { launcher.Capabilities.SupportsCredentialPersistence, launcher.Capabilities.SupportsSystemProxy, launcher.Capabilities.Limitations } });
             return 0;
         }
@@ -63,8 +64,14 @@ public static partial class Bootstrap
             ?? await launcher.AddOfflineAccountAsync(profileName, ct).ConfigureAwait(false);
         await launcher.SelectAccountAsync(account.Id, ct).ConfigureAwait(false);
         var version = ArgumentValue("--version") ?? "1.21.1";
-        var instance = launcher.Snapshot.Instances.FirstOrDefault(i => i.VersionId == version && i.Loader == "vanilla")
-            ?? await launcher.CreateInstanceAsync("Minecraft " + version + " · 隔离验证", version, ct).ConfigureAwait(false);
+        var loader = ArgumentValue("--loader") ?? "vanilla";
+        if (loader is not ("vanilla" or "fabric")) throw new ArgumentException("Only vanilla and modern Fabric are implemented.");
+        var loaderVersion = ArgumentValue("--loader-version") ?? "0.16.14";
+        var versionId = loader == "fabric" ? Core.Minecraft.FabricMetadataProvider.ProfileId(version, loaderVersion) : version;
+        var instance = launcher.Snapshot.Instances.FirstOrDefault(i => i.VersionId == versionId && i.Loader == loader)
+            ?? (loader == "fabric"
+                ? await launcher.CreateFabricInstanceAsync("Fabric " + version + " · 隔离验证", version, loaderVersion, ct).ConfigureAwait(false)
+                : await launcher.CreateInstanceAsync("Minecraft " + version + " · 隔离验证", version, ct).ConfigureAwait(false));
         await launcher.SelectInstanceAsync(instance.Id, ct).ConfigureAwait(false);
         if (launch)
         {
@@ -73,14 +80,14 @@ public static partial class Bootstrap
             catch (OperationCanceledException) { await launcher.StopGameAsync().ConfigureAwait(false); throw; }
             var success = launcher.Snapshot.State != "Error";
             WriteCommandReport(new { status = success ? "PASS" : "FAIL", scope = "process_lifecycle_only", instanceId = instance.Id,
-                version, offlineProfile = true, serverJoined = false, sourceSha = launcher.Snapshot.Build.SourceSha,
+                version, loader, loaderVersion = loader == "fabric" ? loaderVersion : null, offlineProfile = true, serverJoined = false, sourceSha = launcher.Snapshot.Build.SourceSha,
                 finalState = launcher.Snapshot.State, evidenceBoundary = "Minecraft main-menu evidence must be observed separately through native GUI" });
             return success ? 0 : 1;
         }
         await launcher.InstallInstanceAsync(instance.Id, ct).ConfigureAwait(false);
         var dryRun = await launcher.BuildLaunchPlanAsync(instance.Id, ct).ConfigureAwait(false);
         WriteCommandReport(new { status = "PASS", scope = "verified_install_and_plan_only", instanceId = instance.Id,
-            version, offlineProfile = true, serverJoined = false, sourceSha = launcher.Snapshot.Build.SourceSha,
+            version, loader, loaderVersion = loader == "fabric" ? loaderVersion : null, offlineProfile = true, serverJoined = false, sourceSha = launcher.Snapshot.Build.SourceSha,
             plan = dryRun.ToRedactedReport(), evidenceBoundary = "No game was started; this is not L4 evidence" });
         return 0;
     }

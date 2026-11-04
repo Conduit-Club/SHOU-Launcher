@@ -32,6 +32,11 @@ internal sealed class FakeLauncherService : ILauncherService
     public int StopCalls { get; private set; }
     public int DisposeCalls { get; private set; }
     public int SaveCalls { get; private set; }
+    public int VanillaCreateCalls { get; private set; }
+    public int FabricCreateCalls { get; private set; }
+    public (string Name, string GameVersion, string LoaderVersion)? LastFabricRequest { get; private set; }
+    public Func<CancellationToken, Task>? FabricCreateBehavior { get; set; }
+    public bool FabricCreationCancelled { get; private set; }
     public List<string> SavedSecretKinds { get; } = [];
 
     public FakeLauncherService()
@@ -48,9 +53,21 @@ internal sealed class FakeLauncherService : ILauncherService
     public Task InitializeAsync(CancellationToken cancellationToken = default) { Publish(Snapshot); return Task.CompletedTask; }
     public Task<GameInstance> CreateInstanceAsync(string name, string versionId, CancellationToken cancellationToken = default)
     {
+        VanillaCreateCalls++;
         var instance = new GameInstance("instance-" + (Snapshot.Instances.Count + 1), name, versionId, Path.Combine(Paths.InstancesDirectory, "new-fixture"));
         Publish(Snapshot with { Instances = [.. Snapshot.Instances, instance], SelectedInstanceId = instance.Id });
         return Task.FromResult(instance);
+    }
+    public async Task<GameInstance> CreateFabricInstanceAsync(string name, string gameVersionId, string loaderVersion, CancellationToken cancellationToken = default)
+    {
+        FabricCreateCalls++;
+        LastFabricRequest = (name, gameVersionId, loaderVersion);
+        try { if (FabricCreateBehavior is not null) await FabricCreateBehavior(cancellationToken); }
+        catch (OperationCanceledException) { FabricCreationCancelled = true; throw; }
+        cancellationToken.ThrowIfCancellationRequested();
+        var instance = new GameInstance("instance-" + (Snapshot.Instances.Count + 1), name, gameVersionId, Path.Combine(Paths.InstancesDirectory, "fabric-fixture"), Loader: "fabric", LoaderVersion: loaderVersion);
+        Publish(Snapshot with { Instances = [.. Snapshot.Instances, instance], SelectedInstanceId = instance.Id });
+        return instance;
     }
     public Task SelectInstanceAsync(string instanceId, CancellationToken cancellationToken = default) { Publish(Snapshot with { SelectedInstanceId = instanceId }); return Task.CompletedTask; }
     public Task<IReadOnlyList<JavaInstallation>> DiscoverJavaAsync(CancellationToken cancellationToken = default) => Task.FromResult(Snapshot.JavaInstallations);

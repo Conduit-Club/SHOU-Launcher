@@ -4,6 +4,8 @@ using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
+public sealed record InstanceLoaderChoice(string Id, string Name);
+
 public sealed class InstancesPageViewModel : PageViewModel
 {
     private bool _refreshing;
@@ -11,6 +13,8 @@ public sealed class InstancesPageViewModel : PageViewModel
     private bool _runtimeDirty;
     private string _instanceName = "原版 1.21.1";
     private string _versionId = "1.21.1";
+    private string _fabricLoaderVersion = "0.16.14";
+    private InstanceLoaderChoice _selectedLoader = null!;
     private string _javaExecutable = "";
     private decimal _memoryMiB = 2048;
     private GameInstance? _selectedInstance;
@@ -18,8 +22,30 @@ public sealed class InstancesPageViewModel : PageViewModel
     private string _planDiagnostics = "";
     public ObservableCollection<GameInstance> Instances { get; } = [];
     public ObservableCollection<JavaInstallation> JavaInstallations { get; } = [];
+    public IReadOnlyList<InstanceLoaderChoice> LoaderChoices { get; } = [new("vanilla", "原版"), new("fabric", "Fabric")];
     public string InstanceName { get => _instanceName; set { SetProperty(ref _instanceName, value); NotifyCommands(); } }
-    public string VersionId { get => _versionId; set { SetProperty(ref _versionId, value); NotifyCommands(); } }
+    public string VersionId { get => _versionId; set { SetProperty(ref _versionId, value); OnPropertyChanged(nameof(CreationHint)); NotifyCommands(); } }
+    public string FabricLoaderVersion { get => _fabricLoaderVersion; set { SetProperty(ref _fabricLoaderVersion, value); OnPropertyChanged(nameof(CreationHint)); NotifyCommands(); } }
+    public InstanceLoaderChoice SelectedLoader
+    {
+        get => _selectedLoader;
+        set
+        {
+            if (value is null) return;
+            var oldDefaultName = $"{_selectedLoader.Name} {VersionId}";
+            if (!SetProperty(ref _selectedLoader, value)) return;
+            if (InstanceName == oldDefaultName) InstanceName = $"{value.Name} {VersionId}";
+            OnPropertyChanged(nameof(IsFabricCreation)); OnPropertyChanged(nameof(CreationHint)); NotifyCommands();
+        }
+    }
+    public bool IsFabricCreation => SelectedLoader.Id == "fabric";
+    public string CreationHint => SelectedLoader.Id switch
+    {
+        "vanilla" => "创建原版 Minecraft 实例后，再安装并启动。",
+        "fabric" when string.IsNullOrWhiteSpace(FabricLoaderVersion) => "请明确填写 Fabric Loader 版本。",
+        "fabric" => $"Minecraft {VersionId} + Fabric Loader {FabricLoaderVersion}；创建后安装所需依赖。",
+        _ => $"暂不支持加载器 {SelectedLoader.Id}，不会作为原版创建。"
+    };
     public string JavaExecutable { get => _javaExecutable; set { if (SetProperty(ref _javaExecutable, value) && !_refreshing) { _runtimeDirty = true; OnPropertyChanged(nameof(RuntimeDraftSummary)); } } }
     public decimal MemoryMiB { get => _memoryMiB; set { if (SetProperty(ref _memoryMiB, value) && !_refreshing) { _runtimeDirty = true; OnPropertyChanged(nameof(RuntimeDraftSummary)); } } }
     public string RuntimeDraftSummary => _runtimeDirty ? "Java 与内存有未应用的修改。" : "当前显示已保存的全局 Java 与内存。";
@@ -44,12 +70,20 @@ public sealed class InstancesPageViewModel : PageViewModel
         get => _selectedJava;
         set { if (SetProperty(ref _selectedJava, value) && value is not null && !_refreshing) JavaExecutable = value.ExecutablePath; }
     }
-    public string InstanceSummary => SelectedInstance is { } item ? $"{item.VersionId} · {item.Loader} · {(item.Installed ? "已安装" : "尚未安装")}\n{item.GameDirectory}" : "尚未选择实例。";
+    public string InstanceSummary => SelectedInstance is { } item ? $"Minecraft {item.VersionId} · {LoaderSummary(item)} · {(item.Installed ? "已安装" : "尚未安装")}\n{item.GameDirectory}" : "尚未选择实例。";
+    private static string LoaderSummary(GameInstance item) => item.Loader switch
+    {
+        "vanilla" => "原版",
+        "fabric" => "Fabric Loader " + (string.IsNullOrWhiteSpace(item.LoaderVersion) ? "版本缺失" : item.LoaderVersion),
+        _ => "未支持的加载器：" + item.Loader
+    };
+    private bool SelectedInstanceSupported => SelectedInstance?.Loader is "vanilla" or "fabric";
     public string LaunchPrerequisite
     {
         get
         {
             if (SelectedInstance is null) return "创建或选择一个实例。";
+            if (!SelectedInstanceSupported) return $"当前候选不支持加载器 {SelectedInstance.Loader}，不会按原版安装或启动。";
             if (!SelectedInstance.Installed) return "先安装/校验实例，再启动游戏。";
             var account = Owner.Snapshot.Accounts.FirstOrDefault(a => a.Id == Owner.Snapshot.SelectedAccountId);
             if (account is null) return "请在账户页添加并选择账户。";
@@ -68,19 +102,37 @@ public sealed class InstancesPageViewModel : PageViewModel
 
     public InstancesPageViewModel(MainWindowViewModel owner) : base(owner, "实例与启动", "创建实例，选择运行时，然后安装并启动 Minecraft。")
     {
-        CreateInstanceCommand = AsyncCommand(() => Owner.RunAsync("创建实例", async ct => { await Service.CreateInstanceAsync(InstanceName.Trim(), VersionId.Trim(), ct); }), () => CanEdit && !string.IsNullOrWhiteSpace(InstanceName) && !string.IsNullOrWhiteSpace(VersionId));
+        _selectedLoader = LoaderChoices[0];
+        CreateInstanceCommand = AsyncCommand(CreateInstanceAsync, () => CanEdit && !string.IsNullOrWhiteSpace(InstanceName) && !string.IsNullOrWhiteSpace(VersionId)
+            && (SelectedLoader.Id == "vanilla" || (IsFabricCreation && !string.IsNullOrWhiteSpace(FabricLoaderVersion))));
         DiscoverJavaCommand = AsyncCommand(() => Owner.RunAsync("发现 Java", async ct => { await Service.DiscoverJavaAsync(ct); }), () => CanEdit);
         SaveRuntimeCommand = AsyncCommand(SaveRuntimeAsync, () => CanEdit);
         AutomaticJavaCommand = Command(() => { JavaExecutable = ""; SelectedJava = null; }, () => CanEdit);
-        InstallCommand = AsyncCommand(() => Owner.RunAsync("安装/校验实例", ct => Service.InstallInstanceAsync(SelectedInstance!.Id, ct)), () => CanEdit && SelectedInstance is not null);
+        InstallCommand = AsyncCommand(() => Owner.RunAsync("安装/校验实例", ct => Service.InstallInstanceAsync(SelectedInstance!.Id, ct)), () => CanEdit && SelectedInstanceSupported);
         LaunchCommand = AsyncCommand(() => Owner.RunAsync("启动游戏", ct => Service.LaunchAsync(SelectedInstance!.Id, Owner.Home.SelectedServerId, ct)), CanLaunch);
         InspectPlanCommand = AsyncCommand(() => Owner.RunAsync("检查启动计划", async ct =>
         {
             var plan = await Service.BuildLaunchPlanAsync(SelectedInstance!.Id, ct);
             PlanDiagnostics = $"Java：{plan.JavaExecutable}\n架构：{plan.JavaRuntimeArchitecture}\n类路径：{plan.ClasspathEntries.Count} 项\n" + string.Join("\n", plan.RedactedDiagnostics.Select(s => UiPrivacy.Redact(s)));
-        }), () => CanEdit && SelectedInstance?.Installed == true);
+        }), () => CanEdit && SelectedInstanceSupported && SelectedInstance?.Installed == true);
     }
-    private bool CanLaunch() => CanEdit && SelectedInstance?.Installed == true && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId && (a.Kind != AccountKind.Offline || Owner.Home.SelectedServerId == "none"));
+    private async Task CreateInstanceAsync()
+    {
+        var loader = SelectedLoader.Id;
+        var name = InstanceName.Trim();
+        var gameVersion = VersionId.Trim();
+        var loaderVersion = FabricLoaderVersion.Trim();
+        await Owner.RunAsync("创建实例", async ct =>
+        {
+            switch (loader)
+            {
+                case "vanilla": await Service.CreateInstanceAsync(name, gameVersion, ct); break;
+                case "fabric": await Service.CreateFabricInstanceAsync(name, gameVersion, loaderVersion, ct); break;
+                default: throw new InvalidOperationException("暂不支持此加载器，不会作为原版创建。");
+            }
+        });
+    }
+    private bool CanLaunch() => CanEdit && SelectedInstanceSupported && SelectedInstance?.Installed == true && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId && (a.Kind != AccountKind.Offline || Owner.Home.SelectedServerId == "none"));
     private async Task SaveRuntimeAsync()
     {
         if (MemoryMiB is < 512 or > 32768 || decimal.Truncate(MemoryMiB) != MemoryMiB) { Owner.ShowError("内存须为 512–32768 MiB 的整数。"); return; }

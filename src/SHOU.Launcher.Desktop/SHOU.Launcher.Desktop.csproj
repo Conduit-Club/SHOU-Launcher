@@ -16,4 +16,8 @@
     <PackageReference Include="PlainToolkit.CngProtectedData" Version="2.1.0" />
     <AvaloniaResource Include="Assets/**" />
   </ItemGroup>
+  <ItemGroup Condition="'$(JavaBootstrapJarPath)' != '' and Exists('$(JavaBootstrapJarPath)')">
+    <EmbeddedResource Include="$(JavaBootstrapJarPath)" LogicalName="SHOU.Launcher.Desktop.JavaBootstrap.jar" />
+    <AssemblyMetadata Include="SHOU.JavaBootstrap.Sha256" Value="$(JavaBootstrapSha256)" />
+  </ItemGroup>
 </Project>

@@ -25,6 +25,7 @@ public sealed class LauncherService : ILauncherService
     private readonly BuildConfiguration build;
     private readonly ConfigurationStore config;
     private readonly AuthenticationClient authentication;
+    private readonly JavaBootstrapArtifact? javaBootstrap;
     private readonly SemaphoreSlim initialize = new(1, 1), operation = new(1, 1);
     private readonly CancellationTokenSource lifetime = new();
     private readonly object sync = new();
@@ -43,11 +44,13 @@ public sealed class LauncherService : ILauncherService
     private readonly string launcherLogPath;
 
     public LauncherService(PlatformServices platform, HttpClient http, IVerifiedDownloader downloader,
-        NetworkOptions network, BuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null)
+        NetworkOptions network, BuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null,
+        JavaBootstrapArtifact? javaBootstrap = null)
     {
         this.platform = platform; this.http = http; this.downloader = downloader; this.network = network;
         build = buildConfiguration ?? new(); config = new(platform.Paths);
         authentication = authenticationClient ?? new(http);
+        this.javaBootstrap = javaBootstrap;
         network.Credentials = platform.Credentials;
         launcherLogPath = Path.Combine(platform.Paths.LogsDirectory, "launcher.log");
         snapshot = new(build.GetIdentity(), platform.Info.Context, new(), [], [], [],
@@ -125,6 +128,23 @@ public sealed class LauncherService : ILauncherService
     }
     public Task SelectInstanceAsync(string instanceId, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     { _ = FindInstance(instanceId); Set(s => s with { SelectedInstanceId = instanceId }); await PersistAsync(ct).ConfigureAwait(false); }, cancellationToken);
+    public async Task<GameInstance> CreateFabricInstanceAsync(string name, string gameVersionId, string loaderVersion, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 80) throw new ArgumentException("请输入1–80字符实例名称。");
+        _ = FabricMetadataProvider.ProfileId(gameVersionId, loaderVersion);
+        GameInstance? created = null;
+        await ExecuteAsync("Installing", async ct =>
+        {
+            var profile = await new FabricMetadataProvider(http, Paths.CacheDirectory, Sources).CacheProfileAsync(gameVersionId, loaderVersion, ct).ConfigureAwait(false);
+            created = new(Guid.NewGuid().ToString("N"), name.Trim(), profile,
+                SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")), Loader: "fabric", LoaderVersion: loaderVersion);
+            Directory.CreateDirectory(created.GameDirectory);
+            var candidate = Snapshot with { Instances = Snapshot.Instances.Append(created).ToArray(), SelectedInstanceId = created.Id };
+            await PersistCandidateAsync(candidate, ct).ConfigureAwait(false);
+            Set(s => s with { Instances = candidate.Instances, SelectedInstanceId = created.Id });
+        }, cancellationToken).ConfigureAwait(false);
+        return created!;
+    }
     public async Task<IReadOnlyList<JavaInstallation>> DiscoverJavaAsync(CancellationToken cancellationToken = default)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(false);
@@ -170,12 +190,19 @@ public sealed class LauncherService : ILauncherService
     {
         LaunchPlan? plan = null;
         await ExecuteAsync("Installing", async ct =>
-        { var instance = FindInstance(instanceId); var prepared = await PrepareInstanceAsync(instance, ct).ConfigureAwait(false); plan = await PlanAsync(instance, prepared.Game, prepared.Java, ct).ConfigureAwait(false); }, cancellationToken).ConfigureAwait(false);
+        {
+            var instance = FindInstance(instanceId); var prepared = await PrepareInstanceAsync(instance, ct).ConfigureAwait(false);
+            var original = await PlanAsync(instance, prepared.Game, prepared.Java, ct).ConfigureAwait(false);
+            using var protection = ProtectPlan(original);
+            plan = protection?.Plan ?? original;
+        }, cancellationToken).ConfigureAwait(false);
         return plan!;
     }
     private async Task<LaunchPlan> PlanAsync(GameInstance instance, InstalledGame installed, JavaInstallation java, CancellationToken ct)
     {
         var account = Snapshot.Accounts.FirstOrDefault(a => a.Id == Snapshot.SelectedAccountId) ?? throw new InvalidOperationException("请先选择账户或添加本地离线测试档案。");
+        if (account.Kind != AccountKind.Offline && javaBootstrap is null)
+            throw new InvalidOperationException("此构建缺少受信Java引导，已拒绝将真实账户凭据放入命令行。请使用完整候选包。");
         LaunchIdentity identity;
         if (account.Kind == AccountKind.Offline) identity = new(account.DisplayName, account.PlayerUuid, "0");
         else
@@ -203,6 +230,12 @@ public sealed class LauncherService : ILauncherService
             installed.LibrariesDirectory, installed.AssetsDirectory, installed.NativesDirectory, installed.ClientJar,
             installed.Assets.Id, instance.MemoryMiB ?? Snapshot.Settings.MemoryMiB, installed.LegacyExtractions, TemporaryDirectory: temporary));
     }
+    private ProtectedJavaLaunch? ProtectPlan(LaunchPlan original)
+    {
+        if (javaBootstrap is null) return null; // Offline-only fixtures remain runnable without a packaged helper.
+        var token = Snapshot.SelectedAccountId is { } id && sessions.TryGetValue(id, out var session) ? session.AccessToken : null;
+        return ProtectedJavaLaunch.Prepare(original, javaBootstrap, Snapshot.Platform.MinecraftOS == "windows" ? ';' : ':', token);
+    }
     public Task LaunchAsync(string instanceId, string serverId = "none", CancellationToken cancellationToken = default) => ExecuteAsync("Launching", async ct =>
     {
         if (game is not null && !game.Completion.IsCompleted) throw new InvalidOperationException("已有本启动器创建的游戏在运行。");
@@ -210,13 +243,15 @@ public sealed class LauncherService : ILauncherService
         if (serverId != "none") throw new PlatformNotSupportedException("当前候选先验证只启动游戏；真实账户/社团服联机门禁尚未通过。");
         var instance = FindInstance(instanceId);
         var prepared = await PrepareInstanceAsync(instance, ct).ConfigureAwait(false);
-        var plan = await PlanAsync(instance, prepared.Game, prepared.Java, ct).ConfigureAwait(false);
+        var original = await PlanAsync(instance, prepared.Game, prepared.Java, ct).ConfigureAwait(false);
+        using var protection = ProtectPlan(original);
+        var plan = protection?.Plan ?? original;
         var reportPath = SafePath.Within(Paths.LogsDirectory, "launch-plan-redacted.json");
         await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(plan.ToRedactedReport(), ConfigurationStore.JsonOptions), ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
         var collector = new ProcessLogCollector((error, line) => Log(error ? "GameError" : "Game", line));
         var process = await platform.Processes.StartAsync(new(plan.JavaExecutable, plan.Arguments, plan.WorkingDirectory, plan.EnvironmentOverrides,
-            OutputLimitCharacters: 4 * 1024 * 1024), new InlineProgress<ProcessOutput>(collector.Report), lifetime.Token).ConfigureAwait(false);
+            OutputLimitCharacters: 4 * 1024 * 1024, SensitiveInput: protection?.Input), new InlineProgress<ProcessOutput>(collector.Report), lifetime.Token).ConfigureAwait(false);
         lock (sync) game = process;
         Set(s => s with { State = "Running", GameProcessId = process.ProcessId });
         Log("Info", "已启动本次Java游戏进程，PID=" + process.ProcessId + "；主菜单仍需独立真实观察。");

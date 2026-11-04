@@ -20,6 +20,8 @@ $identity = & (Join-Path $PSScriptRoot 'Get-BuildIdentity.ps1') -RuntimeIdentifi
 $entry = Join-Path $repo 'src/SHOU.Launcher.Desktop/SHOU.Launcher.Desktop.csproj'
 $props = @('-p:UseArtifactsOutput=true', "-p:ArtifactsPath=$build", "-p:Configuration=$Configuration", "-p:RuntimeIdentifier=$RuntimeIdentifier", '-p:SelfContained=true', '-p:UseSharedCompilation=false', '-p:PublishSingleFile=false','-p:IncludeNativeLibrariesForSelfExtract=false','-p:PublishTrimmed=false','-p:PublishAot=false','-p:UseAppHost=true')
 $projects = @($entry, (Join-Path $repo 'src/SHOU.Launcher.Core/SHOU.Launcher.Core.csproj'), (Join-Path $repo 'src/SHOU.Launcher.Generators/SHOU.Launcher.Generators.csproj'))
+$bootstrap=New-ConduitJavaBootstrap $repo $build
+$props+=@("-p:JavaBootstrapJarPath=$($bootstrap.path)","-p:JavaBootstrapSha256=$($bootstrap.sha256)")
 Push-Location $repo
 try {
     Invoke-ConduitBuildEnvironment -Repo $repo -EnvFile $EnvFile -Action {
@@ -36,7 +38,8 @@ try {
         $info = [ordered]@{ entry='Avalonia Desktop'; version=$identity.Version; codename=$identity.Codename; label=$identity.Label; source_sha=$env:PCL_GITHUB_SHA; source_dirty=$dirty;
             sdk=(& $Dotnet --version); avalonia='12.1.5'; runtime=$RuntimeIdentifier; configuration=$Configuration; self_contained=$true;
             configuration_owner='SHOU.Launcher.Core.dll'; configuration_sources=$inputConfig.Sources; credential_verification=$check;
-            signing='local candidate; not notarized'; windows_default='legacy WPF'; built_at=[DateTimeOffset]::UtcNow.ToString('o') }
+            java_bootstrap=@{sha256=$bootstrap.sha256;source_sha256=$bootstrap.source_sha256;compiler=$bootstrap.compiler;target_class_version=52;transport='private stdin'};
+            signing=$(if($RuntimeIdentifier -eq 'osx-arm64'){'ad-hoc local candidate; not notarized'}else{'unsigned local candidate'}); windows_default='legacy WPF'; built_at=[DateTimeOffset]::UtcNow.ToString('o') }
         Copy-Item -LiteralPath (Join-Path $repo 'LICENSE'),(Join-Path $repo 'Plain Craft Launcher 2/LICENCE') -Destination $publish
         Copy-Item -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/metadata.json') -Destination (Join-Path $publish 'THIRD-PARTY-METADATA.json')
         & (Join-Path $PSScriptRoot 'Collect-DesktopLicenses.ps1') -PublishDirectory $publish

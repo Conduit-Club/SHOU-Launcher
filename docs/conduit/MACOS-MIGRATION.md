@@ -57,3 +57,15 @@ Core集成83/83及新增官方1.21.1回归后的86/86均实测通过，0警告0�
 首轮B07的A包已完成真实owner检查，但正常restore将Core/生成器锁文件从无RID改为win-x64目标，源码指纹检查正确拒绝该轮，未继续把它记为三步通过。保留原ArtifactsRoot与A归档，没有删除obj。新SHOU工程统一声明osx-arm64/win-x64/win-arm64及仅供可移植测试的linux-x64恢复目标；五份锁文件现在均含同一目标集合，避免切换入口/RID时再改写源码锁文件。产品Publish仍只接受Windows/macOS三RID，Linux没有产品宿主支持声明。
 
 修正后Core89通过/1项在线opt-in跳过，Headless26/26通过，均0警告/错误；独立TRX保存于reports/night/P0-GATES。UI B3单文件增量已按hash整合，Application.Name在XAML加载前来自真实metadata/provider，未手写品牌默认值；worker和集成各26项，数量不累加。下一条实际动作是从新干净本地检查点，以原B07中间根和新的fixture输出目录重跑完整A→B→none。
+
+## B07 通过与 P1 接线（2026-11-05 02:55 SGT）
+
+B07完整三步已在`69080e24c9b14f90f53e4d03e98ab7b52ba9e918`实测通过，A/B/none使用同一Desktop、Release、win-x64、同一有效中间根及完全相同源码指纹`f966185089ea73d79d7b53850163f7c87efc871a4a4ab0d1dd0813f41d771a40`。三份实际owner只含对应本轮假配置、none不含A/B，环境精确还原。失败阶段保留原ArtifactsRoot；固定RID目标后SDK使用稳定RID pivot，正式三步没有人为清空或逐次更换obj。报告在`reports/night/B07/stable`，其归档明确仅为配置fixture。
+
+同一干净SHA的真实配置Windows x64与ARM64候选均已生成于`dist/N1/Desktop/Release/<RID>/default`，附SHA-256/BUILD-INFO；实际publish与最终owner均校验通过，Windows真机仍BLOCKED。Mac30fa最终归档的独立进程凭据write/read/delete三步全部PASS（仅唯一隔离假key），不表示跨版本签名连续性通过。
+
+P1已把目标main与全部game args移到受控anonymous stdin。随包Java bootstrap以Java8字节码运行在原main线程，JVM公开argv不含游戏凭据；不用argfile、明文参数文件或raw-argv降级。Java helper由统一构建使用注册JDK编译、hash作为Desktop元数据/嵌入资源身份；初始化获lease后校验并原子提取到缓存，运行时不需要javac。没有helper的真实账户启动明确拒绝。主编排/共享DTO/资源构建由主亲写；平台B6传输/protocol五文件精确patch整合，10项真实Java与传输专项通过。
+
+现代Fabric0.16.14+1.21.1已接生产接口、现有Loader来源fallback、metadata继承与Maven校验；六库采用官方profile声明的SHA1/size，另外两库按来源顺序获取checksum sidecar。UI提供原版/Fabric选择并显示loader，未知loader明确拒绝。既有DownloadSources/ModDownloadSources及CF凭据host边界测试直接复用，无旧WPF/PCL.Core程序集引用。
+
+P1完整Core127通过、1项默认在线opt-in跳过；首轮只有路径负例断言类型错误，生产拒绝行为正确，测试修正后通过。集成Headless28/28通过。平台只读复审指出helper类可被前置库遮蔽及等号classpath覆盖，主已修为受信helper首位并拒绝替代入口/路径形式；后续五项保护回归通过，含真实JVM同名恶意类负例。详细报告在`reports/night/P1`。JDK21编译release8产生三条目标过时兼容提示，与.NET0警告分开记录。下一步是P1正式候选包及从最终归档执行保护后的原版/Fabric安装与进程验证；当前不预报主菜单通过。

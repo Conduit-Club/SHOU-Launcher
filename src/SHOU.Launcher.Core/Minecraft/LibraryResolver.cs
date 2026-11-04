@@ -34,7 +34,7 @@ public static class LibraryResolver
             {
                 var path = MavenPath(name);
                 var url = new Uri(((string?)lib["url"] ?? "https://libraries.minecraft.net/").TrimEnd('/') + "/" + path);
-                files.Add(new(name, path, url, null, null)); classpath.Add(path);
+                files.Add(new(name, path, url, (string?)lib["sha1"], (long?)lib["size"])); classpath.Add(path);
             }
             if (lib["natives"] is JsonObject natives && (string?)natives[context.OSName] is { } template)
             {

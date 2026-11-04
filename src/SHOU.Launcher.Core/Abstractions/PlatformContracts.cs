@@ -50,7 +50,11 @@ public interface ICredentialStore
 }
 public sealed record ProcessSpec(string FileName, IReadOnlyList<string> Arguments, string WorkingDirectory,
     IReadOnlyDictionary<string, string?>? EnvironmentOverrides = null, TimeSpan? Timeout = null,
-    int OutputLimitCharacters = 1048576);
+    int OutputLimitCharacters = 1048576,
+    [property: System.Text.Json.Serialization.JsonIgnore] SensitiveProcessInput? SensitiveInput = null)
+{
+    public override string ToString() => "ProcessSpec [arguments/environment redacted; sensitive stdin=" + (SensitiveInput is not null) + "]";
+}
 public sealed record ProcessOutput(DateTimeOffset Timestamp, bool IsStandardError, string Text);
 public sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError,
     bool TimedOut = false, bool Cancelled = false, bool OutputTruncated = false);

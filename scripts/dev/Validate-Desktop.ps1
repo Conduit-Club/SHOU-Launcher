@@ -10,6 +10,10 @@ $entry=Join-Path $repo $EntryProject
 $report=Join-Path $build 'reports'
 $null=New-Item -ItemType Directory -Path $report -Force
 $props=@('-p:UseArtifactsOutput=true',"-p:ArtifactsPath=$build","-p:Configuration=$Configuration","-p:RuntimeIdentifier=$RuntimeIdentifier",'-p:UseSharedCompilation=false')
+if($EntryProject -ne 'src/SHOU.Launcher.Core/SHOU.Launcher.Core.csproj') {
+    $bootstrap=New-ConduitJavaBootstrap $repo $build
+    $props+=@("-p:JavaBootstrapJarPath=$($bootstrap.path)","-p:JavaBootstrapSha256=$($bootstrap.sha256)")
+}
 $projects=@($entry,(Join-Path $repo 'src/SHOU.Launcher.Core/SHOU.Launcher.Core.csproj'),(Join-Path $repo 'src/SHOU.Launcher.Desktop/SHOU.Launcher.Desktop.csproj'),(Join-Path $repo 'src/SHOU.Launcher.Generators/SHOU.Launcher.Generators.csproj')) | Select-Object -Unique
 Assert-ConduitProjectPaths $Dotnet $projects $props (Join-Path $report 'paths.json')
 Invoke-ConduitDotnet $Dotnet (@('restore',$entry) + $props) (Join-Path $report 'restore.log')

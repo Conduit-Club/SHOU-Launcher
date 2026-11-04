@@ -83,7 +83,7 @@ public static class LaunchPlanBuilder
         // Do not copy argv into diagnostics. Extra JVM arguments may contain secrets unknown to identity redaction.
         return new(input.Java.ExecutablePath, input.Java.RuntimeArchitecture, Path.GetFullPath(input.GameDirectory), argv,
             environment, classpath,
-            resolved.Files.Select(f => SafePath.Within(input.LibrariesDirectory, f.RelativePath)).ToArray(), input.LegacyExtractions ?? [], diagnostics);
+            resolved.Files.Select(f => SafePath.Within(input.LibrariesDirectory, f.RelativePath)).ToArray(), input.LegacyExtractions ?? [], diagnostics, MainClassIndex: jvm.Count);
     }
     private static string RedactArgument(string argument, LaunchIdentity identity)
     {

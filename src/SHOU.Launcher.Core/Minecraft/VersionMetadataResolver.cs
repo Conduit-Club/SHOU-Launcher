@@ -72,7 +72,7 @@ public sealed class VersionMetadataResolver(HttpClient http, IVerifiedDownloader
                 return ParseVersion(await File.ReadAllTextAsync(path, ct).ConfigureAwait(false), id);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or AggregateException or KeyNotFoundException or OperationCanceledException or System.Text.Json.JsonException or FormatException)
+            catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or AggregateException or KeyNotFoundException or OperationCanceledException or System.Text.Json.JsonException or FormatException)
             { errors.Add(new IOException($"Metadata source {source.Name}: {ex.GetType().Name}")); }
         }
         throw new AggregateException($"No metadata source can provide {id}.", errors);

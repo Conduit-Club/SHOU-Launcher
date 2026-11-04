@@ -33,10 +33,7 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
             var sha1 = file.Sha1;
             if (string.IsNullOrWhiteSpace(sha1))
             {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token); timeout.CancelAfter(TimeSpan.FromSeconds(20));
-                var sidecar = (await http.GetStringAsync(new Uri(file.Url.AbsoluteUri + ".sha1"), timeout.Token).ConfigureAwait(false)).Trim();
-                sha1 = sidecar.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                if (sha1?.Length != 40 || sha1.Any(c => !Uri.IsHexDigit(c))) throw new InvalidDataException("Library does not provide a usable SHA-1 checksum: " + file.Name);
+                sha1 = await ReadChecksumAsync(file.Url, token).ConfigureAwait(false);
             }
             await downloader.DownloadAsync(new(Map(file.Url), path, sha1, Size: file.Size), progress, token).ConfigureAwait(false);
         }).ConfigureAwait(false);
@@ -66,6 +63,26 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
         return new(version, libraries, assets, clientPath, librariesDirectory, assetsDirectory, nativesDirectory, extracted);
     }
     private IReadOnlyList<Uri> Map(Uri uri) => DownloadSources.Resolve([uri.AbsoluteUri], sources()).Select(s => new Uri(s.Url)).ToArray();
+    private async Task<string> ReadChecksumAsync(Uri artifact, CancellationToken ct)
+    {
+        var errors = new List<Exception>();
+        var checksumUri = new UriBuilder(artifact); checksumUri.Path += ".sha1";
+        foreach (var uri in Map(checksumUri.Uri))
+        {
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(20));
+                var text = (await http.GetStringAsync(uri, timeout.Token).ConfigureAwait(false)).Trim();
+                var checksum = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
+                if (checksum?.Length != 40 || checksum.Any(c => !Uri.IsHexDigit(c))) throw new InvalidDataException("Library checksum sidecar is invalid.");
+                return checksum.ToLowerInvariant();
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception error) when (error is HttpRequestException or InvalidDataException or IOException or OperationCanceledException)
+            { errors.Add(new IOException("Library checksum source failed: " + error.GetType().Name)); }
+        }
+        throw new AggregateException("No configured source supplied a usable library checksum.", errors);
+    }
     private Task FetchDescriptorAsync(JsonObject file, string destination, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         var url = (string?)file["url"] ?? throw new InvalidDataException("Download descriptor URL missing.");

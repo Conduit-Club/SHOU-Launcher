@@ -29,6 +29,55 @@ function Assert-ConduitHeavyGate {
     $owner = Get-Content -Raw -LiteralPath (Join-Path $env:SHOU_DEV_ROOT 'state/heavy-owner.json') | ConvertFrom-Json
     if ($owner.worker -ne $env:SHOU_WORKER) { throw 'Heavy task owner mismatch.' }
 }
+function New-ConduitJavaBootstrap([string]$Repo,[string]$BuildRoot) {
+    Assert-ConduitHeavyGate
+    $build=Assert-ConduitTaskPath $BuildRoot
+    $source=@(Get-ChildItem -LiteralPath (Join-Path $Repo 'src/SHOU.Launcher.Core/Java/Bootstrap') -Filter '*.java' -File | Sort-Object Name)
+    if(-not $source.Count){throw 'Trusted Java bootstrap source is missing.'}
+    $registry=Get-Content -Raw -LiteralPath (Join-Path $env:SHOU_DEV_ROOT 'control/tools.json') | ConvertFrom-Json
+    $suffix=if($IsWindows){'.exe'}else{''}
+    if($registry.java.path) {
+        $compiler=Get-ChildItem -LiteralPath $registry.java.path -Filter ('javac'+$suffix) -File -Recurse | Select-Object -First 1
+        if(-not $compiler){throw 'Registered Java compiler is unavailable; no system JDK change will be attempted.'}
+        $javac=$compiler.FullName
+    } elseif($env:GITHUB_ACTIONS -eq 'true') {$javac=(Get-Command ('javac'+$suffix) -ErrorAction Stop).Source}
+    else {throw 'A registered Java compiler is required for the trusted bootstrap.'}
+    $jar=Join-Path (Split-Path $javac) ('jar'+$suffix)
+    if(-not (Test-Path -LiteralPath $jar -PathType Leaf)){throw 'Registered jar tool is missing.'}
+    $saved=@{}
+    foreach($name in (@((Get-ChildItem Env:PCL_*).Name)+@('CURSEFORGE_API_KEY','CURSEFORGE_API') | Select-Object -Unique)){
+        $saved[$name]=[Environment]::GetEnvironmentVariable($name,'Process')
+        Remove-Item -LiteralPath ('Env:'+$name) -ErrorAction SilentlyContinue
+    }
+    try {
+        $version=(& $javac '-J-XX:-UsePerfData' "-J-Djava.io.tmpdir=$env:TMPDIR" --version) -join "`n"
+        if($LASTEXITCODE -ne 0){throw 'Cannot read Java compiler version.'}
+        $fingerprint=(@($source | ForEach-Object {$_.Name+':'+(Get-FileHash $_.FullName -Algorithm SHA256).Hash})+@($version))-join "`n"
+        $sourceHash=[Convert]::ToHexStringLower([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($fingerprint)))
+        $root=Assert-ConduitTaskPath (Join-Path $build ('java-bootstrap/'+$sourceHash))
+        $classes=Join-Path $root 'classes';$null=New-Item -ItemType Directory -Path $classes -Force
+        $target=Join-Path $root 'bootstrap.jar'
+        $record=Join-Path $root 'build.json'
+        if(Test-Path -LiteralPath $record) {
+            $previous=Get-Content -Raw -LiteralPath $record | ConvertFrom-Json
+            if((Test-Path -LiteralPath $target) -and (Get-FileHash $target -Algorithm SHA256).Hash.ToLowerInvariant() -eq $previous.sha256){return $previous}
+            throw 'Cached trusted Java bootstrap changed; use another registered build job.'
+        }
+        $arguments=@('-J-XX:-UsePerfData',"-J-Djava.io.tmpdir=$env:TMPDIR",'--release','8','-encoding','UTF-8','-g:none','-proc:none','-d',$classes)+@($source.FullName)
+        & $javac @arguments
+        if($LASTEXITCODE -ne 0){throw 'Trusted Java bootstrap compilation failed.'}
+        & $jar '-J-XX:-UsePerfData' "-J-Djava.io.tmpdir=$env:TMPDIR" --create --file $target --date=2000-01-01T00:00:00Z -C $classes org/shou/launcher/bootstrap
+        if($LASTEXITCODE -ne 0){throw 'Trusted Java bootstrap archive failed.'}
+        $info=[pscustomobject]@{path=$target;sha256=(Get-FileHash $target -Algorithm SHA256).Hash.ToLowerInvariant();source_sha256=$sourceHash;compiler=$version;target_class_version=52;entry='org.shou.launcher.bootstrap.BootstrapMain'}
+        $info | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $record -Encoding utf8
+        return $info
+    } finally {
+        foreach($name in $saved.Keys){
+            if($null -eq $saved[$name]){Remove-Item -LiteralPath ('Env:'+$name) -ErrorAction SilentlyContinue}
+            else{[Environment]::SetEnvironmentVariable($name,$saved[$name],'Process')}
+        }
+    }
+}
 function Get-ConduitBuildInput([string]$Repo, [string]$EnvFile = '.env') {
     $path = if ([IO.Path]::IsPathRooted($EnvFile)) { $EnvFile } else { Join-Path $Repo $EnvFile }
     if ($EnvFile -ne '.env' -and -not (Test-Path -LiteralPath $path -PathType Leaf)) { throw 'Explicit EnvFile is not readable.' }
