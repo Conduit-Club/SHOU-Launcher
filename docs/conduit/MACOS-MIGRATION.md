@@ -69,3 +69,16 @@ P1已把目标main与全部game args移到受控anonymous stdin。随包Java boo
 现代Fabric0.16.14+1.21.1已接生产接口、现有Loader来源fallback、metadata继承与Maven校验；六库采用官方profile声明的SHA1/size，另外两库按来源顺序获取checksum sidecar。UI提供原版/Fabric选择并显示loader，未知loader明确拒绝。既有DownloadSources/ModDownloadSources及CF凭据host边界测试直接复用，无旧WPF/PCL.Core程序集引用。
 
 P1完整Core127通过、1项默认在线opt-in跳过；首轮只有路径负例断言类型错误，生产拒绝行为正确，测试修正后通过。集成Headless28/28通过。平台只读复审指出helper类可被前置库遮蔽及等号classpath覆盖，主已修为受信helper首位并拒绝替代入口/路径形式；后续五项保护回归通过，含真实JVM同名恶意类负例。详细报告在`reports/night/P1`。JDK21编译release8产生三条目标过时兼容提示，与.NET0警告分开记录。下一步是P1正式候选包及从最终归档执行保护后的原版/Fabric安装与进程验证；当前不预报主菜单通过。
+
+
+## N2/N3 候选与边界验证（2026-11-05）
+
+N2从干净的`853c41e28dd346a4598019b81f7e1f7e273e0ed1`经统一入口生成同一Desktop的Mac ARM64 Beta/Release、Windows x64/ARM64四份候选，BUILD-INFO与SHA-256随包。Mac Release由最终zip重新ditto解包后严格验签；移除构建变量及SDK/pwsh PATH后的diagnostics、同一产物Keychain假键跨进程write/read/delete、真实原版1.21.1与Fabric0.16.14安装/计划全部exit0，证据在`reports/night/N2`。
+
+两种真实Java游戏进程均通过私有stdin引导至游戏渲染/音频初始化，实际OS argv/HotSpot检查不含游戏凭据参数，ARM64由活进程os.arch与加载native佐证。Fabric首轮检查器把官方profile公开的`-DFabricMcEmu= net.minecraft.client.main.Main`误判为实际KnotClient泄漏；首轮FAIL保留，修正为检查所选target后重跑PASS，产品未为此改动。60秒观察上限由启动器停止进程，命令exit1，不能算正常Quit或L4。CUA无Java/Minecraft绑定，显示条件与原生AvaloniaRenderTimer阻塞仍单列；未宣称可交互主菜单。
+
+N3顺序应用UI `90c9706`和platform `de23f5d`的精确增量：联机后端尚未实现，所有非none目的地均禁用启动；aria2仅支持本机RPC，界面与真实Core一致。通用Java保护断言与Mac OS argv专项分开，避免其他OS整项skip。CI固定Temurin21并在临时任务根登记同一JDK别名，wrapper注入JAVA_HOME，helper不再回退系统javac；setup-java Maven输出也在runner.temp，空间计量跳过POSIX链接与Windows reparse。仅本机CI工具注册/alias/gate/编译fixture通过，Actions未运行。
+
+吾亲写的下载修复把aria2输出、控制sidecar、cache命中纳入路径门禁与独占锁，单次捕获网络配置；无哈希目录走内部新请求。内部下载在HTTP await之后、任何截断前复查路径，resume以CreateNew临时文件原子替换，新写来源身份为URL摘要且兼容旧明文身份。阻塞真实HTTP期间替换.part或.resume链接的负例保护独立fixture字节不变。此边界不等同于抵御拥有目录写权限的恶意进程所有原子级双重TOCTOU。RPC是本地协议fixture，未冒充真实aria2二进制。
+
+集成全量Core最终137 passed、1显式OnlineJava opt-in skipped、0 failed；Headless30/30通过，.NET编译零警告/错误。Java8兼容helper由Java21编译仍有3条目标8过时提示，未隐去。不可变TRX、真实命令/退出码与两次worker只读审查在`reports/night/N3`及各handoff目录。后续进入受控Java trust派生副本；绝不原地修复官方runtime后继续宣称原manifest不变。

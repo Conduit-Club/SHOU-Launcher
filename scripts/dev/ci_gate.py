@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import subprocess
 import sys
 
@@ -22,13 +23,16 @@ def space_decision(free, used, peak, reserve_gib=20):
     return 'PASS'
 
 def tree_bytes(root):
+    def is_link(path):
+        info = path.lstat()
+        return stat.S_ISLNK(info.st_mode) or bool(getattr(info, 'st_file_attributes', 0) & 0x400)
     total = 0
     for folder, directories, files in os.walk(root, followlinks=False):
-        directories[:] = [d for d in directories if not (Path(folder) / d).is_symlink()]
+        directories[:] = [d for d in directories if not is_link(Path(folder) / d)]
         for name in files:
             path = Path(folder) / name
             try:
-                if not path.is_symlink():
+                if not is_link(path):
                     total += path.stat().st_size
             except FileNotFoundError:
                 pass
@@ -50,6 +54,13 @@ def main():
     policy = json.loads((root / 'control/resource-policy.json').read_text())
     if policy.get('profile') != 'ephemeral-github-standard' or policy.get('reserve_gib') != 8 or policy.get('stop_free_gib') != 10:
         raise ValueError('Unregistered ephemeral runner policy')
+    registry = json.loads((root / 'control/tools.json').read_text())
+    java_home = Path(registry['java']['home'])
+    if not java_home.is_absolute() or not java_home.is_dir():
+        raise ValueError('The selected CI Java home is unavailable')
+    suffix = '.exe' if os.name == 'nt' else ''
+    if any(not (java_home / 'bin' / (tool + suffix)).is_file() for tool in ['java', 'javac', 'jar', 'jcmd']):
+        raise ValueError('The registered CI JDK is incomplete')
     checkout = Path(os.environ['GITHUB_WORKSPACE']).resolve(strict=True)
     cwd = args.cwd.resolve(strict=True)
     if cwd != checkout or not re.fullmatch(r'[A-Za-z0-9_.-]+', args.job) or args.job in ['.', '..'] or not 0 < args.peak_gib <= 35:
@@ -86,6 +97,8 @@ def main():
         environment = dict(os.environ)
         environment['SHOU_WORKER'] = args.worker
         environment['SHOU_JOB_ID'] = args.job
+        # Preserve the registered alias spelling for tests and use the same JDK for bootstrap compilation.
+        environment['JAVA_HOME'] = str(java_home)
         mapping = {'DOTNET_CLI_HOME': root / 'state/cli-home' / args.worker,
             'TMPDIR': root / 'tmp' / args.worker / args.job,
             'NUGET_PACKAGES': root / 'cache/nuget/packages',

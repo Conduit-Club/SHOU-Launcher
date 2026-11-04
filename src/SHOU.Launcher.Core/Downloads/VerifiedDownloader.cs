@@ -46,7 +46,7 @@ public sealed class VerifiedDownloader(HttpClient http) : IVerifiedDownloader
                         if (!valid)
                         {
                             // This is owned, reproducible staging, never an installed file.
-                            using (File.Create(destination + ".part")) { }
+                            using (OpenPart(destination + ".part", false)) { }
                             throw new InvalidDataException("Downloaded file failed size/hash verification.");
                         }
                         File.Move(destination + ".part", destination, true);
@@ -65,13 +65,56 @@ public sealed class VerifiedDownloader(HttpClient http) : IVerifiedDownloader
         }
         finally { gate.Release(); }
     }
-    private static void RejectLink(string path)
+    internal static void RejectLink(string path)
     {
+        var full = Path.GetFullPath(path);
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!IO.SafePath.Canonical(full).Equals(full, comparison))
+            throw new IOException("Download output must not traverse symbolic links/reparse points.");
         var info = new FileInfo(path);
         if (info.LinkTarget is not null || (info.Exists && (info.Attributes & FileAttributes.ReparsePoint) != 0))
             throw new IOException("Download destination or staging sidecar must not be a symbolic link/reparse point.");
     }
     private sealed record ResumeIdentity(string Url, string? ETag);
+    private static FileStream OpenPart(string path, bool append)
+    {
+        RejectLink(path);
+        FileStream stream;
+        try { stream = new(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, true); }
+        catch (IOException) when (File.Exists(path))
+        {
+            RejectLink(path);
+            // Open does not truncate an existing target. Validate again before any mutation.
+            stream = new(path, FileMode.Open, FileAccess.Write, FileShare.None, 131072, true);
+        }
+        try
+        {
+            RejectLink(path);
+            if (append) stream.Position = stream.Length;
+            else stream.SetLength(0);
+            return stream;
+        }
+        catch { stream.Dispose(); throw; }
+    }
+    private static async Task WriteResumeAsync(string path, ResumeIdentity identity, CancellationToken ct)
+    {
+        RejectLink(path);
+        var temporary = path + ".write-" + Guid.NewGuid().ToString("N");
+        var owned = false;
+        try
+        {
+            RejectLink(temporary);
+            await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, true))
+            {
+                owned = true;
+                await JsonSerializer.SerializeAsync(stream, identity, cancellationToken: ct).ConfigureAwait(false);
+                await stream.FlushAsync(ct).ConfigureAwait(false);
+            }
+            RejectLink(path); RejectLink(temporary);
+            File.Move(temporary, path, true);
+        }
+        finally { if (owned && File.Exists(temporary)) File.Delete(temporary); }
+    }
     private async Task DownloadOneAsync(Uri uri, string destination, DownloadRequest request, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         var part = destination + ".part";
@@ -84,7 +127,10 @@ public sealed class VerifiedDownloader(HttpClient http) : IVerifiedDownloader
             catch (JsonException) { /* Invalid staging identity starts a new transfer. */ }
         }
         var hasHash = !string.IsNullOrEmpty(request.Sha1) || !string.IsNullOrEmpty(request.Sha256);
-        var offset = request.AllowResume && hasHash && identity?.Url == uri.AbsoluteUri && File.Exists(part) ? new FileInfo(part).Length : 0;
+        var sourceIdentity = "sha256:" + Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(uri.AbsoluteUri)));
+        // Accept an existing pre-migration identity, then rewrite it without signed/query URL text.
+        var sameSource = identity?.Url == sourceIdentity || identity?.Url == uri.AbsoluteUri;
+        var offset = request.AllowResume && hasHash && sameSource && File.Exists(part) ? new FileInfo(part).Length : 0;
         if (request.Size is { } size && offset > size) offset = 0;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromMinutes(3));
@@ -95,9 +141,12 @@ public sealed class VerifiedDownloader(HttpClient http) : IVerifiedDownloader
             if (identity?.ETag is { } etag && EntityTagHeaderValue.TryParse(etag, out var parsed)) message.Headers.IfRange = new RangeConditionHeaderValue(parsed);
         }
         using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+        // A network await is a real opportunity for another writer to replace staging paths.
+        // Check again before range resets, sidecar writes or opening a writable stream.
+        RejectLink(part); RejectLink(resumePath);
         if (response.StatusCode == HttpStatusCode.RequestedRangeNotSatisfiable)
         {
-            using (File.Create(part)) { }
+            using (OpenPart(part, false)) { }
             throw new IOException("Range is no longer valid; staging reset for next attempt.");
         }
         response.EnsureSuccessStatusCode();
@@ -105,13 +154,13 @@ public sealed class VerifiedDownloader(HttpClient http) : IVerifiedDownloader
         {
             if (response.Content.Headers.ContentRange?.From != offset || (request.Size is { } expected && response.Content.Headers.ContentRange?.Length is { } total && expected != total))
             {
-                using (File.Create(part)) { }
+                using (OpenPart(part, false)) { }
                 throw new IOException("Invalid resume range.");
             }
         }
         else offset = 0; // A server ignoring Range returned a whole file; truncate first.
-        await File.WriteAllTextAsync(resumePath, JsonSerializer.Serialize(new ResumeIdentity(uri.AbsoluteUri, response.Headers.ETag?.ToString())), ct).ConfigureAwait(false);
-        await using var output = new FileStream(part, offset > 0 ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, 131072, true);
+        await WriteResumeAsync(resumePath, new(sourceIdentity, response.Headers.ETag?.ToString()), timeout.Token).ConfigureAwait(false);
+        await using var output = OpenPart(part, offset > 0);
         await using var input = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
         var bytes = offset;
         var totalBytes = request.Size ?? (response.Content.Headers.ContentLength is { } len ? len + offset : null);
@@ -131,6 +180,7 @@ public sealed class VerifiedDownloader(HttpClient http) : IVerifiedDownloader
     }
     public static async Task<bool> IsValidAsync(string path, DownloadRequest request, CancellationToken ct = default)
     {
+        RejectLink(path);
         if (!File.Exists(path)) return false;
         if (request.Size is { } length && new FileInfo(path).Length != length) return false;
         if (request.Sha1 is null && request.Sha256 is null) return false; // Unhashed catalogs are fetched fresh.

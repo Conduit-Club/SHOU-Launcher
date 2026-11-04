@@ -70,7 +70,7 @@ public sealed class SettingsPageViewModel : PageViewModel
         catch (JsonException) { Owner.ShowError("下载源 JSON 格式无效；请修正后保存。"); return; }
         if (IsCustomProxy && !IsHttpEndpoint(ProxyAddress)) { Owner.ShowError("自定义代理需要有效的 HTTP/HTTPS 地址；凭据请填入独立密钥字段。"); return; }
         if (ProxySecret.Length > 0 && !ProxySecret.Contains(':')) { Owner.ShowError("代理凭据须使用 username:password 格式，不会以明文保存。"); return; }
-        if (Aria2Enabled && !IsHttpEndpoint(Aria2Endpoint)) { Owner.ShowError("aria2 RPC 地址需要有效的 HTTP/HTTPS URL，不能包含明文凭据。"); return; }
+        if (Aria2Enabled && !IsLocalAria2Endpoint(Aria2Endpoint)) { Owner.ShowError("本候选仅支持本机 aria2 RPC（localhost、127.0.0.1 或 ::1），尚不支持远程 RPC；地址须为不含凭据、查询或片段的 HTTP/HTTPS URL。"); return; }
         if (ProxyMode == ProxyMode.System && !Service.Capabilities.SupportsSystemProxy) { Owner.ShowError("当前平台尚不支持系统代理，请明确选择直连或自定义代理。"); return; }
         var proxySecret = ProxySecret;
         var ariaSecret = Aria2Secret;
@@ -91,6 +91,9 @@ public sealed class SettingsPageViewModel : PageViewModel
         else Feedback = "保存未完成，请查看错误提示。已有密钥不会以明文保存或被空值覆盖。";
     }
     private static bool IsHttpEndpoint(string address) => Uri.TryCreate(address.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && string.IsNullOrEmpty(uri.UserInfo);
+    private static bool IsLocalAria2Endpoint(string address) => Uri.TryCreate(address.Trim(), UriKind.Absolute, out var uri)
+        && uri.Scheme is "http" or "https" && uri.IsLoopback && string.IsNullOrEmpty(uri.UserInfo)
+        && string.IsNullOrEmpty(uri.Query) && string.IsNullOrEmpty(uri.Fragment);
     private void Load(LauncherSettings settings)
     {
         _loading = true;

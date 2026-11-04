@@ -36,12 +36,14 @@ function New-ConduitJavaBootstrap([string]$Repo,[string]$BuildRoot) {
     if(-not $source.Count){throw 'Trusted Java bootstrap source is missing.'}
     $registry=Get-Content -Raw -LiteralPath (Join-Path $env:SHOU_DEV_ROOT 'control/tools.json') | ConvertFrom-Json
     $suffix=if($IsWindows){'.exe'}else{''}
-    if($registry.java.path) {
+    if($registry.java.home) {
+        $javac=Join-Path $registry.java.home ('bin/javac'+$suffix)
+        if(-not (Test-Path -LiteralPath $javac -PathType Leaf)){throw 'Registered Java compiler is unavailable; no system JDK change will be attempted.'}
+    } elseif($registry.java.path) {
         $compiler=Get-ChildItem -LiteralPath $registry.java.path -Filter ('javac'+$suffix) -File -Recurse | Select-Object -First 1
         if(-not $compiler){throw 'Registered Java compiler is unavailable; no system JDK change will be attempted.'}
         $javac=$compiler.FullName
-    } elseif($env:GITHUB_ACTIONS -eq 'true') {$javac=(Get-Command ('javac'+$suffix) -ErrorAction Stop).Source}
-    else {throw 'A registered Java compiler is required for the trusted bootstrap.'}
+    } else {throw 'A registered Java compiler is required for the trusted bootstrap.'}
     $jar=Join-Path (Split-Path $javac) ('jar'+$suffix)
     if(-not (Test-Path -LiteralPath $jar -PathType Leaf)){throw 'Registered jar tool is missing.'}
     $saved=@{}
