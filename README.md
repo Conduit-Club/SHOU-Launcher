@@ -18,7 +18,7 @@
 
 ## 主要功能
 
-- Microsoft、MUA Union、LittleSkin 账户管理与角色切换。
+- Microsoft、MUA Union、LittleSkin 与离线账户管理和角色切换，可选微软正版 3D 皮肤与披风预览。
 - 社团首页、实景轮播与嘉然主题。
 - 游戏实例管理、社团入口选择与更新日志提醒。
 

@@ -499,6 +499,8 @@ public static partial class Config
     /// </summary>
     [ConfigGroup("Launch")] partial class LaunchConfigGroup
     {
+        [ConfigItem<bool>("ConduitSkinPreview3D", false, ConfigSource.Local)] public partial bool SkinPreview3D { get; set; }
+
         /// <summary>
         /// 内存分配模式。
         /// </summary>

@@ -44,15 +44,19 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Build Project
+        shell: pwsh
         env:
           PCL_WRITE_SECRET: '1'
           PCL_MS_CLIENT_ID: ${{ secrets.CLIENT_ID }}
           PCL_CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
           PCL_GITHUB_SHA: ${{ github.sha }}
+          BUILD_CONFIGURATION: ${{ inputs.configuration }}
+          BUILD_ARCHITECTURE: ${{ inputs.architecture }}
         run: |
-          dotnet publish "Plain Craft Launcher 2/Plain Craft Launcher 2.csproj" \
-          -p:Configuration=${{ inputs.configuration }} -p:Platform=${{ inputs.architecture }} \
-          -p:DeleteExistingFiles=true -o ./artifact --no-self-contained
+          dotnet publish "Plain Craft Launcher 2/Plain Craft Launcher 2.csproj" "-p:Configuration=$env:BUILD_CONFIGURATION" "-p:Platform=$env:BUILD_ARCHITECTURE" -p:UseSharedCompilation=false -p:DeleteExistingFiles=true -o ./artifact --no-self-contained
+          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed: $LASTEXITCODE" }
+          $coreAssembly = "PCL.Core/bin/${env:BUILD_CONFIGURATION}-${env:BUILD_ARCHITECTURE}/net10.0-windows/PCL.Core.dll"
+          ./scripts/conduit/Assert-ClientCredentials.ps1 -AssemblyPath $coreAssembly
 
       - name: Upload the Build Artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

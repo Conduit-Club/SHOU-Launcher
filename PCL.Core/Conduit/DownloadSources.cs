@@ -36,7 +36,7 @@ public static class DownloadSources
         new() { Name = "Mojang 官方", Category = SourceCategory.Minecraft, Layout = SourceLayout.Official, Priority = 200 },
         new() { Name = "BMCLAPI · 加载器", Category = SourceCategory.Loader, Layout = SourceLayout.Bmclapi, BaseUrl = BmclRoot, Priority = 0 },
         new() { Name = "加载器官方", Category = SourceCategory.Loader, Layout = SourceLayout.Official, Priority = 200 },
-        new() { Name = "Mod 官方", Category = SourceCategory.Mod, Layout = SourceLayout.Official, Priority = 200 },
+        new() { Name = "Mod 官方 · CurseForge / Modrinth", Category = SourceCategory.Mod, Layout = SourceLayout.Official, Priority = 0 },
         new() { Name = "MCIM · Modrinth API", Category = SourceCategory.Mod, OriginPrefix = "https://api.modrinth.com", BaseUrl = "https://mod.mcimirror.top/modrinth", Priority = 300 },
         new() { Name = "MCIM · CurseForge API", Category = SourceCategory.Mod, OriginPrefix = "https://api.curseforge.com", BaseUrl = "https://mod.mcimirror.top/curseforge", Priority = 300 },
         new() { Name = "MCIM · Modrinth 文件", Category = SourceCategory.Mod, OriginPrefix = "https://cdn.modrinth.com", BaseUrl = "https://mod.mcimirror.top", Priority = 300 },
@@ -84,6 +84,7 @@ public static class DownloadSources
 
     private static string Canonical(string url, IReadOnlyList<DownloadSource> sources)
     {
+        if (Matches(url, "https://mediafilez.forgecdn.net/files")) return ReplacePrefix(url, "https://mediafilez.forgecdn.net", "https://edge.forgecdn.net");
         if (Matches(url, "https://mod.mcimirror.top/files")) return ReplacePrefix(url, "https://mod.mcimirror.top", "https://edge.forgecdn.net");
         if (Matches(url, "https://mod.mcimirror.top/data")) return ReplacePrefix(url, "https://mod.mcimirror.top", "https://cdn.modrinth.com");
         foreach (var source in sources.Where(s => s.Layout == SourceLayout.Shou).Append(new DownloadSource { Layout = SourceLayout.Shou, BaseUrl = ShouRoot }))
