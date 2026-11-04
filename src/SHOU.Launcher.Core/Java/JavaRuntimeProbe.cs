@@ -16,8 +16,14 @@ public sealed partial class JavaRuntimeProbe(IProcessRunner processes, TimeSpan?
         if (!File.Exists(executable)) return Failure(executable, "NotFound", "Java 可执行文件不存在或不可访问。");
         try
         {
+            var environment = new Dictionary<string, string?>(StringComparer.OrdinalIgnoreCase);
+            foreach (string key in Environment.GetEnvironmentVariables().Keys)
+                if (key.StartsWith("PCL_", StringComparison.OrdinalIgnoreCase)
+                    || key.StartsWith("CURSEFORGE_", StringComparison.OrdinalIgnoreCase)
+                    || new[] { "JAVA_TOOL_OPTIONS", "_JAVA_OPTIONS", "JDK_JAVA_OPTIONS", "CLASSPATH", "JAVA_HOME" }.Contains(key, StringComparer.OrdinalIgnoreCase))
+                    environment[key] = null;
             var result = await processes.RunAsync(new ProcessSpec(executable,
-                ["-XshowSettings:properties", "-version"], Path.GetDirectoryName(executable)!,
+                ["-XX:-UsePerfData", "-XshowSettings:properties", "-version"], Path.GetDirectoryName(executable)!, environment,
                 Timeout: timeout ?? TimeSpan.FromSeconds(10), OutputLimitCharacters: 131072), cancellationToken: cancellationToken);
             if (result.Cancelled)
             {

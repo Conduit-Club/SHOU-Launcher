@@ -65,7 +65,7 @@ public sealed class MojangJavaRuntimeInstaller(IVerifiedDownloader downloader, I
             await VerifyExistingAsync(final, files, cancellationToken);
             var existing = await ProbeRequiredAsync(Contained(final, javaEntry), request, cancellationToken);
             await WriteStateAsync(final, true, manifestSha1, javaEntry, cancellationToken);
-            return existing with { Source = "managed:Mojang" };
+            return existing with { Source = "managed:Mojang", ValidatedManifestSha1 = manifestSha1 };
         }
 
         var staging = Contained(root, ".staging/" + component + "-" + Guid.NewGuid().ToString("N"));
@@ -136,7 +136,7 @@ public sealed class MojangJavaRuntimeInstaller(IVerifiedDownloader downloader, I
         var installed = await ProbeRequiredAsync(Contained(final, javaEntry), request, cancellationToken);
         await WriteStateAsync(final, true, manifestSha1, javaEntry, cancellationToken);
         progress?.Report(new TransferProgress(component, "Completed", total, total, platform));
-        return installed with { Source = "managed:Mojang" };
+        return installed with { Source = "managed:Mojang", ValidatedManifestSha1 = manifestSha1 };
     }
 
     public static bool IsIncompleteRuntime(string directory)
