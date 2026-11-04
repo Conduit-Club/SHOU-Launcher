@@ -49,8 +49,9 @@ jobs:
         env:
           TARGET_RID: ${{ matrix.rid }}
         run: |
-          $filter='TestCategory!=NativeCredential&TestCategory!=OnlineJava'
+          $filter='TestCategory!=NativeCredential&TestCategory!=OnlineJava&TestCategory!=JavaTrustInterop'
           if(-not $IsMacOS){$filter+='&TestCategory!=MacOSNativeArgv'}
+          if($IsWindows){$filter+='&TestCategory!=JavaTrustPosixLinks'}
           if($IsLinux){$filter+='&TestCategory!=DesktopPlatforms'}
           ./scripts/dev/Invoke-Dev.ps1 -RunId core -Action Test -EntryProject tests/SHOU.Launcher.Core.Tests/SHOU.Launcher.Core.Tests.csproj -RuntimeIdentifier $env:TARGET_RID -Configuration Release -TestFilter $filter
       - name: Shared Avalonia Headless tests

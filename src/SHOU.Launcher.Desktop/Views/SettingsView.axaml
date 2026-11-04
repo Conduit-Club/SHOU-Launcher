@@ -6,9 +6,19 @@
     <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="18" Margin="0,0,0,16">
       <Border Classes="card"><StackPanel Spacing="8" IsEnabled="{Binding CanEdit}"><TextBlock Classes="sectionTitle" Text="游戏与运行时" />
         <TextBlock Classes="label" Text="游戏根目录" /><Grid ColumnDefinitions="*,Auto"><TextBox Name="GameRootSetting" Text="{Binding GameRoot}" PlaceholderText="留空使用启动器管理的实例目录" /><Button Grid.Column="1" Content="浏览…" Click="PickGameRoot_Click" Margin="8,0,0,0" /></Grid>
-        <TextBlock Classes="label" Text="全局 Java 可执行文件" /><Grid ColumnDefinitions="*,Auto"><TextBox Text="{Binding JavaExecutable}" PlaceholderText="留空自动选择" /><Button Grid.Column="1" Content="浏览…" Click="PickJava_Click" Margin="8,0,0,0" /></Grid>
+        <TextBlock Classes="label" Text="全局 Java 可执行文件" /><Grid ColumnDefinitions="*,Auto"><TextBox Name="GlobalJavaExecutableSetting" Text="{Binding JavaExecutable}" PlaceholderText="留空自动选择" /><Button Grid.Column="1" Content="浏览…" Click="PickJava_Click" Margin="8,0,0,0" /></Grid>
         <TextBlock Classes="label" Text="最大内存（MiB）" /><NumericUpDown Value="{Binding MemoryMiB}" Minimum="512" Maximum="32768" Increment="256" />
         <TextBlock Text="实例自己的 Java、内存和游戏目录设置仍优先；保存不会搬移已有实例或存档。" Classes="muted" FontSize="12" />
+      </StackPanel></Border>
+      <Border Classes="card"><StackPanel Spacing="10"><TextBlock Classes="sectionTitle" Text="Java 信任配置" />
+        <CheckBox Name="JavaTrustAutoRepairSetting" Content="为新下载的官方 Java 自动创建独立修复副本" IsChecked="{Binding ConduitJavaTrustAutoRepair}" IsEnabled="{Binding CanEdit}" />
+        <TextBlock Text="自动修复偏好随设置保存。仅修改启动器创建的新派生副本，官方原始 Java 和 manifest 校验保持不变。已有外部 Java 可手动扫描或创建副本。" Classes="muted" FontSize="12" />
+        <TextBlock Text="操作目标：上方明确填写的全局 Java 可执行文件。留空自动选择时不执行扫描或修复。" Classes="muted" FontSize="12" />
+        <WrapPanel><Button Name="InspectJavaTrustButton" Content="只读扫描所选 Java" Command="{Binding InspectJavaTrustCommand}" Margin="0,4,8,4" /><Button Name="CreateRepairedJavaCopyButton" Content="创建修复副本并选用" Command="{Binding CreateRepairedJavaCopyCommand}" Margin="0,4,8,4" /></WrapPanel>
+        <TextBlock Name="JavaTrustStatusText" Text="{Binding JavaTrustStatus}" Classes="muted" />
+        <ItemsControl Name="JavaTrustFindings" ItemsSource="{Binding JavaTrustFindings}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="4" Margin="0,6"><TextBlock Text="{Binding Summary}" FontWeight="SemiBold" /><TextBlock Text="{Binding Path}" Classes="muted" FontSize="12" /><TextBlock Text="{Binding Hash}" Classes="muted" FontSize="11" /><TextBlock Text="{Binding Details}" Classes="muted" FontSize="12" /></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+        <TextBox Name="JavaTrustProvenanceText" Text="{Binding JavaTrustProvenance}" IsVisible="{Binding HasJavaTrustProvenance}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120" />
+        <TextBlock Text="原始 Java 不改动；可从原路径或实例页的发现列表重新选用。本页不执行原地修复，也不提供还原原始 Java 的操作。" Classes="muted" FontSize="12" />
       </StackPanel></Border>
       <Border Classes="card"><StackPanel Spacing="8" IsEnabled="{Binding CanEdit}"><TextBlock Classes="sectionTitle" Text="界面" /><Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto"><TextBlock Text="语言偏好" Classes="label" /><TextBlock Grid.Column="1" Text="主题（System / Light / Dark）" Classes="label" Margin="12,8,0,4" /><ComboBox Grid.Row="1" ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}" /><ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}" Margin="12,0,0,0" /></Grid><TextBlock Text="本候选保留语言偏好，界面文案暂为简体中文；完整本地化尚未完成。" Classes="muted" FontSize="12" /></StackPanel></Border>
       <Border Classes="card"><StackPanel Spacing="8" IsEnabled="{Binding CanEdit}"><TextBlock Classes="sectionTitle" Text="下载源" /><TextBlock Text="留空沿用默认来源顺序。高级配置按分类保存，可调整各来源的启用状态与优先级。" Classes="muted" />

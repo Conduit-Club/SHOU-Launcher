@@ -17,7 +17,7 @@ public static class PlatformServicesFactory
         if (OperatingSystem.IsMacOS()) credentials = new KeychainCredentialStore(paths.CredentialScope);
         else if (OperatingSystem.IsWindows()) credentials = new WindowsDpapiCredentialStore(paths);
         else throw new PlatformNotSupportedException("This Desktop host supports Windows and macOS; no credential adapter is registered for this OS.");
-        var discovery = new JavaDiscovery(processes, info.Context, options);
+        var discovery = new JavaDiscovery(processes, info.Context, options, managedRuntimeDirectory: paths.RuntimesDirectory);
         var installer = new MojangJavaRuntimeInstaller(downloader, discovery, paths.RuntimesDirectory,
             Path.Combine(paths.CacheDirectory, "java-metadata"));
         return new PlatformServices(info, paths, new Capabilities(info.Context), new ExternalLauncher(processes, info.Context),

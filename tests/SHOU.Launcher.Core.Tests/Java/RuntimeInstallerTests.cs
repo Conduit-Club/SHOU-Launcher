@@ -19,6 +19,7 @@ public sealed class RuntimeInstallerTests
         var result = await fixture.Installer.InstallAsync(fixture.Request);
         Assert.IsTrue(result.IsUsable);
         Assert.AreEqual("managed:Mojang", result.Source);
+        Assert.AreEqual(Path.GetFileName(fixture.FinalDirectory), result.ValidatedManifestSha1);
         Assert.AreEqual(2, fixture.Discovery.Probed.Count);
         StringAssert.Contains(fixture.Discovery.Probed[0], ".staging");
         Assert.IsFalse(result.ExecutablePath.Contains(".staging", StringComparison.Ordinal));
@@ -33,6 +34,7 @@ public sealed class RuntimeInstallerTests
         }
         var second = await fixture.Installer.InstallAsync(fixture.Request);
         Assert.AreEqual(result.ExecutablePath, second.ExecutablePath);
+        Assert.AreEqual(result.ValidatedManifestSha1, second.ValidatedManifestSha1);
         Assert.AreEqual(2, fixture.Downloader.CatalogFetches, "The root catalog must be fetched fresh for every installation request.");
     }
 

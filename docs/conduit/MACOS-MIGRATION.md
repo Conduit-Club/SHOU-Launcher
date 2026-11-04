@@ -85,3 +85,14 @@ N3顺序应用UI `90c9706`和platform `de23f5d`的精确增量：联机后端尚
 
 
 旧WPF回退已实际交叉发布x64和ARM64：`reports/night/LEGACY/publish-x64-fix1-run.json`与`publish-arm64-run.json`均exit0，实际PCL.Core owner及最终单文件exe均验证三项配置嵌入布尔值，zip/hash/BUILD-INFO齐全。首轮x64编译/publish成功后owner定位失败，发现SDK引用项目实际移除RID；统一脚本现分别评估入口RID与引用RID-less上下文。旧generator去掉无意义nullable tuple转换；旧WPF原有大量告警仍如实保留。此交叉构建不证明WPF/DPAPI/Windows界面能在真机运行，W01–W10仍有主机阻塞与配置导入/往返内部缺口，旧入口继续为默认。
+
+
+## B8 独立Java信任副本
+
+三角色已整合完整独立派生内核与真实设置入口。源JavaHome只读复制并保留安全相对链接/权限，hash覆盖路径/type/文件bytes/link文本/mode；不复用源硬链接。只允许策略命中的信任文件与精确备份/receipt发生变化，重新扫描保留其他证书。源/输出/provenance全部重核，失败/不完整变体不可被发现或执行；生产公开probe在执行前验证，自身发布probe只在已验树内使用显式runner，未开放公共staging bypass。
+
+新增官方`System.Security.Cryptography.Pkcs 10.0.14`用于纯内存PKCS12 Decode/VerifyMac/Decrypt，拒绝私钥/未知bag与无界KDF声明，仅将X509 CertBag裸DER交给证书读取器。macOS EphemeralKeySet导入与OCTET封装问题的前两轮失败已保留；没有改用DefaultKeySet，也没有把PFX导入临时/持久Keychain。第三轮定点→完整fixture→真实B5 JKS/同副本keytool PKCS12的子命令均exit0。包装器误按MSTest错误notExecuted counter断言导致外层exit1，原记录保留；只读assessment按UnitTestResult确认实际PASS与默认2项SKIPPED，不重写退出码。
+
+主亲写扫描/派生/持久设置编排、CLI隔离入口与事务回归。自动修复偏好默认true，只为新下载官方Java创建派生副本；不写隐藏实例覆盖。无显式Java时优先匹配metadata的完成变体，显式原路径可以选回，既有实例显式覆盖保持。派生变体即使auto=false也必须验provenance，字面路径/实际home逃逸不降成普通Java；观察性日志失败不把已提交切换变成假失败，日志链接不写独立fixture。
+
+集成Core181 PASS、3显式SKIPPED（OnlineJava1、trust interop默认2）、0FAIL；Headless34/34，.NET编译0warning/error。真实副本互操作由worker另表，不与集成重复相加。证据在`reports/night/B8`及platform B8 handoff。已发现macOS Path.GetRelativePath默认大小写比较不适合严格卷边界，B9将独立硬化；本节不宣称已验证case-sensitive卷。最终候选重包与GUI/Windows/外部账户门禁仍按真实层级单列。

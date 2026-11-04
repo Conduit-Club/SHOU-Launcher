@@ -73,7 +73,7 @@ public static partial class Bootstrap
     }
     private static void ValidateArguments()
     {
-        var switches = new HashSet<string>(["--diagnostics","--smoke-test","--prepare-minecraft","--launch-minecraft","--official-downloads"], StringComparer.Ordinal);
+        var switches = new HashSet<string>(["--diagnostics","--smoke-test","--prepare-minecraft","--launch-minecraft","--official-downloads","--inspect-java-trust","--derive-java-trust"], StringComparer.Ordinal);
         var valued = new HashSet<string>(["--data-dir","--result-file","--run-id","--exit-after","--java-path","--version","--loader","--loader-version","--offline-profile","--dry-run-launch","--credential-smoke"], StringComparer.Ordinal);
         for (var i = 0; i < Arguments.Length; i++)
         {
@@ -83,7 +83,7 @@ public static partial class Bootstrap
         }
         foreach (var flag in new[] { "--data-dir", "--result-file", "--java-path" })
             if (ArgumentValue(flag) is { } path && !Path.IsPathFullyQualified(path)) throw new ArgumentException(flag + " requires an absolute path.");
-        var testMode = Arguments.Any(a => a is "--smoke-test" or "--prepare-minecraft" or "--launch-minecraft" or "--credential-smoke");
+        var testMode = Arguments.Any(a => a is "--smoke-test" or "--prepare-minecraft" or "--launch-minecraft" or "--credential-smoke" or "--inspect-java-trust" or "--derive-java-trust");
         if (testMode && ArgumentValue("--data-dir") is null) throw new ArgumentException("Smoke/game/credential validation requires a fully isolated --data-dir.");
         if (ArgumentValue("--exit-after") is { } value && (!int.TryParse(value, out var seconds) || seconds is <= 0 or > 3600)) throw new ArgumentException("exit-after must be 1–3600 seconds.");
     }

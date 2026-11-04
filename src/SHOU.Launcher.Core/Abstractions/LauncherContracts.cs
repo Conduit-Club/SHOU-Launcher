@@ -14,7 +14,8 @@ public sealed record ProxySettings(ProxyMode Mode = ProxyMode.System, string? Ad
 public sealed record Aria2Settings(bool Enabled = false, string Endpoint = "http://localhost:6800/jsonrpc", string? CredentialKey = null);
 public sealed record LauncherSettings(string? GameRoot = null, string? JavaExecutable = null, int MemoryMiB = 2048,
     string Language = "zh-CN", string Theme = "System", string DownloadSourcesJson = "",
-    ProxySettings? Proxy = null, Aria2Settings? Aria2 = null, string? MicrosoftClientId = null);
+    ProxySettings? Proxy = null, Aria2Settings? Aria2 = null, string? MicrosoftClientId = null,
+    bool ConduitJavaTrustAutoRepair = true);
 public sealed record GameInstance(string Id, string Name, string VersionId, string GameDirectory,
     string? JavaExecutable = null, int? MemoryMiB = null, string Loader = "vanilla", string? LoaderVersion = null,
     bool Installed = false);
@@ -56,6 +57,8 @@ public interface ILauncherService : IAsyncDisposable
     Task<GameInstance> CreateFabricInstanceAsync(string name, string gameVersionId, string loaderVersion, CancellationToken cancellationToken = default);
     Task SelectInstanceAsync(string instanceId, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<JavaInstallation>> DiscoverJavaAsync(CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<JavaTrustFinding>> InspectJavaTrustAsync(string javaExecutable, CancellationToken cancellationToken = default);
+    Task<JavaTrustDerivation> CreateRepairedJavaCopyAsync(string javaExecutable, CancellationToken cancellationToken = default);
     Task InstallInstanceAsync(string instanceId, CancellationToken cancellationToken = default);
     Task<LaunchPlan> BuildLaunchPlanAsync(string instanceId, CancellationToken cancellationToken = default);
     Task LaunchAsync(string instanceId, string serverId = "none", CancellationToken cancellationToken = default);

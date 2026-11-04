@@ -15,6 +15,21 @@ public static partial class Bootstrap
         var timeoutSeconds = int.TryParse(ArgumentValue("--exit-after"), out var value) ? value : 1800;
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
         var ct = deadline.Token;
+        if (Arguments.Contains("--inspect-java-trust", StringComparer.Ordinal))
+        {
+            var source = ArgumentValue("--java-path") ?? throw new ArgumentException("Java trust validation requires an explicit Java path.");
+            var findings = await launcher.InspectJavaTrustAsync(source, ct).ConfigureAwait(false);
+            WriteCommandReport(new { status = "PASS", scope = "read_only_java_trust_inspection", source, findings,
+                sourceSha = launcher.Snapshot.Build.SourceSha, launcher.Paths.IsIsolated }); return 0;
+        }
+        if (Arguments.Contains("--derive-java-trust", StringComparer.Ordinal))
+        {
+            var source = ArgumentValue("--java-path") ?? throw new ArgumentException("Java trust derivation requires an explicit Java path.");
+            var derivation = await launcher.CreateRepairedJavaCopyAsync(source, ct).ConfigureAwait(false);
+            WriteCommandReport(new { status = "PASS", scope = "copied_java_trust_derivation", derivation,
+                sourceSha = launcher.Snapshot.Build.SourceSha, launcher.Paths.IsIsolated,
+                evidenceBoundary = "Source runtime is retained; policy/provenance/probe do not prove Minecraft GUI acceptance." }); return 0;
+        }
         if (Arguments.Contains("--diagnostics", StringComparer.Ordinal))
         {
             var java = await launcher.DiscoverJavaAsync(ct).ConfigureAwait(false);

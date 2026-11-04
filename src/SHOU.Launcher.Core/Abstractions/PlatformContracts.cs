@@ -77,7 +77,8 @@ public sealed record PlatformServices(IPlatformInfo Info, IAppPaths Paths, IPlat
     IJavaDiscovery JavaDiscovery, IJavaRuntimeInstaller JavaInstaller, IDataDirectoryLock DataLock);
 
 public sealed record JavaInstallation(string ExecutablePath, string JavaHome, string FullVersion, int MajorVersion,
-    string Vendor, RuntimeArchitecture RuntimeArchitecture, string Source, string? ProbeError = null)
+    string Vendor, RuntimeArchitecture RuntimeArchitecture, string Source, string? ProbeError = null,
+    string? ValidatedManifestSha1 = null)
 { public bool IsUsable => ProbeError is null && MajorVersion > 0 && RuntimeArchitecture != RuntimeArchitecture.Unknown; }
 public sealed record JavaDiscoveryRequest(string? ConfiguredExecutable, string ManagedRuntimeDirectory,
     int? RequiredMajorVersion = null, RuntimeArchitecture? RequiredArchitecture = null);

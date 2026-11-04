@@ -10,13 +10,14 @@ using SHOU.Launcher.Core.Configuration;
 using SHOU.Launcher.Core.Diagnostics;
 using SHOU.Launcher.Core.Downloads;
 using SHOU.Launcher.Core.IO;
+using SHOU.Launcher.Core.Java;
 using SHOU.Launcher.Core.Minecraft;
 using ClubServer = SHOU.Launcher.Core.Abstractions.ClubServer;
 
 namespace SHOU.Launcher.Core;
 
 /// <summary>Production orchestration shared by both desktops. All persisted account DTOs are nonsecret.</summary>
-public sealed class LauncherService : ILauncherService
+public sealed partial class LauncherService : ILauncherService
 {
     private readonly PlatformServices platform;
     private readonly HttpClient http;
@@ -26,6 +27,7 @@ public sealed class LauncherService : ILauncherService
     private readonly ConfigurationStore config;
     private readonly AuthenticationClient authentication;
     private readonly JavaBootstrapArtifact? javaBootstrap;
+    private readonly IJavaTrustService javaTrust;
     private readonly SemaphoreSlim initialize = new(1, 1), operation = new(1, 1);
     private readonly CancellationTokenSource lifetime = new();
     private readonly object sync = new();
@@ -45,12 +47,13 @@ public sealed class LauncherService : ILauncherService
 
     public LauncherService(PlatformServices platform, HttpClient http, IVerifiedDownloader downloader,
         NetworkOptions network, BuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null,
-        JavaBootstrapArtifact? javaBootstrap = null)
+        JavaBootstrapArtifact? javaBootstrap = null, IJavaTrustService? javaTrust = null)
     {
         this.platform = platform; this.http = http; this.downloader = downloader; this.network = network;
         build = buildConfiguration ?? new(); config = new(platform.Paths);
         authentication = authenticationClient ?? new(http);
         this.javaBootstrap = javaBootstrap;
+        this.javaTrust = javaTrust ?? new DerivedJavaTrustService(platform.JavaDiscovery, platform.Processes);
         network.Credentials = platform.Credentials;
         launcherLogPath = Path.Combine(platform.Paths.LogsDirectory, "launcher.log");
         snapshot = new(build.GetIdentity(), platform.Info.Context, new(), [], [], [],
@@ -170,14 +173,25 @@ public sealed class LauncherService : ILauncherService
         var candidates = await platform.JavaDiscovery.DiscoverAsync(new(preferred, Paths.RuntimesDirectory, version.RequiredJavaMajor,
             Snapshot.Platform.HardwareArchitecture), ct).ConfigureAwait(false);
         Set(s => s with { JavaInstallations = candidates });
-        var java = candidates.FirstOrDefault(j => j.IsUsable && j.MajorVersion == version.RequiredJavaMajor
-            && j.RuntimeArchitecture == Snapshot.Platform.HardwareArchitecture && (string.IsNullOrWhiteSpace(preferred) || PathEquals(j.ExecutablePath, preferred)));
+        var java = candidates.Where(j => j.IsUsable && j.MajorVersion == version.RequiredJavaMajor
+            && j.RuntimeArchitecture == Snapshot.Platform.HardwareArchitecture && (string.IsNullOrWhiteSpace(preferred) || PathEquals(j.ExecutablePath, preferred)))
+            .OrderByDescending(j => string.IsNullOrWhiteSpace(preferred) && IsDerivedJava(j)).FirstOrDefault();
+        var installedRuntime = java is null;
         if (java is null)
         {
             if (!string.IsNullOrWhiteSpace(preferred)) throw new InvalidOperationException("指定Java未通过版本/架构探测；请修正选择，不会静默替换用户指定runtime。");
             java = await platform.JavaInstaller.InstallAsync(new(version.JavaComponent, version.RequiredJavaMajor, Snapshot.Platform.OS,
                 Snapshot.Platform.HardwareArchitecture, Paths.RuntimesDirectory), new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
             Set(s => s with { JavaInstallations = s.JavaInstallations.Append(java).ToArray() });
+        }
+        if (IsDerivedJava(java) || installedRuntime && Snapshot.Settings.ConduitJavaTrustAutoRepair
+            && java.Source.StartsWith("managed:Mojang", StringComparison.Ordinal))
+        {
+            if (installedRuntime && java.ValidatedManifestSha1 is null)
+                throw new InvalidDataException("官方下载Java缺少已验证manifest身份，未进行自动派生修复。");
+            var derivation = await DeriveJavaAsync(java, ct).ConfigureAwait(false);
+            java = derivation.Java;
+            Set(s => s with { JavaInstallations = s.JavaInstallations.Where(j => !SameJavaPath(j.ExecutablePath, java.ExecutablePath)).Append(java).ToArray() });
         }
         var context = Context(java);
         var gameFiles = await new MinecraftInstaller(http, downloader, Paths.CacheDirectory, Sources).InstallAsync(version, context,
@@ -452,7 +466,19 @@ public sealed class LauncherService : ILauncherService
         lock (sync)
         {
             logs.Enqueue(log); while (logs.Count > 500) logs.Dequeue();
-            try { if (Directory.Exists(Paths.LogsDirectory)) File.AppendAllText(launcherLogPath, $"{log.Timestamp:O} [{log.Level}] {log.Message}\n"); } catch (IOException) { }
+            try
+            {
+                if (Directory.Exists(Paths.LogsDirectory))
+                {
+                    var info = new FileInfo(launcherLogPath);
+                    if (!PathEquals(SafePath.Canonical(launcherLogPath), launcherLogPath) || info.LinkTarget is not null
+                        || info.Exists && (info.Attributes & FileAttributes.ReparsePoint) != 0)
+                        throw new IOException("Observational log path is not a regular owned path.");
+                    File.AppendAllText(launcherLogPath, $"{log.Timestamp:O} [{log.Level}] {log.Message}\n");
+                }
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+            { /* Observational logging cannot turn an already committed operation into a reported failure. */ }
         }
         if (LogReceived is { } received) foreach (EventHandler<LauncherLog> subscriber in received.GetInvocationList()) { try { subscriber(this, log); } catch { } }
     }

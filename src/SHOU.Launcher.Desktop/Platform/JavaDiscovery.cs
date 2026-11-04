@@ -13,9 +13,11 @@ public sealed class JavaDiscovery : IJavaDiscovery
     private readonly string? _configuredExecutable;
     private readonly string _home;
     private readonly bool _includeSystemSources;
+    private readonly string? _managedRuntimeDirectory;
 
     public JavaDiscovery(IProcessRunner processes, PlatformContext platform, PlatformOptions? options = null,
-        string? homeDirectory = null, bool includeSystemSources = true, TimeSpan? probeTimeout = null)
+        string? homeDirectory = null, bool includeSystemSources = true, TimeSpan? probeTimeout = null,
+        string? managedRuntimeDirectory = null)
     {
         _processes = processes;
         _probe = new JavaRuntimeProbe(processes, probeTimeout);
@@ -23,10 +25,20 @@ public sealed class JavaDiscovery : IJavaDiscovery
         _configuredExecutable = options?.ConfiguredJavaExecutable;
         _home = homeDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         _includeSystemSources = includeSystemSources;
+        _managedRuntimeDirectory = managedRuntimeDirectory;
     }
 
-    public Task<JavaInstallation> ProbeAsync(string executable, CancellationToken cancellationToken = default) =>
-        _probe.ProbeAsync(executable, cancellationToken);
+    public async Task<JavaInstallation> ProbeAsync(string executable, CancellationToken cancellationToken = default)
+    {
+        if (Path.IsPathFullyQualified(executable))
+        {
+            var root = DerivedJavaTrustService.FindDerivedRootForCandidate(executable,
+                _managedRuntimeDirectory ?? Path.GetDirectoryName(executable)!);
+            if (root is not null && !await DerivedJavaTrustService.ValidateCandidateReadOnlyAsync(root, executable, cancellationToken))
+                return InvalidDerived(executable, "probe");
+        }
+        return await _probe.ProbeAsync(executable, cancellationToken);
+    }
 
     public async Task<IReadOnlyList<JavaInstallation>> DiscoverAsync(JavaDiscoveryRequest request,
         CancellationToken cancellationToken = default)
@@ -85,6 +97,13 @@ public sealed class JavaDiscovery : IJavaDiscovery
         foreach (var (path, source) in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var derivedRoot = DerivedJavaTrustService.FindDerivedRootForCandidate(path, request.ManagedRuntimeDirectory);
+            if (derivedRoot is not null
+                && !await DerivedJavaTrustService.ValidateCandidateReadOnlyAsync(derivedRoot, path, cancellationToken))
+            {
+                if (source == "configured") installations.Add(InvalidDerived(path, source));
+                continue;
+            }
             installations.Add((await _probe.ProbeAsync(path, cancellationToken)) with { Source = source });
         }
         return installations.OrderByDescending(java => java.IsUsable
@@ -131,6 +150,8 @@ public sealed class JavaDiscovery : IJavaDiscovery
                 foreach (var child in EnumerateDirectories(directory))
                 {
                     if (IsLink(child)) continue; // No loops or traversal into unrelated runtime trees.
+                    if (DerivedJavaTrustService.IsDerivedRootDirectory(directory)
+                        && !DerivedJavaTrustService.IsCompletedVariantDirectory(child)) continue;
                     queue.Enqueue((child, depth + 1));
                 }
             }
@@ -138,6 +159,8 @@ public sealed class JavaDiscovery : IJavaDiscovery
     }
 
     private string JavaFilename => _platform.OS == LauncherOS.Windows ? "java.exe" : "java";
+    private static JavaInstallation InvalidDerived(string executable, string source) => new(executable, "", "", 0, "",
+        RuntimeArchitecture.Unknown, source, "[InvalidDerivedRuntime] 派生 Java 未通过执行前只读验证。");
 
     private static bool IsLink(string path)
     {

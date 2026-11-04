@@ -37,6 +37,12 @@ internal sealed class FakeLauncherService : ILauncherService
     public (string Name, string GameVersion, string LoaderVersion)? LastFabricRequest { get; private set; }
     public Func<CancellationToken, Task>? FabricCreateBehavior { get; set; }
     public bool FabricCreationCancelled { get; private set; }
+    public Func<string, CancellationToken, Task<IReadOnlyList<JavaTrustFinding>>>? JavaTrustInspectBehavior { get; set; }
+    public Func<string, CancellationToken, Task<JavaTrustDerivation>>? JavaTrustCopyBehavior { get; set; }
+    public int JavaTrustInspectCalls { get; private set; }
+    public int JavaTrustCopyCalls { get; private set; }
+    public string? LastJavaTrustInspectPath { get; private set; }
+    public string? LastJavaTrustCopyPath { get; private set; }
     public List<string> SavedSecretKinds { get; } = [];
 
     public FakeLauncherService()
@@ -71,6 +77,20 @@ internal sealed class FakeLauncherService : ILauncherService
     }
     public Task SelectInstanceAsync(string instanceId, CancellationToken cancellationToken = default) { Publish(Snapshot with { SelectedInstanceId = instanceId }); return Task.CompletedTask; }
     public Task<IReadOnlyList<JavaInstallation>> DiscoverJavaAsync(CancellationToken cancellationToken = default) => Task.FromResult(Snapshot.JavaInstallations);
+    public Task<IReadOnlyList<JavaTrustFinding>> InspectJavaTrustAsync(string javaExecutable, CancellationToken cancellationToken = default)
+    {
+        JavaTrustInspectCalls++; LastJavaTrustInspectPath = javaExecutable;
+        return JavaTrustInspectBehavior?.Invoke(javaExecutable, cancellationToken) ?? Task.FromResult<IReadOnlyList<JavaTrustFinding>>([]);
+    }
+    public async Task<JavaTrustDerivation> CreateRepairedJavaCopyAsync(string javaExecutable, CancellationToken cancellationToken = default)
+    {
+        JavaTrustCopyCalls++; LastJavaTrustCopyPath = javaExecutable;
+        var result = await (JavaTrustCopyBehavior ?? throw new InvalidOperationException("Test must supply an explicit Java trust copy protocol fixture."))(javaExecutable, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        Publish(Snapshot with { Settings = Snapshot.Settings with { JavaExecutable = result.Java.ExecutablePath },
+            JavaInstallations = Snapshot.JavaInstallations.Where(j => j.ExecutablePath != result.Java.ExecutablePath).Append(result.Java).ToArray() });
+        return result;
+    }
     public async Task InstallInstanceAsync(string instanceId, CancellationToken cancellationToken = default)
     {
         Publish(Snapshot with { State = "Installing", Error = null });

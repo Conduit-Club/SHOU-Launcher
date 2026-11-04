@@ -56,7 +56,7 @@ public sealed class JavaRuntimeTests
         var probe = new JavaRuntimeProbe(runner);
         var installation = await probe.ProbeAsync(PlatformFixture.JavaExecutable);
         Assert.IsTrue(installation.IsUsable);
-        CollectionAssert.AreEqual(new[] { "-XshowSettings:properties", "-version" }, runner.LastSpec!.Arguments.ToArray());
+        CollectionAssert.AreEqual(new[] { "-XX:-UsePerfData", "-XshowSettings:properties", "-version" }, runner.LastSpec!.Arguments.ToArray());
         Assert.IsTrue(runner.LastSpec.Timeout <= TimeSpan.FromSeconds(10));
         runner.Result = runner.Result with { ExitCode = 1 };
         StringAssert.Contains((await probe.ProbeAsync(PlatformFixture.JavaExecutable)).ProbeError, "FailedExit");
