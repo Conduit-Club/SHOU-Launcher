@@ -18,9 +18,7 @@ internal static class JavaTrustTree
 
     internal static bool IsInside(string root, string path)
     {
-        var relative = System.IO.Path.GetRelativePath(root, path);
-        return !System.IO.Path.IsPathRooted(relative) && relative != ".."
-            && !relative.StartsWith(".." + System.IO.Path.DirectorySeparatorChar, StringComparison.Ordinal);
+        return JavaPathBoundary.Contains(root, path);
     }
 
     internal static string Absolute(string path)
@@ -45,6 +43,7 @@ internal static class JavaTrustTree
     {
         root = Absolute(root);
         JavaTrustRepair.EnsureRegularPath(root);
+        root = JavaPathBoundary.Canonical(root);
         if (!Directory.Exists(root)) throw new DirectoryNotFoundException("Java trust tree does not exist.");
         var entries = new List<Entry> { new(".", "directory", Mode(root)) };
         var queue = new Queue<string>(); queue.Enqueue(root);
@@ -56,7 +55,7 @@ internal static class JavaTrustTree
             {
                 ct.ThrowIfCancellationRequested();
                 if (entries.Count >= 100000) throw new InvalidDataException("Java trust tree exceeds its entry budget.");
-                var relative = System.IO.Path.GetRelativePath(root, path).Replace(System.IO.Path.DirectorySeparatorChar, '/');
+                var relative = JavaPathBoundary.RelativeCanonical(root, path);
                 _ = Combine(root, relative);
                 var attributes = File.GetAttributes(path);
                 FileSystemInfo info = (attributes & FileAttributes.Directory) != 0 ? new DirectoryInfo(path) : new FileInfo(path);

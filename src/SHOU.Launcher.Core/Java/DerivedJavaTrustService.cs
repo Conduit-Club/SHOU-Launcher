@@ -40,14 +40,15 @@ public sealed class DerivedJavaTrustService(IJavaDiscovery discovery, IProcessRu
         var sourceHome = JavaTrustTree.Absolute(request.Source.JavaHome);
         JavaTrustRepair.EnsureRegularPath(root);
         JavaTrustRepair.EnsureRegularPath(sourceHome);
+        root = JavaPathBoundary.Canonical(root); sourceHome = JavaPathBoundary.Canonical(sourceHome);
         if (!request.Source.IsUsable) throw new InvalidDataException("A usable source Java probe is required.");
         var literalExecutable = JavaTrustTree.Absolute(request.Source.ExecutablePath);
-        if (JavaTrustTree.IsInside(root, literalExecutable) && !JavaTrustTree.IsInside(root, sourceHome))
+        if (JavaPathBoundary.ContainsLiteral(root, literalExecutable) && !JavaTrustTree.IsInside(root, sourceHome))
             throw new InvalidDataException("A derived Java executable cannot escape through an external JavaHome.");
 
         if (JavaTrustTree.IsInside(root, sourceHome))
         {
-            var relative = Path.GetRelativePath(root, sourceHome).Replace(Path.DirectorySeparatorChar, '/').Split('/');
+            var relative = JavaPathBoundary.Relative(root, sourceHome).Split('/');
             if (relative.Length != 2 || !IsKey(relative[0]) || relative[1] != "home")
                 throw new InvalidDataException("Source is not a completed owned Java trust variant.");
             var variant = JavaTrustTree.Combine(root, relative[0]);
@@ -63,7 +64,7 @@ public sealed class DerivedJavaTrustService(IJavaDiscovery discovery, IProcessRu
         if (JavaTrustTree.IsInside(sourceHome, root))
             throw new InvalidDataException("DerivedRoot cannot be inside the read-only source JavaHome.");
 
-        var source = request.Source with { JavaHome = sourceHome, ExecutablePath = JavaTrustTree.Absolute(request.Source.ExecutablePath) };
+        var source = request.Source with { JavaHome = sourceHome, ExecutablePath = JavaPathBoundary.Canonical(request.Source.ExecutablePath, false) };
         var executableRelative = ExecutableRelative(source);
         var manifest = ValidateManifestRequest(request.SourceManifestSha1, source.ValidatedManifestSha1);
         var key = Key(source.ExecutablePath, manifest);
@@ -161,7 +162,7 @@ public sealed class DerivedJavaTrustService(IJavaDiscovery discovery, IProcessRu
         {
             root = JavaTrustTree.Absolute(root); executable = JavaTrustTree.Absolute(executable);
             JavaTrustRepair.EnsureRegularPath(root);
-            var relative = Path.GetRelativePath(root, executable).Replace(Path.DirectorySeparatorChar, '/').Split('/');
+            var relative = JavaPathBoundary.Relative(root, executable).Split('/');
             if (relative.Length != 4 || !IsKey(relative[0]) || relative[1] != "home"
                 || relative[2] != "bin" || relative[3] != (OperatingSystem.IsWindows() ? "java.exe" : "java")) return false;
             var record = await ReadProvenanceAsync(JavaTrustTree.Combine(root, relative[0]), ct);
@@ -179,9 +180,10 @@ public sealed class DerivedJavaTrustService(IJavaDiscovery discovery, IProcessRu
         managedRoot = JavaTrustTree.Absolute(managedRoot);
         for (var directory = Path.GetDirectoryName(JavaTrustTree.Absolute(executable)); directory is not null; directory = Path.GetDirectoryName(directory))
         {
+            var canonical = JavaPathBoundary.Canonical(directory, false);
             if (File.Exists(Path.Combine(directory, RootMarkerName))
                 || new FileInfo(Path.Combine(directory, RootMarkerName)).LinkTarget is not null
-                || (Path.GetFileName(directory) == "derived-trust" && JavaTrustTree.IsInside(managedRoot, directory))) return directory;
+                || (Path.GetFileName(canonical) == "derived-trust" && JavaTrustTree.IsInside(managedRoot, canonical))) return canonical;
         }
         return null;
     }
@@ -257,11 +259,11 @@ public sealed class DerivedJavaTrustService(IJavaDiscovery discovery, IProcessRu
     }
     private static string Relative(string root, string path)
     {
-        var relative = Path.GetRelativePath(root, path).Replace(Path.DirectorySeparatorChar, '/');
+        var relative = JavaPathBoundary.Relative(root, path);
         _ = JavaTrustTree.Combine(root, relative); return relative;
     }
     private static bool PathEquals(string left, string right) =>
-        string.Equals(JavaTrustTree.Absolute(left), JavaTrustTree.Absolute(right), JavaTrustTree.PathComparison);
+        string.Equals(JavaPathBoundary.Canonical(left, false), JavaPathBoundary.Canonical(right, false), JavaTrustTree.PathComparison);
     private static string Key(string executable, string? manifest)
     {
         var normalized = JavaTrustTree.Absolute(executable);

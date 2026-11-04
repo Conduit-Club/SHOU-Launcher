@@ -150,7 +150,13 @@ public sealed class DerivedJavaTrustServiceTests
             var invalid = new Fixture();
             File.WriteAllText(Path.Combine(invalid.Root, "outside"), "outside");
             File.CreateSymbolicLink(Path.Combine(invalid.Source.JavaHome, "unsafe"), target);
-            await Assert.ThrowsAsync<InvalidDataException>(() => invalid.Service.CreateRepairedCopyAsync(invalid.Request));
+            var original = File.ReadAllBytes(invalid.Store);
+            if (target == "missing")
+                await Assert.ThrowsAsync<IOException>(() => invalid.Service.CreateRepairedCopyAsync(invalid.Request));
+            else await Assert.ThrowsAsync<InvalidDataException>(() => invalid.Service.CreateRepairedCopyAsync(invalid.Request));
+            CollectionAssert.AreEqual(original, File.ReadAllBytes(invalid.Store));
+            Assert.AreEqual(0, invalid.Discovery.Probed.Count, "Unsafe sources must fail before even a copied runtime is probed.");
+            Assert.AreEqual(0, Directory.GetDirectories(invalid.DerivedRoot).Count(path => !Path.GetFileName(path).StartsWith('.')));
         }
     }
 

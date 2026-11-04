@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Core.Java;
 using SHOU.Launcher.Desktop.Platform.MacOS;
 
 namespace SHOU.Launcher.Desktop.Platform;
@@ -122,8 +123,7 @@ public sealed class AppPaths : IAppPaths
 
     internal static void EnsureContained(string root, string path)
     {
-        var relative = Path.GetRelativePath(ResolveExistingLinks(root), ResolveExistingLinks(path));
-        if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        if (!JavaPathBoundary.ContainsCanonical(ResolveExistingLinks(root), ResolveExistingLinks(path)))
             throw new IOException("An isolated application path escapes its data root through a symbolic link.");
     }
 }

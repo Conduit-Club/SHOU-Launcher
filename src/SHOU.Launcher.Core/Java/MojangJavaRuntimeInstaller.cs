@@ -244,21 +244,13 @@ public sealed class MojangJavaRuntimeInstaller(IVerifiedDownloader downloader, I
         if (!allowAbsolute && (string.IsNullOrWhiteSpace(path) || Path.IsPathRooted(path) || path.Contains(':') || path.Contains('\0')
             || path.Replace('\\', '/').Split('/').Any(part => part is "." or ".."))) throw new InvalidDataException("Unsafe runtime manifest path.");
         var result = Canonical(Path.IsPathFullyQualified(path) && allowAbsolute ? path : Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar)));
-        var relative = Path.GetRelativePath(root, result);
-        if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        if (!JavaPathBoundary.ContainsCanonical(root, result))
             throw new InvalidDataException("Runtime path escapes the application-managed installation root.");
         return result;
     }
     private static string Canonical(string path)
     {
-        var full = Path.GetFullPath(path); var root = Path.GetPathRoot(full)!; var current = root;
-        foreach (var part in full[root.Length..].Split(Path.DirectorySeparatorChar, StringSplitOptions.RemoveEmptyEntries))
-        {
-            current = Path.Combine(current, part);
-            FileSystemInfo info = Directory.Exists(current) ? new DirectoryInfo(current) : new FileInfo(current);
-            if (info.LinkTarget is not null) current = info.ResolveLinkTarget(true)?.FullName ?? throw new IOException("Unresolved runtime symbolic link.");
-        }
-        return Path.GetFullPath(current);
+        return JavaPathBoundary.Canonical(path);
     }
     private static string LinkTarget(string root, string link, string target)
     {
