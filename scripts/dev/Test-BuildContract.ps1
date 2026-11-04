@@ -37,6 +37,19 @@ function Owner-Contains([string]$Path,[string]$Value) {
     $bytes=[IO.File]::ReadAllBytes($Path)
     return [Conduit.BuildContractProbe]::Contains($bytes,$Value)
 }
+function Source-Fingerprint {
+    $head=& git -C $repo rev-parse HEAD
+    if($LASTEXITCODE -ne 0){throw 'Cannot fingerprint source HEAD.'}
+    $status=@(& git -C $repo status --porcelain)
+    if($LASTEXITCODE -ne 0){throw 'Cannot fingerprint source status.'}
+    $diff=@(& git -C $repo diff --binary HEAD)
+    if($LASTEXITCODE -ne 0){throw 'Cannot fingerprint tracked source.'}
+    $extra=@(& git -C $repo ls-files --others --exclude-standard)
+    if($LASTEXITCODE -ne 0){throw 'Cannot fingerprint new source.'}
+    $hashes=@($extra | ForEach-Object { $_+':'+(Get-FileHash -LiteralPath (Join-Path $repo $_) -Algorithm SHA256).Hash })
+    $text=(@($head)+$status+$diff+$hashes)-join "`n"
+    return [Convert]::ToHexStringLower([Security.Cryptography.SHA256]::HashData([Text.Encoding]::UTF8.GetBytes($text)))
+}
 function Read-Provider([string]$Owner) {
     # The CLR can share a mapped PE image for an identical file path across collectible
     # contexts. Probe an exact byte copy at a unique path, while all compiler/obj roots
@@ -141,6 +154,7 @@ try {
     if($Mode -in @('All','Sequence')) {
         $intermediate=Join-Path $build 'B07-Desktop'
         $sha=& git -C $repo rev-parse HEAD
+        $sourceFingerprint=Source-Fingerprint
         foreach($case in @('A','B','none')) {
             $current='B07-'+$case;Clear-Inputs
             $envFile=Join-Path $inputs ($case+'.input')
@@ -160,7 +174,9 @@ try {
             $null=New-Item -ItemType Directory -Path (Join-Path $report $case) -Force
             Copy-Item -LiteralPath (Join-Path $intermediate 'reports/steps.json') -Destination (Join-Path $report "$case/steps.json")
             [IO.File]::WriteAllText((Join-Path $out 'FIXTURE-ONLY.txt'),'Contains fake configuration inputs for B07; not a product candidate.')
-            $cases.Add(@{id=$current;status='PASS';build_root=$intermediate;entry='src/SHOU.Launcher.Desktop/SHOU.Launcher.Desktop.csproj';configuration='Release';rid=$SequenceRid;source_sha=$sha;owner_sha256=(Get-FileHash $owner).Hash;fixture_only=$true;output=$out})
+            $afterFingerprint=Source-Fingerprint
+            Require ($sourceFingerprint -eq $afterFingerprint) 'B07 source tree changed during the sequence; this run cannot prove same-source withdrawal.'
+            $cases.Add(@{id=$current;status='PASS';build_root=$intermediate;entry='src/SHOU.Launcher.Desktop/SHOU.Launcher.Desktop.csproj';configuration='Release';rid=$SequenceRid;source_sha=$sha;source_fingerprint=$sourceFingerprint;owner_sha256=(Get-FileHash $owner).Hash;fixture_only=$true;output=$out})
         }
     }
 } catch {$failure=$_.Exception;throw}
