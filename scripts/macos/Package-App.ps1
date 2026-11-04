@@ -12,6 +12,12 @@ $mac=Join-Path $app 'Contents/MacOS'
 $res=Join-Path $app 'Contents/Resources'
 $null=New-Item -ItemType Directory -Path (Split-Path $mac),$res -Force
 Copy-Item -LiteralPath $publish -Destination $mac -Recurse
+# Resource directories do not belong in the code directory: codesign treats dotted
+# package/version directories there as nested bundles instead of ordinary resources.
+foreach ($name in @('licenses','LICENSE','LICENCE','THIRD-PARTY-METADATA.json')) {
+    $source=Join-Path $mac $name
+    if (Test-Path -LiteralPath $source) { Move-Item -LiteralPath $source -Destination (Join-Path $res $name) }
+}
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 Copy-Item -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/Images/Conduit/club-logo.png') -Destination $res
 Copy-Item -LiteralPath (Join-Path $repo 'LICENSE'),(Join-Path $repo 'Plain Craft Launcher 2/LICENCE') -Destination $res

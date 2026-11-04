@@ -351,7 +351,14 @@ public sealed class LauncherService : ILauncherService
         await InitializeAsync(ct).ConfigureAwait(false);
         if (!await operation.WaitAsync(0, ct).ConfigureAwait(false)) throw new InvalidOperationException("另一项操作尚在运行，请等待或取消。");
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
-        try { Set(s => s with { State = state, Error = null }); await action(linked.Token).ConfigureAwait(false); if (Snapshot.State != "Running") Set(s => s with { State = game is null ? "Ready" : "Running" }); }
+        try
+        {
+            Set(s => s with { State = state, Error = null });
+            await action(linked.Token).ConfigureAwait(false);
+            // A process observer can already have reported failure before StartAsync returns.
+            // Only complete our own transitional state; never overwrite a newer Error/Running.
+            Set(s => s.State == state ? s with { State = game is null ? "Ready" : "Running" } : s);
+        }
         catch (OperationCanceledException) { MarkDownloads("Cancelled", null); Set(s => s with { State = game is null ? "Ready" : "Running", Error = "操作已取消，已校验文件与部分下载保留。" }); throw; }
         catch (Exception ex) { var message = SafeError(ex); MarkDownloads("Failed", message); Set(s => s with { State = "Error", Error = message }); Log("Error", message); throw; }
         finally { operation.Release(); }
