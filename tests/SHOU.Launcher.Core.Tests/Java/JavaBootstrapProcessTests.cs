@@ -18,7 +18,7 @@ public sealed class JavaBootstrapProcessTests
 
     [TestMethod]
     [TestCategory("JavaArgumentProtection")]
-    public async Task RealJava8BytecodeEchoKeepsSecretsOutOfOsAndHotSpotCommandLines()
+    public async Task RealJava8BytecodeEchoKeepsSecretsOutOfHotSpotCommandLineAndClearsInput()
     {
         var fixture = await Fixture.Value;
         await using var runner = new ProcessRunner();
@@ -32,16 +32,10 @@ public sealed class JavaBootstrapProcessTests
         await capture.Ready.Task.WaitAsync(TimeSpan.FromSeconds(10));
         var diagnostic = await runner.RunAsync(new(fixture.Jcmd, [child.ProcessId.ToString(), "VM.command_line"], fixture.Root,
             fixture.Environment, Timeout: TimeSpan.FromSeconds(10)));
-        Assert.AreEqual(0, diagnostic.ExitCode);
+        Assert.AreEqual(0, diagnostic.ExitCode, "Registered jcmd must query its owned child; native attach permissions/support are required.");
         Assert.IsTrue(diagnostic.StandardOutput.Contains("org.shou.launcher.bootstrap.BootstrapMain", StringComparison.Ordinal));
         Assert.IsFalse(diagnostic.StandardOutput.Contains(secret, StringComparison.Ordinal));
         Assert.IsFalse(diagnostic.StandardOutput.Contains("SecureEcho", StringComparison.Ordinal));
-        if (!OperatingSystem.IsMacOS()) Assert.Inconclusive("OS argv native assertion in this gate currently targets macOS; Windows requires its own native evidence.");
-        var argv = await runner.RunAsync(new("/bin/ps", ["-ww", "-p", child.ProcessId.ToString(), "-o", "command="], fixture.Root,
-            Timeout: TimeSpan.FromSeconds(5)));
-        Assert.AreEqual(0, argv.ExitCode);
-        Assert.IsFalse(argv.StandardOutput.Contains(secret, StringComparison.Ordinal));
-        Assert.IsFalse(argv.StandardOutput.Contains("SecureEcho", StringComparison.Ordinal));
         foreach (var (value, index) in values.Select((value, index) => (value, index)))
             StringAssert.Contains(capture.Text, "A" + index + ":" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value))).ToLowerInvariant());
         StringAssert.Contains(capture.Text, "THREAD:main");
@@ -49,6 +43,34 @@ public sealed class JavaBootstrapProcessTests
         Assert.IsFalse(capture.Text.Contains(secret, StringComparison.Ordinal));
         AssertCleared(owned);
         await Assert.ThrowsAsync<InvalidOperationException>(async () => await runner.StartAsync(fixture.Bootstrap(input)));
+        await child.StopAsync();
+        Assert.IsTrue((await child.Completion).Cancelled);
+    }
+
+    [TestMethod]
+    [TestCategory("JavaArgumentProtection")]
+    [TestCategory("MacOSNativeArgv")]
+    public async Task MacOsNativeArgvContainsOnlyBootstrapEntryAndPublicJvmArguments()
+    {
+        if (!OperatingSystem.IsMacOS())
+        {
+            Assert.Inconclusive("This case requires native macOS /bin/ps; it supplies no Windows/Linux OS argv evidence.");
+            return;
+        }
+        var fixture = await Fixture.Value;
+        await using var runner = new ProcessRunner();
+        var secret = "synthetic-macos-private-" + Guid.NewGuid().ToString("N");
+        using var payload = JavaBootstrapPayload.Create("SecureEcho", ["hold", secret]);
+        using var input = SensitiveProcessInput.CopyFrom(payload.Bytes.Span);
+        var capture = new Capture();
+        await using var child = await runner.StartAsync(fixture.Bootstrap(input), capture);
+        await capture.Ready.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var argv = await runner.RunAsync(new("/bin/ps", ["-ww", "-p", child.ProcessId.ToString(), "-o", "command="], fixture.Root,
+            Timeout: TimeSpan.FromSeconds(5)));
+        Assert.AreEqual(0, argv.ExitCode);
+        StringAssert.Contains(argv.StandardOutput, "org.shou.launcher.bootstrap.BootstrapMain");
+        Assert.IsFalse(argv.StandardOutput.Contains(secret, StringComparison.Ordinal));
+        Assert.IsFalse(argv.StandardOutput.Contains("SecureEcho", StringComparison.Ordinal));
         await child.StopAsync();
         Assert.IsTrue((await child.Completion).Cancelled);
     }
@@ -169,8 +191,16 @@ public sealed class JavaBootstrapProcessTests
         public static async Task<NativeFixture> CreateAsync()
         {
             var taskRoot = System.Environment.GetEnvironmentVariable("SHOU_DEV_ROOT") ?? throw new InvalidOperationException("Native Java input tests require control/dev.py.");
-            var home = System.Environment.GetEnvironmentVariable("JAVA_HOME") ?? throw new InvalidOperationException("Registered Java tool is missing.");
-            Assert.IsTrue(Path.GetFullPath(home).StartsWith(Path.Combine(taskRoot, "tools", "java") + Path.DirectorySeparatorChar, StringComparison.Ordinal));
+            using var tools = JsonDocument.Parse(await File.ReadAllTextAsync(Path.Combine(taskRoot, "control", "tools.json")));
+            if (!tools.RootElement.TryGetProperty("java", out var registered) || !registered.TryGetProperty("home", out var registeredHome)
+                || registeredHome.ValueKind != JsonValueKind.String || string.IsNullOrWhiteSpace(registeredHome.GetString()))
+                throw new InvalidOperationException("Java input tests require an explicitly registered java.home; the CI tool owner must register its selected JDK.");
+            var home = registeredHome.GetString()!;
+            var selectedHome = System.Environment.GetEnvironmentVariable("JAVA_HOME") ?? throw new InvalidOperationException("Registered JAVA_HOME is missing.");
+            if (!Path.IsPathFullyQualified(home) || !Path.IsPathFullyQualified(selectedHome)
+                || !Path.GetFullPath(home).TrimEnd(Path.DirectorySeparatorChar).Equals(Path.GetFullPath(selectedHome).TrimEnd(Path.DirectorySeparatorChar),
+                    OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+                throw new InvalidOperationException("JAVA_HOME does not match the selected JDK registered by the task controller.");
             var root = Path.Combine(taskRoot, "test-data", "platform", "B6", Guid.NewGuid().ToString("N")); Directory.CreateDirectory(root);
             var classes = Path.Combine(root, "classes"); Directory.CreateDirectory(classes);
             var source = Path.Combine(root, "SecureEcho.java");
