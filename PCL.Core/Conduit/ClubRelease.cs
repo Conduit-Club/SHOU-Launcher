@@ -7,8 +7,8 @@ namespace PCL.Core.Conduit;
 
 public sealed record ClubRelease(string Tag, string Title, string Notes, string PageUrl)
 {
-    public const string CurrentVersion = "1.4.0";
-    public const string CurrentCodename = "lzj";
+    public const string CurrentVersion = "1.5.0";
+    public const string CurrentCodename = "wyc";
     public const string CurrentTag = "v" + CurrentVersion;
 
     public bool IsNewerThan(string currentTag)
