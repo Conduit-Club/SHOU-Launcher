@@ -13,7 +13,7 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
     private readonly SemaphoreSlim gate = new(1, 1);
     private JsonObject root = new();
     private bool canWrite = true;
-    private readonly string file = Path.Combine(paths.LocalDataDirectory, "shou.desktop.v1.json");
+    private readonly string file = Core.IO.SafePath.Within(paths.LocalDataDirectory, "shou.desktop.v1.json");
     public bool CanWrite => canWrite;
     public static JsonSerializerOptions JsonOptions { get; } = new(JsonSerializerDefaults.Web) { WriteIndented = true };
     public async Task<LauncherState> LoadAsync(CancellationToken ct = default)
@@ -21,6 +21,7 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
         await gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
+            _ = Core.IO.SafePath.Within(paths.LocalDataDirectory, "shou.desktop.v1.json");
             if (!File.Exists(file)) return new(new(), [], []);
             try
             {
@@ -56,8 +57,20 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
             }
             next["selectedInstanceId"] = state.SelectedInstanceId;
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-            await File.WriteAllTextAsync(file + ".tmp", next.ToJsonString(JsonOptions), ct).ConfigureAwait(false);
-            File.Move(file + ".tmp", file, true);
+            _ = Core.IO.SafePath.Within(paths.LocalDataDirectory, "shou.desktop.v1.json");
+            var temporary = Core.IO.SafePath.Within(paths.LocalDataDirectory, "shou.desktop.v1.json.tmp-" + Guid.NewGuid().ToString("N"));
+            var created = false;
+            try
+            {
+                await using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true))
+                {
+                    created = true;
+                    await JsonSerializer.SerializeAsync(stream, next, JsonOptions, ct).ConfigureAwait(false);
+                    await stream.FlushAsync(ct).ConfigureAwait(false);
+                }
+                File.Move(temporary, file, true);
+            }
+            finally { if (created && File.Exists(temporary)) File.Delete(temporary); }
             root = next;
         }
         finally { gate.Release(); }

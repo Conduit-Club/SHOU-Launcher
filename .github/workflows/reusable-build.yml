@@ -29,37 +29,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Resolve build identity
-        id: identity
-        shell: pwsh
-        env:
-          BUILD_ARCH: ${{ inputs.architecture }}
-        run: |
-          $identity = ./scripts/conduit/Get-BuildIdentity.ps1 -Architecture $env:BUILD_ARCH -Configuration CI
-          "artifact_name=$($identity.ArchiveStem)" | Add-Content -LiteralPath $env:GITHUB_OUTPUT
-
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: '10.0.403'
 
       - name: Build Project
+        id: publish
         shell: pwsh
         env:
-          PCL_WRITE_SECRET: '1'
           PCL_MS_CLIENT_ID: ${{ secrets.CLIENT_ID }}
           PCL_CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
-          PCL_GITHUB_SHA: ${{ github.sha }}
           BUILD_CONFIGURATION: ${{ inputs.configuration }}
           BUILD_ARCHITECTURE: ${{ inputs.architecture }}
         run: |
-          dotnet publish "Plain Craft Launcher 2/Plain Craft Launcher 2.csproj" "-p:Configuration=$env:BUILD_CONFIGURATION" "-p:Platform=$env:BUILD_ARCHITECTURE" -p:UseSharedCompilation=false -p:DeleteExistingFiles=true -o ./artifact --no-self-contained
-          if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed: $LASTEXITCODE" }
-          $coreAssembly = "PCL.Core/bin/${env:BUILD_CONFIGURATION}-${env:BUILD_ARCHITECTURE}/net10.0-windows/PCL.Core.dll"
-          ./scripts/conduit/Assert-ClientCredentials.ps1 -AssemblyPath $coreAssembly
+          ./scripts/conduit/Publish.ps1 -Architecture $env:BUILD_ARCHITECTURE -Configuration $env:BUILD_CONFIGURATION -OutputRoot artifact
 
       - name: Upload the Build Artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: ${{ steps.identity.outputs.artifact_name }}
+          name: ${{ steps.publish.outputs.artifact_name }}
           path: artifact/**

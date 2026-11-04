@@ -64,7 +64,7 @@ public sealed class AuthRegressionTests
         Assert.AreNotEqual(old, current); Assert.ThrowsExactly<InvalidOperationException>(() => registry.RequireActive(old));
         registry.RequireActive(current); registry.End(second);
     }
-    [TestMethod] public async Task FailedSettingsWriteCannotPublishDraftOrChangeProxy()
+    [TestMethod, TestCategory("DesktopPlatforms")] public async Task FailedSettingsWriteCannotPublishDraftOrChangeProxy()
     {
         var network = new NetworkOptions(); using var http = new HttpClient(new HttpClientHandler { UseProxy = false }); var downloader = new VerifiedDownloader(http);
         var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
@@ -72,7 +72,7 @@ public sealed class AuthRegressionTests
         await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, network);
         await service.InitializeAsync();
-        Directory.CreateDirectory(Path.Combine(platform.Paths.LocalDataDirectory, "shou.desktop.v1.json.tmp"));
+        Directory.CreateDirectory(Path.Combine(platform.Paths.LocalDataDirectory, "shou.desktop.v1.json"));
         var old = service.Snapshot.Settings;
         await Assert.ThrowsAsync<Exception>(() => service.SaveSettingsAsync(old with { MemoryMiB = 1536, Proxy = new(ProxyMode.Direct) }));
         Assert.AreEqual(old, service.Snapshot.Settings); Assert.AreEqual(ProxyMode.System, network.Capture().Proxy.Mode);
@@ -83,5 +83,22 @@ public sealed class AuthRegressionTests
         var before = options.Capture(); options.Update(new(Proxy: new(ProxyMode.Custom, "http://127.0.0.1:1"), Aria2: new(false)));
         Assert.AreEqual(ProxyMode.Direct, before.Proxy.Mode); Assert.IsTrue(before.Aria2.Enabled);
         var after = options.Capture(); Assert.AreEqual(ProxyMode.Custom, after.Proxy.Mode); Assert.IsFalse(after.Aria2.Enabled); Assert.IsGreaterThan(before.Revision, after.Revision);
+    }
+    [TestMethod] public void MicrosoftClientIdUsesExplicitThenUserThenBuildAndReportsMissingConfiguration()
+    {
+        const string explicitId = "11111111-1111-4111-8111-111111111111", userId = "22222222-2222-4222-8222-222222222222", builtId = "33333333-3333-4333-8333-333333333333";
+        var build = new FixtureBuild(builtId);
+        Assert.AreEqual(explicitId, AuthenticationClient.ResolveMicrosoftClientId(explicitId, userId, build));
+        Assert.AreEqual(userId, AuthenticationClient.ResolveMicrosoftClientId(null, userId, build));
+        Assert.AreEqual(builtId, AuthenticationClient.ResolveMicrosoftClientId(" ", null, build));
+        Assert.ThrowsExactly<AuthenticationException>(() => AuthenticationClient.ResolveMicrosoftClientId(null, null, new FixtureBuild(null)));
+        Assert.ThrowsExactly<AuthenticationException>(() => AuthenticationClient.ResolveMicrosoftClientId("invalid-explicit", userId, build));
+    }
+    private sealed record FixtureBuild(string? MicrosoftClientId) : IBuildConfiguration
+    {
+        public string? CurseForgeApiKey => null;
+        public string SourceSha => "fixture";
+        public string Configuration => "Release";
+        public string OwnerAssembly => "fixture";
     }
 }

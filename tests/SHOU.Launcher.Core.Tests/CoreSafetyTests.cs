@@ -15,6 +15,17 @@ namespace SHOU.Launcher.Core.Tests;
 [TestClass]
 public sealed class CoreSafetyTests
 {
+    [TestMethod] public async Task ConfigurationSymlinkCannotReadOrOverwriteAnotherRoot()
+    {
+        if (OperatingSystem.IsWindows()) return; // Native Windows reparse policy is a separate gate.
+        var paths = new AppPaths(new(TestFiles.Root()), new(LauncherOS.MacOS, RuntimeArchitecture.Arm64, RuntimeArchitecture.Arm64, "26"));
+        Directory.CreateDirectory(paths.LocalDataDirectory);
+        var outside = Path.Combine(TestFiles.Root(), "preserve.json");
+        await File.WriteAllTextAsync(outside, "must survive");
+        File.CreateSymbolicLink(Path.Combine(paths.LocalDataDirectory, "shou.desktop.v1.json"), outside);
+        Assert.ThrowsExactly<IOException>(() => new ConfigurationStore(paths));
+        Assert.AreEqual("must survive", await File.ReadAllTextAsync(outside));
+    }
     [TestMethod] public async Task UnhashedCatalogIsAlwaysFreshAndTypedParseIsSeparate()
     {
         var count = 0;

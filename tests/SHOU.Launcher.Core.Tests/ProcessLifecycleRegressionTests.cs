@@ -10,7 +10,7 @@ namespace SHOU.Launcher.Core.Tests;
 [TestClass]
 public sealed class ProcessLifecycleRegressionTests
 {
-    [TestMethod]
+    [TestMethod, TestCategory("DesktopPlatforms")]
     public async Task AlreadyExitedGameFailureSurvivesLaunchOperationCompletion()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Cached fixture must not perform network requests.")));

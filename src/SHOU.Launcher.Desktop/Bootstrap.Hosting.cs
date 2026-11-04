@@ -100,7 +100,20 @@ public static partial class Bootstrap
     private static void TryWriteFailureReport(Exception error, string stage)
     {
         try { WriteCommandReport(new { status = "FAIL", stage, errorType = error.GetType().Name,
-            message = Launcher?.Snapshot.Error ?? "命令或清理未完成；未作成功声明。", reportedAt = DateTimeOffset.UtcNow }); }
+            message = Launcher?.Snapshot.Error ?? "命令或清理未完成；未作成功声明。",
+            // Method identities diagnose native startup without copying exception text, argv,
+            // response bodies, file contents, credentials or source-file paths into a report.
+            stackMethods = new System.Diagnostics.StackTrace(error, false).GetFrames()
+                .Select(frame => frame.GetMethod()).Where(method => method is not null)
+                .Select(method => method!.DeclaringType?.FullName + "." + method.Name).Take(32).ToArray(),
+            innerTypes = InnerExceptionTypes(error), reportedAt = DateTimeOffset.UtcNow }); }
         catch (Exception reportError) { Console.Error.WriteLine("Failure report could not be written: " + reportError.GetType().Name); }
+    }
+    private static string[] InnerExceptionTypes(Exception error)
+    {
+        var types = new List<string>();
+        for (var inner = error.InnerException; inner is not null && types.Count < 8; inner = inner.InnerException)
+            types.Add(inner.GetType().FullName ?? inner.GetType().Name);
+        return types.ToArray();
     }
 }

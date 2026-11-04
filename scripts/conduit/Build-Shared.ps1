@@ -49,7 +49,7 @@ function Invoke-ConduitBuildEnvironment([string]$Repo, [string]$EnvFile, [script
     $names = @((Get-ChildItem Env:PCL_*).Name) + @('CURSEFORGE_API_KEY','CURSEFORGE_API')
     foreach ($name in ($names | Select-Object -Unique)) { $saved[$name] = [Environment]::GetEnvironmentVariable($name, 'Process') }
     try {
-        foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $null, 'Process') }
+        foreach ($name in $saved.Keys) { Remove-Item -LiteralPath ('Env:'+$name) -ErrorAction SilentlyContinue }
         $env:PCL_WRITE_SECRET = '1'
         $env:PCL_MS_CLIENT_ID = $inputConfig.Credentials.MicrosoftClientId
         $env:PCL_CURSEFORGE_API_KEY = $inputConfig.Credentials.CurseForgeApiKey
@@ -57,8 +57,11 @@ function Invoke-ConduitBuildEnvironment([string]$Repo, [string]$EnvFile, [script
         if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve actual checkout SHA.' }
         & $Action $inputConfig
     } finally {
-        Get-ChildItem Env:PCL_* | ForEach-Object { [Environment]::SetEnvironmentVariable($_.Name, $null, 'Process') }
-        foreach ($name in $saved.Keys) { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
+        Get-ChildItem Env:PCL_* | ForEach-Object { Remove-Item -LiteralPath ('Env:'+$_.Name) -ErrorAction SilentlyContinue }
+        foreach ($name in $saved.Keys) {
+            if($null -eq $saved[$name]) { Remove-Item -LiteralPath ('Env:'+$name) -ErrorAction SilentlyContinue }
+            else { [Environment]::SetEnvironmentVariable($name, $saved[$name], 'Process') }
+        }
     }
 }
 function Invoke-ConduitDotnet([string]$Dotnet, [string[]]$Arguments, [string]$LogPath) {
@@ -74,6 +77,9 @@ function Invoke-ConduitDotnet([string]$Dotnet, [string[]]$Arguments, [string]$Lo
 function Assert-ConduitProjectPaths([string]$Dotnet, [string[]]$Projects, [string[]]$Properties, [string]$ReportPath) {
     $names = 'OutputPath,BaseIntermediateOutputPath,IntermediateOutputPath,MSBuildProjectExtensionsPath,ProjectAssetsFile,PublishDir,PackageOutputPath,TargetPath'
     $reports = @()
+    $artifactProperty=@($Properties | Where-Object { $_.StartsWith('-p:ArtifactsPath=',[StringComparison]::OrdinalIgnoreCase) })
+    $expected=if($artifactProperty.Count){(Resolve-ConduitCanonicalPath $artifactProperty[-1].Substring(17)).TrimEnd([IO.Path]::DirectorySeparatorChar)}else{$null}
+    $comparison=if($IsWindows){[StringComparison]::OrdinalIgnoreCase}else{[StringComparison]::Ordinal}
     foreach ($project in $Projects) {
         $raw = & $Dotnet msbuild $project "-getProperty:$names" @Properties
         if ($LASTEXITCODE -ne 0) { throw 'Cannot evaluate output paths.' }
@@ -81,7 +87,10 @@ function Assert-ConduitProjectPaths([string]$Dotnet, [string[]]$Projects, [strin
         foreach ($entry in $values.Properties.PSObject.Properties) {
             if ($entry.Value) {
                 $path = if ([IO.Path]::IsPathRooted($entry.Value)) { $entry.Value } else { Join-Path (Split-Path $project) $entry.Value }
-                $null = Assert-ConduitTaskPath $path
+                $canonical = Assert-ConduitTaskPath $path
+                if($expected -and -not ($canonical.Equals($expected,$comparison) -or $canonical.StartsWith($expected+[IO.Path]::DirectorySeparatorChar,$comparison))) {
+                    throw "Evaluated project output escaped this job root: $($entry.Name)"
+                }
             }
         }
         $reports += [pscustomobject]@{ project = $project; properties = $values.Properties }
