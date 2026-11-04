@@ -19,18 +19,9 @@ public class EnvironmentInteropGenerator : IIncrementalGenerator
             // These three values are deliberately distributed with the client.
             // Never capture unrelated service tokens or private keys from the build environment.
 #pragma warning disable RS1035
-            var envs = Environment.GetEnvironmentVariables();
+            var approved = SHOU.Build.Generation.ClientBuildInputs.Capture();
 #pragma warning restore RS1035
-            var secretPairs = envs.Contains("PCL_WRITE_SECRET") ? (
-                from key in (
-                    from key in envs.Keys.Cast<string>()
-                    where key is "PCL_MS_CLIENT_ID" or "PCL_CURSEFORGE_API_KEY" or "PCL_GITHUB_SHA"
-                    select key
-                )
-                let value = envs[key]?.ToString()
-                where !string.IsNullOrWhiteSpace(value)
-                select (key.Substring(4), value)
-            ) : [];
+            var secretPairs = approved.Select(pair => (pair.Key, (string?)pair.Value));
             return secretPairs;
         });
 
