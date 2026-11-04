@@ -12,6 +12,8 @@ $metadata = Get-Content -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/me
 $version = [string]$metadata.version.base
 $releaseSource = Get-Content -LiteralPath (Join-Path $repo 'PCL.Core/Conduit/ClubRelease.cs') -Raw
 $declaredVersion = [regex]::Match($releaseSource, 'CurrentVersion = "([^"]+)"').Groups[1].Value
+$codename = [regex]::Match($releaseSource, 'CurrentCodename = "([^"]+)"').Groups[1].Value
+if ($metadata.PSObject.Properties['codename'] -and $metadata.codename -cne $codename) { throw 'metadata codename and ClubRelease.CurrentCodename must match.' }
 if ($version -notmatch '^\d+\.\d+\.\d+$' -or $version -ne $declaredVersion) {
     throw 'metadata.json and ClubRelease.CurrentVersion must contain the same numeric version.'
 }
@@ -35,6 +37,7 @@ if ($BuildSuffix -and $BuildSuffix -notmatch '^[0-9A-Za-z]+(?:[.-][0-9A-Za-z]+)*
 $label = "v$version" + $(if ($BuildSuffix) { "-$BuildSuffix" } else { '' })
 [pscustomobject]@{
     Version = $version
+    Codename = $codename
     Commit = $commit
     Label = $label
     ArchiveStem = "SHOU-Launcher-$(if ($RuntimeIdentifier) { $RuntimeIdentifier } else { 'win-' + $Architecture.ToLowerInvariant() })-$label"

@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.LogsView">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="10" Margin="0,0,0,14"><WrapPanel><Button Name="CopyLogsButton" Content="复制脱敏日志" Click="CopyLogs_Click" Margin="0,0,8,4" /><Button Name="ExportLogsButton" Content="导出日志…" Click="ExportLogs_Click" Margin="0,0,8,4" /><Button Content="清空显示" Click="ClearLogs_Click" Margin="0,0,8,4" /><CheckBox Content="跟随最新日志" IsChecked="{Binding FollowTail}" Margin="8,0" /></WrapPanel><TextBlock Text="{Binding Summary}" Classes="muted" /><TextBlock Text="{Binding Feedback}" Classes="muted" /><TextBlock Text="尚无日志。操作实例、下载或账户后，服务输出会显示在此处。" IsVisible="{Binding IsEmpty}" Classes="muted" /></StackPanel>
+    <Border BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="10" Background="{DynamicResource ClubSurface}">
+      <ListBox Name="LogEntries" ItemsSource="{Binding Entries}" Background="Transparent" BorderThickness="0" Padding="10" SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Text}" FontFamily="Menlo, Consolas, monospace" FontSize="12" TextWrapping="Wrap" /></DataTemplate></ListBox.ItemTemplate></ListBox>
+    </Border>
+  </DockPanel>
+</UserControl>

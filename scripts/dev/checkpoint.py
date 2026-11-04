@@ -53,7 +53,7 @@ def capture(repo, out, baseline=None):
             patch+=b''.join(fixed)
     (out/'changes.patch').write_bytes(patch)
     manifest={'created_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'worktree':str(repo),
-        'branch':git(repo,'branch','--show-current').decode().strip(),'base_sha':git(repo,'rev-parse','HEAD').decode().strip(),
+        'branch':git(repo,'branch','--show-current').decode().strip(),'base_sha':git(repo,'merge-base','HEAD','origin/dev').decode().strip(),'current_sha':git(repo,'rev-parse','HEAD').decode().strip(),
         'dirty':bool(git(repo,'status','--porcelain').strip()),'baseline_snapshot':str(baseline) if baseline else None,
         'patch_path':str(out/'changes.patch'),'patch_sha256':hashlib.sha256(patch).hexdigest(),'files':data}
     (out/'snapshot.json').write_text(json.dumps(manifest,ensure_ascii=False,indent=2)+'\n')

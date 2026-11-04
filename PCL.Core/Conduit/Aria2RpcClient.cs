@@ -52,7 +52,13 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
     public async Task<string> GetVersionAsync(CancellationToken cancellationToken = default)
         => (string?)(await CallAsync("getVersion", [], cancellationToken).ConfigureAwait(false))["version"] ?? "未知版本";
 
-    public static string TaskId(string path) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(Path.GetFullPath(path).ToUpperInvariant())))[..16].ToLowerInvariant();
+    public static string TaskId(string path)
+    {
+        var identity = Path.GetFullPath(path);
+        // Keep Windows GIDs compatible; Unix case-sensitive paths must remain distinct.
+        if (OperatingSystem.IsWindows()) identity = identity.ToUpperInvariant();
+        return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(identity)))[..16].ToLowerInvariant();
+    }
 
     public async Task DownloadAsync(IReadOnlyList<string> urls, string partialPath, string userAgent,
         Action<Aria2Progress>? progress, CancellationToken cancellationToken = default)
@@ -69,7 +75,7 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
             if (existing != null)
             {
                 var actual = (string?)existing["files"]?[0]?["path"];
-                if (actual == null || !string.Equals(Path.GetFullPath(actual), fullPath, StringComparison.OrdinalIgnoreCase))
+                if (actual == null || !string.Equals(Path.GetFullPath(actual), fullPath, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
                     throw new IOException("aria2 任务的输出路径不匹配，拒绝接管。");
                 attached = true;
                 var status = (string?)existing["status"];

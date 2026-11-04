@@ -1,0 +1,1 @@
+Pinned official Mojang metadata and asset-index fixture for Minecraft 1.21.1. Source URLs, byte sizes and SHA-1/SHA-256 are in sources.json. Expected classpaths were computed independently by platform_worker; production resolver tests consume them without network. This fixture is not evidence of a game launch or authentication.

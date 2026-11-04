@@ -1,0 +1,26 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <ResourceDictionary.ThemeDictionaries>
+    <ResourceDictionary x:Key="Light">
+      <SolidColorBrush x:Key="ClubBackground">#FDF9F3</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSurface">#FFFFFF</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSidebar">#F6EEE8</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubForeground">#3E302C</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubMuted">#70625D</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubAccent">#904855</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubBorder">#E9DDD6</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubErrorBackground">#FFF0EE</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubErrorForeground">#9B332D</SolidColorBrush>
+    </ResourceDictionary>
+    <ResourceDictionary x:Key="Dark">
+      <SolidColorBrush x:Key="ClubBackground">#201C1E</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSurface">#2B2528</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSidebar">#282124</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubForeground">#F6E9E5</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubMuted">#C3AEAA</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubAccent">#D99CAA</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubBorder">#4A3B41</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubErrorBackground">#4B282D</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubErrorForeground">#FFC6BC</SolidColorBrush>
+    </ResourceDictionary>
+  </ResourceDictionary.ThemeDictionaries>
+</ResourceDictionary>

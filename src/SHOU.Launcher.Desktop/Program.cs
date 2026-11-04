@@ -7,9 +7,7 @@ internal static class Program
     [STAThread]
     public static int Main(string[] args)
     {
-        var diagnostic = Bootstrap.TryRunDiagnostics(args);
-        if (diagnostic.HasValue) return diagnostic.Value;
-        return BuildAvaloniaApp().StartWithClassicDesktopLifetime(args);
+        return Bootstrap.Run(args);
     }
     public static AppBuilder BuildAvaloniaApp() => AppBuilder.Configure<App>().UsePlatformDetect().LogToTrace();
 }

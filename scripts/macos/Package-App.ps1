@@ -15,6 +15,17 @@ Copy-Item -LiteralPath $publish -Destination $mac -Recurse
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 Copy-Item -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/Images/Conduit/club-logo.png') -Destination $res
 Copy-Item -LiteralPath (Join-Path $repo 'LICENSE'),(Join-Path $repo 'Plain Craft Launcher 2/LICENCE') -Destination $res
+$iconset=Join-Path $env:TMPDIR ('shou-'+[guid]::NewGuid().ToString('N')+'.iconset')
+$null=New-Item -ItemType Directory -Path $iconset
+foreach ($size in @(16,32,128,256,512)) {
+    foreach ($scale in @(1,2)) {
+        $name="icon_$($size)x$($size)"+$(if ($scale -eq 2) {'@2x'} else {''})+'.png'
+        & /usr/bin/sips -z ($size*$scale) ($size*$scale) (Join-Path $res 'club-logo.png') --out (Join-Path $iconset $name) | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot generate bundle icon.' }
+    }
+}
+& /usr/bin/iconutil -c icns $iconset -o (Join-Path $res 'SHOU.icns')
+if ($LASTEXITCODE -ne 0) { throw 'Cannot encode bundle icon.' }
 @"
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -24,6 +35,7 @@ Copy-Item -LiteralPath (Join-Path $repo 'LICENSE'),(Join-Path $repo 'Plain Craft
 <key>CFBundleName</key><string>SHOU Launcher</string>
 <key>CFBundleDisplayName</key><string>潮涌核心社启动器</string>
 <key>CFBundlePackageType</key><string>APPL</string>
+<key>CFBundleIconFile</key><string>SHOU.icns</string>
 <key>CFBundleVersion</key><string>$Version</string>
 <key>CFBundleShortVersionString</key><string>$Version</string>
 <key>NSHighResolutionCapable</key><true/>
@@ -33,19 +45,26 @@ Copy-Item -LiteralPath (Join-Path $repo 'LICENSE'),(Join-Path $repo 'Plain Craft
 & /bin/chmod +x (Join-Path $mac 'SHOU.Launcher.Desktop')
 if ($LASTEXITCODE -ne 0) { throw 'Cannot set apphost executable permission.' }
 $nativeReport=@()
-foreach ($file in Get-ChildItem -LiteralPath $mac -File) {
+foreach ($file in Get-ChildItem -LiteralPath $mac -File -Recurse) {
     $kind = & /usr/bin/file -b $file.FullName
-    if ($kind -notmatch 'Mach-O') { continue }
-    $arch = & /usr/bin/lipo -archs $file.FullName
-    if ($LASTEXITCODE -ne 0 -or $arch -notmatch 'arm64') { throw "Native dependency is not arm64: $($file.Name)" }
-    $links = & /usr/bin/otool -L $file.FullName
-    if ($LASTEXITCODE -ne 0 -or ($links -join "`n") -match '/opt/homebrew|/Users/[^/]+/') { throw "Unexpected developer-machine native dependency: $($file.Name)" }
-    # Sign each actual Mach-O independently. ad-hoc is only local execution, never notarization.
+    if ($kind -match 'Mach-O') {
+        $arch = & /usr/bin/lipo -archs $file.FullName
+        if ($LASTEXITCODE -ne 0 -or $arch -notmatch 'arm64') { throw "Native dependency is not arm64: $($file.Name)" }
+        $links = & /usr/bin/otool -L $file.FullName
+        $dependencyRows = @($links | Where-Object { $_ -match '^\s+' })
+        if ($LASTEXITCODE -ne 0 -or ($dependencyRows -join "`n") -match '/opt/homebrew|/Users/[^/]+/') { throw "Unexpected developer-machine native dependency: $($file.Name)" }
+        $nativeReport += @{file=$file.Name;architectures=$arch;dependencies=$dependencyRows;signature='ad-hoc'}
+    }
+    # All files in Contents/MacOS are code subcomponents, including PE DLLs and JSON data.
+    # Follow Avalonia's explicit per-file signing order, then sign the apphost/bundle last.
+    # codesign stores generic-file signatures in xattrs; ditto preserves them in the archive.
+    if ($file.Name -eq 'SHOU.Launcher.Desktop') { continue }
     & /usr/bin/codesign --force --sign - $file.FullName 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Local native signing failed: $($file.Name)" }
-    $nativeReport += @{file=$file.Name;architectures=$arch;dependencies=$links;signature='ad-hoc'}
+    & /usr/bin/codesign --verify --strict $file.FullName
+    if ($LASTEXITCODE -ne 0) { throw "Individual signature verification failed: $($file.Name)" }
 }
-& /usr/bin/codesign --force --sign - $app 2>&1 | Out-Host
+& /usr/bin/codesign --force --sign - --identifier club.conduit.shou.launcher --entitlements (Join-Path $PSScriptRoot 'Entitlements.plist') $app 2>&1 | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'Local bundle signing failed.' }
 & /usr/bin/codesign --verify --strict $app
 if ($LASTEXITCODE -ne 0) { throw 'Local bundle signature verification failed.' }

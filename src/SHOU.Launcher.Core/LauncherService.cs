@@ -1,0 +1,442 @@
+using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using PCL.Core.Conduit;
+using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Core.Authentication;
+using SHOU.Launcher.Core.Configuration;
+using SHOU.Launcher.Core.Diagnostics;
+using SHOU.Launcher.Core.Downloads;
+using SHOU.Launcher.Core.IO;
+using SHOU.Launcher.Core.Minecraft;
+using ClubServer = SHOU.Launcher.Core.Abstractions.ClubServer;
+
+namespace SHOU.Launcher.Core;
+
+/// <summary>Production orchestration shared by both desktops. All persisted account DTOs are nonsecret.</summary>
+public sealed class LauncherService : ILauncherService
+{
+    private readonly PlatformServices platform;
+    private readonly HttpClient http;
+    private readonly IVerifiedDownloader downloader;
+    private readonly NetworkOptions network;
+    private readonly BuildConfiguration build;
+    private readonly ConfigurationStore config;
+    private readonly AuthenticationClient authentication;
+    private readonly SemaphoreSlim initialize = new(1, 1), operation = new(1, 1);
+    private readonly CancellationTokenSource lifetime = new();
+    private readonly object sync = new();
+    private readonly ConcurrentDictionary<string, AuthSession> sessions = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, DownloadTaskSnapshot> downloads = new(StringComparer.Ordinal);
+    private readonly Queue<LauncherLog> logs = new();
+    private readonly LogRedactor redactor = new();
+    private LauncherSnapshot snapshot;
+    private bool initialized, disposed;
+    private CancellationTokenSource? installCancellation;
+    private IManagedProcess? game;
+    private Task? gameObserver;
+    private long gameGeneration;
+    private DateTimeOffset lastDownloadUpdate;
+    private readonly DownloadTaskRegistry downloadOwners = new();
+    private readonly string launcherLogPath;
+
+    public LauncherService(PlatformServices platform, HttpClient http, IVerifiedDownloader downloader,
+        NetworkOptions network, BuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null)
+    {
+        this.platform = platform; this.http = http; this.downloader = downloader; this.network = network;
+        build = buildConfiguration ?? new(); config = new(platform.Paths);
+        authentication = authenticationClient ?? new(http);
+        network.Credentials = platform.Credentials;
+        launcherLogPath = Path.Combine(platform.Paths.LogsDirectory, "launcher.log");
+        snapshot = new(build.GetIdentity(), platform.Info.Context, new(), [], [], [],
+            [new("none", "只启动游戏", ""), new("smp", "SMP · 多人生存", "smp.shoumc.com"),
+             new("create", "Create · 创造建筑", "create.shoumc.com"), new("shou", "SHOU · 校园展示", "shou.shoumc.com")], []);
+    }
+    public LauncherSnapshot Snapshot { get { lock (sync) return snapshot; } }
+    public IAppPaths Paths => platform.Paths;
+    public IPlatformCapabilities Capabilities => platform.Capabilities;
+    public event EventHandler<LauncherSnapshot>? SnapshotChanged;
+    public event EventHandler<LauncherLog>? LogReceived;
+    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    {
+        await initialize.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            ObjectDisposedException.ThrowIf(disposed, this);
+            if (initialized) return;
+            if (!GeneratedLifecycle.Entries.SequenceEqual(new[] { "Paths", "DataLock", "Configuration", "Credentials", "Network", "Accounts", "UI" }))
+                throw new InvalidOperationException("Generated startup contract is not compatible with Bootstrap.");
+            foreach (var path in new[] { Paths.DataDirectory, Paths.SharedDataDirectory, Paths.LocalDataDirectory, Paths.CacheDirectory,
+                         Paths.LogsDirectory, Paths.RuntimesDirectory, Paths.InstancesDirectory, Paths.TempDirectory }) Directory.CreateDirectory(path);
+            var state = await config.LoadAsync(cancellationToken).ConfigureAwait(false);
+            ConfigurationStore.ValidateSettings(state.Settings);
+            if (state.Settings.GameRoot is { Length: > 0 } gameRoot) EnsureIsolatedGamePath(gameRoot);
+            foreach (var instance in state.Instances) EnsureIsolatedGamePath(instance.GameDirectory);
+            network.Update(state.Settings);
+            Set(s => s with { Settings = state.Settings, Instances = state.Instances, Accounts = state.Accounts,
+                SelectedAccountId = state.SelectedAccountId, SelectedInstanceId = state.SelectedInstanceId });
+            foreach (var account in state.Accounts.Where(a => a.Kind != AccountKind.Offline))
+            {
+                try
+                {
+                    var bytes = await platform.Credentials.ReadAsync(AccountKey(account.Id), cancellationToken).ConfigureAwait(false);
+                    if (bytes is not null)
+                    {
+                        try
+                        {
+                            var session = JsonSerializer.Deserialize<AuthSession>(bytes, ConfigurationStore.JsonOptions) ?? throw new InvalidDataException("Empty credential record.");
+                            if (!AccountIdentity.Matches(account, session.Profile)) throw new InvalidDataException("Protected account identity/origin mismatch.");
+                            var trusted = session.Profile with { Persisted = true, Status = "已保存 · 启动时验证" };
+                            RegisterSession(session); sessions[account.Id] = session with { Profile = trusted }; ReplaceAccount(trusted);
+                        }
+                        finally { CryptographicOperations.ZeroMemory(bytes); }
+                    }
+                    else ReplaceAccount(account with { Persisted = false, Status = "凭据缺失 · 请重新登录" });
+                }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) when (ex is CredentialStoreException or JsonException or InvalidDataException or IOException)
+                {
+                    Set(s => s with { CanPersistAccounts = false });
+                    ReplaceAccount(account with { Status = "凭据读取失败 · 原数据保留" });
+                    Log("Warning", "账户凭据无法读取，已禁止账户持久写入；原因类型：" + ex.GetType().Name);
+                }
+            }
+            initialized = true;
+            Log("Info", $"{Snapshot.Build.Name} {Snapshot.Build.Version} · {Snapshot.Platform.RuntimeIdentifier} · configuration owner={build.OwnerAssembly}");
+        }
+        finally { initialize.Release(); }
+    }
+    public async Task<GameInstance> CreateInstanceAsync(string name, string versionId, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken).ConfigureAwait(false);
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 80) throw new ArgumentException("请输入1–80字符实例名称。");
+        SafePath.Identifier(versionId);
+        var instance = new GameInstance(Guid.NewGuid().ToString("N"), name.Trim(), versionId,
+            SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")));
+        await ExecuteAsync("Ready", async ct =>
+        {
+            Directory.CreateDirectory(instance.GameDirectory);
+            Set(s => s with { Instances = s.Instances.Append(instance).ToArray(), SelectedInstanceId = instance.Id });
+            await PersistAsync(ct).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
+        return instance;
+    }
+    public Task SelectInstanceAsync(string instanceId, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
+    { _ = FindInstance(instanceId); Set(s => s with { SelectedInstanceId = instanceId }); await PersistAsync(ct).ConfigureAwait(false); }, cancellationToken);
+    public async Task<IReadOnlyList<JavaInstallation>> DiscoverJavaAsync(CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken).ConfigureAwait(false);
+        var result = await platform.JavaDiscovery.DiscoverAsync(new(Snapshot.Settings.JavaExecutable, Paths.RuntimesDirectory), cancellationToken).ConfigureAwait(false);
+        Set(s => s with { JavaInstallations = result }); return result;
+    }
+    public Task InstallInstanceAsync(string instanceId, CancellationToken cancellationToken = default) => ExecuteAsync("Installing", async ct =>
+    { _ = await PrepareInstanceAsync(FindInstance(instanceId), ct).ConfigureAwait(false); }, cancellationToken);
+    private async Task<(InstalledGame Game, JavaInstallation Java)> PrepareInstanceAsync(GameInstance instance, CancellationToken ct)
+    {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var ownership = downloadOwners.Begin(instance.Id); installCancellation = cancellation;
+        try { return await PrepareInstanceCoreAsync(instance, cancellation.Token).ConfigureAwait(false); }
+        finally { downloadOwners.End(ownership); installCancellation = null; }
+    }
+    private async Task<(InstalledGame Game, JavaInstallation Java)> PrepareInstanceCoreAsync(GameInstance instance, CancellationToken ct)
+    {
+        EnsureIsolatedGamePath(instance.GameDirectory);
+        if (instance.Loader is not ("vanilla" or "fabric")) throw new PlatformNotSupportedException("当前预览尚未实现此loader的processor链。");
+        var resolver = new VersionMetadataResolver(http, downloader, Paths.CacheDirectory, Sources);
+        var version = await resolver.ResolveAsync(instance.VersionId, ct).ConfigureAwait(false);
+        var preferred = instance.JavaExecutable ?? Snapshot.Settings.JavaExecutable;
+        var candidates = await platform.JavaDiscovery.DiscoverAsync(new(preferred, Paths.RuntimesDirectory, version.RequiredJavaMajor,
+            Snapshot.Platform.HardwareArchitecture), ct).ConfigureAwait(false);
+        Set(s => s with { JavaInstallations = candidates });
+        var java = candidates.FirstOrDefault(j => j.IsUsable && j.MajorVersion == version.RequiredJavaMajor
+            && j.RuntimeArchitecture == Snapshot.Platform.HardwareArchitecture && (string.IsNullOrWhiteSpace(preferred) || PathEquals(j.ExecutablePath, preferred)));
+        if (java is null)
+        {
+            if (!string.IsNullOrWhiteSpace(preferred)) throw new InvalidOperationException("指定Java未通过版本/架构探测；请修正选择，不会静默替换用户指定runtime。");
+            java = await platform.JavaInstaller.InstallAsync(new(version.JavaComponent, version.RequiredJavaMajor, Snapshot.Platform.OS,
+                Snapshot.Platform.HardwareArchitecture, Paths.RuntimesDirectory), new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
+            Set(s => s with { JavaInstallations = s.JavaInstallations.Append(java).ToArray() });
+        }
+        var context = Context(java);
+        var gameFiles = await new MinecraftInstaller(http, downloader, Paths.CacheDirectory, Sources).InstallAsync(version, context,
+            instance.GameDirectory, new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
+        Set(s => s with { Instances = s.Instances.Select(i => i.Id == instance.Id ? i with { Installed = true } : i).ToArray() });
+        await PersistAsync(ct).ConfigureAwait(false);
+        return (gameFiles, java);
+    }
+    public async Task<LaunchPlan> BuildLaunchPlanAsync(string instanceId, CancellationToken cancellationToken = default)
+    {
+        LaunchPlan? plan = null;
+        await ExecuteAsync("Installing", async ct =>
+        { var instance = FindInstance(instanceId); var prepared = await PrepareInstanceAsync(instance, ct).ConfigureAwait(false); plan = await PlanAsync(instance, prepared.Game, prepared.Java, ct).ConfigureAwait(false); }, cancellationToken).ConfigureAwait(false);
+        return plan!;
+    }
+    private async Task<LaunchPlan> PlanAsync(GameInstance instance, InstalledGame installed, JavaInstallation java, CancellationToken ct)
+    {
+        var account = Snapshot.Accounts.FirstOrDefault(a => a.Id == Snapshot.SelectedAccountId) ?? throw new InvalidOperationException("请先选择账户或添加本地离线测试档案。");
+        LaunchIdentity identity;
+        if (account.Kind == AccountKind.Offline) identity = new(account.DisplayName, account.PlayerUuid, "0");
+        else
+        {
+            if (!sessions.TryGetValue(account.Id, out var session)) throw new AuthenticationException("missing_credentials", "账户凭据不可用，请重新登录。");
+            if (account.ExpiresAt is null || account.ExpiresAt < DateTimeOffset.UtcNow.AddMinutes(2)) session = await RefreshInternalAsync(account, ct).ConfigureAwait(false);
+            identity = new(account.DisplayName, account.PlayerUuid, session.AccessToken, account.Kind == AccountKind.Microsoft ? "msa" : "legacy", session.Xuid,
+                account.Kind == AccountKind.Microsoft ? ResolveClientId() : session.ClientToken);
+            if (account.Kind == AccountKind.Yggdrasil)
+            {
+                var server = new Uri(AuthenticationClient.NormalizeYggdrasilRoot(new Uri(account.AuthenticationServer!)));
+                var descriptor = JsonNode.Parse(await http.GetStringAsync("https://authlib-injector.yushi.moe/artifact/latest.json", ct).ConfigureAwait(false))?.AsObject() ?? throw new InvalidDataException("Authlib descriptor invalid.");
+                var url = (string?)descriptor["download_url"] ?? throw new InvalidDataException("Authlib download URL missing.");
+                var sha256 = (string?)descriptor["checksums"]?["sha256"] ?? throw new InvalidDataException("Authlib checksum missing.");
+                var injector = SafePath.Within(Paths.CacheDirectory, "authlib/" + sha256 + ".jar");
+                await downloader.DownloadAsync(new([new Uri(url)], injector, Sha256: sha256), new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
+                var metadata = await http.GetStringAsync(server, ct).ConfigureAwait(false);
+                _ = JsonNode.Parse(metadata) as JsonObject ?? throw new InvalidDataException("Auth server metadata invalid.");
+                identity = identity with { AuthenticationServer = server, InjectorPath = injector, PrefetchedMetadataBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(metadata)) };
+            }
+        }
+        var temporary = SafePath.Within(Paths.TempDirectory, "game-" + SafePath.Identifier(instance.Id));
+        Directory.CreateDirectory(temporary);
+        return LaunchPlanBuilder.Build(new(installed.Version, java, Context(java), identity, instance.GameDirectory,
+            installed.LibrariesDirectory, installed.AssetsDirectory, installed.NativesDirectory, installed.ClientJar,
+            installed.Assets.Id, instance.MemoryMiB ?? Snapshot.Settings.MemoryMiB, installed.LegacyExtractions, TemporaryDirectory: temporary));
+    }
+    public Task LaunchAsync(string instanceId, string serverId = "none", CancellationToken cancellationToken = default) => ExecuteAsync("Launching", async ct =>
+    {
+        if (game is not null && !game.Completion.IsCompleted) throw new InvalidOperationException("已有本启动器创建的游戏在运行。");
+        long generation; lock (sync) generation = ++gameGeneration;
+        if (serverId != "none") throw new PlatformNotSupportedException("当前候选先验证只启动游戏；真实账户/社团服联机门禁尚未通过。");
+        var instance = FindInstance(instanceId);
+        var prepared = await PrepareInstanceAsync(instance, ct).ConfigureAwait(false);
+        var plan = await PlanAsync(instance, prepared.Game, prepared.Java, ct).ConfigureAwait(false);
+        var reportPath = SafePath.Within(Paths.LogsDirectory, "launch-plan-redacted.json");
+        await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(plan.ToRedactedReport(), ConfigurationStore.JsonOptions), ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        var collector = new ProcessLogCollector((error, line) => Log(error ? "GameError" : "Game", line));
+        var process = await platform.Processes.StartAsync(new(plan.JavaExecutable, plan.Arguments, plan.WorkingDirectory, plan.EnvironmentOverrides,
+            OutputLimitCharacters: 4 * 1024 * 1024), new InlineProgress<ProcessOutput>(collector.Report), lifetime.Token).ConfigureAwait(false);
+        lock (sync) game = process;
+        Set(s => s with { State = "Running", GameProcessId = process.ProcessId });
+        Log("Info", "已启动本次Java游戏进程，PID=" + process.ProcessId + "；主菜单仍需独立真实观察。");
+        gameObserver = ObserveGameAsync(process, collector, generation);
+    }, cancellationToken);
+    private async Task ObserveGameAsync(IManagedProcess process, ProcessLogCollector collector, long generation)
+    {
+        try
+        {
+            var result = await process.Completion.ConfigureAwait(false); collector.Flush(result.OutputTruncated);
+            Log(result.ExitCode == 0 ? "Info" : "Error", $"本次游戏进程退出：code={result.ExitCode}, cancelled={result.Cancelled}, timeout={result.TimedOut}。");
+            Set(s => generation != gameGeneration ? s : s with { State = result.ExitCode == 0 || result.Cancelled ? "Ready" : "Error", GameProcessId = null,
+                Error = result.ExitCode == 0 || result.Cancelled ? null : "游戏异常退出，请查看日志。" });
+        }
+        catch (Exception ex) { Log("Error", "游戏进程观察失败：" + ex.GetType().Name); Set(s => generation != gameGeneration ? s : s with { State = "Error", GameProcessId = null, Error = "无法完整读取游戏退出状态。" }); }
+        finally { await process.DisposeAsync().ConfigureAwait(false); lock (sync) { if (ReferenceEquals(game, process)) game = null; } }
+    }
+    public async Task StopGameAsync(CancellationToken cancellationToken = default)
+    { var current = game; if (current is not null) await current.StopAsync(cancellationToken).ConfigureAwait(false); }
+    public Task CancelDownloadAsync(string taskId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var current = installCancellation ?? throw new InvalidOperationException("当前没有可取消的安装下载。");
+        downloadOwners.RequireActive(taskId);
+        current.Cancel(); return Task.CompletedTask;
+    }
+    public Task RetryDownloadAsync(string taskId, CancellationToken cancellationToken = default) =>
+        InstallInstanceAsync(downloadOwners.Resolve(taskId).InstanceId, cancellationToken);
+    public Task SaveSettingsAsync(LauncherSettings settings, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
+    {
+        ConfigurationStore.ValidateSettings(settings);
+        if (settings.GameRoot is { Length: > 0 } gameRoot) EnsureIsolatedGamePath(gameRoot);
+        await PersistCandidateAsync(Snapshot with { Settings = settings }, ct).ConfigureAwait(false);
+        network.Update(settings); Set(s => s with { Settings = settings });
+    }, cancellationToken);
+    public Task SaveConnectionSecretAsync(string kind, string secret, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
+    {
+        if (kind is not ("aria2" or "proxy")) throw new ArgumentException("Unknown credential kind.");
+        if (string.IsNullOrWhiteSpace(secret)) throw new ArgumentException("凭据不能为空。");
+        redactor.Register(secret);
+        var key = "connection:" + kind;
+        await platform.Credentials.WriteAsync(key, Encoding.UTF8.GetBytes(secret), ct).ConfigureAwait(false);
+        var settings = Snapshot.Settings;
+        settings = kind == "aria2" ? settings with { Aria2 = (settings.Aria2 ?? new()) with { CredentialKey = key } }
+            : settings with { Proxy = (settings.Proxy ?? new()) with { CredentialKey = key } };
+        await PersistCandidateAsync(Snapshot with { Settings = settings }, ct).ConfigureAwait(false);
+        network.Update(settings); Set(s => s with { Settings = settings });
+    }, cancellationToken);
+    public async Task<AccountProfile> AddOfflineAccountAsync(string playerName, CancellationToken cancellationToken = default)
+    {
+        if (string.IsNullOrWhiteSpace(playerName) || playerName.Length is < 3 or > 16 || playerName.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_')) throw new ArgumentException("离线档案名须为3–16位英文字母、数字或下划线。");
+        var bytes = MD5.HashData(Encoding.UTF8.GetBytes("OfflinePlayer:" + playerName)); bytes[6] = (byte)((bytes[6] & 0x0f) | 0x30); bytes[8] = (byte)((bytes[8] & 0x3f) | 0x80);
+        var uuid = Convert.ToHexString(bytes).ToLowerInvariant();
+        var account = new AccountProfile("offline:" + uuid, AccountKind.Offline, playerName, uuid, Persisted: true, Status: "本地离线档案 · 无法进入需认证社团服");
+        await ExecuteAsync("Ready", async ct => { ReplaceAccount(account); Set(s => s with { SelectedAccountId = account.Id }); await PersistAsync(ct).ConfigureAwait(false); }, cancellationToken).ConfigureAwait(false);
+        return account;
+    }
+    public async Task<AccountProfile> LoginMicrosoftAsync(IProgress<DeviceCodeChallenge> challenge, CancellationToken cancellationToken = default)
+    {
+        AccountProfile? result = null;
+        await ExecuteAsync("Authenticating", async ct => { var session = await authentication.LoginMicrosoftAsync(ResolveClientId(), challenge, ct).ConfigureAwait(false); result = await SaveSessionAsync(session, ct).ConfigureAwait(false); }, cancellationToken).ConfigureAwait(false);
+        return result!;
+    }
+    public async Task<IReadOnlyList<AccountProfile>> LoginYggdrasilAsync(Uri server, string username, string password, CancellationToken cancellationToken = default)
+        => await LoginYggdrasilCoreAsync(server, username, password, null, cancellationToken).ConfigureAwait(false);
+    public Task<IReadOnlyList<AccountProfile>> LoginYggdrasilWithProfileSelectionAsync(Uri server, string username, string password,
+        Func<IReadOnlyList<AuthenticationProfileChoice>, CancellationToken, Task<string?>> selectProfile, CancellationToken cancellationToken = default)
+        => LoginYggdrasilCoreAsync(server, username, password, selectProfile, cancellationToken);
+    private async Task<IReadOnlyList<AccountProfile>> LoginYggdrasilCoreAsync(Uri server, string username, string password,
+        Func<IReadOnlyList<AuthenticationProfileChoice>, CancellationToken, Task<string?>>? selectProfile, CancellationToken cancellationToken)
+    {
+        redactor.Register(password); redactor.Register(username);
+        var result = new List<AccountProfile>();
+        await ExecuteAsync("Authenticating", async ct =>
+        { foreach (var session in await authentication.LoginYggdrasilAsync(server, username, password, ct, selectProfile).ConfigureAwait(false)) result.Add(await SaveSessionAsync(session, ct).ConfigureAwait(false)); }, cancellationToken).ConfigureAwait(false);
+        return result;
+    }
+    private async Task<AccountProfile> SaveSessionAsync(AuthSession session, CancellationToken ct)
+    {
+        RegisterSession(session); var account = session.Profile;
+        if (Snapshot.CanPersistAccounts)
+        {
+            try
+            {
+                var data = JsonSerializer.SerializeToUtf8Bytes(session, ConfigurationStore.JsonOptions);
+                try { await platform.Credentials.WriteAsync(AccountKey(account.Id), data, ct).ConfigureAwait(false); }
+                finally { CryptographicOperations.ZeroMemory(data); }
+                account = account with { Persisted = true, Status = "已保存 · 启动时验证" };
+            }
+            catch (CredentialStoreException ex)
+            { Set(s => s with { CanPersistAccounts = false }); account = account with { Persisted = false, Status = "当前会话可用 · 凭据无法持久保存" }; Log("Warning", "凭据持久保存失败；原数据保留，未降明文。状态=" + ex.Failure); }
+        }
+        else account = account with { Persisted = false, Status = "当前会话可用 · 持久保存已禁用" };
+        sessions[account.Id] = session with { Profile = account }; ReplaceAccount(account); Set(s => s with { SelectedAccountId = account.Id });
+        await PersistAsync(ct).ConfigureAwait(false); return account;
+    }
+    public Task RefreshAccountAsync(string accountId, CancellationToken cancellationToken = default) => ExecuteAsync("Authenticating", async ct =>
+    { _ = await RefreshInternalAsync(FindAccount(accountId), ct).ConfigureAwait(false); }, cancellationToken);
+    private async Task<AuthSession> RefreshInternalAsync(AccountProfile account, CancellationToken ct)
+    {
+        if (account.Kind == AccountKind.Offline) throw new InvalidOperationException("离线档案无需刷新。");
+        if (!sessions.TryGetValue(account.Id, out var current)) throw new AuthenticationException("missing_credentials", "请重新登录此账户。");
+        try
+        {
+            var refreshed = account.Kind == AccountKind.Microsoft ? await authentication.RefreshMicrosoftAsync(ResolveClientId(), current, ct).ConfigureAwait(false)
+                : await authentication.RefreshYggdrasilAsync(current, ct).ConfigureAwait(false);
+            _ = await SaveSessionAsync(refreshed, ct).ConfigureAwait(false); return sessions[account.Id];
+        }
+        catch (AuthenticationException) { ReplaceAccount(account with { Status = "凭据已失效 · 请重新登录" }); throw; }
+    }
+    public Task SelectAccountAsync(string accountId, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
+    { _ = FindAccount(accountId); Set(s => s with { SelectedAccountId = accountId }); await PersistAsync(ct).ConfigureAwait(false); }, cancellationToken);
+    public Task RemoveAccountAsync(string accountId, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
+    {
+        var account = FindAccount(accountId);
+        if (!Snapshot.CanPersistAccounts && account.Kind != AccountKind.Offline) throw new InvalidOperationException("凭据读取曾失败，删除写入已禁用以保护原数据。");
+        if (account.Kind != AccountKind.Offline) await platform.Credentials.DeleteAsync(AccountKey(accountId), ct).ConfigureAwait(false);
+        sessions.TryRemove(accountId, out _); Set(s => s with { Accounts = s.Accounts.Where(a => a.Id != accountId).ToArray(), SelectedAccountId = s.SelectedAccountId == accountId ? null : s.SelectedAccountId });
+        await PersistAsync(ct).ConfigureAwait(false);
+    }, cancellationToken);
+    public async Task RefreshServersAsync(CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken).ConfigureAwait(false);
+        if (Paths.IsIsolated) { Set(s => s with { Servers = s.Servers.Select(server => server.Id == "none" ? server : server with { Status = "隔离验证未连接服务器" }).ToArray() }); return; }
+        var current = Snapshot.Servers;
+        var refreshed = await Task.WhenAll(current.Select(async server => server.Id == "none" ? server : await ClubStatusProbe.ProbeAsync(server, cancellationToken).ConfigureAwait(false))).ConfigureAwait(false);
+        Set(s => s with { Servers = refreshed });
+    }
+    public IReadOnlyList<LauncherLog> GetRecentLogs() { lock (sync) return logs.ToArray(); }
+    private async Task ExecuteAsync(string state, Func<CancellationToken, Task> action, CancellationToken ct)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        if (!await operation.WaitAsync(0, ct).ConfigureAwait(false)) throw new InvalidOperationException("另一项操作尚在运行，请等待或取消。");
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
+        try { Set(s => s with { State = state, Error = null }); await action(linked.Token).ConfigureAwait(false); if (Snapshot.State != "Running") Set(s => s with { State = game is null ? "Ready" : "Running" }); }
+        catch (OperationCanceledException) { MarkDownloads("Cancelled", null); Set(s => s with { State = game is null ? "Ready" : "Running", Error = "操作已取消，已校验文件与部分下载保留。" }); throw; }
+        catch (Exception ex) { var message = SafeError(ex); MarkDownloads("Failed", message); Set(s => s with { State = "Error", Error = message }); Log("Error", message); throw; }
+        finally { operation.Release(); }
+    }
+    private Task PersistAsync(CancellationToken ct)
+    {
+        return PersistCandidateAsync(Snapshot, ct);
+    }
+    private Task PersistCandidateAsync(LauncherSnapshot state, CancellationToken ct)
+    {
+        // If reading any credential failed, do not overwrite the persisted account list with a partial view.
+        return config.SaveAsync(new(state.Settings, state.Instances, state.Accounts.Where(a => a.Kind == AccountKind.Offline || a.Persisted).ToArray(), state.SelectedAccountId, state.SelectedInstanceId), ct, writeAccounts: state.CanPersistAccounts);
+    }
+    private void OnTransfer(TransferProgress progress)
+    {
+        var id = downloadOwners.Register(progress.Id);
+        downloads[id] = new(id, Path.GetFileName(progress.Id), progress.Stage, progress.BytesReceived, progress.TotalBytes, progress.Source);
+        lock (sync)
+        {
+            if (DateTimeOffset.UtcNow - lastDownloadUpdate < TimeSpan.FromMilliseconds(120) && progress.Stage != "Completed") return;
+            lastDownloadUpdate = DateTimeOffset.UtcNow;
+        }
+        Set(s => s with { Downloads = downloads.Values.TakeLast(250).ToArray() });
+    }
+    private void MarkDownloads(string state, string? error)
+    { foreach (var item in downloads.ToArray()) if (item.Value.State is "Queued" or "Downloading") downloads[item.Key] = item.Value with { State = state, Error = error }; Set(s => s with { Downloads = downloads.Values.TakeLast(250).ToArray() }); }
+    private void RegisterSession(AuthSession session)
+    { redactor.Register(session.AccessToken); redactor.Register(session.RefreshToken); redactor.Register(session.ClientToken); redactor.Register(session.Profile.PlayerUuid); redactor.Register(session.Profile.DisplayName); }
+    private void ReplaceAccount(AccountProfile account) => Set(s => s with { Accounts = s.Accounts.Where(a => a.Id != account.Id).Append(account).ToArray() });
+    private GameInstance FindInstance(string id) => Snapshot.Instances.FirstOrDefault(i => i.Id == id) ?? throw new KeyNotFoundException("找不到实例。");
+    private AccountProfile FindAccount(string id) => Snapshot.Accounts.FirstOrDefault(a => a.Id == id) ?? throw new KeyNotFoundException("找不到账户。");
+    private static string AccountKey(string id) => "account:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(id))).ToLowerInvariant();
+    private string ResolveClientId() => AuthenticationClient.ResolveMicrosoftClientId(null, Snapshot.Settings.MicrosoftClientId, build);
+    private IReadOnlyList<DownloadSource> Sources() => DownloadSources.Parse(Snapshot.Settings.DownloadSourcesJson);
+    private RuleContext Context(JavaInstallation java) => new(Snapshot.Platform.MinecraftOS, Snapshot.Platform.OSVersion, java.RuntimeArchitecture,
+        new Dictionary<string, bool> { ["is_demo_user"] = false, ["has_custom_resolution"] = false, ["has_quick_plays_support"] = false });
+    private static bool PathEquals(string a, string b) => string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+    private void EnsureIsolatedGamePath(string path)
+    {
+        if (!Path.IsPathFullyQualified(path)) throw new InvalidDataException("实例游戏路径必须为绝对路径。");
+        if (!Paths.IsIsolated) return;
+        var relative = Path.GetRelativePath(SafePath.Canonical(Paths.DataDirectory), SafePath.Canonical(path));
+        if (Path.IsPathRooted(relative) || relative == ".." || relative.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            throw new InvalidDataException("隔离模式的游戏目录不能越出数据根；请先显式重新映射旧路径。");
+    }
+    private string SafeError(Exception ex) => ex switch
+    { AuthenticationException auth => redactor.Scrub(auth.Message), CredentialStoreException cred => "凭据服务不可用（" + cred.Failure + "），原数据保留。", AggregateException => "下载或元数据所有来源均失败，请检查网络并重试。", _ => redactor.Scrub(ex.Message) };
+    private void Set(Func<LauncherSnapshot, LauncherSnapshot> change)
+    {
+        LauncherSnapshot next; lock (sync) snapshot = next = change(snapshot);
+        if (SnapshotChanged is { } changed) foreach (EventHandler<LauncherSnapshot> subscriber in changed.GetInvocationList()) { try { subscriber(this, next); } catch { /* UI observers cannot corrupt orchestration. */ } }
+    }
+    private void Log(string level, string message)
+    {
+        var log = new LauncherLog(DateTimeOffset.UtcNow, level, redactor.Scrub(message));
+        lock (sync)
+        {
+            logs.Enqueue(log); while (logs.Count > 500) logs.Dequeue();
+            try { if (Directory.Exists(Paths.LogsDirectory)) File.AppendAllText(launcherLogPath, $"{log.Timestamp:O} [{log.Level}] {log.Message}\n"); } catch (IOException) { }
+        }
+        if (LogReceived is { } received) foreach (EventHandler<LauncherLog> subscriber in received.GetInvocationList()) { try { subscriber(this, log); } catch { } }
+    }
+    public async ValueTask DisposeAsync()
+    {
+        if (disposed) return; disposed = true; lifetime.Cancel(); installCancellation?.Cancel();
+        await operation.WaitAsync().ConfigureAwait(false);
+        try { if (game is { } current) await current.StopAsync().ConfigureAwait(false); if (gameObserver is { } observer) await observer.ConfigureAwait(false); await config.DisposeAsync().ConfigureAwait(false); }
+        finally { operation.Release(); lifetime.Dispose(); }
+    }
+    private sealed class InlineProgress<T>(Action<T> callback) : IProgress<T> { public void Report(T value) => callback(value); }
+    private sealed class ProcessLogCollector(Action<bool, string> emit)
+    {
+        private readonly StringBuilder stdout = new(), stderr = new();
+        private readonly object gate = new();
+        public void Report(ProcessOutput output)
+        {
+            lock (gate)
+            {
+                var buffer = output.IsStandardError ? stderr : stdout; buffer.Append(output.Text);
+                while (buffer.ToString().IndexOf('\n') is var index && index >= 0)
+                { var line = buffer.ToString(0, index).TrimEnd('\r'); buffer.Remove(0, index + 1); emit(output.IsStandardError, line); }
+                // Do not emit partial lines: a token may straddle process stream chunks.
+                if (buffer.Length > 131072) { buffer.Clear(); emit(output.IsStandardError, "[overlong game log line omitted]"); }
+            }
+        }
+        public void Flush(bool omitPartial) { lock (gate) { if (!omitPartial) { if (stdout.Length > 0) emit(false, stdout.ToString()); if (stderr.Length > 0) emit(true, stderr.ToString()); } stdout.Clear(); stderr.Clear(); } }
+    }
+}

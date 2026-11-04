@@ -64,6 +64,11 @@ function Invoke-ConduitBuildEnvironment([string]$Repo, [string]$EnvFile, [script
 function Invoke-ConduitDotnet([string]$Dotnet, [string[]]$Arguments, [string]$LogPath) {
     & $Dotnet @Arguments 2>&1 | Tee-Object -FilePath $LogPath | Out-Host
     $code = $LASTEXITCODE
+    $stepsPath = Join-Path (Split-Path $LogPath) 'steps.json'
+    $steps = @()
+    if (Test-Path -LiteralPath $stepsPath) { $steps = @(Get-Content -Raw -LiteralPath $stepsPath | ConvertFrom-Json) }
+    $steps += [pscustomobject]@{ command = @($Dotnet) + $Arguments; cwd = (Get-Location).Path; exit_code = $code; log = $LogPath; time = [DateTimeOffset]::UtcNow.ToString('o') }
+    $steps | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $stepsPath -Encoding utf8
     if ($code -ne 0) { throw "dotnet step failed (exit $code); log: $LogPath" }
 }
 function Assert-ConduitProjectPaths([string]$Dotnet, [string[]]$Projects, [string[]]$Properties, [string]$ReportPath) {

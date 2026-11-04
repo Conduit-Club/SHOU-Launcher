@@ -33,7 +33,7 @@ public sealed partial class BuildConfiguration : IBuildConfiguration
             ?? throw new InvalidOperationException("Required PCL.metadata.json resource is missing.");
         using var metadata = JsonDocument.Parse(stream);
         return new(metadata.RootElement.GetProperty("name").GetString()!,
-            metadata.RootElement.GetProperty("version").GetProperty("base").GetString()!, "wyc", SourceSha,
+            metadata.RootElement.GetProperty("version").GetProperty("base").GetString()!, metadata.RootElement.GetProperty("codename").GetString()!, SourceSha,
             Configuration, OwnerAssembly, !string.IsNullOrWhiteSpace(MicrosoftClientId), !string.IsNullOrWhiteSpace(CurseForgeApiKey));
     }
 }

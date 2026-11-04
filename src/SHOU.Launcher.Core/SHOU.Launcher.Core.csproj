@@ -5,5 +5,7 @@
     <AdditionalFiles Include="Configuration/settings.schema" />
     <AdditionalFiles Include="Configuration/lifecycle.registry" />
     <EmbeddedResource Include="../../Plain Craft Launcher 2/metadata.json" LogicalName="PCL.metadata.json" />
+    <Compile Include="../../PCL.Core/Conduit/DownloadSources.cs" Link="Downloads/DownloadSources.cs" />
+    <Compile Include="../../PCL.Core/Conduit/Aria2RpcClient.cs" Link="Downloads/Aria2RpcClient.cs" />
   </ItemGroup>
 </Project>

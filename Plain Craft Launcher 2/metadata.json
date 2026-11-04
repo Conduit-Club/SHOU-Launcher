@@ -1,5 +1,6 @@
 {
   "name": "潮涌核心社启动器",
+  "codename": "wyc",
   "version": {
     "base": "1.5.0",
     "upstream": "2.12.1",

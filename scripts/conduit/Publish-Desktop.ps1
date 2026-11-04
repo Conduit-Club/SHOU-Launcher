@@ -26,19 +26,20 @@ try {
         param($inputConfig)
         Assert-ConduitProjectPaths -Dotnet $Dotnet -Projects $projects -Properties $props -ReportPath (Join-Path $report 'paths-before.json')
         Invoke-ConduitDotnet $Dotnet (@('restore',$entry) + $props) (Join-Path $report 'restore.log')
-        Invoke-ConduitDotnet $Dotnet (@('clean',$entry) + $props) (Join-Path $report 'clean.log')
+        Invoke-ConduitDotnet $Dotnet (@('clean',$entry,'-v','quiet') + $props) (Join-Path $report 'clean.log')
         Invoke-ConduitDotnet $Dotnet (@('publish',$entry,'--no-restore','-o',(Join-Path $build 'publish-desktop')) + $props) (Join-Path $report 'publish.log')
         Assert-ConduitProjectPaths -Dotnet $Dotnet -Projects $projects -Properties $props -ReportPath (Join-Path $report 'paths-after.json')
         $publish = Join-Path $build 'publish-desktop'
         $owner = Join-Path $publish 'SHOU.Launcher.Core.dll'
         $check = & (Join-Path $PSScriptRoot 'Assert-ClientCredentials.ps1') -AssemblyPath $owner
         $dirty = -not [string]::IsNullOrWhiteSpace((& git -C $repo status --porcelain) -join "`n")
-        $info = [ordered]@{ entry='Avalonia Desktop'; version=$identity.Version; label=$identity.Label; source_sha=$env:PCL_GITHUB_SHA; source_dirty=$dirty;
+        $info = [ordered]@{ entry='Avalonia Desktop'; version=$identity.Version; codename=$identity.Codename; label=$identity.Label; source_sha=$env:PCL_GITHUB_SHA; source_dirty=$dirty;
             sdk=(& $Dotnet --version); avalonia='12.1.5'; runtime=$RuntimeIdentifier; configuration=$Configuration; self_contained=$true;
             configuration_owner='SHOU.Launcher.Core.dll'; configuration_sources=$inputConfig.Sources; credential_verification=$check;
             signing='local candidate; not notarized'; windows_default='legacy WPF'; built_at=[DateTimeOffset]::UtcNow.ToString('o') }
         Copy-Item -LiteralPath (Join-Path $repo 'LICENSE'),(Join-Path $repo 'Plain Craft Launcher 2/LICENCE') -Destination $publish
         Copy-Item -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/metadata.json') -Destination (Join-Path $publish 'THIRD-PARTY-METADATA.json')
+        & (Join-Path $PSScriptRoot 'Collect-DesktopLicenses.ps1') -PublishDirectory $publish
         $info | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $publish 'BUILD-INFO.json') -Encoding utf8
         $info | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'BUILD-INFO.json') -Encoding utf8
         if ($RuntimeIdentifier -eq 'osx-arm64') {

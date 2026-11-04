@@ -1,0 +1,18 @@
+{
+  "version_id": "1.21.1",
+  "metadata_sha1": "82ba6501da174a665c1787775f946487422f2432",
+  "asset_index_id": "17",
+  "asset_index_sha1": "4ca8e1a1edd37a703c5d1594f71d409852cd9770",
+  "java_component": "java-runtime-delta",
+  "java_major": 21,
+  "macos_artifacts": 63,
+  "macos_library_bytes": 64939887,
+  "client_bytes": 26836906,
+  "unique_asset_bytes": 826124658,
+  "legacy_native_descriptor_count": 0,
+  "modern_native_classifiers_required": [
+    "natives-macos",
+    "natives-macos-arm64"
+  ],
+  "xstart_on_first_thread_count": 1
+}
