@@ -51,3 +51,9 @@ Core集成83/83及新增官方1.21.1回归后的86/86均实测通过，0警告0�
 新增独立跨平台workflow，保留Windows旧入口gate；reusable legacy构建改走同一Publish链，SDK统一10.0.403。标准runner规格仅列14GB SSD（[GitHub官方资料](https://docs.github.com/en/actions/reference/runners/github-hosted-runners)），因此仅全新ephemeral GitHub任务根显式登记8GiB保留量/10GiB停止线；现有本机night controller仍保持20GiB保留量、10GiB停止线、35GiB任务上限。CI按真实free决定是否放行，不使用收费runner，不绕本机控制器。新增脚本语法与合成空间fixture通过，云端未获运行授权，状态NOT_RUN。
 
 当前下一步：集成Core/Headless回归、构建输入异常/还原检查、本地阶段提交；再冻结同一源码执行B07，随后生成当前Windows x64/ARM64候选。Windows原生、旧数据导入/往返、DPAPI及默认接管仍未完成。
+
+## B07 源码不变门禁与恢复目标修正
+
+首轮B07的A包已完成真实owner检查，但正常restore将Core/生成器锁文件从无RID改为win-x64目标，源码指纹检查正确拒绝该轮，未继续把它记为三步通过。保留原ArtifactsRoot与A归档，没有删除obj。新SHOU工程统一声明osx-arm64/win-x64/win-arm64及仅供可移植测试的linux-x64恢复目标；五份锁文件现在均含同一目标集合，避免切换入口/RID时再改写源码锁文件。产品Publish仍只接受Windows/macOS三RID，Linux没有产品宿主支持声明。
+
+修正后Core89通过/1项在线opt-in跳过，Headless26/26通过，均0警告/错误；独立TRX保存于reports/night/P0-GATES。UI B3单文件增量已按hash整合，Application.Name在XAML加载前来自真实metadata/provider，未手写品牌默认值；worker和集成各26项，数量不累加。下一条实际动作是从新干净本地检查点，以原B07中间根和新的fixture输出目录重跑完整A→B→none。

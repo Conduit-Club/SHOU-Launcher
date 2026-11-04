@@ -5,6 +5,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Configurations>Debug;CI;Beta;Release</Configurations>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Keep lock targets stable across native hosts and portable Linux test jobs.
+         Product publishing remains restricted to the three supported Desktop RIDs. -->
+    <RuntimeIdentifiers>osx-arm64;win-x64;win-arm64;linux-x64</RuntimeIdentifiers>
     <Deterministic>true</Deterministic>
     <UseSharedCompilation>false</UseSharedCompilation>
     <Version>1.5.0</Version>

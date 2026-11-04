@@ -3,6 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Core.Configuration;
 using SHOU.Launcher.Desktop.ViewModels;
 using SHOU.Launcher.Desktop.Views;
 
@@ -10,7 +11,11 @@ namespace SHOU.Launcher.Desktop;
 
 public partial class App : Application
 {
-    public override void Initialize() => AvaloniaXamlLoader.Load(this);
+    public override void Initialize()
+    {
+        Name = Bootstrap.Launcher?.Snapshot.Build.Name ?? new BuildConfiguration().GetIdentity().Name;
+        AvaloniaXamlLoader.Load(this);
+    }
     public override void OnFrameworkInitializationCompleted()
     {
         if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime desktop)

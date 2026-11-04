@@ -2,7 +2,7 @@
   <PropertyGroup>
     <OutputType>WinExe</OutputType><TargetFramework>net10.0</TargetFramework>
     <AssemblyName>SHOU.Launcher.Desktop</AssemblyName>
-    <RuntimeIdentifiers>osx-arm64;win-x64;win-arm64</RuntimeIdentifiers>
+    <RuntimeIdentifiers>osx-arm64;win-x64;win-arm64;linux-x64</RuntimeIdentifiers>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <PublishSingleFile>false</PublishSingleFile><PublishTrimmed>false</PublishTrimmed><PublishAot>false</PublishAot>
     <ApplicationIcon>../../Plain Craft Launcher 2/Images/Conduit/club.ico</ApplicationIcon>
