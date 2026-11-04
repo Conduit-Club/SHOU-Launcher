@@ -153,3 +153,13 @@ N4补充跨配置实测发现真实失败：Beta写入唯一隔离假键后，Re
 同一最终N5 Release包再次实际运行原版1.21.1及Fabric0.16.14，Java21 ARM64、私有stdin/argv和native加载组件通过；60秒上限停止自有进程，命令exit1/cancelled仍如实保留。未在原生CUA条件无变化时重复盲试GUI，N5没有可交互主菜单、截图或正常Quit验收。L3/L4、Windows W01–W10、真实账户/入服及签名/公证仍按条件单列；旧数据往返、selected-server和其他完整功能缺口仍在续跑清单，Windows默认入口继续保留旧WPF。
 
 任务在最后45分钟仅收束包、回归、hash与报告。最终六份归档（N5四份及较早WPF回退两份）再次SHA-256核验通过，任务占用约26.9GiB触发25GiB警告但低于35GiB上限，系统free约381GiB；没有为消除警告删除源码、报告、用户数据或全局缓存。全部真实命令/退出码、精确源码patch/hash、三角色handoff、环境/路径/空间与续跑步骤由`reports/night/DELIVERY.md`及`delivery.json`索引。候选已生成不代表整体迁移完成，`all_executable_work_done=false`。
+
+## 截止前恢复收束
+
+恢复后沿用相同三角色、工具、分支和截止时间，没有重装环境或重复已通过套件。当前显示器仍报告休眠，未在GUI前提未满足时再次启动候选。两worker重新审计next_step，修正平台handoff中已经过期的“N5验证pending”措辞；主进度中的旧冻结SHA也已改为实际候选`573ce8e74b9abf429aa6b882b055ebc16c123832`。
+
+原先未执行的独立大小写敏感卷检查已实际补充：在任务根内创建256MiB稀疏Case-sensitive APFS镜像，只从N5发布包加载原Core.dll，用JavaPathBoundary/SafePath验证原生不同大小写目录inode、内部路径、大小写不同兄弟拒绝、相对路径拒绝、链接逃逸及新子路径共六项，全部PASS。单锁命令exit0、13.669秒、无timeout，保护fixture字节不变，实际detach exit0；只读hdiutil精确image路径确认无遗留挂载。DLL SHA-256为`62c22ce59e528913a1c142320b7e8937c847a145cf80679cfbdd3699ab71c497`，实际BUILD-INFO仍指向573ce8e且source_dirty=false。
+
+此结果只覆盖该卷上的JavaPathBoundary/SafePath，未推广到AppPaths、凭据namespace、完整Java trust或其他OS。harness的partial-attach/timeout故障清理分支没有注入验证，不标PASS，也不为此重跑已经通过的六项。原始命令、结果与卸载receipt位于`reports/night/resume`，平台独立review位于`handoffs/platform/CASE-SENSITIVE-NATIVE-REVIEW`。
+
+仍有Windows旧配置/实例/禁用Java导入与往返、selected-server等真实内部实现缺口，另有GUI、Windows真机、真实账户、签名等条件门禁；不能声称“只剩外部阻塞”，不能把all_executable_work_done改为true。原截止时间保持不变，本轮剩余只收束交付证据和续跑状态，产品代码及N5候选保持冻结。
