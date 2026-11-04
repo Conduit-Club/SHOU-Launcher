@@ -18,7 +18,7 @@
 
 ## 主要功能
 
-- Microsoft、MUA Union、LittleSkin 账户管理与角色切换。
+- Microsoft、MUA Union、LittleSkin 与离线账户管理和角色切换，可选微软正版 3D 皮肤与披风预览。
 - 社团首页、实景轮播与嘉然主题。
 - 游戏实例管理、社团入口选择与更新日志提醒。
 
@@ -26,7 +26,7 @@
 
 从 [Releases](https://github.com/Conduit-Club/SHOU-Launcher/releases/latest) 下载 Windows x64 启动器包，解压后运行，添加账户并选择游戏实例即可开始。运行启动器无需另装 .NET，启动 Minecraft 仍需 Java。
 
-当前开发目标为 [v1.4.0 · lzj](docs/conduit/RELEASE-v1.4.0.md)，正式发行以社团 Releases 为准。`main` 为稳定分支，`dev` 为开发分支；历史迁移与来源见 [历史说明](docs/conduit/HISTORY.md)。版本变化与已知限制见对应发行说明；源码构建请参阅[构建文档](docs/conduit/BUILD.md)。社团 QQ 群：**756155087**。
+当前开发目标为 [v1.5.0 · wyc](docs/conduit/RELEASE-v1.5.0.md)，正式发行以社团 Releases 为准。`main` 为稳定分支，`dev` 为开发分支；历史迁移与来源见 [历史说明](docs/conduit/HISTORY.md)。版本变化与已知限制见对应发行说明；源码构建请参阅[构建文档](docs/conduit/BUILD.md)。社团 QQ 群：**756155087**。
 
 ## 社团实景
 

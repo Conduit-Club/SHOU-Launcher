@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Input;
+using PCL.Core.App;
 using PCL.Core.App.Localization;
 using PCL.Core.Conduit;
 using PCL.Core.Minecraft.Profile;
@@ -9,6 +10,11 @@ namespace PCL;
 
 public partial class PageLoginProfileSkin
 {
+    private MyMenuItem Preview3DAllowed => BtnSkin.ContextMenu.Items.OfType<MyMenuItem>()
+        .Single(item => Equals(item.Tag, "preview3d-allowed"));
+    private MyMenuItem Preview3D => BtnSkin.ContextMenu.Items.OfType<MyMenuItem>()
+        .Single(item => Equals(item.Tag, "preview3d"));
+
     public PageLoginProfileSkin()
     {
         InitializeComponent();
@@ -51,6 +57,7 @@ public partial class PageLoginProfileSkin
         Skin.loader.Start(isForceRestart: true);
         TextName.Text = profile.UserName;
         TextType.Text = ProfileUi.GetProfileInfo(profile);
+        RefreshPreviewOptions();
     }
 
     #region 控制与编辑
@@ -78,8 +85,25 @@ public partial class PageLoginProfileSkin
     // 皮肤与披风子菜单
     private void BtnSkin_Click(object sender, EventArgs e)
     {
+        RefreshPreviewOptions();
         BtnSkin.ContextMenu.IsOpen = true;
     }
+
+    private void RefreshPreviewOptions()
+    {
+        Preview3DAllowed.IsChecked = Config.Launch.SkinPreview3D;
+        Preview3DAllowed.SvgIcon = Config.Launch.SkinPreview3D ? "lucide/check" : "";
+        Preview3D.IsEnabled = Config.Launch.SkinPreview3D && ProfileService.Current?.ProfileType == ProfileType.Microsoft;
+    }
+
+    private void Preview3DAllowed_Click(object sender, RoutedEventArgs e)
+    {
+        Config.Launch.SkinPreview3D = Preview3DAllowed.IsChecked;
+        RefreshPreviewOptions();
+        if (Config.Launch.SkinPreview3D) ClubSkinPreviewWindow.ShowCurrent();
+    }
+
+    private void Preview3D_Click(object sender, RoutedEventArgs e) => ClubSkinPreviewWindow.ShowCurrent();
 
     // 账号信息子菜单
     private void BtnEdit_Click(object sender, EventArgs e)

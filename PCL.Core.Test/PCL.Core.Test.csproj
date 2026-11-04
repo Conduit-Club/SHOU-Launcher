@@ -41,6 +41,7 @@
   <ItemGroup>
     <PackageReference Include="fNbt" Version="1.0.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="18.7.0" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="5.6.0" PrivateAssets="all" />
     <PackageReference Include="Microsoft.TestPlatform.AdapterUtilities" Version="18.7.0" />
     <PackageReference Include="Microsoft.TestPlatform.ObjectModel" Version="18.7.0" />
     <PackageReference Include="MSTest.TestAdapter" Version="4.3.0" />
@@ -49,6 +50,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\PCL.Core\PCL.Core.csproj" />
+    <ProjectReference Include="..\PCL.Core.SourceGenerators\PCL.Core.SourceGenerators.csproj" />
   </ItemGroup>
   <ItemGroup>
     <EmbeddedResource Include="..\Plain Craft Launcher 2\metadata.json" LogicalName="PCL.metadata.json" />

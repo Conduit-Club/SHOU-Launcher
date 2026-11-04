@@ -30,6 +30,37 @@ public sealed class SkinResponseParserTest
     }
 
     [TestMethod]
+    public void ParsesEquippedCapeAndSlimModel()
+    {
+        var response = CreateProfileResponse(Encode("""
+            {"textures":{"SKIN":{"url":"https://textures.minecraft.net/texture/Skin","metadata":{"model":"slim"}},
+                         "CAPE":{"url":"https://textures.minecraft.net/texture/Cape"}}}
+            """));
+        var textures = SkinResponseParser.ParseTextures(response);
+        Assert.AreEqual("https://textures.minecraft.net/texture/Skin", textures.SkinUrl);
+        Assert.AreEqual("https://textures.minecraft.net/texture/Cape", textures.CapeUrl);
+        Assert.IsTrue(textures.IsSlim);
+    }
+
+    [TestMethod]
+    public void CapeCanExistWithoutACustomSkin()
+    {
+        var response = CreateProfileResponse(Encode("""{"textures":{"CAPE":{"url":"https://textures.minecraft.net/texture/Cape"}}}"""));
+        var textures = SkinResponseParser.ParseTextures(response);
+        Assert.IsNull(textures.SkinUrl);
+        Assert.IsNotNull(textures.CapeUrl);
+        Assert.IsFalse(textures.IsSlim);
+    }
+
+    [TestMethod]
+    public void InvalidCapeDoesNotBreakExistingHeadLoading()
+    {
+        var response = CreateProfileResponse(Encode("""{"textures":{"SKIN":{"url":"https://textures.minecraft.net/skin"},"CAPE":{"url":123}}}"""));
+        Assert.AreEqual("https://textures.minecraft.net/skin", SkinResponseParser.TryGetSkinUrl(response));
+        Assert.ThrowsExactly<InvalidDataException>(() => SkinResponseParser.ParseTextures(response));
+    }
+
+    [TestMethod]
     public void InvalidBase64RemainsAFormatError()
     {
         var response = CreateProfileResponse("not-base64");

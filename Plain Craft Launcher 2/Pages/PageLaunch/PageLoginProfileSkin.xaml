@@ -45,6 +45,13 @@
                                               Header="{DynamicResource Launch.Account.ProfileSkin.RefreshSkin}" />
                             <local:MyMenuItem Click="BtnSkinCape_Click"
                                               Header="{DynamicResource Launch.Account.ProfileSkin.ChangeCape}" />
+                            <Separator />
+                            <local:MyMenuItem Tag="preview3d-allowed" Header="允许 3D 皮肤展示"
+                                              IsCheckable="True" Click="Preview3DAllowed_Click" />
+                            <local:MyMenuItem Tag="preview3d" Header="3D 预览皮肤与披风"
+                                              SvgIcon="lucide/box" Click="Preview3D_Click"
+                                              ToolTip="开启 3D 皮肤展示后，可预览当前微软正版账户。"
+                                              ToolTipService.ShowOnDisabled="True" />
                         </ContextMenu>
                     </local:MyIconButton.ContextMenu>
                 </local:MyIconButton>

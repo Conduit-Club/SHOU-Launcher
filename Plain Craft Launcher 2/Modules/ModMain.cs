@@ -324,7 +324,8 @@ public static class ModMain
         AuthServer,
         Login,
         Markdown,
-        ClubUpdateHistory
+        ClubUpdateHistory,
+        ClubSkinPreview
     }
 
     private static string GetDefaultDialogTitle() => Lang.Text("Common.Dialog.Title");
@@ -717,6 +718,11 @@ public static class ModMain
                     case MyMsgBoxType.ClubUpdateHistory:
                     {
                         frmMain.PanMsg.Children.Add(new ClubUpdateHistoryWindow(WaitingMyMsgBox[0]));
+                        break;
+                    }
+                    case MyMsgBoxType.ClubSkinPreview:
+                    {
+                        frmMain.PanMsg.Children.Add(new ClubSkinPreviewWindow(WaitingMyMsgBox[0]));
                         break;
                     }
                 }
