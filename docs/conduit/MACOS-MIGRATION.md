@@ -130,3 +130,26 @@ B07在最终源码再次完整通过A→B→none三步，仍使用最初登记�
 分层结果为L0编译/包、L1 Core、L2 Headless通过；L3原生GUI、L4可交互游戏主菜单及正常Quit、L5真实账户/入服仍未通过。Windows W01–W10因缺原生主机保持BLOCKED；旧配置/实例/禁用Java往返与生产根双入口接管还存在内部实现缺口，不能全归因于主机缺失。selected-server生产路径未完成，UI明确禁用非none目的地；Forge/NeoForge、完整mod/modpack内容管理及旧Java/LWJGL2兼容矩阵尚未迁移。旧WPF继续为Windows默认入口。
 
 本轮仅在三个指定功能分支进行普通本地阶段提交，未推送、合并、创建PR、打标签、调用远程Actions或发行。原工作区仍为main。最终交付索引在任务根`reports/night/DELIVERY.md`和`delivery.json`，包含六份实际归档的hash、BUILD-INFO、真实测试命令/退出码、L/B/W/D门禁、三角色handoff、精确patch/源码hash与可执行续跑步骤。迁移整体仍未完成，`all_executable_work_done`不得据此改为true。
+
+## N5 凭据失败修复与最终检查点
+
+N4补充跨配置实测发现真实失败：Beta写入唯一隔离假键后，Release新进程读取40.26秒超时，exit124且没有结果JSON；Beta随后成功删除假键。此前同一Release二进制的跨进程write/read/delete三步PASS仍只适用于同一产物，不表示跨配置或未来签名连续性。原始失败保留于`reports/night/N4/cross-configuration-credential-suite.json`。
+
+平台核实原实现已经有`kSecUseAuthenticationUIFail`，没有把重复补flag冒充修复。结合CLT头文件和[Apple Security进程内实现](https://github.com/apple-oss-distributions/Security/blob/main/OSX/libsecurity_keychain/lib/Globals.h)，为旧Keychain入口增加进程内交互状态的保存、禁用、调用及finally还原；所有store实例共用同步门，Darwin Boolean按字节传递，保存/禁用/还原的OSStatus均检查。未修改用户电源/安全偏好、Keychain ACL或存储后端。独立ad-hoc creator创建的唯一假项由生产reader约54ms拒绝读取，原creator核验原值并清理；原生状态/异常还原、串行门及既有roundtrip共4项通过。此证据不唯一证明旧挂起根因，也不保证任意Security daemon故障都有硬超时。
+
+主线程亲修账户事务：档案落盘后才发布“已保存”及选择；凭据不可写时新档案明确仅本次会话，磁盘原账户/选择不被部分视图覆盖。若刷新已轮换令牌而sidecar保存失败，保留新有效内存session，已有账户显示会话状态，冻结后续账户持久写并继续抛出真实保存失败，防止重试沿用旧token。五项定点回归全部通过，含二轮refresh令牌序列及原磁盘列表保持；UI worker独立复核确认路径关闭。
+
+新候选在干净提交`573ce8e74b9abf429aa6b882b055ebc16c123832`冻结后实测，驱动逐步核对相同HEAD/clean状态：Release Core196 PASS、3显式SKIPPED，Headless34/34，本地无Secrets的CI Core192/192，均0.NET warning/error。Java8兼容helper仍保留Java21编译的3条目标8过时提示。B07再次使用最初有效中间根，A/B/none三步源码指纹均为`3b52ba8b719c82426e87a80f018af4b733909a4b963dae41ce292914a3b95663`，owner及环境还原通过。
+
+| 最终N5候选 | SHA-256 |
+|---|---|
+| Mac ARM64 Release | `5656227d1f0564049d0e1678db2c01271a679a5b19b96fb44209940a885d6ac2` |
+| Mac ARM64 Beta | `fa3f5a02839319d8393bed443630900e6d69e9ac2256ca7eb55ec3921b741e06` |
+| Windows x64 Release | `db1b89acd2d43b1d544d70ee975db065dff726d2bacc141596a726cdc3736036` |
+| Windows ARM64 Release | `1cb5c4bfd36fb7ca412daa9630891fab4fb3964c64b7e8bde4659175ca670cff` |
+
+四包均经同一正式入口生成于`dist/N5/Desktop/<Configuration>/<RID>/default`。Mac Beta和Release最终zip解包严格验签通过；清除构建输入、SDK/pwsh PATH后的实际运行、同Release三进程假键、生产JKS/PKCS12独立副本及源保持再次通过。Windows两包PE架构检查通过但没有真机执行。跨配置N5读取在0.577秒内以typed CredentialStoreException、exit1明确拒绝，Beta复读原值与清理均exit0；无交互失败边界PASS，访问/签名连续性仍BLOCKED，原N4超时未被改写。
+
+同一最终N5 Release包再次实际运行原版1.21.1及Fabric0.16.14，Java21 ARM64、私有stdin/argv和native加载组件通过；60秒上限停止自有进程，命令exit1/cancelled仍如实保留。未在原生CUA条件无变化时重复盲试GUI，N5没有可交互主菜单、截图或正常Quit验收。L3/L4、Windows W01–W10、真实账户/入服及签名/公证仍按条件单列；旧数据往返、selected-server和其他完整功能缺口仍在续跑清单，Windows默认入口继续保留旧WPF。
+
+任务在最后45分钟仅收束包、回归、hash与报告。最终六份归档（N5四份及较早WPF回退两份）再次SHA-256核验通过，任务占用约26.9GiB触发25GiB警告但低于35GiB上限，系统free约381GiB；没有为消除警告删除源码、报告、用户数据或全局缓存。全部真实命令/退出码、精确源码patch/hash、三角色handoff、环境/路径/空间与续跑步骤由`reports/night/DELIVERY.md`及`delivery.json`索引。候选已生成不代表整体迁移完成，`all_executable_work_done=false`。
