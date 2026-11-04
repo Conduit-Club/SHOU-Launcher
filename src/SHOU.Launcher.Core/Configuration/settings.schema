@@ -1,0 +1,10 @@
+# Stable nonsecret sidecar keys; legacy Windows files remain untouched until W gates pass.
+GameRoot
+JavaExecutable
+MemoryMiB
+Language
+Theme
+DownloadSourcesJson
+Proxy
+Aria2
+MicrosoftClientId

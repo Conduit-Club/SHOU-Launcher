@@ -38,28 +38,28 @@
         <CETCompat>false</CETCompat>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
-        <OutputPath>bin\Debug\</OutputPath>
+        <OutputPath Condition="'$(UseArtifactsOutput)' != 'true'">bin\Debug\</OutputPath>
         <DebugSymbols>true</DebugSymbols>
         <DebugType>full</DebugType>
         <Optimize>false</Optimize>
         <DefineConstants>TRACE;DEBUG</DefineConstants>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Configuration)' == 'CI' Or '$(Configuration)' == 'DebugCI'">
-        <OutputPath>bin\CI\</OutputPath>
+        <OutputPath Condition="'$(UseArtifactsOutput)' != 'true'">bin\CI\</OutputPath>
         <DebugSymbols>true</DebugSymbols>
         <DebugType>full</DebugType>
         <Optimize>false</Optimize>
         <DefineConstants>TRACE;DEBUGCI</DefineConstants>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-        <OutputPath>bin\Release\</OutputPath>
+        <OutputPath Condition="'$(UseArtifactsOutput)' != 'true'">bin\Release\</OutputPath>
         <DebugSymbols>false</DebugSymbols>
         <DebugType>none</DebugType>
         <Optimize>true</Optimize>
         <DefineConstants>RELEASE</DefineConstants>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Configuration)' == 'Beta'">
-        <OutputPath>bin\Beta\</OutputPath>
+        <OutputPath Condition="'$(UseArtifactsOutput)' != 'true'">bin\Beta\</OutputPath>
         <DebugSymbols>false</DebugSymbols>
         <DebugType>none</DebugType>
         <Optimize>true</Optimize>

@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType><TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>SHOU.Launcher.Desktop</AssemblyName>
+    <RuntimeIdentifiers>osx-arm64;win-x64;win-arm64</RuntimeIdentifiers>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <PublishSingleFile>false</PublishSingleFile><PublishTrimmed>false</PublishTrimmed><PublishAot>false</PublishAot>
+    <ApplicationIcon>../../Plain Craft Launcher 2/Images/Conduit/club.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../SHOU.Launcher.Core/SHOU.Launcher.Core.csproj" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.9" />
+    <PackageReference Include="PlainToolkit.CngProtectedData" Version="2.1.0" />
+    <AvaloniaResource Include="Assets/**" />
+  </ItemGroup>
+</Project>
