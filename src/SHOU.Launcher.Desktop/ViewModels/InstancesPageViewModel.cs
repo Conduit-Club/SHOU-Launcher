@@ -84,10 +84,10 @@ public sealed class InstancesPageViewModel : PageViewModel
         {
             if (SelectedInstance is null) return "创建或选择一个实例。";
             if (!SelectedInstanceSupported) return $"当前候选不支持加载器 {SelectedInstance.Loader}，不会按原版安装或启动。";
+            if (Owner.Home.SelectedServerId != "none") return "本候选尚未开放联机，仅进行单机 / 离线验收；请在首页选择“只启动游戏”。";
             if (!SelectedInstance.Installed) return "先安装/校验实例，再启动游戏。";
             var account = Owner.Snapshot.Accounts.FirstOrDefault(a => a.Id == Owner.Snapshot.SelectedAccountId);
             if (account is null) return "请在账户页添加并选择账户。";
-            if (account.Kind == AccountKind.Offline && Owner.Home.SelectedServerId != "none") return "离线账户请先在首页选择“只启动游戏”。";
             return Owner.Home.DestinationSummary;
         }
     }
@@ -132,7 +132,7 @@ public sealed class InstancesPageViewModel : PageViewModel
             }
         });
     }
-    private bool CanLaunch() => CanEdit && SelectedInstanceSupported && SelectedInstance?.Installed == true && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId && (a.Kind != AccountKind.Offline || Owner.Home.SelectedServerId == "none"));
+    private bool CanLaunch() => CanEdit && SelectedInstanceSupported && SelectedInstance?.Installed == true && Owner.Home.SelectedServerId == "none" && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId);
     private async Task SaveRuntimeAsync()
     {
         if (MemoryMiB is < 512 or > 32768 || decimal.Truncate(MemoryMiB) != MemoryMiB) { Owner.ShowError("内存须为 512–32768 MiB 的整数。"); return; }
