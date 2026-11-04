@@ -112,6 +112,35 @@ public sealed class RuntimeInstallerTests
         Assert.AreEqual(0, fixture.Downloader.CatalogFetches);
     }
 
+    [TestMethod]
+    public async Task ManifestCannotOverwriteInstallerCompletionOrLockState()
+    {
+        foreach (var name in new[] { MojangJavaRuntimeInstaller.StateFileName, ".SHOU-RUNTIME.JSON/payload", ".locks/x", ".staging/x" })
+        {
+            var fixture = new RuntimeFixture(name);
+            await Assert.ThrowsAsync<InvalidDataException>(() => fixture.Installer.InstallAsync(fixture.Request));
+            Assert.AreEqual(0, fixture.Downloader.RuntimeFetches);
+        }
+    }
+
+    [TestMethod]
+    public void MalformedOversizedOrLinkedRuntimeStateCannotAdvertiseCompletion()
+    {
+        var fixture = new PlatformFixture();
+        var large = fixture.Child("large state"); Directory.CreateDirectory(large);
+        File.WriteAllText(Path.Combine(large, MojangJavaRuntimeInstaller.StateFileName), new string('x', 65537));
+        Assert.IsTrue(MojangJavaRuntimeInstaller.IsIncompleteRuntime(large));
+        var broken = fixture.Child("broken state"); Directory.CreateDirectory(broken);
+        File.WriteAllText(Path.Combine(broken, MojangJavaRuntimeInstaller.StateFileName), "not json");
+        Assert.IsTrue(MojangJavaRuntimeInstaller.IsIncompleteRuntime(broken));
+        if (!OperatingSystem.IsWindows())
+        {
+            var linked = fixture.Child("linked state"); Directory.CreateDirectory(linked);
+            File.CreateSymbolicLink(Path.Combine(linked, MojangJavaRuntimeInstaller.StateFileName), fixture.Child("missing-state"));
+            Assert.IsTrue(MojangJavaRuntimeInstaller.IsIncompleteRuntime(linked));
+        }
+    }
+
     private sealed class RuntimeFixture
     {
         public static readonly byte[] ReleaseBytes = "JAVA_VERSION=21.0.13\n"u8.ToArray();

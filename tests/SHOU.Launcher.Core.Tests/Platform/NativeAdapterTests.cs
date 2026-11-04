@@ -13,6 +13,7 @@ namespace SHOU.Launcher.Core.Tests.Platform;
 public sealed class NativeAdapterTests
 {
     [TestMethod]
+    [TestCategory("DesktopPlatforms")]
     public async Task FactoryConstructionDoesNotCreateDataOrAccessTheStore()
     {
         var fixture = new PlatformFixture();

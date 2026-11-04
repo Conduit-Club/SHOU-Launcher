@@ -47,6 +47,13 @@ public sealed class MojangJavaRuntimeInstaller(IVerifiedDownloader downloader, I
         var manifest = await ReadObjectAsync(manifestPath, cancellationToken);
         var files = manifest["files"] as JsonObject ?? throw new InvalidDataException("Runtime manifest has no files.");
         if (files.Count is 0 or > 100000) throw new InvalidDataException("Runtime file count is invalid.");
+        foreach (var name in files.Select(pair => pair.Key))
+        {
+            var first = name.Replace('\\', '/').Split('/')[0];
+            if (first.Equals(".staging", StringComparison.OrdinalIgnoreCase) || first.Equals(".locks", StringComparison.OrdinalIgnoreCase)
+                || first.StartsWith(StateFileName, StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException("Runtime manifest collides with reserved installer state.");
+        }
         var final = Contained(root, component + "/" + platform + "/" + manifestSha1);
         var javaName = request.OS == LauncherOS.Windows ? "java.exe" : "java";
         var javaEntry = files.FirstOrDefault(pair => pair.Value?["type"]?.GetValue<string>() == "file"
@@ -135,9 +142,12 @@ public sealed class MojangJavaRuntimeInstaller(IVerifiedDownloader downloader, I
     public static bool IsIncompleteRuntime(string directory)
     {
         var path = Path.Combine(directory, StateFileName);
-        if (!File.Exists(path)) return false;
         try
         {
+            var info = new FileInfo(path);
+            if (info.LinkTarget is not null) return true;
+            if (!info.Exists) return false;
+            if (info.Length > 65536) return true;
             using var document = JsonDocument.Parse(File.ReadAllText(path));
             return !document.RootElement.TryGetProperty("complete", out var complete) || complete.ValueKind != JsonValueKind.True;
         }
