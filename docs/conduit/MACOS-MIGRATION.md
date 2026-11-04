@@ -105,3 +105,28 @@ Java/Platform内不再用macOS默认忽略大小写的Path.GetRelativePath作roo
 观察性Log在append前拒绝symlink/reparse/父逃逸，也复用单regular+nlink==1身份检查；真实ln负例证明独立保护fixture不会被日志追加。磁盘/权限/PInvoke不可用只保留内存日志，不把已完成配置事务显示为失败。主新增测试首次因漏using无法编译，失败日志保留；仅补导入后全量通过，没有降低生产拒绝语义。平台B9旧broken-link异常断言同样保留首轮FAIL后精确修正。
 
 最终集成Release Core188 passed、3显式skipped（OnlineJava1/trustInterop默认2），Headless34/34；无Secrets的本地CI配置Core187/187并真实编译同一Desktop，均0.NET warning/error。重叠worker专项不累加。证据`reports/night/B9`与两worker只读review/handoff。功能范围到此冻结，仅做同源码B07、最终统一候选、产品包实际验证和交付报告。
+
+## N4 最终候选与分层结论（2026-11-05）
+
+最终产品源码为干净的本地提交`5f99195b95b26cb6c96af8ca67c67775ca44a6ea`，真实基线仍为`b97b565678cbcdc8f602b57973d0837d3ac556a2`。同一Desktop经统一入口依次生成Windows x64 Release、Windows ARM64 Release、Mac ARM64 Beta及Release；全部restore→clean→publish→实际owner程序集验证→打包通过，原`.env`仅以外部只读`-EnvFile`引用，未复制进工作树或报告。归档、SHA-256与BUILD-INFO位于任务根`dist/N4/Desktop/<Configuration>/<RID>/default`。后续文档提交与候选源码SHA分别记录，不把文档HEAD冒充构建来源。
+
+| 候选 | SHA-256 |
+|---|---|
+| Mac ARM64 Release | `edd3ddba491611fbc6103f21a43176866cfccfbbfc7a797a7781708857875f2f` |
+| Mac ARM64 Beta | `cb87ba45402578722b20ff1d371fd57ae7e8d3055eecc4160d20a616e311d7a5` |
+| Windows x64 Release | `cadf341f275d0af9f260541d540058b660735cfbcf2177d5c4728b64973b1e14` |
+| Windows ARM64 Release | `730a33185d2e6f26c0e731cbb93035bff5064e8df535af090177daf926bf02f1` |
+
+四包均为自包含多文件产物，关闭single-file/trimming/AOT；包含正式图标、资源及23个依赖包许可。Mac采用本地ad-hoc签名，Release最终zip在中文空格目录重新ditto解包后严格验签通过；没有Developer ID或公证。两个Windows包各19个原生PE文件分别匹配x64/ARM64，另有204个managed PE；它们是交叉构建候选，未在Windows执行，未签名。旧WPF x64/ARM64回退包另有较早精确检查点与dirty补丁记录，不能与N4源码身份混用。
+
+B07在最终源码再次完整通过A→B→none三步，仍使用最初登记的`build/main/BUILD-CONTRACT/Desktop/Release/win-x64/B07/B07-Desktop`有效中间根；三步源码指纹均为`6cb952171031ed10f36ac50d3197277a9d45af1d4031621eb03705ae133de42f`，环境精确还原，没有换obj或人工删除缓存来掩盖残留。B07归档仅是假配置fixture，不列为产品候选。
+
+最终Mac Release归档的生产程序在清除PCL/build别名、SDK/pwsh PATH后，通过diagnostics、唯一假键Keychain跨进程write/read/delete、JKS独立副本创建/复用/重验、纯内存PKCS12读取与副本keytool修复。原PKCS12源`cacerts`仍为1814字节，SHA-256保持`491a44284c39806db780678e08d0667911ee25e38f576cd4013d0bee38df433c`；源JDK不被修改。完整来源与输出树hash、provenance和命令保存在`reports/night/N4`。
+
+同一最终包选用其已验证的Microsoft Java21.0.7 ARM64派生副本，真实安装并运行Minecraft1.21.1原版及Fabric0.16.14。两次活进程均见`os.arch=aarch64`、9个任务内native库及受信bootstrap，OS argv/HotSpot command不含目标main、游戏参数或离线档案名；Fabric官方公开兼容property另列，不误判成私有target泄漏。真实游戏日志含loader、音频和纹理图集初始化。每次60秒观察上限由启动器停止自有Java，exit137/cancelled、命令exit1；原始FAIL payload保留，不能算主菜单或正常Quit通过。
+
+原生GUI首轮在显示器休眠时于Avalonia render timer初始化失败。最终一次限时`caffeinate -u`用户活动断言未改持久电源设置或解锁；显示器查询的asleep字段消失，不能单凭字段缺失断言已醒。相同N4包随后自报窗口句柄并按150秒定时exit0，但CUA连接该存活程序的确切.app路径仍返回`cgWindowNotFound`，未取得实际窗口交互或截图，故L3仍BLOCKED。旧CUA记录的写盘时刻晚于游戏退出，已移除不能独立复现的“观察时仍存活”表述，保留时间不确定性。
+
+分层结果为L0编译/包、L1 Core、L2 Headless通过；L3原生GUI、L4可交互游戏主菜单及正常Quit、L5真实账户/入服仍未通过。Windows W01–W10因缺原生主机保持BLOCKED；旧配置/实例/禁用Java往返与生产根双入口接管还存在内部实现缺口，不能全归因于主机缺失。selected-server生产路径未完成，UI明确禁用非none目的地；Forge/NeoForge、完整mod/modpack内容管理及旧Java/LWJGL2兼容矩阵尚未迁移。旧WPF继续为Windows默认入口。
+
+本轮仅在三个指定功能分支进行普通本地阶段提交，未推送、合并、创建PR、打标签、调用远程Actions或发行。原工作区仍为main。最终交付索引在任务根`reports/night/DELIVERY.md`和`delivery.json`，包含六份实际归档的hash、BUILD-INFO、真实测试命令/退出码、L/B/W/D门禁、三角色handoff、精确patch/源码hash与可执行续跑步骤。迁移整体仍未完成，`all_executable_work_done`不得据此改为true。
