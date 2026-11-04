@@ -21,7 +21,7 @@ public class EnvironmentInteropGenerator : IIncrementalGenerator
 #pragma warning disable RS1035
             var approved = SHOU.Build.Generation.ClientBuildInputs.Capture();
 #pragma warning restore RS1035
-            var secretPairs = approved.Select(pair => (pair.Key, (string?)pair.Value));
+            var secretPairs = approved.Select(pair => (pair.Key, pair.Value));
             return secretPairs;
         });
 

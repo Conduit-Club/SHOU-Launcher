@@ -82,3 +82,6 @@ N3顺序应用UI `90c9706`和platform `de23f5d`的精确增量：联机后端尚
 吾亲写的下载修复把aria2输出、控制sidecar、cache命中纳入路径门禁与独占锁，单次捕获网络配置；无哈希目录走内部新请求。内部下载在HTTP await之后、任何截断前复查路径，resume以CreateNew临时文件原子替换，新写来源身份为URL摘要且兼容旧明文身份。阻塞真实HTTP期间替换.part或.resume链接的负例保护独立fixture字节不变。此边界不等同于抵御拥有目录写权限的恶意进程所有原子级双重TOCTOU。RPC是本地协议fixture，未冒充真实aria2二进制。
 
 集成全量Core最终137 passed、1显式OnlineJava opt-in skipped、0 failed；Headless30/30通过，.NET编译零警告/错误。Java8兼容helper由Java21编译仍有3条目标8过时提示，未隐去。不可变TRX、真实命令/退出码与两次worker只读审查在`reports/night/N3`及各handoff目录。后续进入受控Java trust派生副本；绝不原地修复官方runtime后继续宣称原manifest不变。
+
+
+旧WPF回退已实际交叉发布x64和ARM64：`reports/night/LEGACY/publish-x64-fix1-run.json`与`publish-arm64-run.json`均exit0，实际PCL.Core owner及最终单文件exe均验证三项配置嵌入布尔值，zip/hash/BUILD-INFO齐全。首轮x64编译/publish成功后owner定位失败，发现SDK引用项目实际移除RID；统一脚本现分别评估入口RID与引用RID-less上下文。旧generator去掉无意义nullable tuple转换；旧WPF原有大量告警仍如实保留。此交叉构建不证明WPF/DPAPI/Windows界面能在真机运行，W01–W10仍有主机阻塞与配置导入/往返内部缺口，旧入口继续为默认。

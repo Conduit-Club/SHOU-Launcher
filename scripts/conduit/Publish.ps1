@@ -20,6 +20,9 @@ if ($BuildRoot) {
     $BuildRoot=Assert-ConduitTaskPath $BuildRoot
     $props+=@('-p:UseArtifactsOutput=true',"-p:ArtifactsPath=$BuildRoot")
 }
+# The SDK removes RuntimeIdentifier from legacy library/analyzer ProjectReferences.
+# Evaluate the context actually built, rather than a nominal entry-RID library path.
+$referenceProps=@($props | Where-Object { -not $_.StartsWith('-p:RuntimeIdentifier=',[StringComparison]::OrdinalIgnoreCase) })+@('-p:RuntimeIdentifier=')
 $null=New-Item -ItemType Directory -Path $output -Force
 Push-Location $repo
 try {
@@ -28,12 +31,15 @@ try {
         if ($BuildRoot) {
             $reports=Join-Path $BuildRoot 'reports'
             $null=New-Item -ItemType Directory -Path $reports -Force
-            Assert-ConduitProjectPaths $Dotnet @($entry,(Join-Path $repo 'PCL.Core/PCL.Core.csproj'),(Join-Path $repo 'PCL.Core.SourceGenerators/PCL.Core.SourceGenerators.csproj')) $props (Join-Path $reports 'paths.json')
+            Assert-ConduitProjectPaths $Dotnet @($entry) $props (Join-Path $reports 'paths-entry.json')
+            Assert-ConduitProjectPaths $Dotnet @((Join-Path $repo 'PCL.Core/PCL.Core.csproj'),(Join-Path $repo 'PCL.Core.SourceGenerators/PCL.Core.SourceGenerators.csproj')) $referenceProps (Join-Path $reports 'paths-references.json')
         } else { $reports=$output }
         Invoke-ConduitDotnet $Dotnet (@('restore',$entry) + $props) (Join-Path $reports 'restore.log')
         Invoke-ConduitDotnet $Dotnet (@('clean',$entry,'-v','quiet') + $props) (Join-Path $reports 'clean.log')
         Invoke-ConduitDotnet $Dotnet (@('publish',$entry,'--no-restore','--self-contained','true','-o',$output) + $props) (Join-Path $reports 'publish.log')
-        $owner=& $Dotnet msbuild (Join-Path $repo 'PCL.Core/PCL.Core.csproj') '-getProperty:TargetPath' @props
+        $ownerJson=& $Dotnet msbuild (Join-Path $repo 'PCL.Core/PCL.Core.csproj') '-getProperty:TargetPath,RuntimeIdentifier' @referenceProps
+        if($LASTEXITCODE -ne 0){throw 'Cannot evaluate the actual legacy configuration owner.'}
+        $owner=($ownerJson -join "`n" | ConvertFrom-Json).Properties.TargetPath
         if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $owner)) { throw 'Cannot locate the actual legacy configuration owner.' }
         $check=& (Join-Path $PSScriptRoot 'Assert-ClientCredentials.ps1') -AssemblyPath $owner
         $executable=Join-Path $output 'Plain Craft Launcher 2.exe'
