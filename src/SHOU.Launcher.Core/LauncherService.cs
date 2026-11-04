@@ -319,9 +319,17 @@ public sealed partial class LauncherService : ILauncherService
         if (string.IsNullOrWhiteSpace(playerName) || playerName.Length is < 3 or > 16 || playerName.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_')) throw new ArgumentException("离线档案名须为3–16位英文字母、数字或下划线。");
         var bytes = MD5.HashData(Encoding.UTF8.GetBytes("OfflinePlayer:" + playerName)); bytes[6] = (byte)((bytes[6] & 0x0f) | 0x30); bytes[8] = (byte)((bytes[8] & 0x3f) | 0x80);
         var uuid = Convert.ToHexString(bytes).ToLowerInvariant();
-        var account = new AccountProfile("offline:" + uuid, AccountKind.Offline, playerName, uuid, Persisted: true, Status: "本地离线档案 · 无法进入需认证社团服");
-        await ExecuteAsync("Ready", async ct => { ReplaceAccount(account); Set(s => s with { SelectedAccountId = account.Id }); await PersistAsync(ct).ConfigureAwait(false); }, cancellationToken).ConfigureAwait(false);
-        return account;
+        AccountProfile? result = null;
+        await ExecuteAsync("Ready", async ct =>
+        {
+            var account = new AccountProfile("offline:" + uuid, AccountKind.Offline, playerName, uuid,
+                Persisted: Snapshot.CanPersistAccounts,
+                Status: Snapshot.CanPersistAccounts ? "本地离线档案 · 无法进入需认证社团服" : "当前会话离线档案 · 持久保存已禁用");
+            var next = AccountCandidate(Snapshot, account);
+            await PersistCandidateAsync(next, ct).ConfigureAwait(false);
+            Set(s => s with { Accounts = next.Accounts, SelectedAccountId = account.Id }); result = account;
+        }, cancellationToken).ConfigureAwait(false);
+        return result!;
     }
     public async Task<AccountProfile> LoginMicrosoftAsync(IProgress<DeviceCodeChallenge> challenge, CancellationToken cancellationToken = default)
     {
@@ -359,8 +367,22 @@ public sealed partial class LauncherService : ILauncherService
             { Set(s => s with { CanPersistAccounts = false }); account = account with { Persisted = false, Status = "当前会话可用 · 凭据无法持久保存" }; Log("Warning", "凭据持久保存失败；原数据保留，未降明文。状态=" + ex.Failure); }
         }
         else account = account with { Persisted = false, Status = "当前会话可用 · 持久保存已禁用" };
-        sessions[account.Id] = session with { Profile = account }; ReplaceAccount(account); Set(s => s with { SelectedAccountId = account.Id });
-        await PersistAsync(ct).ConfigureAwait(false); return account;
+        // Publish a saved account only after both the protected credential write and sidecar commit.
+        // A failed sidecar must not leave the UI claiming that a newly authorized account was saved.
+        var next = AccountCandidate(Snapshot, account);
+        try { await PersistCandidateAsync(next, ct).ConfigureAwait(false); }
+        catch
+        {
+            // Refresh may already have rotated the protected token. Keep that valid in-memory
+            // session, but freeze account persistence and never append an unsaved new account.
+            var temporary = account with { Persisted = false, Status = "当前会话可用 · 档案保存失败，原列表保留" };
+            sessions[account.Id] = session with { Profile = temporary };
+            Set(s => s with { CanPersistAccounts = false,
+                Accounts = s.Accounts.Select(a => a.Id == account.Id ? temporary : a).ToArray() });
+            throw;
+        }
+        sessions[account.Id] = session with { Profile = account };
+        Set(s => s with { Accounts = next.Accounts, SelectedAccountId = account.Id }); return account;
     }
     public Task RefreshAccountAsync(string accountId, CancellationToken cancellationToken = default) => ExecuteAsync("Authenticating", async ct =>
     { _ = await RefreshInternalAsync(FindAccount(accountId), ct).ConfigureAwait(false); }, cancellationToken);
@@ -377,7 +399,11 @@ public sealed partial class LauncherService : ILauncherService
         catch (AuthenticationException) { ReplaceAccount(account with { Status = "凭据已失效 · 请重新登录" }); throw; }
     }
     public Task SelectAccountAsync(string accountId, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
-    { _ = FindAccount(accountId); Set(s => s with { SelectedAccountId = accountId }); await PersistAsync(ct).ConfigureAwait(false); }, cancellationToken);
+    {
+        _ = FindAccount(accountId);
+        await PersistCandidateAsync(Snapshot with { SelectedAccountId = accountId }, ct).ConfigureAwait(false);
+        Set(s => s with { SelectedAccountId = accountId });
+    }, cancellationToken);
     public Task RemoveAccountAsync(string accountId, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     {
         var account = FindAccount(accountId);
@@ -419,8 +445,12 @@ public sealed partial class LauncherService : ILauncherService
     private Task PersistCandidateAsync(LauncherSnapshot state, CancellationToken ct)
     {
         // If reading any credential failed, do not overwrite the persisted account list with a partial view.
-        return config.SaveAsync(new(state.Settings, state.Instances, state.Accounts.Where(a => a.Kind == AccountKind.Offline || a.Persisted).ToArray(), state.SelectedAccountId, state.SelectedInstanceId), ct, writeAccounts: state.CanPersistAccounts);
+        var savedAccounts = state.Accounts.Where(a => a.Kind == AccountKind.Offline || a.Persisted).ToArray();
+        var savedSelection = savedAccounts.Any(a => a.Id == state.SelectedAccountId) ? state.SelectedAccountId : null;
+        return config.SaveAsync(new(state.Settings, state.Instances, savedAccounts, savedSelection, state.SelectedInstanceId), ct, writeAccounts: state.CanPersistAccounts);
     }
+    private static LauncherSnapshot AccountCandidate(LauncherSnapshot state, AccountProfile account) => state with
+    { Accounts = state.Accounts.Where(a => a.Id != account.Id).Append(account).ToArray(), SelectedAccountId = account.Id };
     private void OnTransfer(TransferProgress progress)
     {
         var id = downloadOwners.Register(progress.Id);

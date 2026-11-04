@@ -8,6 +8,7 @@ namespace SHOU.Launcher.Desktop.Platform.MacOS;
 /// <summary>Generic-password items via Security.framework. Secret bytes never enter a subprocess or argv.</summary>
 public sealed class KeychainCredentialStore : ICredentialStore
 {
+    private static readonly object InteractionGate = new();
     private readonly string _service;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -25,7 +26,7 @@ public sealed class KeychainCredentialStore : ICredentialStore
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            return await Task.Run(() =>
+            return await Task.Run(() => WithoutInteraction<byte[]?>(() =>
             {
                 using var query = Query(key);
                 Native.Set(query, "kSecReturnData", Native.True);
@@ -41,7 +42,7 @@ public sealed class KeychainCredentialStore : ICredentialStore
                 var bytes = new byte[(int)count];
                 if (bytes.Length > 0) Marshal.Copy(Native.CFDataGetBytePtr(result), bytes, 0, bytes.Length);
                 return bytes;
-            }, cancellationToken);
+            }), cancellationToken);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or TypeInitializationException)
         { throw new CredentialStoreException(CredentialFailure.Unavailable, "本机 Security framework 不可用。", ex); }
@@ -56,7 +57,7 @@ public sealed class KeychainCredentialStore : ICredentialStore
         var bytes = value.ToArray();
         try
         {
-            await Task.Run(() =>
+            await Task.Run(() => WithoutInteraction(() =>
             {
                 using var query = Query(key);
                 using var data = new CFHandle(Native.CFDataCreate(IntPtr.Zero, bytes, bytes.Length));
@@ -74,7 +75,8 @@ public sealed class KeychainCredentialStore : ICredentialStore
                     }
                 }
                 Check(status);
-            }, cancellationToken);
+                return 0;
+            }), cancellationToken);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or TypeInitializationException)
         { throw new CredentialStoreException(CredentialFailure.Unavailable, "本机 Security framework 不可用。", ex); }
@@ -87,12 +89,13 @@ public sealed class KeychainCredentialStore : ICredentialStore
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            await Task.Run(() =>
+            await Task.Run(() => WithoutInteraction(() =>
             {
                 using var query = Query(key);
                 var status = Native.SecItemDelete(query.DangerousGetHandle());
                 if (status != -25300) Check(status);
-            }, cancellationToken);
+                return 0;
+            }), cancellationToken);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or TypeInitializationException)
         { throw new CredentialStoreException(CredentialFailure.Unavailable, "本机 Security framework 不可用。", ex); }
@@ -118,7 +121,30 @@ public sealed class KeychainCredentialStore : ICredentialStore
             throw new ArgumentException("A nonempty bounded credential identifier is required.");
     }
 
-    private static void Check(int status)
+    // SecItem's authentication-UI query flag does not cover every legacy-keychain UI path.
+    // Apple's SecKeychain.cpp/Globals.h implement this legacy switch as a process-local bool,
+    // not a keychain preference or an ACL change. Serialize every store instance, and keep
+    // save/disable/call/restore on one native worker thread without any await under this gate.
+    // https://github.com/apple-oss-distributions/Security/blob/main/OSX/libsecurity_keychain/lib/Globals.h
+    private static T WithoutInteraction<T>(Func<T> action)
+    {
+        lock (InteractionGate)
+        {
+            Check(Native.SecKeychainGetUserInteractionAllowed(out var previous), "读取交互状态");
+            try
+            {
+                Check(Native.SecKeychainSetUserInteractionAllowed(0), "关闭交互");
+                return action();
+            }
+            finally
+            {
+                // A restore failure is an operation failure, including after a successful mutation.
+                Check(Native.SecKeychainSetUserInteractionAllowed(previous), "恢复交互状态");
+            }
+        }
+    }
+
+    private static void Check(int status, string operation = "操作")
     {
         if (status == 0) return;
         var failure = status switch
@@ -128,7 +154,7 @@ public sealed class KeychainCredentialStore : ICredentialStore
             -26275 => CredentialFailure.Corrupt,
             _ => CredentialFailure.Unavailable
         };
-        throw new CredentialStoreException(failure, $"Keychain 操作失败（OSStatus {status}），凭据未降级保存。");
+        throw new CredentialStoreException(failure, $"Keychain {operation}失败（OSStatus {status}），凭据未降级保存。");
     }
 
     private sealed class CFHandle : SafeHandleZeroOrMinusOneIsInvalid
@@ -162,6 +188,9 @@ public sealed class KeychainCredentialStore : ICredentialStore
         [DllImport(Security)] public static extern int SecItemAdd(IntPtr attributes, IntPtr result);
         [DllImport(Security)] public static extern int SecItemUpdate(IntPtr query, IntPtr attributes);
         [DllImport(Security)] public static extern int SecItemDelete(IntPtr query);
+        // Darwin Boolean is unsigned char, not the four-byte Win32 BOOL.
+        [DllImport(Security)] public static extern int SecKeychainGetUserInteractionAllowed(out byte state);
+        [DllImport(Security)] public static extern int SecKeychainSetUserInteractionAllowed(byte state);
         [DllImport(CoreFoundation)] public static extern void CFRelease(IntPtr value);
         [DllImport(CoreFoundation)] public static extern nuint CFGetTypeID(IntPtr value);
         [DllImport(CoreFoundation)] public static extern nuint CFDataGetTypeID();
