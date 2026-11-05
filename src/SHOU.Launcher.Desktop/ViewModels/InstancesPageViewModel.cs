@@ -96,9 +96,9 @@ public sealed partial class InstancesPageViewModel : PageViewModel
             if (SelectedInstance is null) return "创建或选择一个实例。";
             if (!SelectedInstanceSupported) return $"当前候选不支持加载器 {SelectedInstance.Loader}，不会按原版安装或启动。";
             if (Owner.Home.SelectedServerId != "none") return "本候选尚未开放联机，仅进行单机 / 离线验收；请在首页选择“只启动游戏”。";
-            if (!SelectedInstance.Installed) return "先安装/校验实例，再启动游戏。";
             var account = Owner.Snapshot.Accounts.FirstOrDefault(a => a.Id == Owner.Snapshot.SelectedAccountId);
             if (account is null) return "请在账户页添加并选择账户。";
+            if (!SelectedInstance.Installed) return "首次启动会自动下载并校验游戏本体与加载器，然后启动。";
             return Owner.Home.DestinationSummary;
         }
     }
@@ -120,7 +120,7 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         SaveRuntimeCommand = AsyncCommand(SaveRuntimeAsync, () => CanEdit);
         AutomaticJavaCommand = Command(() => { JavaExecutable = ""; SelectedJava = null; }, () => CanEdit);
         InstallCommand = AsyncCommand(() => Owner.RunAsync("安装/校验实例", ct => Service.InstallInstanceAsync(SelectedInstance!.Id, ct)), () => CanEdit && SelectedInstanceSupported);
-        LaunchCommand = AsyncCommand(() => Owner.RunAsync("启动游戏", ct => Service.LaunchAsync(SelectedInstance!.Id, Owner.Home.SelectedServerId, ct)), CanLaunch);
+        LaunchCommand = AsyncCommand(LaunchSelectedInstanceAsync, CanLaunch);
         InspectPlanCommand = AsyncCommand(() => Owner.RunAsync("检查启动计划", async ct =>
         {
             var plan = await Service.BuildLaunchPlanAsync(SelectedInstance!.Id, ct);
@@ -148,7 +148,18 @@ public sealed partial class InstancesPageViewModel : PageViewModel
             }
         });
     }
-    private bool CanLaunch() => CanEdit && SelectedInstanceSupported && SelectedInstance?.Installed == true && Owner.Home.SelectedServerId == "none" && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId);
+    private bool CanLaunch() => CanEdit && SelectedInstanceSupported && Owner.Home.SelectedServerId == "none" && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId);
+    private Task LaunchSelectedInstanceAsync()
+    {
+        if (!CanLaunch() || SelectedInstance is not { } instance) return Task.CompletedTask;
+        var destination = Owner.Home.SelectedServerId;
+        return Owner.RunAsync(instance.Installed ? "启动游戏" : "准备并启动游戏", async ct =>
+        {
+            if (!instance.Installed) await Service.InstallInstanceAsync(instance.Id, ct);
+            ct.ThrowIfCancellationRequested();
+            await Service.LaunchAsync(instance.Id, destination, ct);
+        });
+    }
     private async Task SaveRuntimeAsync()
     {
         if (MemoryMiB is < 512 or > 32768 || decimal.Truncate(MemoryMiB) != MemoryMiB) { Owner.ShowError("内存须为 512–32768 MiB 的整数。"); return; }
