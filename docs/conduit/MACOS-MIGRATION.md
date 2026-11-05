@@ -163,3 +163,13 @@ N4补充跨配置实测发现真实失败：Beta写入唯一隔离假键后，Re
 此结果只覆盖该卷上的JavaPathBoundary/SafePath，未推广到AppPaths、凭据namespace、完整Java trust或其他OS。harness的partial-attach/timeout故障清理分支没有注入验证，不标PASS，也不为此重跑已经通过的六项。原始命令、结果与卸载receipt位于`reports/night/resume`，平台独立review位于`handoffs/platform/CASE-SENSITIVE-NATIVE-REVIEW`。
 
 仍有Windows旧配置/实例/禁用Java导入与往返、selected-server等真实内部实现缺口，另有GUI、Windows真机、真实账户、签名等条件门禁；不能声称“只剩外部阻塞”，不能把all_executable_work_done改为true。原截止时间保持不变，本轮剩余只收束交付证据和续跑状态，产品代码及N5候选保持冻结。
+
+## 白天原生验收与本地分支整合（2026-11-05）
+
+指挥官明确授权后，从最新`origin/dev`的`b97b5656`建立`features/macos-native-validation`，快进纳入主集成分支，再合并UI与platform的本地历史。两worker负责的实现文件事先逐项核对，与已评审的集成树完全相同；因此两次历史整合使用`--strategy=ours`保留该树，全部三个源分支头均成为祖先，没有把旧共享骨架或锁文件覆盖回去。源分支及其未提交共享输入保持，另有精确备份。后续开发转到主仓库目录的新分支；旧integration worktree保留为detached检查点。未推送、合并PR、更新main/dev、打标签或发布。
+
+同一N5 Mac Release最终zip重新解包验签后，在已唤醒的Mac上取得真实启动器窗口和截图，六页导航全部实际切换。随后从GUI启动隔离离线实例Minecraft1.21.1，Temurin21.0.13 ARM64、2048MiB、目的地none。CUA无法绑定无bundle ID的Java窗口；用户分别授权仅限本次窗口的macOS原生查询/截图/输入及辅助功能。PID限定的Tab/Return/Escape完成首次引导、主菜单、Options、返回及Quit Game，独立截图保存。游戏记录`Stopping!`后exit0、cancelled=False、timeout=False，进程消失；再关闭启动器窗口，`reason=normal_close`、state=Ready、进程exit0且无timeout。临时工具的系统辅助功能项已移除，授权receipt关闭；未操作真实账户或入服。
+
+首轮授权设置期间到达`--exit-after900`，游戏被停止为exit137/cancelled；启动器窗口关闭后进程仍残留，保存采样后仅向自有PID发送SIGTERM恢复，外层记录exit-15。原失败保留，不能算正常退出通过。重试采用3600秒上限，在289秒内主动完成游戏及启动器退出。活动游戏期间关闭启动器的残留问题单列为待修复项，尚未确立根因。
+
+本次补齐N5 Release的L3实窗/六页导航，以及原版1.21.1的L4可交互主菜单与正常Quit；没有扩大为Fabric主菜单、全部业务流或L5通过。产品源码、候选zip与既有测试对象未变，沿用N5的Core196通过/3显式跳过、Headless34通过、本地CI Core192通过，数量不累加，本轮未重复运行这些套件。完整白天验收、截图、退出码、分支审计及更新的未完成清单见[白天验收记录](MACOS-NATIVE-VALIDATION-20261105.md)与任务根`reports/day-native/`。整体迁移仍未完成。

@@ -1,5 +1,21 @@
 # macOS migration ownership — contract B0
 
+## Active validation branch — 2026-11-05
+
+Current development uses `features/macos-native-validation` in the primary repository checkout.
+The previous integration worktree is retained detached at the validation checkpoint.
+The user explicitly authorized combining the three local feature histories and continuing here.
+Source heads were `features/macos-arm64` at `7decdd17`, UI at `8e5fc6f8`, and platform at `de6ebe86`.
+All worker-owned implementation paths matched the reviewed integration tree before merging.
+Two history-reconciliation merges retain that exact tree and make all three source heads ancestors;
+the older shared scaffolding and lock files do not replace subsequent tested fixes.
+The old branches and their uncommitted shared inputs remain preserved. New fixes and validation
+notes belong on the new branch. Push, PR merge, tags, remote Actions and publication remain
+unauthorized. The overnight cutoff and its no-merge rule are historical, superseded only for
+the explicitly requested local consolidation. Evidence lives in `.shou-dev/reports/day-native/`.
+
+## Historical overnight ownership
+
 Base HEAD for all worktrees: `b97b565678cbcdc8f602b57973d0837d3ac556a2`.
 Local phase commits on the three named feature branches are authorized (reports/night/local-commit-authorization.json). Use existing identity/signing/hooks, Angular messages via -F, and validated stage content. Push, PR, merge, cherry-pick, rebase, reset, clean, tag, amend, Actions dispatch and release remain unauthorized.
 
