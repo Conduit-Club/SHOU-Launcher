@@ -4,7 +4,7 @@ using SHOU.Launcher.Core.IO;
 namespace SHOU.Launcher.Desktop.ViewModels;
 
 // Presentation preferences are isolated from credentials and from game launch configuration.
-public sealed record SettingsPresentationPreferences(bool ShowClubIntroduction = false, bool ShowClubServers = false,
+public sealed record SettingsPresentationPreferences(bool ShowClubIntroduction = true, bool ShowClubServers = true,
     bool RotateHomeBackground = true, decimal WindowOpacity = 100);
 
 public sealed class SettingsPresentationStore(string dataDirectory)

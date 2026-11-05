@@ -3,6 +3,9 @@ using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using PCL.Core.Conduit;
+using SHOU.Launcher.Core;
+using SHOU.Launcher.Core.Downloads;
+using SHOU.Launcher.Desktop.Platform;
 using SHOU.Launcher.Desktop.ViewModels;
 using SHOU.Launcher.Desktop.Views;
 using Xunit;
@@ -76,6 +79,87 @@ public sealed class WpfSettingsParityTests
         var saved = DownloadSources.Parse(service.Snapshot.Settings.DownloadSourcesJson);
         Assert.Equal(selected.Name, saved.Where(s => s.Category == SourceCategory.Minecraft).OrderBy(s => s.Priority).First().Name);
         Assert.False(settings.IsDirty);
+    }
+
+    [AvaloniaFact]
+    public async Task FreshHomeShowsClubCardsAndExplicitlySavedHiddenCardsSurviveReload()
+    {
+        var directory = Path.Combine(Environment.GetEnvironmentVariable("SHOU_DEV_ROOT") ?? throw new InvalidOperationException("Guarded test root required."), "test-data/wpf-parity/r6-home-defaults", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var network = new RejectPresentationNetwork();
+            using var http = new HttpClient(network);
+            var downloads = new VerifiedDownloader(http);
+            var platform = PlatformServicesFactory.Create(new(directory), downloads);
+            using var lease = platform.DataLock.Acquire(platform.Paths);
+            await using var processes = (ProcessRunner)platform.Processes;
+            await using var service = new LauncherService(platform, http, downloads, new NetworkOptions());
+            await service.InitializeAsync();
+            var store = new SettingsPresentationStore(service.Paths.DataDirectory);
+            Assert.False(File.Exists(store.FilePath));
+            AssertHomeCards(true, true);
+            Assert.False(File.Exists(store.FilePath));
+
+            foreach (var (json, introduction, servers) in new[]
+            {
+                ("{}", true, true),
+                ("{\"showClubIntroduction\":false}", false, true),
+                ("{\"showClubServers\":false}", true, false)
+            })
+            {
+                await File.WriteAllTextAsync(store.FilePath, json);
+                AssertHomeCards(introduction, servers);
+                Assert.Equal(json, await File.ReadAllTextAsync(store.FilePath));
+            }
+
+            await File.WriteAllTextAsync(store.FilePath, "{}");
+            using (var owner = new MainWindowViewModel(service, new FakeExternalLauncher()))
+            {
+                var window = new MainWindow { DataContext = owner }; window.Show(); Pump(window);
+                try
+                {
+                    Assert.True(Find<Border>(window, "ClubIntroductionCard").IsEffectivelyVisible);
+                    Assert.True(Find<Border>(window, "ClubServersCard").IsEffectivelyVisible);
+                    owner.Settings.ShowClubIntroduction = false; owner.Settings.ShowClubServers = false;
+                    await owner.Settings.SaveCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(5)); Pump(window);
+                    Assert.False(owner.HasError); Assert.False(owner.Settings.IsDirty);
+                    Assert.False(Find<Border>(window, "ClubIntroductionCard").IsEffectivelyVisible);
+                    Assert.False(Find<Border>(window, "ClubServersCard").IsEffectivelyVisible);
+                }
+                finally { window.Close(); }
+            }
+            var hidden = store.Load(); Assert.False(hidden.ShowClubIntroduction); Assert.False(hidden.ShowClubServers);
+            using (var json = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(store.FilePath)))
+            {
+                Assert.False(json.RootElement.GetProperty("showClubIntroduction").GetBoolean());
+                Assert.False(json.RootElement.GetProperty("showClubServers").GetBoolean());
+            }
+            AssertHomeCards(false, false);
+            Assert.Equal(hidden, store.Load()); Assert.Equal(0, network.Requests);
+
+            void AssertHomeCards(bool introduction, bool servers)
+            {
+                using var owner = new MainWindowViewModel(service, new FakeExternalLauncher());
+                var window = new MainWindow { DataContext = owner }; window.Show(); Pump(window);
+                try
+                {
+                    Assert.False(owner.HasError);
+                    Assert.Equal(introduction, owner.Settings.ShowClubIntroduction); Assert.Equal(servers, owner.Settings.ShowClubServers);
+                    Assert.Equal(introduction, owner.Home.ShowClubIntroduction); Assert.Equal(servers, owner.Home.ShowClubServers);
+                    Assert.Equal(introduction, Find<Border>(window, "ClubIntroductionCard").IsEffectivelyVisible);
+                    Assert.Equal(servers, Find<Border>(window, "ClubServersCard").IsEffectivelyVisible);
+                }
+                finally { window.Close(); }
+            }
+        }
+        finally { if (Directory.Exists(directory)) Directory.Delete(directory, true); }
+    }
+
+    private sealed class RejectPresentationNetwork : HttpMessageHandler
+    {
+        public int Requests { get; private set; }
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        { Requests++; throw new InvalidOperationException("Presentation preferences must not require network access."); }
     }
 
     [Fact]
