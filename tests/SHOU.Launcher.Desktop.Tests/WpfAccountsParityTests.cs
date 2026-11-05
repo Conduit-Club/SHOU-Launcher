@@ -78,7 +78,7 @@ public sealed class WpfAccountsParityTests
         try
         {
             var channel = Find<Button>(window, "MicrosoftChannelButton");
-            Assert.True(channel.Classes.Contains("selected"));
+            Assert.Contains("selected", channel.Classes);
             var presenter = channel.GetVisualDescendants().OfType<ContentPresenter>().Single(part => part.Name == "PART_ContentPresenter" && ReferenceEquals(part.TemplatedParent, channel));
             foreach (var dark in new[] { false, true })
             {
