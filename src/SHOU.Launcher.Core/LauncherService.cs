@@ -17,7 +17,7 @@ using ClubServer = SHOU.Launcher.Core.Abstractions.ClubServer;
 namespace SHOU.Launcher.Core;
 
 /// <summary>Production orchestration shared by both desktops. All persisted account DTOs are nonsecret.</summary>
-public sealed partial class LauncherService : ILauncherService
+public sealed partial class LauncherService : ILauncherService, ILocalPackService
 {
     private readonly PlatformServices platform;
     private readonly HttpClient http;
@@ -47,11 +47,12 @@ public sealed partial class LauncherService : ILauncherService
 
     public LauncherService(PlatformServices platform, HttpClient http, IVerifiedDownloader downloader,
         NetworkOptions network, BuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null,
-        JavaBootstrapArtifact? javaBootstrap = null, IJavaTrustService? javaTrust = null)
+        JavaBootstrapArtifact? javaBootstrap = null, IJavaTrustService? javaTrust = null, Content.CurseForgePackResolver? localPackResolver = null)
     {
         this.platform = platform; this.http = http; this.downloader = downloader; this.network = network;
         build = buildConfiguration ?? new(); config = new(platform.Paths);
         authentication = authenticationClient ?? new(http);
+        this.localPackResolver = localPackResolver;
         this.javaBootstrap = javaBootstrap;
         this.javaTrust = javaTrust ?? new DerivedJavaTrustService(platform.JavaDiscovery, platform.Processes);
         network.Credentials = platform.Credentials;

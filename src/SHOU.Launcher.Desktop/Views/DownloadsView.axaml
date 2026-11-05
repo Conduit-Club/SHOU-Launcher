@@ -11,6 +11,7 @@
           <Button Name="ImportModrinthPackButton" Content="导入到独立新实例" Classes="primary" Command="{Binding ImportLocalPackCommand}" HorizontalAlignment="Left" />
         </StackPanel>
         <TextBlock Name="ModrinthPackImportStatus" Text="{Binding PackStatus}" Classes="muted" />
+        <Expander Name="LocalPackDetails" Header="安装提示与未完成项" IsVisible="{Binding HasPackDetails}"><TextBlock Text="{Binding PackDetails}" Classes="muted" Margin="12" /></Expander>
       </StackPanel></Border>
     </DataTemplate>
     <DataTemplate x:Key="AdditionalLoaderTemplate">

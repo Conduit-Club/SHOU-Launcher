@@ -1,0 +1,134 @@
+using System.Net;
+using System.Net.Http.Headers;
+using System.Text.Json;
+using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Core.Downloads;
+
+namespace SHOU.Launcher.Core.Content;
+
+public sealed record CurseForgePackReference(int ProjectId, int FileId, bool Required);
+public sealed record CurseForgePackFile(int ProjectId, int FileId, string Path, string Sha1, string? Sha512,
+    long Size, Uri DownloadUri, bool FromModrinth);
+public sealed record CurseForgePackResolution(IReadOnlyList<CurseForgePackFile> Files,
+    IReadOnlyList<string> Warnings, IReadOnlyList<string> BlockedFiles);
+
+/// <summary>Caller-owned dedicated HttpClient MUST disable automatic redirects. API key is attached only to fixed CF requests.</summary>
+public sealed class CurseForgePackResolver
+{
+    private readonly HttpClient http;
+    private readonly string? apiKey;
+    public CurseForgePackResolver(HttpClient http, string? apiKey)
+    {
+        this.http = http;
+        if (http.DefaultRequestHeaders.Contains("x-api-key") || http.DefaultRequestHeaders.Authorization is not null) throw new ArgumentException("整合包专用客户端不能携带全局鉴权头。");
+        if (apiKey is not null && (apiKey.Length > 8192 || apiKey.Any(c => char.IsControl(c) || char.IsWhiteSpace(c)))) throw new ArgumentException("CurseForge API key 配置格式无效。");
+        this.apiKey = string.IsNullOrEmpty(apiKey) ? null : apiKey;
+    }
+    public async Task<CurseForgePackResolution> ResolveAsync(IReadOnlyList<CurseForgePackReference> references, string gameVersion, string loader, CancellationToken ct = default)
+    {
+        if (references.Count > 512 || references.Any(r => r.ProjectId <= 0 || r.FileId <= 0)) throw new InvalidDataException("CurseForge 清单项目数量或身份无效。");
+        var required = references.Where(r => r.Required).ToArray();
+        if (apiKey is null) return new([], [], required.Select(r => Label(r) + "：未配置 CurseForge API key，尚未核实文件。").ToArray());
+        var results = new Item?[required.Length]; using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromMinutes(3));
+        try
+        {
+            await Parallel.ForEachAsync(Enumerable.Range(0, required.Length), new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = timeout.Token }, async (index, token) =>
+            { results[index] = await ResolveOneAsync(required[index], gameVersion, loader, references, token).ConfigureAwait(false); }).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
+        ct.ThrowIfCancellationRequested();
+        var files = new List<CurseForgePackFile>(); var warnings = new List<string>(); var blocked = new List<string>();
+        for (var i = 0; i < required.Length; i++)
+        {
+            if (results[i] is not { } item) { blocked.Add(Label(required[i]) + "：官方文件解析超时，尚未核实。"); continue; }
+            warnings.AddRange(item.Warnings); if (item.File is { } file) files.Add(file); else blocked.Add(Label(required[i]) + "：" + item.Reason);
+        }
+        if (references.Any(r => !r.Required)) warnings.Add("CurseForge 可选文件本轮默认不安装，仅安装清单内 required 文件。");
+        if (files.Sum(f => f.Size) > 4L * 1024 * 1024 * 1024) blocked.Add("清单下载总量超过 4 GiB，本次不会创建实例。");
+        if (files.Select(f => ContentInstallFiles.PathKey(f.Path)).Distinct(StringComparer.Ordinal).Count() != files.Count) blocked.Add("不同 CurseForge 项目映射到相同文件路径，本次不会创建实例。");
+        return new(files, warnings, blocked);
+    }
+    private sealed record Item(CurseForgePackFile? File, IReadOnlyList<string> Warnings, string? Reason = null);
+    private async Task<Item> ResolveOneAsync(CurseForgePackReference reference, string gameVersion, string loader, IReadOnlyList<CurseForgePackReference> all, CancellationToken ct)
+    {
+        try
+        {
+            using var response = await GetJsonAsync(new Uri($"https://api.curseforge.com/v1/mods/{reference.ProjectId}/files/{reference.FileId}"), true, ct).ConfigureAwait(false);
+            var data = response.RootElement.GetProperty("data");
+            if (Number(data, "id") != reference.FileId || Number(data, "modId") != reference.ProjectId || Number(data, "gameId") != 432 || !data.GetProperty("isAvailable").GetBoolean()) throw new InvalidDataException("官方文件身份、游戏或可用状态不匹配。");
+            if (data.TryGetProperty("isServerPack", out var server) && server.ValueKind == JsonValueKind.True) throw new InvalidDataException("此文件是服务器整合包，不能作为客户端模组导入。");
+            var name = Text(data, "fileName", 200); ModrinthPackArchive.SafeRelative(name);
+            if (name.Contains('/')) throw new InvalidDataException("官方文件名不能包含目录路径。");
+            using var projectResponse = await GetJsonAsync(new Uri($"https://api.curseforge.com/v1/mods/{reference.ProjectId}"), true, ct).ConfigureAwait(false);
+            var project = projectResponse.RootElement.GetProperty("data");
+            if (Number(project, "id") != reference.ProjectId || Number(project, "gameId") != 432) throw new InvalidDataException("官方项目身份或游戏不匹配。");
+            var classId = Number(project, "classId");
+            var folder = classId == 6 && name.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ? "mods/"
+                : classId == 12 && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? "resourcepacks/" : throw new InvalidDataException("本轮 CurseForge 文件仅支持 classId 6 模组 JAR 和 classId 12 资源包 ZIP。");
+            var size = Number(data, "fileLength"); if (size is <= 0 or > PackArchiveReader.MaximumFileBytes) throw new InvalidDataException("官方文件大小超过单项 128 MiB 边界。");
+            var hashes = data.GetProperty("hashes");
+            if (hashes.ValueKind != JsonValueKind.Array || hashes.GetArrayLength() > 8) throw new InvalidDataException("官方哈希列表无效。");
+            var sha1s = hashes.EnumerateArray().Where(h => Number(h, "algo") == 1).Select(h => Text(h, "value", 40)).ToArray();
+            if (sha1s.Length != 1 || !ContentInstallFiles.Hash(sha1s[0], 40)) throw new InvalidDataException("官方文件缺少唯一有效 SHA-1。");
+            var sha1 = sha1s[0].ToLowerInvariant(); var warnings = new List<string>();
+            var versions = data.TryGetProperty("gameVersions", out var values) && values.ValueKind == JsonValueKind.Array ? values.EnumerateArray().Take(128).Select(v => v.GetString() ?? "").ToArray() : [];
+            if (!versions.Contains(gameVersion, StringComparer.Ordinal)) warnings.Add(Label(reference) + "：官方标签未列出目标 " + gameVersion + "，实际兼容性仍由加载器验证。");
+            if (classId == 6 && loader == "fabric" && !versions.Contains("Fabric", StringComparer.OrdinalIgnoreCase)) warnings.Add(Label(reference) + "：官方标签未声明 Fabric，需由加载器最终验证。");
+            if (data.TryGetProperty("dependencies", out var dependencies) && dependencies.ValueKind == JsonValueKind.Array)
+            {
+                if (dependencies.GetArrayLength() > 256) throw new InvalidDataException("官方文件依赖数量超过边界。");
+                foreach (var dependency in dependencies.EnumerateArray()) if (Number(dependency, "relationType") == 3 && !all.Any(r => r.Required && r.ProjectId == Number(dependency, "modId")))
+                    warnings.Add(Label(reference) + "：声明的依赖项目 " + Number(dependency, "modId") + " 未列入必装清单，本轮不会猜测版本补装。");
+            }
+            if (data.TryGetProperty("downloadUrl", out var direct) && direct.ValueKind == JsonValueKind.String && direct.GetString() is { Length: > 0 } address)
+            {
+                if (!Uri.TryCreate(address, UriKind.Absolute, out var uri) || !AllowedCurseForgeUri(uri)) throw new InvalidDataException("官方文件返回了不受支持的下载来源。");
+                return new(new(reference.ProjectId, reference.FileId, folder + name, sha1, null, size, uri, false), warnings);
+            }
+            // A null CF URL is not a license to reconstruct its CDN path. Only independently published exact-hash files qualify.
+            using var alternative = await GetJsonAsync(new Uri("https://api.modrinth.com/v2/version_file/" + sha1 + "?algorithm=sha1"), false, ct).ConfigureAwait(false);
+            var candidates = alternative.RootElement.GetProperty("files");
+            if (candidates.ValueKind != JsonValueKind.Array || candidates.GetArrayLength() > 64) throw new InvalidDataException("Modrinth 精确哈希查询返回无效文件列表。");
+            foreach (var candidate in candidates.EnumerateArray())
+            {
+                var digest = candidate.GetProperty("hashes");
+                if (!string.Equals(Text(digest, "sha1", 40), sha1, StringComparison.OrdinalIgnoreCase) || Number(candidate, "size") != size) continue;
+                var sha512 = Text(digest, "sha512", 128); var uri = new Uri(Text(candidate, "url", 2048));
+                if (!ContentInstallFiles.Hash(sha512, 128) || !ContentInstallFiles.AllowedUri(uri)) throw new InvalidDataException("Modrinth 同哈希文件缺少有效 SHA-512 或官方来源。");
+                warnings.Add(Label(reference) + "：CurseForge 未提供第三方下载地址；使用 Modrinth 独立发布、同 SHA-1 且同大小的文件，并校验 SHA-512。");
+                return new(new(reference.ProjectId, reference.FileId, folder + name, sha1, sha512.ToLowerInvariant(), size, uri, true), warnings);
+            }
+            return new(null, warnings, "作者未提供第三方下载地址，Modrinth 也未找到同哈希同大小文件；未猜测下载链接。");
+        }
+        catch (OperationCanceledException) { throw; }
+        catch (LookupException ex) { return new(null, [], ex.Message); }
+        catch (HttpRequestException) { return new(null, [], "官方服务连接失败，请稍后重新预检。"); }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException or FormatException or ArgumentException)
+        { return new(null, [], ex is InvalidDataException ? ex.Message : "官方服务返回的文件元数据无效，未下载任何文件。"); }
+    }
+    public Task DownloadAsync(CurseForgePackFile file, string path, IProgress<TransferProgress>? progress = null, CancellationToken ct = default)
+    {
+        if (!AllowedCurseForgeUri(file.DownloadUri) && !ContentInstallFiles.AllowedUri(file.DownloadUri)) throw new InvalidDataException("文件来源不在官方 CDN 允许范围。");
+        return new VerifiedDownloader(http).DownloadAsync(new([file.DownloadUri], path, file.Sha1, Size: file.Size), progress, ct);
+    }
+    private async Task<JsonDocument> GetJsonAsync(Uri uri, bool sendKey, CancellationToken ct)
+    {
+        if (sendKey && (uri.Scheme != "https" || uri.Host != "api.curseforge.com" || !uri.IsDefaultPort || uri.UserInfo.Length != 0)) throw new InvalidDataException("拒绝向未知来源发送 CurseForge 凭据。");
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri); request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/LocalPackImport"); if (sendKey) request.Headers.Add("x-api-key", apiKey!);
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
+        if (response.StatusCode is >= HttpStatusCode.MultipleChoices and < HttpStatusCode.BadRequest || response.RequestMessage?.RequestUri is { } final && final != uri) throw new LookupException("官方 API 重定向已拒绝，未继续发送凭据。");
+        if (!response.IsSuccessStatusCode) throw new LookupException((sendKey ? "CurseForge" : "Modrinth 精确哈希查询") + $" 返回 HTTP {(int)response.StatusCode}，该文件尚未核实。");
+        if (response.Content.Headers.ContentLength > 1024 * 1024) throw new LookupException("官方文件响应超过 1 MiB 上限。");
+        await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false); using var bytes = new MemoryStream(); var buffer = new byte[16384];
+        while (true) { var count = await stream.ReadAsync(buffer, ct).ConfigureAwait(false); if (count == 0) break; if (bytes.Length + count > 1024 * 1024) throw new LookupException("官方文件响应超过 1 MiB 上限。"); bytes.Write(buffer, 0, count); }
+        return PackArchiveReader.Json(bytes.ToArray());
+    }
+    public static bool AllowedCurseForgeUri(Uri uri) => uri.IsAbsoluteUri && uri.Scheme == "https" && uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.Fragment.Length == 0
+        && uri.Host is "edge.forgecdn.net" or "media.forgecdn.net" or "mediafilez.forgecdn.net" && uri.AbsolutePath.StartsWith("/files/", StringComparison.Ordinal);
+    private static long Number(JsonElement value, string key) => value.GetProperty(key).GetInt64();
+    private static string Text(JsonElement value, string key, int maximum)
+    { var text = value.GetProperty(key).GetString() ?? ""; if (text.Length is < 1 || text.Length > maximum || text.Any(char.IsControl)) throw new InvalidDataException("官方文件元数据文字字段无效。"); return text; }
+    private static string Label(CurseForgePackReference item) => $"项目 {item.ProjectId} / 文件 {item.FileId}";
+    private sealed class LookupException(string message) : Exception(message);
+}

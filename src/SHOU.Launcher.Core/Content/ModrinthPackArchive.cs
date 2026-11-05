@@ -118,8 +118,7 @@ public sealed partial class ModrinthPackArchive
             target.Add(Key(relative), entry);
         }
         if (index is null) throw new InvalidDataException("整合包缺少根目录modrinth.index.json。");
-        await using var indexStream = index.Open();
-        using var json = JsonDocument.Parse(await ReadBoundedAsync(indexStream, 4 * 1024 * 1024, ct).ConfigureAwait(false), new JsonDocumentOptions { MaxDepth = 32 });
+        using var json = PackArchiveReader.Json(await PackArchiveReader.ReadEntryAsync(index, 4 * 1024 * 1024, ct).ConfigureAwait(false));
         UniqueJson(json.RootElement); var root = json.RootElement;
         if (root.GetProperty("formatVersion").GetInt32() != 1 || Text(root, "game") != "minecraft") throw new NotSupportedException("只支持Minecraft的Modrinth格式版本1。");
         var nameText = Text(root, "name"); var version = Text(root, "versionId");
@@ -164,6 +163,7 @@ public sealed partial class ModrinthPackArchive
         foreach (var relative in overrides.Keys)
             if (!files.Any(f => Key(f.Path) == Key(relative) && f.Client == "unsupported")) AllowedPath(relative);
         var clientPaths = files.Where(f => f.Client != "unsupported").Select(f => Key(f.Path)).Concat(overrides.Keys.Select(Key)).ToHashSet(StringComparer.Ordinal);
+        PackArchiveReader.CheckTargets(clientPaths);
         if (files.Where(f => f.Client != "unsupported").Any(f => DownloadSidecars.Any(suffix => clientPaths.Contains(Key(f.Path + suffix)))))
             throw new InvalidDataException("整合包路径与下载器暂存侧文件冲突。");
         var warnings = new List<string> { "导入完整整合包内容并创建新实例；游戏本体将在首次启动时按原安装流程下载。" };
@@ -213,8 +213,7 @@ public sealed partial class ModrinthPackArchive
                 var declared = inspection.Files.FirstOrDefault(f => Key(f.Path) == Key(relative));
                 if (declared is not null && (declared.Client == "unsupported" || declared.Client == "optional" && !selected.Contains(declared.Path))) continue;
                 ct.ThrowIfCancellationRequested(); var path = ContentInstallFiles.Literal(directory, relative); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                await using var source = entry.Open();
-                var bytes = await ReadBoundedAsync(source, MaximumOverrideFileBytes, ct).ConfigureAwait(false);
+                var bytes = await PackArchiveReader.ReadEntryAsync(entry, MaximumOverrideFileBytes, ct).ConfigureAwait(false);
                 if (bytes.LongLength != entry.Length) throw new InvalidDataException("overrides条目长度不一致。");
                 await File.WriteAllBytesAsync(path, bytes, ct).ConfigureAwait(false);
                 installed.RemoveAll(f => Key(f.RelativePath) == Key(relative));

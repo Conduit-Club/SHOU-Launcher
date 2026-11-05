@@ -45,6 +45,8 @@ public sealed partial class DownloadsPageViewModel
     public ModrinthPackInspection? PackInspection => _packInspection;
     public LocalPackInspection? DetectedLocalPack => _localPackInspection;
     public bool HasPackInspection => _localPackInspection is not null || _packInspection is not null;
+    public string PackDetails => string.Join(Environment.NewLine, _localPackInspection?.Warnings ?? _packInspection?.Warnings ?? []);
+    public bool HasPackDetails => PackDetails.Length > 0;
     private bool CanImportLocalPack => _localPackInspection?.CanImport ?? _packInspection?.CanImport ?? false;
     public ObservableCollection<PackOptionalFileViewModel> OptionalPackFiles { get; } = [];
     public bool HasOptionalPackFiles => OptionalPackFiles.Count > 0;
@@ -102,6 +104,7 @@ public sealed partial class DownloadsPageViewModel
         if (!PackServiceAvailable || !CanEdit) return;
         var revision = ++_packRevision; _localPackPath = path; _packInspection = null; _localPackInspection = null; OptionalPackFiles.Clear();
         OnPropertyChanged(nameof(LocalPackPath)); OnPropertyChanged(nameof(PackInspection)); OnPropertyChanged(nameof(HasPackInspection)); OnPropertyChanged(nameof(HasOptionalPackFiles));
+        OnPropertyChanged(nameof(PackDetails)); OnPropertyChanged(nameof(HasPackDetails));
         ModrinthPackInspection? inspected = null;
         LocalPackInspection? local = null;
         var success = await Owner.RunAsync("读取本机整合包", async ct =>
@@ -115,12 +118,13 @@ public sealed partial class DownloadsPageViewModel
             _packInspection = inspected; _localPackInspection = local; PackInstanceName = local?.Name ?? inspected!.Name;
             foreach (var file in inspected?.Files.Where(f => f.Client == "optional") ?? []) OptionalPackFiles.Add(new(file.Path));
             PackStatus = local is not null
-                ? local.CanImport ? $"{local.Format} · {local.GameVersion} · {local.Loader}。" + string.Join(" ", local.Warnings)
+                ? local.CanImport ? $"{(local.Format == LocalPackFormat.CurseForge ? "CurseForge ZIP" : "Modrinth .mrpack")} · Minecraft {local.GameVersion} · {local.Loader} {local.LoaderVersion}。"
                     : local.CapabilityReason ?? "此整合包暂不支持导入。"
                 : inspected!.CanImport ? $"{inspected.GameVersion} · {inspected.Loader} · {inspected.Files.Count} 项清单文件 · {inspected.Overrides.Count} 项客户端覆盖文件。" + string.Join(" ", inspected.Warnings) : inspected.CapabilityReason ?? "此整合包暂不支持导入。";
         }
         else PackStatus = Owner.ErrorMessage ?? "整合包读取已取消。";
         OnPropertyChanged(nameof(PackInspection)); OnPropertyChanged(nameof(DetectedLocalPack)); OnPropertyChanged(nameof(HasPackInspection)); OnPropertyChanged(nameof(HasOptionalPackFiles)); NotifyCommands();
+        OnPropertyChanged(nameof(PackDetails)); OnPropertyChanged(nameof(HasPackDetails));
     }
     private async Task ImportLocalPackAsync()
     {

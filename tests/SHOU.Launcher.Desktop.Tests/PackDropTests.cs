@@ -5,6 +5,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Desktop.ViewModels;
 using SHOU.Launcher.Desktop.Views;
@@ -100,7 +101,7 @@ public sealed class PackDropTests
     [AvaloniaFact]
     public async Task RecognizedUnsupportedPackShowsItsReasonAndCannotBeImported()
     {
-        var fixture = new PackCatalog { Supported = false };
+        var fixture = new PackCatalog { Supported = false, Format = LocalPackFormat.CurseForge, Warnings = ["项目 7 / 文件 11：作者未提供下载，尚未完成。"] };
         using var owner = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher(), fixture);
         var window = new MainWindow { DataContext = owner }; window.Show(); Pump(window);
         try
@@ -110,6 +111,9 @@ public sealed class PackDropTests
             Assert.Same(owner.Downloads, owner.SelectedPage);
             Assert.Contains("未提供下载", owner.Downloads.PackStatus);
             Assert.False(owner.Downloads.ImportLocalPackCommand.CanExecute(null));
+            var details = window.GetVisualDescendants().OfType<Expander>().Single(e => e.Name == "LocalPackDetails" && e.IsEffectivelyVisible);
+            details.IsExpanded = true; Pump(window);
+            Assert.Contains("项目 7 / 文件 11", Assert.IsType<TextBlock>(details.Content).Text);
             Assert.Null(fixture.Imported);
         }
         finally { window.Close(); }
@@ -119,6 +123,7 @@ public sealed class PackDropTests
     {
         public LocalPackFormat Format = LocalPackFormat.Modrinth;
         public bool Supported = true;
+        public string[] Warnings = [];
         public string? Inspected;
         public LocalPackImportRequest? Imported;
         public Task<LocalPackInspection> InspectLocalPackAsync(string archivePath, CancellationToken cancellationToken = default)
@@ -126,7 +131,7 @@ public sealed class PackDropTests
             Inspected = archivePath;
             var mr = Format == LocalPackFormat.Modrinth ? new ModrinthPackInspection("Fixture", "1", "1.21.1", "fabric", "0.16.14", new string('c',64),
                 [new("mods/optional.jar", new string('a',40), new string('b',128), 1, [], "optional")], [], [], Supported) : null;
-            return Task.FromResult(new LocalPackInspection(Format,"Fixture", "1.21.1", "fabric", "0.16.14",new string('c',64),[],Supported,
+            return Task.FromResult(new LocalPackInspection(Format,"Fixture", "1.21.1", "fabric", "0.16.14",new string('c',64),Warnings,Supported,
                 Supported ? null : "此整合包的部分文件未提供下载。", mr));
         }
         public Task<LocalPackImportResult> ImportLocalPackAsync(LocalPackImportRequest request, CancellationToken cancellationToken = default)
