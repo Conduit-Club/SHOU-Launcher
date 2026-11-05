@@ -1,5 +1,7 @@
 # WPF 样式与功能对等移植
 
+最新检查点见 [R6 双端验收与剩余项](WPF-PARITY-R6.md)。2026-11-05 起按用户决定暂停 Mac 侧新增开发，转由 Windows 接手；任务说明见 [Windows 接手 Prompt](WINDOWS-HANDOFF-R6.md)。下文保留此前 R1–R5 历史与逐页门禁。
+
 本轮按 Windows 截图恢复信息架构和紧凑样式，使用既有 Avalonia12.1.5 控件。目标是完整取代WPF；当前仍是迁移候选，尚未达到删除旧入口的门禁。
 
 ## cleanroom 输入
