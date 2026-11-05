@@ -55,7 +55,19 @@ public sealed class CurseForgePackResolver
         {
             using var response = await GetJsonAsync(new Uri($"https://api.curseforge.com/v1/mods/{reference.ProjectId}/files/{reference.FileId}"), true, ct).ConfigureAwait(false);
             var data = response.RootElement.GetProperty("data");
-            if (Number(data, "id") != reference.FileId || Number(data, "modId") != reference.ProjectId || Number(data, "gameId") != 432 || !data.GetProperty("isAvailable").GetBoolean()) throw new InvalidDataException("官方文件身份、游戏或可用状态不匹配。");
+            if (Number(data, "id") != reference.FileId || Number(data, "modId") != reference.ProjectId || Number(data, "gameId") != 432) throw new InvalidDataException("官方文件身份或游戏不匹配。");
+            var available = data.GetProperty("isAvailable").GetBoolean();
+            int? status = data.TryGetProperty("fileStatus", out var statusValue) && statusValue.ValueKind != JsonValueKind.Null ? statusValue.GetInt32() : null;
+            if (status is 5 or 6 or 7) throw new InvalidDataException(status switch
+            { 5 => "官方文件审核已拒绝（fileStatus=5），不能导入。", 6 => "官方文件被标记为恶意软件（fileStatus=6），不能导入。", _ => "官方文件已删除（fileStatus=7），不能导入。" });
+            // Official support permits archived files only as pack/mod dependencies, not standalone downloads.
+            var archivedDependency = !available && status == 8 && reference.Required;
+            if (!available && !archivedDependency) throw new InvalidDataException(status switch
+            {
+                null or < 1 or > 23 => "官方文件状态不明且当前不可供下载，不能套用归档依赖例外。",
+                3 or 11 or 18 => $"官方文件仍在审核中（fileStatus={status}），当前不可供下载。",
+                _ => $"官方文件当前不可供下载（fileStatus={status}），不适用归档依赖例外。"
+            });
             if (data.TryGetProperty("isServerPack", out var server) && server.ValueKind == JsonValueKind.True) throw new InvalidDataException("此文件是服务器整合包，不能作为客户端模组导入。");
             var name = Text(data, "fileName", 200); ModrinthPackArchive.SafeRelative(name);
             if (name.Contains('/')) throw new InvalidDataException("官方文件名不能包含目录路径。");
@@ -83,8 +95,10 @@ public sealed class CurseForgePackResolver
             if (data.TryGetProperty("downloadUrl", out var direct) && direct.ValueKind == JsonValueKind.String && direct.GetString() is { Length: > 0 } address)
             {
                 if (!Uri.TryCreate(address, UriKind.Absolute, out var uri) || !AllowedCurseForgeUri(uri)) throw new InvalidDataException("官方文件返回了不受支持的下载来源。");
+                if (archivedDependency) warnings.Add(Label(reference) + "：已归档的历史包依赖，仅按清单锁定版本使用官方提供的 CDN 地址，并核验 SHA-1 与大小；不会作为独立文件安装。");
                 return new(new(reference.ProjectId, reference.FileId, folder + name, sha1, null, size, uri, false), warnings);
             }
+            if (archivedDependency) return new(null, warnings, "已归档的历史包依赖未提供官方 CDN 地址，不能套用归档依赖例外；未猜测链接或查询哈希回退。");
             // A null CF URL is not a license to reconstruct its CDN path. Only independently published exact-hash files qualify.
             using var alternative = await GetJsonAsync(new Uri("https://api.modrinth.com/v2/version_file/" + sha1 + "?algorithm=sha1"), false, ct).ConfigureAwait(false);
             var candidates = alternative.RootElement.GetProperty("files");

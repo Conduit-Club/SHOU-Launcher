@@ -18,7 +18,7 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class LocalPackTests
 {
     private const string FixtureKey = "synthetic-fixture-key-not-real";
-    private sealed record Asset(int Project, int FileId, string Name, byte[] Bytes, int ClassId = 6, bool Fallback = false)
+    private sealed record Asset(int Project, int FileId, string Name, byte[] Bytes, int ClassId = 6, bool Fallback = false, bool Available = true, int FileStatus = 4)
     {
         public string Sha1 => Convert.ToHexStringLower(SHA1.HashData(Bytes));
         public string Sha512 => Convert.ToHexStringLower(SHA512.HashData(Bytes));
@@ -49,7 +49,7 @@ public sealed class LocalPackTests
             {
                 var segments = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries); var project = int.Parse(segments[2]); var asset = assets.Single(a => a.Project == project);
                 var data = segments.Length == 3 ? new JsonObject { ["id"] = project, ["gameId"] = 432, ["classId"] = asset.ClassId }
-                    : new JsonObject { ["id"] = asset.FileId, ["modId"] = project, ["gameId"] = 432, ["isAvailable"] = true, ["fileName"] = asset.Name, ["fileLength"] = asset.Bytes.Length,
+                    : new JsonObject { ["id"] = asset.FileId, ["modId"] = project, ["gameId"] = 432, ["isAvailable"] = asset.Available, ["fileStatus"] = asset.FileStatus, ["fileName"] = asset.Name, ["fileLength"] = asset.Bytes.Length,
                         ["downloadUrl"] = asset.Fallback ? null : asset.Url, ["hashes"] = new JsonArray(new JsonObject { ["algo"] = 1, ["value"] = asset.Sha1 }), ["gameVersions"] = new JsonArray("1.21.1", "Fabric"), ["dependencies"] = new JsonArray() };
                 return Task.FromResult(ScriptedHttpHandler.Json(new JsonObject { ["data"] = data }.ToJsonString()));
             }
@@ -87,6 +87,38 @@ public sealed class LocalPackTests
         var target = TestFiles.Root(); foreach (var file in result.Files) await resolver.DownloadAsync(file, Path.Combine(target, Path.GetFileName(file.Path)));
         Assert.IsTrue(handler.Requests.Any(r => r.Host == "api.modrinth.com" && r.Key is null)); Assert.IsTrue(handler.Requests.Any(r => r.Host == "cdn.modrinth.com" && r.Key is null)); Assert.IsTrue(handler.Requests.Any(r => r.Host == "edge.forgecdn.net" && r.Key is null));
         Assert.IsTrue(result.Warnings.Any(w => w.Contains("同 SHA-1", StringComparison.Ordinal)));
+    }
+    [TestMethod]
+    public async Task ArchivedRequiredPackDependencyStagesOnlyTheOfficialUrlWithHashAndWarning()
+    {
+        var resource = Resource() with { Available = false, FileStatus = 8 }; using var handler = new FixtureApi(resource); using var http = new HttpClient(handler); var resolver = new CurseForgePackResolver(http, FixtureKey);
+        var source = Archive(Manifest(resource)); var archive = new LocalPackArchive(); var read = await archive.ReadAsync(source);
+        var result = await resolver.ResolveAsync(read.CurseForgeFiles, read.Inspection.GameVersion, read.Inspection.Loader);
+        Assert.IsEmpty(result.BlockedFiles); Assert.HasCount(1, result.Files); Assert.AreEqual(resource.Url, result.Files[0].DownloadUri.AbsoluteUri); Assert.IsFalse(result.Files[0].FromModrinth);
+        Assert.IsTrue(result.Warnings.Any(w => w.Contains("已归档的历史包依赖", StringComparison.Ordinal)));
+        var stage = Path.Combine(TestFiles.Root(), "stage"); await archive.StageCurseForgeAsync(source, read.Inspection.ArchiveSha256, stage, result.Files, (file, target, ct) => resolver.DownloadAsync(file, target, ct: ct));
+        CollectionAssert.AreEqual(resource.Bytes, await File.ReadAllBytesAsync(Path.Combine(stage, "resourcepacks/fixture.zip"))); Assert.IsFalse(handler.Requests.Any(r => r.Host == "api.modrinth.com"));
+        Assert.IsTrue(handler.Requests.Any(r => r.Host == "edge.forgecdn.net" && r.Key is null));
+        var count = handler.Requests.Count; var optional = await resolver.ResolveAsync([new(resource.Project, resource.FileId, false)], "1.21.1", "fabric"); Assert.IsEmpty(optional.Files); Assert.AreEqual(count, handler.Requests.Count, "The archived exception must not resolve unselected optional files.");
+    }
+    [TestMethod]
+    [DataRow(8, false, true, false, "未提供官方 CDN")]
+    [DataRow(4, false, false, false, "不可供下载")]
+    [DataRow(3, false, false, false, "审核中")]
+    [DataRow(0, false, false, false, "状态不明")]
+    [DataRow(5, true, false, false, "审核已拒绝")]
+    [DataRow(6, true, false, false, "恶意软件")]
+    [DataRow(7, true, false, false, "已删除")]
+    [DataRow(3, true, false, true, null)]
+    [DataRow(0, true, false, true, null)]
+    [DataRow(12, true, false, true, null)]
+    public async Task FileStatusDoesNotGeneralizeTheArchivedDependencyException(int status, bool available, bool noUrl, bool canResolve, string? reason)
+    {
+        var asset = Mod() with { FileStatus = status, Available = available, Fallback = noUrl }; using var handler = new FixtureApi(asset); using var http = new HttpClient(handler);
+        var result = await new CurseForgePackResolver(http, FixtureKey).ResolveAsync([new(asset.Project, asset.FileId, true)], "1.21.1", "fabric");
+        Assert.AreEqual(canResolve ? 1 : 0, result.Files.Count); Assert.AreEqual(canResolve ? 0 : 1, result.BlockedFiles.Count);
+        if (reason is not null) Assert.IsTrue(result.BlockedFiles[0].Contains(reason, StringComparison.Ordinal));
+        Assert.IsTrue(handler.Requests.All(r => r.Host == "api.curseforge.com"), "Unavailable or archived files without a direct URL must not trigger hash fallback or CDN downloads.");
     }
     [TestMethod]
     public async Task MissingKeyAndApiDenialListEveryUnresolvedRequiredFileWithoutLeakingSecret()
