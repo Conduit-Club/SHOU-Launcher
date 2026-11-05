@@ -127,3 +127,17 @@
 - Windows 当前用户旧 Profile 容器可只读解密，旧配置与 UserKey 哈希保持；仅在进程内检查结构，未复制完整缓存或输出凭据。尚未完成支持的账户导入路径、刷新、profile/所有权、正版主菜单及 Quit；仍为替代门禁阻塞。
 
 证据位于任务 reports、evidence-r7-stage1-rc2/rc3/rc4/rc5。完整阶段摘要和候选校验见 reports/r7-stage1-summary.json；后续功能继续从该产品树推进。
+
+## 阶段二：旧微软账户的显式验证导入
+
+产品提交 `6d3c3eb1d28b6d8e0c0fc5c04b9a73313f8bb0d7`。仅 Windows 平台注册当前用户 PCLCE 的只读来源，界面先读取候选，再由用户明确选择及点击验证导入。Core 重读源记录，走既有 OAuth refresh → Xbox → Minecraft 所有权/profile，并核对原 UUID 后才进入既有系统凭据存储与档案提交。不会照搬旧 access token 作为成功授权；Mac 不显示 Windows 导入入口。
+
+- 新回归覆盖有界读取、BOM、其它来源隔离、凭据不序列化、损坏/超预算/重复身份拒绝；无所有权、身份不符、invalid_grant、源记录变化及取消均不保存、不发布账户；成功路径检查刷新与重启后的受保护重读。UI 要求明确选择，并在离页后取消且丢弃迟到结果。
+- 完整 Desktop **120/120**。Core 新功能回归 **340 通过、18 显式跳过**；随后 `1d60a34c` 仅补测试夹具，以无提升权限的真实 Windows junction 和硬链接运行原断言，完整 Core **342 通过、16 显式跳过、0 失败**。下载/缓存的联接祖先被拒绝、独立日志硬链接目标不被改写。其余 Windows 链接/竞态夹具和 Mac/opt-in 门禁仍未通过，不能一并销账。
+- 第一次账户 Core 构建因测试 JSON helper 参数数目不符失败；第一次新增 UI 测试因误用不可访问的 LayoutManager 失败，均已修正且保留首次构建日志。未减少安全断言。
+- 干净产品树构建 win-x64 / Release / 自包含：`SHOU-Launcher-win-x64-v1.5.0-dev.g6d3c3eb1.zip`，80,756,343 字节，SHA-256 `32f5f009f80d4f0c20f8b871a63bdacf5824ba9747440f506dad6d6e082b440b`。19 个本机 PE 均为 AMD64，含自包含 CoreCLR/HostFXR；无 .env、用户缓存、日志、测试程序集或额外字体。沿用构建入口原有 4 个 PDB，未将符号文件误认作用户凭据。包检查脚本的 PDB 假设及字符串/数值比较错误记录已另存，修正后的检查通过，候选字节未变。
+- 发布包的默认 Windows reader **真实只读识别 3 个微软候选**，源 config 与 UserKey 哈希不变。尚未导入这些账户，更未取得刷新/所有权/游戏成功证据；不能把候选数量当作登录成功。
+- 真实账户验收数据根另放当前用户 LocalApplicationData 下；应用输出也留在该私有位置。任务目录只留脱敏计数、布尔结果和错误类别，未复制原缓存。原生鼠标操作被前台 LockApp 阻挡，已请求用户解锁，未操作锁屏或系统安全设置；真实导入、切换/刷新、正版主菜单/Quit、重启凭据待继续。
+- 系统字体只读核对 Segoe UI、Microsoft YaHei UI、Microsoft YaHei、Consolas 均已安装。尚未完成字体/图标视觉统一与全部 DPI/主题原生验收，未以字体存在冒充排版通过。
+
+阶段摘要：任务 `reports/r7-stage2-summary.json`、`r7-published-legacy-read.json`、`r7-account-rc1-native-package.json`、`core-skips-stage2.json`。旧 WPF、Windows 默认入口、源 Java 和旧账户文件继续保留；无推送、PR、合并或发布。
