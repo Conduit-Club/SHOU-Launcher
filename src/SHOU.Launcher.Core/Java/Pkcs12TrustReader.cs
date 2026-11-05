@@ -5,7 +5,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace SHOU.Launcher.Core.Java;
 
-/// <summary>Reads only authenticated public-certificate bags in memory, without importing a PFX into an OS key store.</summary>
+/// <summary>Reads bounded public-certificate bags in memory, without importing a PFX into an OS key store.</summary>
 public static class Pkcs12TrustReader
 {
     private const string Data = "1.2.840.113549.1.7.1";
@@ -13,17 +13,18 @@ public static class Pkcs12TrustReader
     private const string CertificateBag = "1.2.840.113549.1.12.10.1.3";
     private static readonly Asn1Tag Explicit = new(TagClass.ContextSpecific, 0, true);
 
-    public static IReadOnlyList<string> ReadFingerprints(byte[] data)
+    public static IReadOnlyList<string> ReadFingerprints(byte[] data, bool allowUnprotectedCertificateBags = false)
     {
         if (data.Length is < 1 or > 33554432) throw new InvalidDataException("Invalid PKCS12 trust-store size.");
-        ValidateWorkBudget(data);
+        ValidateWorkBudget(data, allowUnprotectedCertificateBags);
         var info = Pkcs12Info.Decode(data, out var consumed);
-        if (consumed != data.Length || info.IntegrityMode != Pkcs12IntegrityMode.Password || !info.VerifyMac("changeit"))
+        var unprotected = allowUnprotectedCertificateBags && info.IntegrityMode == Pkcs12IntegrityMode.None;
+        if (consumed != data.Length || !unprotected && (info.IntegrityMode != Pkcs12IntegrityMode.Password || !info.VerifyMac("changeit")))
             throw new InvalidDataException("PKCS12 integrity or default password could not be verified.");
         var fingerprints = new List<string>();
         foreach (var safe in info.AuthenticatedSafe)
         {
-            if (safe.ConfidentialityMode == Pkcs12ConfidentialityMode.Password) safe.Decrypt("changeit");
+            if (!unprotected && safe.ConfidentialityMode == Pkcs12ConfidentialityMode.Password) safe.Decrypt("changeit");
             if (safe.ConfidentialityMode != Pkcs12ConfidentialityMode.None)
                 throw new InvalidDataException("Unsupported PKCS12 confidentiality mode.");
             foreach (var bag in safe.GetBags())
@@ -42,7 +43,7 @@ public static class Pkcs12TrustReader
 
     // Bound declared KDF work before invoking the official crypto library. This parses structure/limits only;
     // all MAC, password derivation and decryption remain System.Security.Cryptography.Pkcs operations.
-    private static void ValidateWorkBudget(byte[] data)
+    private static void ValidateWorkBudget(byte[] data, bool allowUnprotectedCertificateBags)
     {
         long work = 0;
         var outer = Reader(data); var pfx = outer.ReadSequence(); outer.ThrowIfNotEmpty();
@@ -51,9 +52,14 @@ public static class Pkcs12TrustReader
         if (content.ReadObjectIdentifier() != Data) throw new InvalidDataException("Password-authenticated PKCS12 is required.");
         var wrapper = content.ReadSequence(Explicit); var safeBytes = wrapper.ReadOctetString();
         wrapper.ThrowIfNotEmpty(); content.ThrowIfNotEmpty();
-        if (!pfx.HasData) throw new InvalidDataException("PKCS12 MAC is required.");
-        var mac = pfx.ReadSequence(); _ = mac.ReadSequence();
-        Salt(mac); Iterations(mac.HasData ? mac.ReadInteger() : 1); mac.ThrowIfNotEmpty(); pfx.ThrowIfNotEmpty();
+        var hasMac = pfx.HasData;
+        if (!hasMac && !allowUnprotectedCertificateBags) throw new InvalidDataException("PKCS12 MAC is required.");
+        if (hasMac)
+        {
+            var mac = pfx.ReadSequence(); _ = mac.ReadSequence();
+            Salt(mac); Iterations(mac.HasData ? mac.ReadInteger() : 1); mac.ThrowIfNotEmpty();
+        }
+        pfx.ThrowIfNotEmpty();
         var authenticated = Reader(safeBytes); var safes = authenticated.ReadSequence(); authenticated.ThrowIfNotEmpty();
         var safeCount = 0;
         while (safes.HasData)
@@ -77,6 +83,7 @@ public static class Pkcs12TrustReader
             }
             else if (oid == EncryptedData)
             {
+                if (!hasMac) throw new InvalidDataException("Unprotected PKCS12 may contain only plaintext public certificates.");
                 var encrypted = value.ReadSequence(); value.ThrowIfNotEmpty();
                 var version = encrypted.ReadInteger();
                 if (version != 0) throw new InvalidDataException("Unsupported PKCS12 encrypted content version.");

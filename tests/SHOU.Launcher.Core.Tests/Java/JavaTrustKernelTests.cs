@@ -226,6 +226,37 @@ public sealed class JavaTrustKernelTests
         }
     }
 
+    [TestMethod]
+    public void PasswordlessPublicCacertsRequireExplicitModeAndRejectPrivateOrEncryptedBags()
+    {
+        using var certificate = X509CertificateLoader.LoadCertificate(RootCertificate());
+        using var key = RSA.Create(2048);
+        foreach (var kind in new[] { "public", "key", "secret", "encrypted", "trailing", "bad-mac" })
+        {
+            var safe = new Pkcs12SafeContents(); safe.AddCertificate(certificate);
+            if (kind == "key") safe.AddKeyUnencrypted(key);
+            if (kind == "secret") safe.AddSecret(new Oid("1.2.3.4"), new byte[] { 0x05, 0x00 });
+            var builder = new Pkcs12Builder();
+            if (kind == "encrypted") builder.AddSafeContentsEncrypted(safe, "changeit", new PbeParameters(PbeEncryptionAlgorithm.Aes256Cbc, HashAlgorithmName.SHA256, 1000));
+            else builder.AddSafeContentsUnencrypted(safe);
+            if (kind == "bad-mac") builder.SealWithMac("changeit", HashAlgorithmName.SHA256, 1000);
+            else builder.SealWithoutIntegrity();
+            var bytes = builder.Encode();
+            if (kind == "trailing") bytes = [.. bytes, 0];
+            if (kind == "bad-mac") bytes[^1] ^= 1;
+            if (kind == "trailing") Assert.Throws<System.Formats.Asn1.AsnContentException>(() => Pkcs12TrustReader.ReadFingerprints(bytes));
+            else Assert.Throws<InvalidDataException>(() => Pkcs12TrustReader.ReadFingerprints(bytes));
+            if (kind == "public")
+            {
+                CollectionAssert.AreEqual(new[] { JavaTrustPolicy.Root }, Pkcs12TrustReader.ReadFingerprints(bytes, true).ToArray());
+                File.WriteAllBytes(Store, bytes);
+                Assert.IsTrue(JavaTrustRepair.Scan(Store, true).NeedsRepair);
+            }
+            else if (kind == "trailing") Assert.Throws<System.Formats.Asn1.AsnContentException>(() => Pkcs12TrustReader.ReadFingerprints(bytes, true));
+            else Assert.Throws<InvalidDataException>(() => Pkcs12TrustReader.ReadFingerprints(bytes, true));
+        }
+    }
+
     internal static byte[] RootCertificate()
     {
         using var cert = X509Certificate2.CreateFromPem(RootPem); return cert.RawData;

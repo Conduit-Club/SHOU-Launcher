@@ -190,7 +190,8 @@ public static class JavaTrustRepair
             if (entries.Any(e => e.HasDistrustedKeyCertificate)) throw new InvalidDataException("私钥条目包含本次事件证书，请使用 Java 厂商工具处理，未自动修改。");
             return entries.Where(e => e.Fingerprint is not null).Select(e => e.Fingerprint!).ToArray();
         }
-        return Pkcs12TrustReader.ReadFingerprints(data).ToArray();
+        // JDK-8275252: shipped cacerts may be plaintext public-certificate PKCS12 without MacData.
+        return Pkcs12TrustReader.ReadFingerprints(data, allowUnprotectedCertificateBags: true).ToArray();
     }
 
     private static string[] MissingBlocks(byte[] data)
