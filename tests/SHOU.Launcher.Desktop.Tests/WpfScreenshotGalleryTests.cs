@@ -30,6 +30,7 @@ public sealed class WpfScreenshotGalleryTests
         await owner.InitializeAsync();
         owner.Instances.ShowInstanceSettingsCommand.Execute(null);
         owner.Instances.SelectedSection = owner.Instances.Sections.Single(s => s.Key == "screenshots");
+        Dispatcher.UIThread.RunJobs();
         await (owner.Instances.RefreshContentCommand.ExecutionTask ?? Task.CompletedTask);
         Assert.Equal(2, owner.Instances.ScreenshotPreviews.Count);
         var image = owner.Instances.ScreenshotPreviews.Single(p => p.Name == "fixture.png");
@@ -40,6 +41,15 @@ public sealed class WpfScreenshotGalleryTests
         Assert.True(window.GetVisualDescendants().OfType<ItemsControl>().Single(c => c.Name == "ScreenshotGallery").IsEffectivelyVisible);
         owner.Instances.SelectedSection = owner.Instances.Sections.Single(s => s.Key == "overview");
         Assert.Empty(owner.Instances.ScreenshotPreviews);
+        var resources = Path.Combine(instance.GameDirectory, "resourcepacks"); Directory.CreateDirectory(resources);
+        await File.WriteAllTextAsync(Path.Combine(resources, "queued-fixture.zip"), "list fixture only");
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var busy = owner.RunAsync("navigation gate fixture", _ => gate.Task);
+        owner.Instances.SelectedSection = owner.Instances.Sections.Single(s => s.Key == "resourcepacks");
+        Dispatcher.UIThread.RunJobs(); Assert.True(owner.IsBusy);
+        gate.SetResult(); await busy; Dispatcher.UIThread.RunJobs();
+        await (owner.Instances.RefreshContentCommand.ExecutionTask ?? Task.CompletedTask);
+        Assert.Equal("queued-fixture.zip", Assert.Single(owner.Instances.ContentEntries).Name);
         window.Close();
     }
 }

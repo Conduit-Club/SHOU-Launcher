@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Input;
+using Avalonia.Threading;
 using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Core.Instances;
 
@@ -21,6 +22,7 @@ public sealed partial class InstancesPageViewModel
     private bool _useGlobalJava = true, _useGlobalMemory = true, _includeWorlds, _instanceDraftDirty;
     private string? _draftInstanceId;
     private InstanceContentEntry? _selectedContent;
+    private bool _pendingContentRefresh, _contentRefreshScheduled, _workspaceDisposed;
     public IReadOnlyList<InstanceSectionChoice> Sections { get; } = [new("overview", "概览", "◉"), new("settings", "设置", "⚙"),
         new("modify", "修改", "↻"), new("export", "导出", "⇧"), new("worlds", "存档", "▣"), new("screenshots", "截图", "▧"),
         new("mods", "模组", "◇"), new("resourcepacks", "资源包", "▤"), new("shaders", "光影包", "☼"),
@@ -39,7 +41,8 @@ public sealed partial class InstancesPageViewModel
         {
             if (value is null || !SetProperty(ref _selectedSection, value)) return;
             Feedback = ""; ContentEntries.Clear(); SelectedContent = null; ClearScreenshotPreviews(); NotifyWorkspace();
-            if (IsFileSection && _workspaceReady && SelectedInstance is not null) _ = RefreshContentCommand.ExecuteAsync(null);
+            _pendingContentRefresh = IsFileSection;
+            ScheduleContentRefresh();
         }
     }
     public bool IsOverview => !IsSelection && SelectedSection?.Key == "overview";
@@ -87,11 +90,26 @@ public sealed partial class InstancesPageViewModel
         NavigateBackCommand = Command(() => { if (IsSelection) Owner.SelectedPage = Owner.Home; else IsSelection = true; });
         SaveInstanceSettingsCommand = AsyncCommand(SaveInstanceEditAsync, () => CanEdit && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         RefreshContentCommand = AsyncCommand(RefreshContentAsync, () => SelectedInstance is not null && IsFileSection && Owner.CanReadRemote && Service is IInstanceWorkspaceService);
+        RefreshContentCommand.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(RefreshContentCommand.IsRunning)) ScheduleContentRefresh(); };
         OpenInstanceDirectoryCommand = AsyncCommand(() => Owner.RunControlAsync("打开实例目录", ct => Owner.ExternalLauncher.OpenDirectoryAsync(SelectedInstance!.GameDirectory, ct)), () => SelectedInstance is not null);
         OpenContentDirectoryCommand = AsyncCommand(OpenContentDirectoryAsync, () => SelectedInstance is not null && IsFileSection);
         ToggleModCommand = AsyncCommand(ToggleModAsync, () => CanEdit && SelectedSection.Key == "mods" && SelectedContent is not null && Service is IInstanceWorkspaceService);
         ExportInstanceCommand = AsyncCommand(ExportAsync, () => CanEdit && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         _workspaceReady = true;
+    }
+    private void ScheduleContentRefresh()
+    {
+        if (!_workspaceReady || _workspaceDisposed || !_pendingContentRefresh || _contentRefreshScheduled) return;
+        _contentRefreshScheduled = true;
+        Dispatcher.UIThread.Post(() =>
+        {
+            _contentRefreshScheduled = false;
+            if (_workspaceDisposed) return;
+            if (!IsFileSection || SelectedInstance is null) { _pendingContentRefresh = false; return; }
+            if (RefreshContentCommand.IsRunning || !RefreshContentCommand.CanExecute(null)) return;
+            _pendingContentRefresh = false;
+            _ = RefreshContentCommand.ExecuteAsync(null);
+        }, DispatcherPriority.Background);
     }
     private void RefreshWorkspaceSnapshot(LauncherSnapshot snapshot)
     {

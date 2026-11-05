@@ -37,6 +37,7 @@ public sealed partial class InstancesPageViewModel : IDisposable
             ct.ThrowIfCancellationRequested();
             if (generation != _screenshotGeneration || SelectedInstance?.Id != instanceId || !IsScreenshots) return;
             var preview = await Task.Run(() => DecodeScreenshot(file), ct);
+            if (ct.IsCancellationRequested) { preview?.Dispose(); ct.ThrowIfCancellationRequested(); }
             if (generation != _screenshotGeneration || SelectedInstance?.Id != instanceId || !IsScreenshots) { preview?.Dispose(); return; }
             ScreenshotPreviews.Add(new(file, preview, new AsyncRelayCommand(() => Owner.RunControlAsync("在文件夹中显示截图", async token =>
             {
@@ -64,5 +65,5 @@ public sealed partial class InstancesPageViewModel : IDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException) { return null; }
     }
-    public void Dispose() => ClearScreenshotPreviews();
+    public void Dispose() { _workspaceDisposed = true; _pendingContentRefresh = false; ClearScreenshotPreviews(); }
 }
