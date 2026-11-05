@@ -56,6 +56,8 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         get => _selectedInstance;
         set
         {
+            // Filtering a list must not erase the launcher's persisted current instance.
+            if (value is null && !_refreshing) return;
             if (!_refreshing && !Owner.CanMutate) { OnPropertyChanged(nameof(SelectedInstance)); return; }
             if (!SetProperty(ref _selectedInstance, value)) return;
             OnPropertyChanged(nameof(InstanceSummary));

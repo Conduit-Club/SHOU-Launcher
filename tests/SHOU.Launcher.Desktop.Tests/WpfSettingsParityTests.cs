@@ -23,6 +23,12 @@ public sealed class WpfSettingsParityTests
         try
         {
             Assert.Equal(135, Find<Border>(window, "SettingsContextNavigation").Bounds.Width);
+            Assert.InRange(Find<Button>(window, "SettingsLaunchNavigation").Bounds.Width, 130, 135);
+            Assert.Equal(841, Find<ScrollViewer>(window, "SettingsPageScroller").Bounds.Width);
+            Assert.InRange(Find<Border>(window, "SettingsSaveBar").Bounds.Height, 28, 36);
+            var memory = Find<NumericUpDown>(window, "MaximumMemorySetting");
+            Assert.True(memory.Bounds.Width >= 130);
+            Assert.Equal("2048", memory.GetVisualDescendants().OfType<TextBox>().Single().Text);
             root.Settings.CustomInfo = "explicit parity draft";
             foreach (var section in SettingsPageViewModel.SectionIds)
             {

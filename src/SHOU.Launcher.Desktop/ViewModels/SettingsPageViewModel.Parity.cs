@@ -109,7 +109,7 @@ public sealed partial class SettingsPageViewModel
         ShowLiveLogsCommand = Command(() => Owner.SelectedPage = Owner.Logs);
         _presentationStore = new(DataDirectory);
         try { _savedPresentation = _presentationStore.Load(); }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or System.Text.Json.JsonException) { Feedback = "界面偏好未加载：" + UiPrivacy.Redact(ex.Message); }
+        catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException) { Feedback = "界面偏好未加载：" + UiPrivacy.Redact(ex.Message); }
         LoadPresentation(_savedPresentation);
         InitializeSourceEditor();
     }

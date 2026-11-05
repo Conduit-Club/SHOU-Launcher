@@ -291,6 +291,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _operation?.Cancel();
         _lifetime.Cancel();
         Accounts.CancelAuthenticationState(_lifetime.Token);
+        Instances.Dispose();
         Downloads.Dispose();
         _lifetime.Dispose();
         // Bootstrap owns the service, its processes, pending writes and data lease.

@@ -76,11 +76,13 @@ public static class InstanceWorkspace
     }
     public static async Task<string> ExportAsync(GameInstance instance, string outputDirectory, bool includeWorlds, CancellationToken ct)
     {
+        RejectLiteralLink(instance.GameDirectory, true);
         var root = SafePath.Canonical(instance.GameDirectory);
         var files = new List<(string Full, string Relative, long Size)>();
         foreach (var folderName in new[] { "mods", "resourcepacks", "shaderpacks", "config", "schematics", "saves" })
         {
             if (folderName == "saves" && !includeWorlds) continue;
+            RejectLiteralLink(Path.Combine(root, folderName), true);
             var folder = SafePath.Within(root, folderName);
             if (!System.IO.Directory.Exists(folder)) continue;
             void Visit(string current, string prefix, int depth)
@@ -101,6 +103,7 @@ public static class InstanceWorkspace
         }
         foreach (var name in new[] { "options.txt", "servers.dat" })
         {
+            RejectLiteralLink(Path.Combine(root, name), false);
             var path = SafePath.Within(root, name); var info = new FileInfo(path);
             if (info.Exists && info.LinkTarget is null) files.Add((path, name, info.Length));
         }
@@ -117,6 +120,8 @@ public static class InstanceWorkspace
                 foreach (var item in files)
                 {
                     ct.ThrowIfCancellationRequested();
+                    RejectLiteralLink(Path.Combine(root, item.Relative.Split('/')[0]), item.Relative.Contains('/'));
+                    RejectLiteralLink(Path.Combine(root, item.Relative), false);
                     if (!string.Equals(SafePath.Within(root, item.Relative), item.Full, StringComparison.Ordinal) || new FileInfo(item.Full).LinkTarget is not null)
                         throw new IOException("导出期间实例路径发生变化。");
                     var entry = zip.CreateEntry(item.Relative, CompressionLevel.Fastest);
@@ -133,5 +138,11 @@ public static class InstanceWorkspace
             File.Move(temp, destination, false); return destination;
         }
         finally { if (File.Exists(temp)) File.Delete(temp); }
+    }
+    private static void RejectLiteralLink(string path, bool directory)
+    {
+        FileSystemInfo info = directory ? new DirectoryInfo(path) : new FileInfo(path);
+        if (info.LinkTarget is not null || info.Exists && (info.Attributes & FileAttributes.ReparsePoint) != 0)
+            throw new IOException("导出不跟随实例中的链接：" + info.Name);
     }
 }

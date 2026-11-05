@@ -44,7 +44,7 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
                 return (node, new Uri(candidate.Url).Host, candidate.IsPartialCatalog);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException or OperationCanceledException)
+            catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or JsonException or OperationCanceledException)
             { failures.Add(new IOException("目录来源失败：" + ex.GetType().Name)); }
         }
         throw new AggregateException("所有目录来源均不可用，请检查网络后重试。", failures);
@@ -154,7 +154,7 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
                 return result.ToArray();
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException) { }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or OperationCanceledException) { }
         }
         throw new IOException("资源图标暂不可用。");
     }

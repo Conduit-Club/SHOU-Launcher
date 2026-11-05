@@ -1,61 +1,65 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.ToolsView">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:themes="using:SHOU.Launcher.Desktop.Themes" x:Class="SHOU.Launcher.Desktop.Views.ToolsView">
+  <UserControl.Styles>
+    <Style Selector="TextBlock"><Setter Property="LineHeight" Value="18" /></Style>
+    <Style Selector="Button"><Setter Property="Height" Value="28" /><Setter Property="Padding" Value="11,4" /></Style>
+    <Style Selector="TextBox"><Setter Property="Height" Value="28" /></Style>
+    <Style Selector="ComboBox"><Setter Property="Height" Value="28" /></Style>
+    <Style Selector="Expander.toolGenerator /template/ ToggleButton"><Setter Property="MinHeight" Value="39" /></Style>
+  </UserControl.Styles>
   <Grid ColumnDefinitions="121,*">
     <Border Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,0,1,0">
       <StackPanel>
         <TextBlock Classes="contextHeading" Text="联机" />
         <ToggleButton Name="LobbyNavigationButton" Classes="contextNavigation" IsChecked="{Binding IsLobby, Mode=OneWay}" Command="{Binding ShowLobbyCommand}">
-          <StackPanel Orientation="Horizontal" Spacing="10"><Path Classes="contextIcon" Data="M 7,3 L 5,3 A 5,5 0 0 0 5,13 L 7,13 M 11,3 L 13,3 A 5,5 0 0 1 13,13 L 11,13 M 5,8 L 13,8" /><TextBlock Text="大厅" FontSize="15" VerticalAlignment="Center" /></StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10"><Path Classes="contextIcon" Data="{x:Static themes:ClubIcons.Link}" /><TextBlock Text="大厅" FontSize="15" LineHeight="20" VerticalAlignment="Center" /></StackPanel>
         </ToggleButton>
         <TextBlock Classes="contextHeading" Text="奇妙小工具" />
         <ToggleButton Name="ToolboxNavigationButton" Classes="contextNavigation" IsChecked="{Binding IsToolbox, Mode=OneWay}" Command="{Binding ShowToolboxCommand}">
-          <StackPanel Orientation="Horizontal" Spacing="10"><Path Classes="contextIcon" Data="M 3,7 L 15,7 L 15,17 L 3,17 Z M 1,4 L 17,4 L 17,7 L 1,7 Z M 9,7 L 9,17 M 9,4 C 3,-2 2,4 9,4 C 16,-2 16,4 9,4" /><TextBlock Text="百宝箱" FontSize="15" VerticalAlignment="Center" /></StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10"><Path Classes="contextIcon" Data="{x:Static themes:ClubIcons.Toolbox}" /><TextBlock Text="百宝箱" FontSize="15" LineHeight="20" VerticalAlignment="Center" /></StackPanel>
         </ToggleButton>
       </StackPanel>
     </Border>
     <Grid Grid.Column="1" Name="LobbyPage" IsVisible="{Binding IsLobby}" RowDefinitions="Auto,*,Auto" Margin="20,14,20,20">
-      <Button Content="点击测试" IsEnabled="False" HorizontalAlignment="Right" Margin="0,0,12,12" ToolTip.Tip="{Binding LobbyCapabilityReason}" />
+      <Button IsEnabled="False" HorizontalAlignment="Right" Margin="0,0,12,12" ToolTip.Tip="{Binding LobbyCapabilityReason}"><StackPanel Orientation="Horizontal" Spacing="7"><Path Data="{x:Static themes:ClubIcons.Chat}" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource ClubForeground}" StrokeThickness="1.5" /><TextBlock Text="点击测试" LineHeight="18" /></StackPanel></Button>
       <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="20">
-        <Border Classes="card"><StackPanel Spacing="12">
-          <TextBlock Text="加入大厅" Classes="sectionTitle" />
-          <StackPanel Spacing="4" Margin="5,0"><TextBlock Text="1、在下方输入朋友发送给你的大厅编号，单击【加入】" TextWrapping="Wrap" /><TextBlock Text="2、启动游戏，选择【多人游戏】，在局域网游戏中加入大厅" TextWrapping="Wrap" /></StackPanel>
+        <Border Name="JoinLobbyCard" Classes="card"><StackPanel Spacing="12">
+          <DockPanel><TextBlock DockPanel.Dock="Right" Text="联机服务尚未迁移" Classes="capability" LineHeight="18" ToolTip.Tip="{Binding LobbyCapabilityReason}" /><TextBlock Text="加入大厅" Classes="sectionTitle" LineHeight="18" /></DockPanel>
+          <StackPanel Spacing="3" Margin="5,0"><TextBlock Text="1、在下方输入朋友发送给你的大厅编号，单击【加入】" TextWrapping="Wrap" LineHeight="19" /><TextBlock Text="2、启动游戏，选择【多人游戏】，在局域网游戏中加入大厅" TextWrapping="Wrap" LineHeight="19" /></StackPanel>
           <Grid ColumnDefinitions="*,10,50,10,50,10,50" Margin="5,0">
-            <TextBox Name="LobbyCodeInput" PlaceholderText="编号应该长得像这样：U/NNN-AAAA-SSSS-EEEE" IsEnabled="False" />
+            <TextBox Height="28" Name="LobbyCodeInput" PlaceholderText="编号应该长得像这样：U/NNN-AAAA-SSSS-EEEE" IsEnabled="False" />
             <Button Grid.Column="2" Content="清除" IsEnabled="False" /><Button Grid.Column="4" Content="粘贴" IsEnabled="False" /><Button Grid.Column="6" Name="JoinLobbyButton" Classes="primary" Content="加入" IsEnabled="False" />
           </Grid>
-          <TextBlock Text="{Binding LobbyCapabilityReason}" Classes="capability" Margin="5,0" />
         </StackPanel></Border>
-        <Expander Header="创建大厅" IsExpanded="True"><StackPanel Spacing="12" Margin="20,0,20,20">
-          <StackPanel Spacing="4"><TextBlock Text="1、进入世界后，在游戏菜单中选择【对局域网开放】" TextWrapping="Wrap" /><TextBlock Text="2、在下方选择此游戏实例，单击【创建】" TextWrapping="Wrap" /><TextBlock Text="3、成功创建大厅后，复制大厅编号并发送给你的朋友" TextWrapping="Wrap" /></StackPanel>
+        <Expander Name="CreateLobbyCard" Header="创建大厅" IsExpanded="True"><StackPanel Spacing="12" Margin="20,0,20,20">
+          <StackPanel Spacing="4"><TextBlock Text="1、进入世界后，在游戏菜单中选择【对局域网开放】" TextWrapping="Wrap" LineHeight="19" /><TextBlock Text="2、在下方选择此游戏实例，单击【创建】" TextWrapping="Wrap" LineHeight="19" /><TextBlock Text="3、成功创建大厅后，复制大厅编号并发送给你的朋友" TextWrapping="Wrap" LineHeight="19" /></StackPanel>
           <Grid ColumnDefinitions="*,10,80,10,50,10,50"><ComboBox IsEnabled="False" /><Button Grid.Column="2" Content="手动输入" IsEnabled="False" /><Button Grid.Column="4" Content="刷新" IsEnabled="False" /><Button Grid.Column="6" Name="CreateLobbyButton" Content="创建" IsEnabled="False" /></Grid>
         </StackPanel></Expander>
       </StackPanel></ScrollViewer>
-      <Border Grid.Row="2" Classes="card" Margin="0,15,0,0"><StackPanel Spacing="7" HorizontalAlignment="Center"><TextBlock Text="联机服务尚未就绪" Classes="muted" HorizontalAlignment="Center" /><Button Classes="flat" Content="登录与入服指南" Command="{Binding Root.Home.OpenGuideCommand}" /></StackPanel></Border>
+      <Border Grid.Row="2" Name="LobbyFooterCard" Classes="card" Padding="12,10" Margin="0,15,0,0"><StackPanel Spacing="2" HorizontalAlignment="Center"><TextBlock Text="联机服务尚未就绪" Classes="muted" LineHeight="18" HorizontalAlignment="Center" /><Button Classes="flat" Content="登录与入服指南" Command="{Binding Root.Home.OpenGuideCommand}" Height="28" /></StackPanel></Border>
     </Grid>
     <ScrollViewer Grid.Column="1" Name="ToolboxPage" IsVisible="{Binding IsToolbox}" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="25" Spacing="15">
-        <Border Classes="card"><StackPanel Spacing="12">
-          <TextBlock Text="百宝箱" Classes="sectionTitle" />
-          <WrapPanel Margin="10,0,0,0"><Button Content="清理游戏垃圾" IsEnabled="False" Height="35" Margin="0,0,15,0" /><Button Content="今日人品" IsEnabled="False" Height="35" Margin="0,0,15,0" /><Button Content="创建快捷方式" IsEnabled="False" Height="35" Margin="0,0,15,0" /><Button Content="查看启动计数" IsEnabled="False" Height="35" /></WrapPanel>
-          <TextBlock Text="{Binding ToolboxCapabilityReason}" Classes="capability" />
+        <Border Name="ToolboxActionsCard" Classes="card"><StackPanel Spacing="10">
+          <DockPanel><TextBlock DockPanel.Dock="Right" Text="这些工具尚未迁移" Classes="capability" LineHeight="18" ToolTip.Tip="{Binding ToolboxCapabilityReason}" /><TextBlock Text="百宝箱" Classes="sectionTitle" LineHeight="18" /></DockPanel>
+          <WrapPanel Margin="10,0,0,0"><Button Content="清理游戏垃圾" IsEnabled="False" MinWidth="120" Height="35" Margin="0,0,15,0" /><Button Content="今日人品" IsEnabled="False" MinWidth="100" Height="35" Margin="0,0,15,0" /><Button Content="创建快捷方式" IsEnabled="False" MinWidth="120" Height="35" Margin="0,0,15,0" /><Button Content="查看启动计数" IsEnabled="False" MinWidth="120" Height="35" /></WrapPanel>
         </StackPanel></Border>
-        <Border Classes="card"><StackPanel Spacing="10">
-          <TextBlock Text="下载自定义文件" Classes="sectionTitle" />
-          <TextBlock Text="按地址下载文件，并选择保存位置与文件名。" TextWrapping="Wrap" Margin="10,0" />
+        <Border Name="CustomDownloadCard" Classes="card" MinHeight="240"><StackPanel Spacing="10" VerticalAlignment="Top">
+          <TextBlock Text="下载自定义文件" Classes="sectionTitle" LineHeight="18" />
+          <TextBlock Text="自定义文件下载尚未迁移；当前可打开数据目录。" TextWrapping="Wrap" LineHeight="18" Margin="10,0" />
           <Grid ColumnDefinitions="78,*" RowDefinitions="Auto,10,Auto,10,Auto" Margin="10,0">
-            <TextBlock Text="下载地址" VerticalAlignment="Center" /><TextBox Grid.Column="1" Name="CustomDownloadUrl" IsEnabled="False" />
-            <TextBlock Grid.Row="2" Text="保存到" VerticalAlignment="Center" /><Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="*,8,45"><TextBox Text="{Binding DataDirectory}" IsReadOnly="True" IsEnabled="False" /><Button Grid.Column="2" Classes="flat" Content="选择" IsEnabled="False" /></Grid>
-            <TextBlock Grid.Row="4" Text="文件名" VerticalAlignment="Center" /><TextBox Grid.Row="4" Grid.Column="1" IsEnabled="False" />
+            <TextBlock Text="下载地址" VerticalAlignment="Center" /><TextBox Height="28" Grid.Column="1" Name="CustomDownloadUrl" IsEnabled="False" />
+            <TextBlock Grid.Row="2" Text="保存到" VerticalAlignment="Center" /><Grid Grid.Row="2" Grid.Column="1" ColumnDefinitions="*,8,45"><TextBox Height="28" Text="{Binding DataDirectory}" IsReadOnly="True" IsEnabled="False" /><Button Grid.Column="2" Classes="flat" Content="选择" IsEnabled="False" /></Grid>
+            <TextBlock Grid.Row="4" Text="文件名" VerticalAlignment="Center" /><TextBox Height="28" Grid.Row="4" Grid.Column="1" IsEnabled="False" />
           </Grid>
-          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15" Margin="0,5,0,5"><Button Name="CustomDownloadButton" Content="开始下载" IsEnabled="False" MinWidth="140" Height="35" /><Button Content="打开文件夹" Command="{Binding Root.Home.OpenDataDirectoryCommand}" MinWidth="140" Height="35" /></StackPanel>
-          <TextBlock Text="自定义文件下载尚未迁移。" Classes="capability" Margin="10,0" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15" Margin="0"><Button Name="CustomDownloadButton" Content="开始下载" IsEnabled="False" MinWidth="140" Height="35" /><Button Content="打开文件夹" Command="{Binding Root.Home.OpenDataDirectoryCommand}" MinWidth="140" Height="35" /></StackPanel>
         </StackPanel></Border>
-        <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="下载正版玩家的皮肤" Classes="sectionTitle" /><Grid ColumnDefinitions="90,*" Margin="10,10,10,0"><TextBlock Text="正版玩家名" VerticalAlignment="Center" /><TextBox Grid.Column="1" IsEnabled="False" /></Grid><Button Content="保存皮肤" IsEnabled="False" MinWidth="140" HorizontalAlignment="Left" Margin="10,0" Height="35" /><TextBlock Text="皮肤获取与保存尚未迁移。" Classes="capability" Margin="10,0" /></StackPanel></Border>
-        <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="瞅眼服务器" Classes="sectionTitle" /><Grid ColumnDefinitions="*,15,60"><TextBox Name="ToolServerAddress" PlaceholderText="输入服务器地址" IsEnabled="False" /><Button Grid.Column="2" Content="查询" IsEnabled="False" /></Grid><TextBlock Text="自定义服务器查询尚未迁移；首页仍可刷新已配置社团服务器。" Classes="capability" /></StackPanel></Border>
-        <Expander Name="AchievementGenerator" Header="自定义成就图片生成器（仅支持英文）"><StackPanel Margin="25,0,25,20" Spacing="10">
-          <Grid ColumnDefinitions="116,*" RowDefinitions="Auto,10,Auto,10,Auto,10,Auto"><TextBlock Text="物品名（ID）" VerticalAlignment="Center" /><TextBox Grid.Column="1" IsEnabled="False" /><TextBlock Grid.Row="2" Text="成就名" VerticalAlignment="Center" /><TextBox Grid.Row="2" Grid.Column="1" IsEnabled="False" /><TextBlock Grid.Row="4" Text="第一行" VerticalAlignment="Center" /><TextBox Grid.Row="4" Grid.Column="1" IsEnabled="False" /><TextBlock Grid.Row="6" Text="第二行（可选）" VerticalAlignment="Center" /><TextBox Grid.Row="6" Grid.Column="1" IsEnabled="False" /></Grid>
+        <Border Name="SkinDownloadCard" Classes="card" MinHeight="149"><StackPanel Spacing="12"><DockPanel><TextBlock DockPanel.Dock="Right" Text="皮肤获取与保存尚未迁移" Classes="capability" LineHeight="18" /><TextBlock Text="下载正版玩家的皮肤" Classes="sectionTitle" LineHeight="18" /></DockPanel><Grid ColumnDefinitions="90,*" Margin="10,10,10,0"><TextBlock Text="正版玩家名" VerticalAlignment="Center" /><TextBox Height="28" Grid.Column="1" IsEnabled="False" /></Grid><Button Content="保存皮肤" IsEnabled="False" MinWidth="140" HorizontalAlignment="Left" Margin="10,0" Height="35" /></StackPanel></Border>
+        <Border Name="ServerQueryCard" Classes="card"><StackPanel Spacing="6"><DockPanel><TextBlock DockPanel.Dock="Right" Text="自定义查询尚未迁移" Classes="capability" LineHeight="18" /><TextBlock Text="瞅眼服务器" Classes="sectionTitle" LineHeight="18" /></DockPanel><Grid ColumnDefinitions="*,15,60"><TextBox Height="28" Name="ToolServerAddress" PlaceholderText="输入服务器地址" IsEnabled="False" /><Button Grid.Column="2" Content="查询" IsEnabled="False" /></Grid></StackPanel></Border>
+        <Expander Name="AchievementGenerator" Classes="toolGenerator" Header="自定义成就图片生成器（仅支持英文）"><StackPanel Margin="25,0,25,20" Spacing="10">
+          <Grid ColumnDefinitions="116,*" RowDefinitions="Auto,10,Auto,10,Auto,10,Auto"><TextBlock Text="物品名（ID）" VerticalAlignment="Center" /><TextBox Grid.Column="1" IsEnabled="False" /><TextBlock Grid.Row="2" Text="成就名" VerticalAlignment="Center" /><TextBox Grid.Row="2" Grid.Column="1" IsEnabled="False" /><TextBlock Grid.Row="4" Text="第一行" VerticalAlignment="Center" /><TextBox Height="28" Grid.Row="4" Grid.Column="1" IsEnabled="False" /><TextBlock Grid.Row="6" Text="第二行（可选）" VerticalAlignment="Center" /><TextBox Grid.Row="6" Grid.Column="1" IsEnabled="False" /></Grid>
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="15" Margin="0,7,0,0"><Button Content="预览成就图像" Classes="primary" IsEnabled="False" MinWidth="140" Height="35" /><Button Content="保存图片" IsEnabled="False" MinWidth="140" Height="35" /></StackPanel><TextBlock Text="成就图片生成与导出尚未迁移。" Classes="capability" />
         </StackPanel></Expander>
-        <Expander Name="AvatarGenerator" Header="皮肤头像生成器"><StackPanel Margin="25,0,25,20" Spacing="10"><Grid ColumnDefinitions="76,*"><TextBlock Text="头像大小：" VerticalAlignment="Center" /><ComboBox Grid.Column="1" SelectedIndex="0" IsEnabled="False"><ComboBoxItem Content="64×64" /><ComboBoxItem Content="128×128" /><ComboBoxItem Content="256×256" /></ComboBox></Grid><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="选择皮肤" IsEnabled="False" MinWidth="140" Height="35" /><Button Content="保存头像" IsEnabled="False" MinWidth="140" Height="35" /></StackPanel><TextBlock Text="皮肤头像生成与导出尚未迁移。" Classes="capability" /></StackPanel></Expander>
+        <Expander Name="AvatarGenerator" Classes="toolGenerator" Header="皮肤头像生成器"><StackPanel Margin="25,0,25,20" Spacing="10"><Grid ColumnDefinitions="76,*"><TextBlock Text="头像大小：" VerticalAlignment="Center" /><ComboBox Grid.Column="1" SelectedIndex="0" IsEnabled="False"><ComboBoxItem Content="64×64" /><ComboBoxItem Content="128×128" /><ComboBoxItem Content="256×256" /></ComboBox></Grid><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="选择皮肤" IsEnabled="False" MinWidth="140" Height="35" /><Button Content="保存头像" IsEnabled="False" MinWidth="140" Height="35" /></StackPanel><TextBlock Text="皮肤头像生成与导出尚未迁移。" Classes="capability" /></StackPanel></Expander>
         <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="社团入口" Classes="sectionTitle" /><WrapPanel><Button Content="社团 Wiki" Command="{Binding Root.Home.OpenWikiCommand}" Margin="0,0,10,0" /><Button Content="登录与入服指南" Command="{Binding Root.Home.OpenGuideCommand}" Margin="0,0,10,0" /><Button Content="查看日志" Command="{Binding Root.ShowLogsCommand}" /></WrapPanel></StackPanel></Border>
       </StackPanel>
     </ScrollViewer>

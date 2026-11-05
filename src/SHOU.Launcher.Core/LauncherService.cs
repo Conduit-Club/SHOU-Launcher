@@ -296,17 +296,19 @@ public sealed partial class LauncherService : ILauncherService
     }
     public async Task RetryDownloadAsync(string taskId, CancellationToken cancellationToken = default)
     {
-        var owner = downloadOwners.Resolve(taskId).InstanceId;
-        if (owner.StartsWith("content:", StringComparison.Ordinal))
+        var owner = downloadOwners.Resolve(taskId);
+        if (owner.InstanceId.StartsWith("content:", StringComparison.Ordinal))
         {
-            if (!contentTransfers.TryGetValue(owner[8..], out var file)) throw new InvalidOperationException("该资源下载记录已失效，请重新选择文件。");
+            if (!contentTransfers.TryGetValue(owner.Generation, out var file)) throw new InvalidOperationException("该资源下载记录已失效，请重新选择文件。");
             _ = await DownloadContentAsync(file, cancellationToken).ConfigureAwait(false);
         }
-        else await InstallInstanceAsync(owner, cancellationToken).ConfigureAwait(false);
+        else await InstallInstanceAsync(owner.InstanceId, cancellationToken).ConfigureAwait(false);
     }
     public Task SaveSettingsAsync(LauncherSettings settings, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     {
         ConfigurationStore.ValidateSettings(settings);
+        if (settings.MinimumMemoryMiB is { } initial && Snapshot.Instances.FirstOrDefault(i => (i.MemoryMiB ?? settings.MemoryMiB) < initial) is { } conflict)
+            throw new ArgumentException($"初始内存不能高于实例“{conflict.Name}”的最大内存，请先修改该实例或降低初始内存。");
         if (settings.GameRoot is { Length: > 0 } gameRoot) EnsureIsolatedGamePath(gameRoot);
         await PersistCandidateAsync(Snapshot with { Settings = settings }, ct).ConfigureAwait(false);
         network.Update(settings); Set(s => s with { Settings = settings });

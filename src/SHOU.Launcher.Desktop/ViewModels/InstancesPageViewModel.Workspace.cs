@@ -5,7 +5,11 @@ using SHOU.Launcher.Core.Instances;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
-public sealed record InstanceSectionChoice(string Key, string Title, string Icon);
+public sealed record InstanceSectionChoice(string Key, string Title, string Icon)
+{
+    public string IconPath => Themes.ClubIcons.ForInstanceSection(Key);
+    public bool StartsResources => Key == "worlds";
+}
 public sealed partial class InstancesPageViewModel
 {
     private bool _isSelection = true;
@@ -34,7 +38,7 @@ public sealed partial class InstancesPageViewModel
         set
         {
             if (value is null || !SetProperty(ref _selectedSection, value)) return;
-            Feedback = ""; ContentEntries.Clear(); SelectedContent = null; NotifyWorkspace();
+            Feedback = ""; ContentEntries.Clear(); SelectedContent = null; ClearScreenshotPreviews(); NotifyWorkspace();
             if (IsFileSection && _workspaceReady && SelectedInstance is not null) _ = RefreshContentCommand.ExecuteAsync(null);
         }
     }
@@ -107,13 +111,17 @@ public sealed partial class InstancesPageViewModel
     {
         var query = SearchText.Trim();
         var rows = Instances.Where(i => query.Length == 0 || (i.Name + " " + i.VersionId + " " + i.Loader).Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
-        if (!FilteredInstances.SequenceEqual(rows)) { FilteredInstances.Clear(); foreach (var row in rows) FilteredInstances.Add(row); }
+        if (!FilteredInstances.SequenceEqual(rows))
+        {
+            FilteredInstances.Clear(); foreach (var row in rows) FilteredInstances.Add(row);
+            OnPropertyChanged(nameof(SelectedInstance));
+        }
         OnPropertyChanged(nameof(InstanceCountSummary));
     }
     private void NotifyWorkspace()
     {
         foreach (var name in new[] { nameof(ContextTitle), nameof(IsOverview), nameof(IsInstanceSettings), nameof(IsModify), nameof(IsExport), nameof(IsFileSection), nameof(IsOtherSection),
-                     nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent) }) OnPropertyChanged(name);
+                     nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary) }) OnPropertyChanged(name);
         if (_workspaceReady) NotifyCommands();
     }
     private async Task SaveInstanceEditAsync()
@@ -133,6 +141,7 @@ public sealed partial class InstancesPageViewModel
             if (SelectedInstance?.Id != selected.Id || SelectedSection.Key != section) return;
             ContentEntries.Clear(); foreach (var row in rows) ContentEntries.Add(row);
             SelectedContent = null; NotifyWorkspace();
+            if (section == "screenshots") await LoadScreenshotPreviewsAsync(selected.Id, rows, ct);
         }, true);
     }
     public async Task ImportContentFileAsync(string path)

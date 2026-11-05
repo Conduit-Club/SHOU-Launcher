@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Logging;
@@ -165,7 +166,7 @@ public sealed class WpfDownloadsTests
         window.Show(); Pump(window);
         try
         {
-            Assert.Equal(150, Find<Border>(window, "DownloadsCategoryPanel").Bounds.Width);
+            Assert.Equal(180, Find<Border>(window, "DownloadsCategoryPanel").Bounds.Width);
             Assert.Equal(0, catalog.GameCalls);
             vm.SelectCategory("mod"); await vm.SearchCommand.ExecuteAsync(null); Pump(window);
             Assert.Single(vm.Projects);
@@ -180,6 +181,34 @@ public sealed class WpfDownloadsTests
             Assert.Empty(sink.Errors);
         }
         finally { window.Close(); Logger.Sink = previous; }
+    }
+
+    [AvaloniaFact]
+    public async Task SelectingVersionFromAScrolledLongCatalogShowsConfigurationNameAtTop()
+    {
+        var versions = Enumerable.Range(0, 80).Select(i => new GameCatalogVersion("scroll-fixture-" + i, "release", FixtureDate)).ToArray();
+        var catalog = new CatalogFixture { Games = new(versions, "fixture-source") };
+        using var owner = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
+        using var vm = new DownloadsPageViewModel(owner, catalog, FixturePath("favorites.json"));
+        var window = new Window { Width = 976, Height = 588, Content = new DownloadsView { DataContext = vm } };
+        window.Show(); Pump(window);
+        try
+        {
+            await vm.RefreshCatalogCommand.ExecuteAsync(null); Pump(window);
+            Find<ItemsControl>(window, "GameVersionGroups").GetVisualDescendants().OfType<Expander>().Single().IsExpanded = true;
+            Pump(window);
+            var scroller = Find<ScrollViewer>(window, "DownloadsPageScroller");
+            scroller.Offset = new Vector(0, 1800); Pump(window);
+            Assert.True(scroller.Offset.Y > 100);
+            vm.SelectVersion(versions[40]); Pump(window);
+            Assert.Equal(0, scroller.Offset.Y);
+            var name = Find<TextBox>(window, "CatalogInstallationName");
+            Assert.True(name.IsEffectivelyVisible);
+            var position = name.TranslatePoint(new Point(0, 0), scroller);
+            Assert.NotNull(position);
+            Assert.InRange(position.Value.Y, 0, 100);
+        }
+        finally { window.Close(); }
     }
 
     [AvaloniaFact]

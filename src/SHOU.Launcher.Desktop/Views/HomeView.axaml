@@ -11,7 +11,7 @@
         <views:AccountsView DataContext="{Binding Root.Accounts}" />
         <StackPanel Grid.Row="1" Margin="20,5,20,20" Spacing="10">
           <Button Name="HomeLaunchButton" Classes="primary" Command="{Binding Root.Instances.LaunchCommand}" HorizontalAlignment="Stretch" Height="54" ToolTip.Tip="{Binding Root.Instances.LaunchPrerequisite}">
-            <StackPanel Spacing="3"><TextBlock Text="启动游戏" HorizontalAlignment="Center" /><TextBlock Text="{Binding SelectedInstanceName}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="232" HorizontalAlignment="Center" /></StackPanel>
+            <StackPanel Spacing="3"><TextBlock Text="启动游戏" HorizontalAlignment="Center" LineHeight="18" /><TextBlock Text="{Binding SelectedInstanceName}" Classes="muted" FontSize="11" LineHeight="16" TextTrimming="CharacterEllipsis" MaxWidth="232" HorizontalAlignment="Center" /></StackPanel>
           </Button>
           <Grid ColumnDefinitions="*,10,*">
             <Button Name="HomeSelectInstanceButton" Content="实例选择" Command="{Binding Root.ShowInstancesCommand}" HorizontalAlignment="Stretch" Height="35" />
@@ -22,28 +22,28 @@
     </Border>
     <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
       <StackPanel Spacing="15" Margin="25">
-        <Border Classes="card" Padding="20" IsVisible="{Binding ShowClubIntroduction}">
+        <Border Name="ClubIntroductionCard" Classes="card" Padding="20" IsVisible="{Binding ShowClubIntroduction}">
           <StackPanel Spacing="14">
-            <DockPanel>
-              <Border DockPanel.Dock="Right" Background="{DynamicResource ClubSelection}" CornerRadius="6" Padding="10,5" Margin="12,0,0,0"><StackPanel><TextBlock Text="社团在线" Classes="muted" FontSize="11" HorizontalAlignment="Center" /><TextBlock Text="{Binding OnlinePlayerSummary}" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" /></StackPanel></Border>
-              <StackPanel Orientation="Horizontal" Spacing="15"><Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="44" Height="44" /><StackPanel VerticalAlignment="Center"><TextBlock Name="BrandTitle" Text="{Binding ClubName}" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource ClubAccent}" /><TextBlock Text="五湖四海之士，汇于东海之滨" /></StackPanel></StackPanel>
+            <DockPanel Name="ClubBrandRow" Height="46">
+              <Border DockPanel.Dock="Right" Background="{DynamicResource ClubSelection}" CornerRadius="6" Padding="10,4" Margin="12,0,0,0"><StackPanel><TextBlock Text="社团在线" Classes="muted" FontSize="11" LineHeight="14" HorizontalAlignment="Center" /><TextBlock Text="{Binding OnlinePlayerSummary}" FontSize="20" LineHeight="24" FontWeight="Bold" HorizontalAlignment="Center" /></StackPanel></Border>
+              <StackPanel Orientation="Horizontal" Spacing="15"><Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="44" Height="44" /><StackPanel VerticalAlignment="Center"><TextBlock Name="BrandTitle" Text="{Binding ClubName}" FontSize="24" LineHeight="28" FontWeight="Bold" Foreground="{DynamicResource ClubAccent}" /><TextBlock Text="五湖四海之士，汇于东海之滨" LineHeight="18" /></StackPanel></StackPanel>
             </DockPanel>
             <WrapPanel>
               <Button Content="社团 Wiki" Command="{Binding OpenWikiCommand}" Height="32" Margin="0,0,8,0" />
               <Button Content="登录与入服指南" Command="{Binding OpenGuideCommand}" Height="32" Margin="0,0,8,0" />
               <Button Content="社团更新日志" Command="{Binding OpenReleasesCommand}" Height="32" Margin="0,0,8,0" />
-              <TextBlock Text="QQ群 756155087" FontSize="12" VerticalAlignment="Center" Margin="0,5,0,0" />
+              <TextBlock Text="QQ群 756155087" FontSize="12" LineHeight="16" VerticalAlignment="Center" Margin="0,5,0,0" />
             </WrapPanel>
           </StackPanel>
         </Border>
-        <Border Classes="card" IsVisible="{Binding ShowClubServers}">
-          <StackPanel Spacing="8">
-            <DockPanel Margin="0,0,0,1"><Button Name="RefreshServersButton" DockPanel.Dock="Right" Classes="flat" Content="刷新状态" Command="{Binding RefreshServersCommand}" FontSize="11" MinHeight="18" Height="18" Padding="6,1" /><TextBlock Text="启动后前往" Classes="sectionTitle" VerticalAlignment="Center" /></DockPanel>
+        <Border Name="ClubServersCard" Classes="card" IsVisible="{Binding ShowClubServers}">
+          <StackPanel Spacing="6">
+            <DockPanel Margin="0,0,0,1"><Button Name="RefreshServersButton" DockPanel.Dock="Right" Classes="flat" Content="刷新状态" Command="{Binding RefreshServersCommand}" FontSize="11" MinHeight="18" Height="18" Padding="6,1" /><TextBlock Text="启动后前往" Classes="sectionTitle" LineHeight="18" VerticalAlignment="Center" /></DockPanel>
             <ListBox Name="ServerSelector" Classes="serverCards" ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer}" IsEnabled="{Binding CanEdit}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate></ListBox.ItemsPanel>
-              <ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="3" ToolTip.Tip="{Binding Status}"><TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" /></StackPanel></DataTemplate></ListBox.ItemTemplate>
+              <ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="3" ToolTip.Tip="{Binding Status}"><TextBlock Text="{Binding Name}" FontSize="15" LineHeight="20" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" LineHeight="14" TextTrimming="CharacterEllipsis" /></StackPanel></DataTemplate></ListBox.ItemTemplate>
             </ListBox>
-            <TextBlock Name="DestinationSummary" Text="{Binding DestinationSummary}" Foreground="{DynamicResource ClubAccent}" TextWrapping="Wrap" Margin="5,0" FontSize="12" />
+            <TextBlock Name="DestinationSummary" Text="{Binding DestinationSummary}" Foreground="{DynamicResource ClubAccent}" TextWrapping="Wrap" Margin="5,0" FontSize="12" LineHeight="16" />
           </StackPanel>
         </Border>
       </StackPanel>

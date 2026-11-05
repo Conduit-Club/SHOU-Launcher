@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
 using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Desktop.Themes;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
@@ -39,7 +40,7 @@ public sealed class DownloadCategoryViewModel(DownloadsPageViewModel owner, stri
 {
     public string Id { get; } = id;
     public string Title { get; } = title;
-    public string Icon { get; } = icon;
+    public string IconPath { get; } = icon;
     public bool IsSelected => owner.SelectedCategory.Id == Id;
     public RelayCommand SelectCommand { get; } = new(() => owner.SelectCategory(id));
     internal void RefreshSelection() => OnPropertyChanged(nameof(IsSelected));
@@ -273,10 +274,11 @@ public sealed class DownloadsPageViewModel : PageViewModel, IDisposable
         _catalog = catalog ?? Service as ILauncherCatalogService;
         _imageToken = _imageLifetime.Token;
         _favoritesPathOverride = favoritesPath;
-        MinecraftCategory = new(this, "minecraft", "Minecraft", "◇");
-        CommunityCategories = [new(this, "mod", "模组", "♧"), new(this, "modpack", "整合包", "□"), new(this, "datapack", "数据包", "▤"), new(this, "resourcepack", "资源包", "▱"), new(this, "shader", "光影包", "✧"), new(this, "world", "世界", "◎"), new(this, "favorites", "收藏夹", "♡")];
-        InstallerCategories = [new(this, "installer-minecraft", "Minecraft", "□"), new(this, "installer-optifine", "OptiFine", "◴"), new(this, "installer-forge", "Forge", "♜"), new(this, "installer-neoforge", "NeoForge", "♧"), new(this, "installer-cleanroom", "Cleanroom", "♙"), new(this, "installer-fabric", "Fabric", "▱"), new(this, "installer-legacyfabric", "Legacy Fabric", "▱"), new(this, "installer-labymod", "LabyMod", "♧"), new(this, "installer-liteloader", "LiteLoader", "♜")];
-        TasksCategory = new(this, "tasks", "下载任务", "↓");
+        DownloadCategoryViewModel Category(string id, string title) => new(this, id, title, ClubIcons.ForDownloadCategory(id));
+        MinecraftCategory = Category("minecraft", "Minecraft");
+        CommunityCategories = [Category("mod", "模组"), Category("modpack", "整合包"), Category("datapack", "数据包"), Category("resourcepack", "资源包"), Category("shader", "光影包"), Category("world", "世界"), Category("favorites", "收藏夹")];
+        InstallerCategories = [Category("installer-minecraft", "Minecraft"), Category("installer-optifine", "OptiFine"), Category("installer-forge", "Forge"), Category("installer-neoforge", "NeoForge"), Category("installer-cleanroom", "Cleanroom"), Category("installer-fabric", "Fabric"), Category("installer-legacyfabric", "Legacy Fabric"), Category("installer-labymod", "LabyMod"), Category("installer-liteloader", "LiteLoader")];
+        TasksCategory = Category("tasks", "下载任务");
         _selectedCategory = MinecraftCategory;
         _selectedSort = SortChoices[0];
         RefreshCatalogCommand = AsyncCommand(RefreshCatalogAsync, () => CanQuery);

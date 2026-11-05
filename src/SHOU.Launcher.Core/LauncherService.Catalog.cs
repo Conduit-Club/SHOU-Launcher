@@ -30,8 +30,8 @@ public sealed partial class LauncherService : ILauncherCatalogService
         {
             using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
             installCancellation = cancellation;
-            contentTransfers[file.Sha1] = file;
             var ownership = downloadOwners.Begin("content:" + file.Sha1);
+            contentTransfers[ownership.Generation] = file;
             try
             {
                 var urls = ModDownloadSources.Resolve(file.Uri.AbsoluteUri, Sources()).Select(s => new Uri(s)).ToArray();

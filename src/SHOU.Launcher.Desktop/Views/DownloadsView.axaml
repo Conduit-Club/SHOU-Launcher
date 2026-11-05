@@ -1,14 +1,14 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.DownloadsView">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.DownloadsView" AttachedToVisualTree="DownloadsView_AttachedToVisualTree" DetachedFromVisualTree="DownloadsView_DetachedFromVisualTree" DataContextChanged="DownloadsView_DataContextChanged">
   <UserControl.Resources>
     <DataTemplate x:Key="DownloadCategoryTemplate">
       <ToggleButton Classes="contextNavigation" IsChecked="{Binding IsSelected, Mode=OneWay}" Command="{Binding SelectCommand}" HorizontalAlignment="Stretch" MinHeight="35">
-        <Grid ColumnDefinitions="22,*"><TextBlock Text="{Binding Icon}" FontSize="19" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" /></Grid>
+        <Grid ColumnDefinitions="22,*"><Path Data="{Binding IconPath}" Width="18" Height="18" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" StrokeThickness="1.5" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" /></Grid>
       </ToggleButton>
     </DataTemplate>
     <DataTemplate x:Key="GameVersionTemplate">
       <Button Classes="flat" Command="{Binding SelectCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="7,4" MinHeight="43" ToolTip.Tip="{Binding Detail}">
         <Grid ColumnDefinitions="36,*">
-          <Grid Width="28" Height="30" VerticalAlignment="Center"><Path Data="M 0,8 L 14,0 L 28,8 L 14,16 Z" Fill="#79A54C" /><Path Data="M 0,8 L 14,16 L 14,30 L 0,22 Z" Fill="#8B674A" /><Path Data="M 14,16 L 28,8 L 28,22 L 14,30 Z" Fill="#5D4630" /></Grid>
+          <Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="28" Height="28" VerticalAlignment="Center" />
           <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center"><TextBlock Text="{Binding Id}" FontSize="14" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" /></StackPanel>
         </Grid>
       </Button>
@@ -23,7 +23,7 @@
     </DataTemplate>
   </UserControl.Resources>
   <Grid ColumnDefinitions="Auto,*">
-    <Border Name="DownloadsCategoryPanel" Width="150" Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,0,1,0" IsVisible="{Binding ShowCategorySidebar}">
+    <Border Name="DownloadsCategoryPanel" Width="180" Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,0,1,0" IsVisible="{Binding ShowCategorySidebar}">
       <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="0,12,0,15">
         <ContentControl Content="{Binding MinecraftCategory}" ContentTemplate="{StaticResource DownloadCategoryTemplate}" HorizontalContentAlignment="Stretch" />
         <TextBlock Text="社区资源" Classes="contextHeading" />
@@ -34,8 +34,8 @@
         <ContentControl Content="{Binding TasksCategory}" ContentTemplate="{StaticResource DownloadCategoryTemplate}" HorizontalContentAlignment="Stretch" />
       </StackPanel></ScrollViewer>
     </Border>
-    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
-      <Grid Margin="25">
+    <ScrollViewer Grid.Column="1" Name="DownloadsPageScroller" HorizontalScrollBarVisibility="Disabled">
+      <Grid Margin="24">
         <StackPanel Name="MinecraftCatalogPage" IsVisible="{Binding IsCatalogPage}" Spacing="15">
           <Border Classes="card"><StackPanel Spacing="10">
             <DockPanel><Button Name="RefreshGameCatalogButton" DockPanel.Dock="Right" Classes="flat" Content="刷新" Command="{Binding RefreshCatalogCommand}" MinHeight="18" Height="18" Padding="6,1" /><TextBlock Text="最新版本" Classes="sectionTitle" /></DockPanel>

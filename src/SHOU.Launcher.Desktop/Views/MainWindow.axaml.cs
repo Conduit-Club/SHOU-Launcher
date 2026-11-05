@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Chrome;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
@@ -13,12 +14,23 @@ public partial class MainWindow : Window
     public MainWindow()
     {
         AvaloniaXamlLoader.Load(this);
+        ConfigurePlatformChrome();
         Opened += async (_, _) => { if (DataContext is MainWindowViewModel vm) await vm.InitializeAsync(); };
         Closed += (_, _) => { if (DataContext is MainWindowViewModel vm) vm.Dispose(); };
         KeyDown += (_, e) =>
         {
             if (DataContext is not MainWindowViewModel vm) return;
-            if ((e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0 && e.Key is >= Key.D1 and <= Key.D4)
+            if (OperatingSystem.IsMacOS() && e.KeyModifiers == KeyModifiers.Meta && e.Key == Key.W)
+            {
+                Close();
+                e.Handled = true;
+            }
+            else if (OperatingSystem.IsMacOS() && e.KeyModifiers == KeyModifiers.Meta && e.Key == Key.OemComma)
+            {
+                vm.ShowSettingsCommand.Execute(null);
+                e.Handled = true;
+            }
+            else if ((e.KeyModifiers & (KeyModifiers.Meta | KeyModifiers.Control)) != 0 && e.Key is >= Key.D1 and <= Key.D4)
             {
                 var command = e.Key switch
                 {
@@ -43,8 +55,24 @@ public partial class MainWindow : Window
         };
     }
 
+    private void ConfigurePlatformChrome()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        WindowDecorations = WindowDecorations.Full;
+        ExtendClientAreaToDecorationsHint = true;
+        ExtendClientAreaTitleBarHeightHint = 48;
+        this.FindControl<StackPanel>("WindowBrand")!.Margin = new Thickness(80, 0, 0, 0);
+        this.FindControl<StackPanel>("ContextHeader")!.Margin = new Thickness(80, 0, 0, 0);
+        this.FindControl<StackPanel>("CustomWindowControls")!.IsVisible = false;
+        WindowDecorationProperties.SetElementRole(this.FindControl<Border>("LauncherTitleBar")!, WindowDecorationsElementRole.TitleBar);
+        foreach (var button in this.FindControl<StackPanel>("PrimaryNavigation")!.Children.OfType<Button>())
+            WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
+        WindowDecorationProperties.SetElementRole(this.FindControl<Button>("BackNavigationButton")!, WindowDecorationsElementRole.User);
+    }
+
     private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
+        if (OperatingSystem.IsMacOS()) return;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         for (var current = e.Source as Visual; current is not null; current = current.GetVisualParent())
             if (current is Button) return;
