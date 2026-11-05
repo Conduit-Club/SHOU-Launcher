@@ -3,8 +3,19 @@ using SHOU.Launcher.Core.Abstractions;
 namespace SHOU.Launcher.Desktop.Tests;
 
 // Explicit test fake. No production composition root references this implementation.
-internal sealed class FakeLauncherService : ILauncherService
+internal sealed class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMigrationService
 {
+    public bool SupportsLegacyMicrosoftImport { get; set; }
+    public IReadOnlyList<LegacyMicrosoftAccountChoice> LegacyChoices { get; set; } = [];
+    public Func<CancellationToken, Task<IReadOnlyList<LegacyMicrosoftAccountChoice>>>? LegacyReadBehavior { get; set; }
+    public string? LastImportedLegacySource { get; private set; }
+    public Task<IReadOnlyList<LegacyMicrosoftAccountChoice>> ReadLegacyMicrosoftAccountsAsync(CancellationToken cancellationToken = default)
+        => LegacyReadBehavior?.Invoke(cancellationToken) ?? Task.FromResult(LegacyChoices);
+    public Task<AccountProfile> ImportLegacyMicrosoftAccountAsync(string sourceId, CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested(); LastImportedLegacySource = sourceId;
+        return Task.FromResult(new AccountProfile("microsoft:fixture", AccountKind.Microsoft, "Fixture", "11111111222233334444555555555555"));
+    }
     private EventHandler<LauncherSnapshot>? _snapshotChanged;
     private EventHandler<LauncherLog>? _logReceived;
     public event EventHandler<LauncherSnapshot>? SnapshotChanged { add => _snapshotChanged += value; remove => _snapshotChanged -= value; }

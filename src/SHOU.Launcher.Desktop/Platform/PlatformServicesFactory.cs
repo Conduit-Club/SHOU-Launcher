@@ -21,7 +21,11 @@ public static class PlatformServicesFactory
         var installer = new MojangJavaRuntimeInstaller(downloader, discovery, paths.RuntimesDirectory,
             Path.Combine(paths.CacheDirectory, "java-metadata"));
         return new PlatformServices(info, paths, new Capabilities(info.Context), new ExternalLauncher(processes, info.Context),
-            credentials, processes, discovery, installer, new DataDirectoryLock());
+            credentials, processes, discovery, installer, new DataDirectoryLock())
+        {
+            LegacyMicrosoftAccounts = OperatingSystem.IsWindows()
+                ? new WindowsLegacyMicrosoftAccountReader(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PCLCE")) : null
+        };
     }
 
     private sealed class Capabilities(PlatformContext context) : IPlatformCapabilities

@@ -17,7 +17,7 @@ using ClubServer = SHOU.Launcher.Core.Abstractions.ClubServer;
 namespace SHOU.Launcher.Core;
 
 /// <summary>Production orchestration shared by both desktops. All persisted account DTOs are nonsecret.</summary>
-public sealed partial class LauncherService : ILauncherService, ILocalPackService
+public sealed partial class LauncherService : ILauncherService, ILocalPackService, ILegacyMicrosoftAccountMigrationService
 {
     private readonly PlatformServices platform;
     private readonly HttpClient http;

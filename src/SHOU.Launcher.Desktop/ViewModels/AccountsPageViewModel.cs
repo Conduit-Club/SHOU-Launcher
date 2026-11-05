@@ -100,6 +100,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
         }, () => CanEdit && SelectedAccount is not null && ConfirmRemoval);
         InitializeAccountPanel();
         InitializeAccountAppearance();
+        InitializeLegacyImport();
     }
     private async Task LoginMicrosoftAsync()
     {
@@ -188,6 +189,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
     }
     internal void OnNavigatingAway()
     {
+        ClearLegacyImportChoices();
         CancelAccountAppearanceWork();
         Password = "";
         if (_authenticationActive) Owner.CancelOperationCommand.Execute(null);

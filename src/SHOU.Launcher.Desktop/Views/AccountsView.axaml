@@ -78,6 +78,16 @@
           <Path Classes="accountAvatar" Width="42" Height="46" HorizontalAlignment="Center" Data="M10,1 A4,4 0 1 1 9.9,1 M3,19 C3,10 17,10 17,19" />
           <Button Name="LoginMicrosoftButton" Classes="primary" Content="开始正版验证" Command="{Binding LoginMicrosoftCommand}" HorizontalAlignment="Center" />
           <TextBlock Text="在微软官网输入设备代码完成授权。" Classes="accountHint" TextAlignment="Center" />
+          <StackPanel Name="LegacyMicrosoftImportPanel" IsVisible="{Binding SupportsLegacyMicrosoftImport}" Spacing="8">
+            <Button Name="ReadLegacyMicrosoftAccountsButton" Content="读取旧版微软账户" Command="{Binding ReadLegacyMicrosoftAccountsCommand}" HorizontalAlignment="Center" />
+            <TextBlock Text="{Binding LegacyImportSummary}" Classes="accountHint" />
+            <StackPanel IsVisible="{Binding HasLegacyMicrosoftAccounts}" Spacing="8">
+              <ComboBox Name="LegacyMicrosoftAccountSelector" ItemsSource="{Binding LegacyMicrosoftAccounts}" SelectedItem="{Binding SelectedLegacyMicrosoftAccount}" IsEnabled="{Binding CanEdit}" PlaceholderText="请选择要导入的账户">
+                <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" /></DataTemplate></ComboBox.ItemTemplate>
+              </ComboBox>
+              <Button Name="ImportLegacyMicrosoftAccountButton" Content="验证并导入所选账户" Command="{Binding ImportLegacyMicrosoftAccountCommand}" HorizontalAlignment="Center" />
+            </StackPanel>
+          </StackPanel>
           <Button Content="前往 Minecraft 官网" Command="{Binding OpenProviderWebsiteCommand}" HorizontalAlignment="Center" />
           <Button Content="返回" Command="{Binding EndAddAccountCommand}" HorizontalAlignment="Center" />
         </StackPanel>

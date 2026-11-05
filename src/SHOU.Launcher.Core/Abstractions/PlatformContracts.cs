@@ -74,7 +74,10 @@ public interface IDataDirectoryLock { IDataDirectoryLease Acquire(IAppPaths path
 public sealed record PlatformOptions(string? DataDirectory = null, string? ConfiguredJavaExecutable = null);
 public sealed record PlatformServices(IPlatformInfo Info, IAppPaths Paths, IPlatformCapabilities Capabilities,
     IExternalLauncher ExternalLauncher, ICredentialStore Credentials, IProcessRunner Processes,
-    IJavaDiscovery JavaDiscovery, IJavaRuntimeInstaller JavaInstaller, IDataDirectoryLock DataLock);
+    IJavaDiscovery JavaDiscovery, IJavaRuntimeInstaller JavaInstaller, IDataDirectoryLock DataLock)
+{
+    public ILegacyMicrosoftAccountReader? LegacyMicrosoftAccounts { get; init; }
+}
 
 public sealed record JavaInstallation(string ExecutablePath, string JavaHome, string FullVersion, int MajorVersion,
     string Vendor, RuntimeArchitecture RuntimeArchitecture, string Source, string? ProbeError = null,
