@@ -1,13 +1,88 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.DownloadsView">
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="14"><TextBlock Text="{Binding Summary}" Classes="muted" /><TextBlock Text="取消或重试会作用于该任务所属实例的整次安装。" Classes="muted" FontSize="12" />
-    <Border Classes="card" IsVisible="{Binding IsEmpty}"><StackPanel Spacing="8"><TextBlock Text="还没有下载任务" Classes="sectionTitle" /><TextBlock Text="在实例页安装游戏后，可在这里查看真实进度与来源。" Classes="muted" /></StackPanel></Border>
-    <ItemsControl Name="DownloadTasks" ItemsSource="{Binding Tasks}"><ItemsControl.ItemTemplate><DataTemplate>
-      <Border Classes="card" Margin="0,0,0,12"><StackPanel Spacing="10"><DockPanel><TextBlock DockPanel.Dock="Right" Text="{Binding State}" Classes="muted" /><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" /></DockPanel>
-        <ProgressBar Value="{Binding Progress}" IsIndeterminate="{Binding IsIndeterminate}" Minimum="0" Maximum="100" Height="6" />
-        <TextBlock Text="{Binding Transfer}" /><TextBlock Text="{Binding Source}" Classes="muted" FontSize="12" />
-        <TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}" Foreground="{DynamicResource ClubErrorForeground}" TextWrapping="Wrap" />
-        <StackPanel Orientation="Horizontal" Spacing="8"><Button Name="CancelDownloadButton" Content="取消所属安装" Command="{Binding CancelCommand}" /><Button Name="RetryDownloadButton" Content="重试所属安装" Command="{Binding RetryCommand}" /></StackPanel>
-      </StackPanel></Border>
-    </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-  </StackPanel></ScrollViewer>
+  <UserControl.Resources>
+    <DataTemplate x:Key="DownloadCategoryTemplate">
+      <ToggleButton Classes="contextNavigation" IsChecked="{Binding IsSelected, Mode=OneWay}" Command="{Binding SelectCommand}" HorizontalAlignment="Stretch" MinHeight="35">
+        <Grid ColumnDefinitions="22,*"><TextBlock Text="{Binding Icon}" FontSize="19" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" /></Grid>
+      </ToggleButton>
+    </DataTemplate>
+    <DataTemplate x:Key="GameVersionTemplate">
+      <Button Classes="flat" Command="{Binding SelectCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="7,4" MinHeight="43" ToolTip.Tip="{Binding Detail}">
+        <Grid ColumnDefinitions="36,*">
+          <Grid Width="28" Height="30" VerticalAlignment="Center"><Path Data="M 0,8 L 14,0 L 28,8 L 14,16 Z" Fill="#79A54C" /><Path Data="M 0,8 L 14,16 L 14,30 L 0,22 Z" Fill="#8B674A" /><Path Data="M 14,16 L 28,8 L 28,22 L 14,30 Z" Fill="#5D4630" /></Grid>
+          <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center"><TextBlock Text="{Binding Id}" FontSize="14" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" /></StackPanel>
+        </Grid>
+      </Button>
+    </DataTemplate>
+    <DataTemplate x:Key="ContentProjectTemplate">
+      <Button Classes="flat" Command="{Binding OpenCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="5" MinHeight="64">
+        <Grid ColumnDefinitions="50,*">
+          <Border Width="40" Height="40" CornerRadius="5" Background="{DynamicResource ClubSelection}" ClipToBounds="True" VerticalAlignment="Center"><Grid><TextBlock Text="{Binding Tile}" FontSize="22" Foreground="{DynamicResource ClubSelectionForeground}" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasIcon}" /><Image Source="{Binding Icon}" Stretch="Uniform" IsVisible="{Binding HasIcon}" /></Grid></Border>
+          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2"><TextBlock Text="{Binding Title}" FontSize="14" /><TextBlock Text="{Binding Description}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="11" /></StackPanel>
+        </Grid>
+      </Button>
+    </DataTemplate>
+  </UserControl.Resources>
+  <Grid ColumnDefinitions="Auto,*">
+    <Border Name="DownloadsCategoryPanel" Width="150" Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,0,1,0" IsVisible="{Binding ShowCategorySidebar}">
+      <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="0,12,0,15">
+        <ContentControl Content="{Binding MinecraftCategory}" ContentTemplate="{StaticResource DownloadCategoryTemplate}" HorizontalContentAlignment="Stretch" />
+        <TextBlock Text="社区资源" Classes="contextHeading" />
+        <ItemsControl ItemsSource="{Binding CommunityCategories}" ItemTemplate="{StaticResource DownloadCategoryTemplate}" />
+        <TextBlock Text="安装包" Classes="contextHeading" />
+        <ItemsControl ItemsSource="{Binding InstallerCategories}" ItemTemplate="{StaticResource DownloadCategoryTemplate}" />
+        <TextBlock Text="任务" Classes="contextHeading" />
+        <ContentControl Content="{Binding TasksCategory}" ContentTemplate="{StaticResource DownloadCategoryTemplate}" HorizontalContentAlignment="Stretch" />
+      </StackPanel></ScrollViewer>
+    </Border>
+    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+      <Grid Margin="25">
+        <StackPanel Name="MinecraftCatalogPage" IsVisible="{Binding IsCatalogPage}" Spacing="15">
+          <Border Classes="card"><StackPanel Spacing="10">
+            <DockPanel><Button Name="RefreshGameCatalogButton" DockPanel.Dock="Right" Classes="flat" Content="刷新" Command="{Binding RefreshCatalogCommand}" MinHeight="18" Height="18" Padding="6,1" /><TextBlock Text="最新版本" Classes="sectionTitle" /></DockPanel>
+            <ItemsControl Name="LatestGameVersions" ItemsSource="{Binding LatestVersions}" ItemTemplate="{StaticResource GameVersionTemplate}" />
+            <TextBlock Text="{Binding RequestStatus}" Classes="muted" FontSize="11" /><TextBlock Text="{Binding CatalogSource}" Classes="muted" FontSize="11" />
+            <TextBlock Text="{Binding QueryCapabilityReason}" Classes="capability" />
+          </StackPanel></Border>
+          <ItemsControl Name="GameVersionGroups" ItemsSource="{Binding VersionGroups}"><ItemsControl.ItemTemplate><DataTemplate><Expander Header="{Binding Header}" Margin="0,0,0,12"><ItemsControl ItemsSource="{Binding Versions}" ItemTemplate="{StaticResource GameVersionTemplate}" Margin="15,0,15,15" /></Expander></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+        </StackPanel>
+        <StackPanel Name="MinecraftInstallConfiguration" IsVisible="{Binding IsConfiguration}" Spacing="12">
+          <Border Classes="card"><StackPanel Spacing="8"><Grid ColumnDefinitions="34,*"><Button Classes="flat" Content="←" Command="{Binding BackToListCommand}" Padding="4" AutomationProperties.Name="返回版本列表" /><TextBox Grid.Column="1" Name="CatalogInstallationName" Text="{Binding InstallationName}" IsEnabled="{Binding CanEdit}" /></Grid><TextBlock Text="{Binding InstallationValidation}" Classes="muted" Margin="34,0,0,0" /><TextBlock Text="{Binding InstallationSummary}" Margin="34,0,0,0" /></StackPanel></Border>
+          <Border Classes="card"><Grid ColumnDefinitions="116,*"><TextBlock Text="Forge" FontSize="14" /><TextBlock Grid.Column="1" Text="安装链尚未迁移" Classes="capability" /></Grid></Border>
+          <Border Classes="card"><Grid ColumnDefinitions="116,*"><TextBlock Text="NeoForge" FontSize="14" /><TextBlock Grid.Column="1" Text="安装链尚未迁移" Classes="capability" /></Grid></Border>
+          <Expander Header="Fabric" IsExpanded="True"><StackPanel Spacing="10" Margin="20,0,20,15">
+            <DockPanel><Button Name="RefreshFabricCatalogButton" DockPanel.Dock="Right" Content="读取 Fabric 版本" Command="{Binding RefreshFabricCommand}" /><TextBlock Text="{Binding FabricStatus}" Classes="muted" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" /></DockPanel>
+            <ListBox Name="FabricCatalogSelector" ItemsSource="{Binding FabricVersions}" SelectedItem="{Binding SelectedFabric}" IsEnabled="{Binding CanEdit}" MaxHeight="220" BorderThickness="0" Background="Transparent"><ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Version}" /><CheckBox Grid.Column="1" Content="稳定版" IsChecked="{Binding Stable, Mode=OneWay}" IsHitTestVisible="False" IsTabStop="False" MinHeight="18" /></Grid></DataTemplate></ListBox.ItemTemplate></ListBox>
+            <Button Content="使用原版，不添加 Fabric" Command="{Binding ClearFabricCommand}" HorizontalAlignment="Left" />
+          </StackPanel></Expander>
+          <Border Classes="card"><Grid ColumnDefinitions="116,*"><TextBlock Text="Fabric API" FontSize="14" /><TextBlock Grid.Column="1" Text="未自动选择；安装后可在社区模组页下载" Classes="capability" /></Grid></Border>
+          <Border Classes="card"><Grid ColumnDefinitions="116,*"><TextBlock Text="LabyMod" FontSize="14" /><TextBlock Grid.Column="1" Text="安装链尚未迁移" Classes="capability" /></Grid></Border>
+          <Border Classes="card"><Grid ColumnDefinitions="116,*"><TextBlock Text="OptiFine" FontSize="14" /><TextBlock Grid.Column="1" Text="安装链尚未迁移" Classes="capability" /></Grid></Border>
+          <TextBlock Name="CatalogInstallStatus" Text="{Binding InstallStatus}" Classes="muted" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,8"><Button Name="InstallCatalogVersionButton" Classes="primary" Content="开始下载" Command="{Binding InstallVersionCommand}" Height="42" MinWidth="135" /><Button Content="查看已创建实例" Command="{Binding ShowCreatedInstanceCommand}" IsVisible="{Binding HasCreatedInstance}" Height="42" /></StackPanel>
+        </StackPanel>
+        <StackPanel Name="CommunitySearchPage" IsVisible="{Binding IsSearchPage}" Spacing="15">
+          <Border Classes="card" Padding="12,5"><Grid ColumnDefinitions="*,10,60"><TextBox Name="ContentSearchQuery" Text="{Binding QueryText}" PlaceholderText="{Binding SearchPlaceholder}" BorderThickness="0" Background="Transparent" IsEnabled="{Binding CanQuery}" /><Button Grid.Column="2" Name="SearchContentButton" Classes="primary" Content="搜索" Command="{Binding SearchCommand}" /></Grid></Border>
+          <Border Classes="card" Padding="12,8"><StackPanel Spacing="8"><Grid ColumnDefinitions="32,*,12,45,*,12,58,*,26"><TextBlock Text="来源" VerticalAlignment="Center" /><ComboBox Grid.Column="1" SelectedIndex="0" IsEnabled="False"><ComboBoxItem Content="Modrinth" /></ComboBox><TextBlock Grid.Column="3" Text="标签" VerticalAlignment="Center" /><ComboBox Grid.Column="4" SelectedIndex="0" IsEnabled="False" ToolTip.Tip="标签筛选尚未迁移"><ComboBoxItem Content="全部" /></ComboBox><TextBlock Grid.Column="6" Text="排序方式" VerticalAlignment="Center" /><ComboBox Grid.Column="7" Name="ContentSortSelector" ItemsSource="{Binding SortChoices}" SelectedItem="{Binding SelectedSort}" IsEnabled="{Binding CanEdit}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox><Button Grid.Column="8" Classes="flat" Content="↶" Command="{Binding ResetFiltersCommand}" Padding="3" ToolTip.Tip="重置筛选" /></Grid>
+          <Grid ColumnDefinitions="32,*,12,45,*,12,58,*"><TextBlock Text="版本" VerticalAlignment="Center" /><TextBox Grid.Column="1" Name="ContentGameVersionFilter" Text="{Binding GameVersionFilter}" PlaceholderText="任意" IsEnabled="{Binding CanEdit}" /><TextBlock Grid.Column="3" Text="加载器" VerticalAlignment="Center" /><ComboBox Grid.Column="4" Name="ContentLoaderFilter" ItemsSource="{Binding LoaderFilters}" SelectedItem="{Binding LoaderFilter}" IsEnabled="{Binding CanEdit}" /></Grid><TextBlock Text="{Binding SearchCapabilityReason}" Classes="capability" /></StackPanel></Border>
+          <TextBlock Text="{Binding RequestStatus}" Classes="muted" /><TextBlock Text="{Binding QueryCapabilityReason}" Classes="capability" />
+          <Border Classes="card" IsVisible="{Binding HasProjects}"><ItemsControl Name="ContentSearchResults" ItemsSource="{Binding Projects}" ItemTemplate="{StaticResource ContentProjectTemplate}" /></Border>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12"><Button Content="上一页" Command="{Binding PreviousPageCommand}" /><TextBlock Text="{Binding PageSummary}" VerticalAlignment="Center" /><Button Content="下一页" Command="{Binding NextPageCommand}" /></StackPanel>
+        </StackPanel>
+        <StackPanel Name="ResourceDetailPage" IsVisible="{Binding IsResourceDetail}" Spacing="15">
+          <Border Classes="card"><StackPanel Spacing="12"><DockPanel><Button DockPanel.Dock="Left" Classes="flat" Content="←" Command="{Binding BackToListCommand}" Margin="0,0,10,0" AutomationProperties.Name="返回资源列表" /><Border DockPanel.Dock="Left" Width="50" Height="50" CornerRadius="6" Background="{DynamicResource ClubSelection}" Margin="0,0,10,0"><TextBlock Text="{Binding ProjectTile}" FontSize="26" HorizontalAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource ClubSelectionForeground}" /></Border><StackPanel Spacing="3"><TextBlock Text="{Binding ProjectTitle}" FontSize="16" /><TextBlock Text="{Binding ProjectDescription}" Classes="muted" FontSize="12" /><TextBlock Text="{Binding ProjectDetail}" Classes="muted" FontSize="12" /></StackPanel></DockPanel>
+          <WrapPanel><Button Content="Modrinth" Command="{Binding OpenProjectPageCommand}" Margin="0,0,8,0" /><Button Content="复制名称" Click="CopyProjectName_Click" Margin="0,0,8,0" /><Button Content="复制链接" Click="CopyProjectLink_Click" Margin="0,0,8,0" /><Button Name="FavoriteProjectButton" Content="{Binding FavoriteAction}" Command="{Binding ToggleFavoriteCommand}" /></WrapPanel><TextBlock Text="{Binding FavoriteStatus}" Classes="muted" FontSize="11" /></StackPanel></Border>
+          <Border Classes="card"><Grid ColumnDefinitions="36,*,12,50,*,12,Auto"><TextBlock Text="版本" VerticalAlignment="Center" /><TextBox Grid.Column="1" Text="{Binding GameVersionFilter}" PlaceholderText="任意" IsEnabled="{Binding CanEdit}" /><TextBlock Grid.Column="3" Text="加载器" VerticalAlignment="Center" /><ComboBox Grid.Column="4" ItemsSource="{Binding LoaderFilters}" SelectedItem="{Binding LoaderFilter}" IsEnabled="{Binding CanEdit}" /><Button Grid.Column="6" Name="RefreshContentReleasesButton" Content="筛选文件" Command="{Binding RefreshReleasesCommand}" /></Grid></Border>
+          <TextBlock Name="ContentReleaseStatus" Text="{Binding RequestStatus}" Classes="muted" />
+          <ItemsControl Name="ContentReleaseGroups" ItemsSource="{Binding ReleaseGroups}"><ItemsControl.ItemTemplate><DataTemplate><Expander Header="{Binding Header}" Margin="0,0,0,12"><ItemsControl ItemsSource="{Binding Releases}" Margin="15,0,15,15"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="4" Margin="0,0,0,12"><TextBlock Text="{Binding Name}" FontSize="14" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="11" /><ItemsControl ItemsSource="{Binding Files}"><ItemsControl.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,12,60" Margin="5,4"><StackPanel Spacing="2"><TextBlock Text="{Binding Name}" TextWrapping="Wrap" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="11" /></StackPanel><Button Grid.Column="2" Name="DownloadResourceFileButton" Content="下载" Command="{Binding DownloadCommand}" /></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Expander></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+          <Border Classes="card" IsVisible="{Binding HasDownloadedFile}"><StackPanel Spacing="8"><TextBlock Text="{Binding LastDownloadPath}" Classes="muted" /><TextBlock Text="文件已校验并保存到缓存；尚未自动装入实例或存档。" Classes="capability" /><Button Content="打开下载目录" Command="{Binding OpenDownloadDirectoryCommand}" HorizontalAlignment="Left" /></StackPanel></Border>
+        </StackPanel>
+        <StackPanel Name="InstallerCatalogPage" IsVisible="{Binding IsInstallerPage}" Spacing="15"><Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="{Binding InstallerTitle}" Classes="sectionTitle" /><TextBlock Text="{Binding InstallerDescription}" TextWrapping="Wrap" /><Button Content="查看官方网站" Command="{Binding OpenInstallerPageCommand}" HorizontalAlignment="Left" /><Button Content="返回 Minecraft 自动安装" Command="{Binding ShowAutomaticInstallCommand}" HorizontalAlignment="Left" /></StackPanel></Border><Expander Header="版本列表"><StackPanel Spacing="8" Margin="15,0,15,15"><TextBlock Text="此类独立安装包目录与下载尚未接入。" Classes="capability" /><Button Content="下载选中安装包" IsEnabled="False" HorizontalAlignment="Left" /></StackPanel></Expander></StackPanel>
+        <StackPanel Name="FavoritesPage" IsVisible="{Binding IsFavoritesPage}" Spacing="15"><Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="收藏夹" Classes="sectionTitle" /><TextBlock Text="{Binding FavoriteStatus}" Classes="muted" /><ItemsControl Name="FavoriteResources" ItemsSource="{Binding FavoriteProjects}" ItemTemplate="{StaticResource ContentProjectTemplate}" /></StackPanel></Border></StackPanel>
+        <StackPanel Name="DownloadsTaskPage" IsVisible="{Binding IsTasksPage}" Spacing="14"><TextBlock Text="{Binding Summary}" Classes="muted" /><TextBlock Text="取消或重试会作用于任务所属实例的整次安装，或当前资源下载。" Classes="capability" />
+          <Border Classes="card" IsVisible="{Binding IsEmpty}"><StackPanel Spacing="8"><TextBlock Text="还没有下载任务" Classes="sectionTitle" /><TextBlock Text="安装游戏或下载社区资源后，可在这里查看真实进度与来源。" Classes="muted" /></StackPanel></Border>
+          <ItemsControl Name="DownloadTasks" ItemsSource="{Binding Tasks}"><ItemsControl.ItemTemplate><DataTemplate><Border Classes="card" Margin="0,0,0,12"><StackPanel Spacing="10"><DockPanel><TextBlock DockPanel.Dock="Right" Text="{Binding State}" Classes="muted" /><TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextWrapping="Wrap" /></DockPanel><ProgressBar Value="{Binding Progress}" IsIndeterminate="{Binding IsIndeterminate}" Minimum="0" Maximum="100" Height="5" /><TextBlock Text="{Binding Transfer}" /><TextBlock Text="{Binding Source}" Classes="muted" FontSize="12" /><TextBlock Text="{Binding Error}" IsVisible="{Binding HasError}" Foreground="{DynamicResource ClubErrorForeground}" TextWrapping="Wrap" /><StackPanel Orientation="Horizontal" Spacing="8"><Button Name="CancelDownloadButton" Content="取消所属安装" Command="{Binding CancelCommand}" /><Button Name="RetryDownloadButton" Content="重试所属安装" Command="{Binding RetryCommand}" /></StackPanel></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+        </StackPanel>
+      </Grid>
+    </ScrollViewer>
+  </Grid>
 </UserControl>

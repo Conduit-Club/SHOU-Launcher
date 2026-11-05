@@ -15,7 +15,8 @@ public sealed record Aria2Settings(bool Enabled = false, string Endpoint = "http
 public sealed record LauncherSettings(string? GameRoot = null, string? JavaExecutable = null, int MemoryMiB = 2048,
     string Language = "zh-CN", string Theme = "System", string DownloadSourcesJson = "",
     ProxySettings? Proxy = null, Aria2Settings? Aria2 = null, string? MicrosoftClientId = null,
-    bool ConduitJavaTrustAutoRepair = true);
+    bool ConduitJavaTrustAutoRepair = true, int? GameWindowWidth = null, int? GameWindowHeight = null,
+    bool GameFullscreen = false, int? MinimumMemoryMiB = null, string? CustomInfo = null);
 public sealed record GameInstance(string Id, string Name, string VersionId, string GameDirectory,
     string? JavaExecutable = null, int? MemoryMiB = null, string Loader = "vanilla", string? LoaderVersion = null,
     bool Installed = false);

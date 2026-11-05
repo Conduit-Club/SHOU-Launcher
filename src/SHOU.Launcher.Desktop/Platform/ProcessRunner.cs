@@ -79,21 +79,22 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
 
     private static async Task<IManagedProcess> DisposeRejectedStartAsync(ManagedProcess process)
     {
-        await process.DisposeAsync();
+        await process.DisposeAsync().ConfigureAwait(false);
         throw new ObjectDisposedException(nameof(ProcessRunner));
     }
 
     public async Task<ProcessResult> RunAsync(ProcessSpec spec, IProgress<ProcessOutput>? output = null,
         CancellationToken cancellationToken = default)
     {
-        await using var process = await StartAsync(spec, output, cancellationToken);
-        return await process.Completion;
+        await using var process = await StartAsync(spec, output, cancellationToken).ConfigureAwait(false);
+        return await process.Completion.ConfigureAwait(false);
     }
 
+    // Shutdown may run after the desktop dispatcher has stopped; no continuation may depend on it.
     public async ValueTask DisposeAsync()
     {
         if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-        await Task.WhenAll(_owned.Values.Select(async process => await process.DisposeAsync()));
+        await Task.WhenAll(_owned.Values.Select(async process => await process.DisposeAsync().ConfigureAwait(false))).ConfigureAwait(false);
     }
 
     private sealed class ManagedProcess : IManagedProcess
@@ -173,7 +174,7 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
             {
                 while (true)
                 {
-                    var count = await reader.ReadAsync(buffer.AsMemory());
+                    var count = await reader.ReadAsync(buffer.AsMemory()).ConfigureAwait(false);
                     if (count == 0) break;
                     string? captured = null;
                     lock (_captureLock)
@@ -209,7 +210,7 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
             var cancelled = false;
             try
             {
-                await _process.WaitForExitAsync(linked.Token);
+                await _process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (linked.IsCancellationRequested)
             {
@@ -217,12 +218,12 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
                 timedOut = deadline.IsCancellationRequested && !cancelled;
                 try { _process.Kill(entireProcessTree: true); }
                 catch (InvalidOperationException) when (_process.HasExited) { }
-                await _process.WaitForExitAsync();
+                await _process.WaitForExitAsync().ConfigureAwait(false);
             }
             finally
             {
                 // A descendant may retain a redirected pipe after the parent exits. Bound that drain too.
-                try { await reads.WaitAsync(TimeSpan.FromSeconds(3)); }
+                try { await reads.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false); }
                 catch (TimeoutException)
                 {
                     _process.StandardOutput.Dispose();
@@ -237,13 +238,13 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
         public async Task StopAsync(CancellationToken cancellationToken = default)
         {
             if (!Completion.IsCompleted) _stop.Cancel();
-            await Completion.WaitAsync(cancellationToken);
+            await Completion.WaitAsync(cancellationToken).ConfigureAwait(false);
         }
 
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            try { await StopAsync(); }
+            try { await StopAsync().ConfigureAwait(false); }
             finally { CloseInput(); _process.Dispose(); _stop.Dispose(); }
         }
     }

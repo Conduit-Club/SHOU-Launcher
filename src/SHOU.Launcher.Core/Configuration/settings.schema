@@ -9,3 +9,8 @@ Proxy
 Aria2
 MicrosoftClientId
 ConduitJavaTrustAutoRepair
+GameWindowWidth
+GameWindowHeight
+GameFullscreen
+MinimumMemoryMiB
+CustomInfo

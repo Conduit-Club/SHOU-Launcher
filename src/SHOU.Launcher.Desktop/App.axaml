@@ -5,7 +5,7 @@
     </ResourceDictionary.MergedDictionaries></ResourceDictionary>
   </Application.Resources>
   <Application.Styles>
-    <FluentTheme />
+    <FluentTheme DensityStyle="Compact" />
     <StyleInclude Source="avares://SHOU.Launcher.Desktop/Themes/ClubStyles.axaml" />
   </Application.Styles>
 </Application>

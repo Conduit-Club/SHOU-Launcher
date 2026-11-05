@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Core.Minecraft;
+using SHOU.Launcher.Core.Configuration;
 
 namespace SHOU.Launcher.Core.Tests;
 
@@ -91,5 +92,33 @@ public sealed class LaunchPlanTests
     {
         CollectionAssert.AreEqual(new[] { "--name", "${auth_player_name}", "--value", "a b" }, LaunchPlanBuilder.TokenizeLegacy("--name ${auth_player_name} --value \"a b\"").ToArray());
         Assert.ThrowsExactly<InvalidDataException>(() => LaunchPlanBuilder.TokenizeLegacy("\"unterminated"));
+    }
+    [TestMethod] public void SavedWindowAndInitialMemoryOptionsReachTheProtectedPlansInput()
+    {
+        var input = Inputs() with { WindowWidth = 1280, WindowHeight = 720, Fullscreen = true,
+            MinimumMemoryMiB = 1024, CustomInfo = "潮涌核心社" };
+        input.Version.Metadata["arguments"]!["game"]!.AsArray().Add("--versionType");
+        input.Version.Metadata["arguments"]!["game"]!.AsArray().Add("${version_type}");
+        input.Version.Metadata["arguments"]!["game"]!.AsArray().Add("--width");
+        input.Version.Metadata["arguments"]!["game"]!.AsArray().Add("${resolution_width}");
+        var plan = LaunchPlanBuilder.Build(input);
+        var argv = plan.Arguments.ToList();
+        Assert.AreEqual("1280", argv[argv.IndexOf("--width") + 1]);
+        Assert.AreEqual(1, argv.Count(a => a == "--width"));
+        Assert.AreEqual("720", argv[argv.IndexOf("--height") + 1]);
+        CollectionAssert.Contains(argv, "--fullscreen");
+        CollectionAssert.Contains(argv, "-Xms1024M");
+        CollectionAssert.Contains(argv, "-Xmx2048M");
+        Assert.AreEqual("潮涌核心社", argv[argv.IndexOf("--versionType") + 1]);
+        Assert.IsFalse(JsonSerializer.Serialize(plan).Contains("fake_sensitive_token", StringComparison.Ordinal));
+    }
+    [TestMethod] public void InvalidWindowAndMemoryDraftsCannotBePersistedOrLaunched()
+    {
+        Assert.ThrowsExactly<ArgumentException>(() => ConfigurationStore.ValidateSettings(new(GameWindowWidth: 1280)));
+        Assert.ThrowsExactly<ArgumentException>(() => ConfigurationStore.ValidateSettings(new(GameWindowWidth: 1280, GameWindowHeight: 0)));
+        Assert.ThrowsExactly<ArgumentException>(() => ConfigurationStore.ValidateSettings(new(MinimumMemoryMiB: 4096)));
+        Assert.ThrowsExactly<ArgumentException>(() => ConfigurationStore.ValidateSettings(new(CustomInfo: "line\nbreak")));
+        Assert.ThrowsExactly<ArgumentOutOfRangeException>(() => LaunchPlanBuilder.Build(Inputs() with { MinimumMemoryMiB = 4096 }));
+        ConfigurationStore.ValidateSettings(new(GameWindowWidth: 1280, GameWindowHeight: 720, MinimumMemoryMiB: 512));
     }
 }

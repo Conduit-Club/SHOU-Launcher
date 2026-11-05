@@ -12,6 +12,7 @@ namespace SHOU.Launcher.Desktop.ViewModels;
 public abstract class PageViewModel(MainWindowViewModel owner, string title, string description) : ObservableObject
 {
     protected MainWindowViewModel Owner { get; } = owner;
+    public MainWindowViewModel Root => Owner;
     protected ILauncherService Service => Owner.Service;
     public string Title { get; } = title;
     public string Description { get; } = description;
@@ -57,29 +58,54 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public AccountsPageViewModel Accounts { get; }
     public SettingsPageViewModel Settings { get; }
     public LogsPageViewModel Logs { get; }
+    public ToolsPageViewModel Tools { get; }
     public ObservableCollection<PageViewModel> Pages { get; }
+    public RelayCommand ShowHomeCommand { get; }
+    public RelayCommand ShowDownloadsCommand { get; }
+    public RelayCommand ShowSettingsCommand { get; }
+    public RelayCommand ShowToolsCommand { get; }
+    public RelayCommand ShowInstancesCommand { get; }
+    public RelayCommand ShowAccountsCommand { get; }
+    public RelayCommand ShowLogsCommand { get; }
+    public RelayCommand BackCommand { get; }
     public RelayCommand CancelOperationCommand { get; }
     public RelayCommand DismissErrorCommand { get; }
     public AsyncRelayCommand StopGameCommand { get; }
 
-    public MainWindowViewModel(ILauncherService service, IExternalLauncher externalLauncher)
+    public MainWindowViewModel(ILauncherService service, IExternalLauncher externalLauncher, ILauncherCatalogService? catalog = null)
     {
         Service = service ?? throw new ArgumentNullException(nameof(service));
         ExternalLauncher = externalLauncher ?? throw new ArgumentNullException(nameof(externalLauncher));
         Snapshot = service.Snapshot;
         Home = new(this);
         Instances = new(this);
-        Downloads = new(this);
+        Downloads = new(this, catalog);
         Accounts = new(this);
         Settings = new(this);
         Logs = new(this);
-        Pages = [Home, Instances, Downloads, Accounts, Settings, Logs];
+        Tools = new(this);
+        Pages = [Home, Instances, Downloads, Accounts, Settings, Logs, Tools];
         _selectedPage = Home;
+        ShowHomeCommand = new(() => SelectedPage = Home);
+        ShowDownloadsCommand = new(() => SelectedPage = Downloads);
+        ShowSettingsCommand = new(() => SelectedPage = Settings);
+        ShowToolsCommand = new(() => SelectedPage = Tools);
+        ShowInstancesCommand = new(() => Instances.ShowSelectionCommand.Execute(null));
+        ShowAccountsCommand = new(() => SelectedPage = Accounts);
+        ShowLogsCommand = new(() => SelectedPage = Logs);
+        BackCommand = new(() =>
+        {
+            if (ReferenceEquals(SelectedPage, Instances)) Instances.NavigateBackCommand.Execute(null);
+            else if (ReferenceEquals(SelectedPage, Downloads) && Downloads.IsResourceDetail) Downloads.BackToListCommand.Execute(null);
+            else SelectedPage = ReferenceEquals(SelectedPage, Logs) ? Settings : Home;
+        }, () => IsContextPage);
         CancelOperationCommand = new(CancelCurrentOperation, () => _operation is { IsCancellationRequested: false });
         DismissErrorCommand = new(() => ShowError(null));
         StopGameCommand = new(() => RunControlAsync("停止游戏", ct => Service.StopGameAsync(ct)), () => HasRunningGame);
         Service.SnapshotChanged += OnSnapshotChanged;
         Service.LogReceived += OnLogReceived;
+        Instances.PropertyChanged += OnInstancesPropertyChanged;
+        Downloads.PropertyChanged += OnDownloadsPropertyChanged;
         ApplySnapshot(Snapshot);
     }
 
@@ -88,11 +114,36 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         get => _selectedPage;
         set
         {
-            if (value is null || ReferenceEquals(value, _selectedPage)) return;
-            var leavingAccounts = ReferenceEquals(_selectedPage, Accounts);
-            if (SetProperty(ref _selectedPage, value) && leavingAccounts) Accounts.OnNavigatingAway();
+            if (value is null) return;
+            if (ReferenceEquals(value, _selectedPage)) { NotifyNavigation(); return; }
+            var leavingAccounts = ReferenceEquals(_selectedPage, Accounts) || ReferenceEquals(_selectedPage, Home);
+            if (!SetProperty(ref _selectedPage, value)) return;
+            if (leavingAccounts) Accounts.OnNavigatingAway();
+            NotifyNavigation();
         }
     }
+    private void NotifyNavigation()
+    {
+        OnPropertyChanged(nameof(CurrentSection));
+        OnPropertyChanged(nameof(IsContextPage));
+        OnPropertyChanged(nameof(NavigationTitle));
+        OnPropertyChanged(nameof(IsLaunchSelected));
+        OnPropertyChanged(nameof(IsDownloadsSelected));
+        OnPropertyChanged(nameof(IsSettingsSelected));
+        OnPropertyChanged(nameof(IsToolsSelected));
+        BackCommand.NotifyCanExecuteChanged();
+    }
+    public string CurrentSection => ReferenceEquals(SelectedPage, Downloads) ? "download"
+        : ReferenceEquals(SelectedPage, Settings) || ReferenceEquals(SelectedPage, Logs) ? "settings"
+        : ReferenceEquals(SelectedPage, Tools) ? "tools" : "launch";
+    public bool IsContextPage => ReferenceEquals(SelectedPage, Instances) || ReferenceEquals(SelectedPage, Accounts) || ReferenceEquals(SelectedPage, Logs)
+        || (ReferenceEquals(SelectedPage, Downloads) && Downloads.IsResourceDetail);
+    public string NavigationTitle => ReferenceEquals(SelectedPage, Instances) ? Instances.ContextTitle
+        : ReferenceEquals(SelectedPage, Downloads) && Downloads.IsResourceDetail ? "资源下载 - " + Downloads.ProjectTitle : SelectedPage.Title;
+    public bool IsLaunchSelected => CurrentSection == "launch";
+    public bool IsDownloadsSelected => CurrentSection == "download";
+    public bool IsSettingsSelected => CurrentSection == "settings";
+    public bool IsToolsSelected => CurrentSection == "tools";
     public string WindowTitle => Snapshot.Build.Name;
     public string BuildSummary => $"{Snapshot.Build.Version} · {Snapshot.Build.Codename} · {Snapshot.Build.Configuration}";
     public string SourceSummary => Snapshot.Build.SourceSha.Length > 12 ? Snapshot.Build.SourceSha[..12] : Snapshot.Build.SourceSha;
@@ -106,6 +157,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public bool CanMutate => !_disposed && !_executing && Snapshot.State is "Ready" or "Error";
     public bool CanReadRemote => !_disposed && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
     public bool HasRunningGame => !_disposed && (Snapshot.State == "Running" || Snapshot.GameProcessId is not null);
+    public bool ShowOperationStatus => IsBusy || HasRunningGame;
     public string? ErrorMessage => _errorMessage;
     public bool HasError => !string.IsNullOrWhiteSpace(_errorMessage);
 
@@ -180,6 +232,16 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     }
 
     private void OnSnapshotChanged(object? sender, LauncherSnapshot snapshot) => Dispatch(() => ApplySnapshot(Service.Snapshot));
+    private void OnInstancesPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(Instances.ContextTitle) && ReferenceEquals(SelectedPage, Instances))
+            OnPropertyChanged(nameof(NavigationTitle));
+    }
+    private void OnDownloadsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (ReferenceEquals(SelectedPage, Downloads) && e.PropertyName is nameof(Downloads.IsResourceDetail) or nameof(Downloads.ProjectTitle))
+            NotifyNavigation();
+    }
     private void OnLogReceived(object? sender, LauncherLog log)
     {
         var safeLog = log with { Message = UiPrivacy.Redact(log.Message, _sensitiveValues) };
@@ -205,6 +267,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CanMutate));
         OnPropertyChanged(nameof(CanReadRemote));
         OnPropertyChanged(nameof(HasRunningGame));
+        OnPropertyChanged(nameof(ShowOperationStatus));
         OnPropertyChanged(nameof(StateSummary));
         CancelOperationCommand.NotifyCanExecuteChanged();
         StopGameCommand.NotifyCanExecuteChanged();
@@ -223,9 +286,12 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         _disposed = true;
         Service.SnapshotChanged -= OnSnapshotChanged;
         Service.LogReceived -= OnLogReceived;
+        Instances.PropertyChanged -= OnInstancesPropertyChanged;
+        Downloads.PropertyChanged -= OnDownloadsPropertyChanged;
         _operation?.Cancel();
         _lifetime.Cancel();
         Accounts.CancelAuthenticationState(_lifetime.Token);
+        Downloads.Dispose();
         _lifetime.Dispose();
         // Bootstrap owns the service, its processes, pending writes and data lease.
     }

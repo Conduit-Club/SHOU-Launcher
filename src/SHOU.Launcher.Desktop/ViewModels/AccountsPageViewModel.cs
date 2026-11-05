@@ -6,7 +6,7 @@ namespace SHOU.Launcher.Desktop.ViewModels;
 
 public sealed record LoginProviderChoice(string Id, string Name, Uri? AuthenticationServer = null);
 
-public sealed class AccountsPageViewModel : PageViewModel
+public sealed partial class AccountsPageViewModel : PageViewModel
 {
     private bool _refreshing;
     private AccountProfile? _selectedAccount;
@@ -31,9 +31,10 @@ public sealed class AccountsPageViewModel : PageViewModel
         get => _provider;
         set
         {
-            if (value is null || !SetProperty(ref _provider, value)) return;
+            if (value is null || (!_refreshing && !Owner.CanMutate) || !SetProperty(ref _provider, value)) return;
             Password = "";
             OnPropertyChanged(nameof(IsOffline)); OnPropertyChanged(nameof(IsMicrosoft)); OnPropertyChanged(nameof(IsYggdrasil));
+            UpdateChannelAccounts();
             NotifyCommands();
         }
     }
@@ -52,14 +53,16 @@ public sealed class AccountsPageViewModel : PageViewModel
             if (!_refreshing && !Owner.CanMutate) { OnPropertyChanged(nameof(SelectedAccount)); return; }
             if (!SetProperty(ref _selectedAccount, value)) return;
             ConfirmRemoval = false;
+            if (!_refreshing && ShowAllAccounts && value is not null) SelectProviderForAccount(value);
             OnPropertyChanged(nameof(AccountDetail));
+            NotifySelectedAccount();
             NotifyCommands();
             if (!_refreshing && value is not null)
                 _ = Owner.RunAsync("选择账户", ct => Service.SelectAccountAsync(value.Id, ct));
         }
     }
     public string AccountDetail => SelectedAccount is { } account
-        ? $"{account.DisplayName} · {account.Kind}\n{UiPrivacy.Redact(account.Status)} · {(account.Persisted ? "已保存" : "仅本次会话")}\n{account.AuthenticationServer ?? "本地/微软认证"}"
+        ? $"{account.DisplayName} · {account.Kind}\n{UiPrivacy.Redact(account.Status)} · {(account.Persisted ? "已保存" : "仅本次会话")}\n{UiPrivacy.Redact(account.AuthenticationServer ?? "本地/微软认证")}"
         : "尚未选择账户。相同昵称的不同来源角色仍是独立账户。";
     public string PersistenceSummary => Owner.Snapshot.CanPersistAccounts && Service.Capabilities.SupportsCredentialPersistence
         ? "凭据由系统安全存储保存，账户列表不含密码或令牌。"
@@ -84,7 +87,7 @@ public sealed class AccountsPageViewModel : PageViewModel
     public AccountsPageViewModel(MainWindowViewModel owner) : base(owner, "账户", "管理离线、Microsoft、MUA 与 LittleSkin 角色。")
     {
         _provider = Providers[0];
-        AddOfflineCommand = AsyncCommand(() => Owner.RunAsync("添加离线角色", async ct => { await Service.AddOfflineAccountAsync(PlayerName.Trim(), ct); }), () => CanEdit && !string.IsNullOrWhiteSpace(PlayerName));
+        AddOfflineCommand = AsyncCommand(async () => { if (await Owner.RunAsync("添加离线角色", async ct => { await Service.AddOfflineAccountAsync(PlayerName.Trim(), ct); })) IsAddingAccount = false; }, () => CanEdit && !string.IsNullOrWhiteSpace(PlayerName));
         LoginMicrosoftCommand = AsyncCommand(LoginMicrosoftAsync, () => CanEdit);
         LoginYggdrasilCommand = AsyncCommand(LoginYggdrasilAsync, () => CanEdit && IsYggdrasil && !string.IsNullOrWhiteSpace(Username) && Password.Length > 0);
         OpenVerificationCommand = AsyncCommand(() => Owner.RunControlAsync("打开微软授权页", ct => Owner.ExternalLauncher.OpenUriAsync(_challenge!.VerificationUri, ct)), () => _challenge is { VerificationUri.Scheme: "https" });
@@ -95,20 +98,21 @@ public sealed class AccountsPageViewModel : PageViewModel
             await Owner.RunAsync("移除本机账户", ct => Service.RemoveAccountAsync(id, ct));
             ConfirmRemoval = false;
         }, () => CanEdit && SelectedAccount is not null && ConfirmRemoval);
+        InitializeAccountPanel();
     }
     private async Task LoginMicrosoftAsync()
     {
         var generation = BeginAuthentication();
         try
         {
-            await Owner.RunAsync("微软设备授权", async ct =>
+            if (await Owner.RunAsync("微软设备授权", async ct =>
             {
                 var progress = new DispatchProgress<DeviceCodeChallenge>(challenge => Owner.Dispatch(() =>
                 {
                     if (IsCurrentAuthentication(generation) && !ct.IsCancellationRequested) SetChallenge(challenge);
                 }));
                 await Service.LoginMicrosoftAsync(progress, ct);
-            });
+            })) IsAddingAccount = false;
         }
         finally { EndAuthentication(generation); }
     }
@@ -121,17 +125,18 @@ public sealed class AccountsPageViewModel : PageViewModel
         var generation = BeginAuthentication();
         try
         {
-            await Owner.RunAsync("登录 " + SelectedProvider.Name, async ct =>
+            if (await Owner.RunAsync("登录 " + SelectedProvider.Name, async ct =>
             {
                 var accounts = await Service.LoginYggdrasilWithProfileSelectionAsync(server, username, password,
                     (choices, selectionToken) => SelectProfileAsync(choices, generation, ct, selectionToken), ct);
                 if (accounts.Count == 0) throw new InvalidOperationException("认证服务没有返回可用角色。");
-            }, false, password);
+            }, false, password)) IsAddingAccount = false;
         }
         finally { EndAuthentication(generation); }
     }
     private long BeginAuthentication()
     {
+        IsAddingAccount = true;
         var generation = ++_authenticationGeneration;
         _authenticationActive = true;
         ClearProfileChallenge(new CancellationToken(true));
@@ -182,6 +187,7 @@ public sealed class AccountsPageViewModel : PageViewModel
     }
     internal void OnNavigatingAway()
     {
+        Password = "";
         if (_authenticationActive) Owner.CancelOperationCommand.Execute(null);
     }
     internal void CancelAuthenticationState(CancellationToken token)
@@ -207,6 +213,7 @@ public sealed class AccountsPageViewModel : PageViewModel
         {
             if (!Accounts.SequenceEqual(snapshot.Accounts)) { Accounts.Clear(); foreach (var account in snapshot.Accounts) Accounts.Add(account); }
             SelectedAccount = Accounts.FirstOrDefault(a => a.Id == snapshot.SelectedAccountId);
+            RefreshAccountPanel();
             OnPropertyChanged(nameof(AccountDetail)); OnPropertyChanged(nameof(PersistenceSummary));
         }
         finally { _refreshing = false; }

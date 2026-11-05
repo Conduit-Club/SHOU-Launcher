@@ -1,26 +1,44 @@
 <ResourceDictionary xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <ResourceDictionary.ThemeDictionaries>
     <ResourceDictionary x:Key="Light">
-      <SolidColorBrush x:Key="ClubBackground">#FDF9F3</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubSurface">#FFFFFF</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubSidebar">#F6EEE8</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubForeground">#3E302C</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubMuted">#70625D</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubAccent">#904855</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubBorder">#E9DDD6</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubErrorBackground">#FFF0EE</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubErrorForeground">#9B332D</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubBackground">#FFF5FB</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSurface">#FCF6FB</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSidebar">#FFF9FC</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubForeground">#5C3A54</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubMuted">#927B8B</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubAccent">#AC2F6C</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubBorder">#EADDE6</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubInputBorder">#EF98C6</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubTitleBar">#B14F91</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubTitleForeground">#FFFFFF</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSelection">#EDF8FE</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSelectionForeground">#26799F</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubHover">#FBE8F4</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubErrorBackground">#FFF1E5</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubErrorForeground">#9B3C32</SolidColorBrush>
+      <LinearGradientBrush x:Key="ClubPageGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Color="#FFF6FB" Offset="0" /><GradientStop Color="#FBE7F3" Offset="0.55" /><GradientStop Color="#EEF8FD" Offset="1" />
+      </LinearGradientBrush>
     </ResourceDictionary>
     <ResourceDictionary x:Key="Dark">
-      <SolidColorBrush x:Key="ClubBackground">#201C1E</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubSurface">#2B2528</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubSidebar">#282124</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubForeground">#F6E9E5</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubMuted">#C3AEAA</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubAccent">#D99CAA</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubBorder">#4A3B41</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubErrorBackground">#4B282D</SolidColorBrush>
-      <SolidColorBrush x:Key="ClubErrorForeground">#FFC6BC</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubBackground">#261F2A</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSurface">#302634</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSidebar">#2B222F</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubForeground">#F0DDEB</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubMuted">#BEA8B9</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubAccent">#EF9CC8</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubBorder">#49384A</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubInputBorder">#956082</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubTitleBar">#74365F</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubTitleForeground">#FFFFFF</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSelection">#233E4D</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubSelectionForeground">#8ED6F4</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubHover">#493047</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubErrorBackground">#4C302E</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubErrorForeground">#FFD0BE</SolidColorBrush>
+      <LinearGradientBrush x:Key="ClubPageGradient" StartPoint="0%,0%" EndPoint="100%,100%">
+        <GradientStop Color="#2B222F" Offset="0" /><GradientStop Color="#302336" Offset="0.55" /><GradientStop Color="#21313E" Offset="1" />
+      </LinearGradientBrush>
     </ResourceDictionary>
   </ResourceDictionary.ThemeDictionaries>
 </ResourceDictionary>

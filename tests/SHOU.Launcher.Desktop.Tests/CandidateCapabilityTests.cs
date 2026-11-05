@@ -31,7 +31,7 @@ public sealed class CandidateCapabilityTests
                 selector.SelectedItem = vm.Home.Servers.Single(s => s.Id == "smp"); Pump(window);
                 Assert.Contains("尚未开放联机", vm.Home.DestinationSummary);
                 Assert.False(vm.Instances.LaunchCommand.CanExecute(null));
-                vm.SelectedPage = vm.Instances; Pump(window);
+                vm.Instances.ShowInstanceSettingsCommand.Execute(null); Pump(window);
                 Assert.False(Find<Button>(window, "LaunchGameButton").IsEffectivelyEnabled);
                 Assert.Contains("尚未开放联机", vm.Instances.LaunchPrerequisite);
                 Assert.Null(fake.LastLaunchServerId);

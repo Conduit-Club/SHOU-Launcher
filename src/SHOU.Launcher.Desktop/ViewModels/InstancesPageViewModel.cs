@@ -6,7 +6,7 @@ namespace SHOU.Launcher.Desktop.ViewModels;
 
 public sealed record InstanceLoaderChoice(string Id, string Name);
 
-public sealed class InstancesPageViewModel : PageViewModel
+public sealed partial class InstancesPageViewModel : PageViewModel
 {
     private bool _refreshing;
     private bool _draftLoaded;
@@ -115,6 +115,7 @@ public sealed class InstancesPageViewModel : PageViewModel
             var plan = await Service.BuildLaunchPlanAsync(SelectedInstance!.Id, ct);
             PlanDiagnostics = $"Java：{plan.JavaExecutable}\n架构：{plan.JavaRuntimeArchitecture}\n类路径：{plan.ClasspathEntries.Count} 项\n" + string.Join("\n", plan.RedactedDiagnostics.Select(s => UiPrivacy.Redact(s)));
         }), () => CanEdit && SelectedInstanceSupported && SelectedInstance?.Installed == true);
+        InitializeWorkspace();
     }
     private async Task CreateInstanceAsync()
     {
@@ -149,6 +150,8 @@ public sealed class InstancesPageViewModel : PageViewModel
         try
         {
             if (!Instances.SequenceEqual(snapshot.Instances)) { Instances.Clear(); foreach (var item in snapshot.Instances) Instances.Add(item); }
+            // Populate the bound list before selecting a newly published instance; otherwise ListBox writes null back.
+            FilterInstances();
             SelectedInstance = Instances.FirstOrDefault(i => i.Id == snapshot.SelectedInstanceId);
             if (!JavaInstallations.SequenceEqual(snapshot.JavaInstallations)) { JavaInstallations.Clear(); foreach (var java in snapshot.JavaInstallations) JavaInstallations.Add(java); }
             SelectedJava = JavaInstallations.FirstOrDefault(j => j.ExecutablePath == snapshot.Settings.JavaExecutable);
@@ -157,7 +160,8 @@ public sealed class InstancesPageViewModel : PageViewModel
             OnPropertyChanged(nameof(LaunchPrerequisite));
         }
         finally { _refreshing = false; }
+        RefreshWorkspaceSnapshot(snapshot);
         base.Refresh(snapshot);
     }
-    public override void NotifyCommands() { base.NotifyCommands(); OnPropertyChanged(nameof(LaunchPrerequisite)); }
+    public override void NotifyCommands() { base.NotifyCommands(); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(CanImportContent)); }
 }

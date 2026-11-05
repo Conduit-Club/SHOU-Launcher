@@ -1,6 +1,23 @@
 # macOS migration ownership — contract B0
 
-## Active validation branch — 2026-11-05
+## Active WPF parity cleanroom phase — 2026-11-05
+
+Current primary checkout uses `features/wpf-parity`, inheriting the validated migration checkpoint
+`3d9205cc`. The two isolated worker branches are `features/wpf-parity-shell` and
+`features/wpf-parity-settings`; old source branches and dirty worktrees remain preserved.
+The user explicitly requested reference-faithful Avalonia UI migration and parallel branch work.
+Only screenshots and sanitized observable notes from `UI-Reference-WPF-20261105.zip` are used
+for UI reconstruction. Do not read legacy WPF UI/XAML or the archive's XAML-derived control
+structures/source mappings/collector scripts. Existing portable business services remain reusable.
+The exact per-phase write contract is `.shou-dev/reports/wpf-parity/CONTRACT.md`.
+Main owns Core integration and instance behavior; shell owns shared chrome/home/tools/download
+views and VMs; settings owns setting/account views and the separate new World/Server NBT backend.
+Two workers only, gpt-6.1-sol/max, no recursive agents. All heavy jobs use the shared lock and budget.
+Local phased commits in these three branches only; no push, PR merge, release, history rewrite,
+original .env modification or legacy deletion before parity/native/data gates pass. Reference
+coverage, visual matching and working business behavior must be reported separately.
+
+## Previous native validation checkpoint — 2026-11-05
 
 Current development uses `features/macos-native-validation` in the primary repository checkout.
 The previous integration worktree is retained detached at the validation checkpoint.

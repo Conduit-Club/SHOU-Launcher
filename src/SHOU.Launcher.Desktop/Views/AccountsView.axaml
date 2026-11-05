@@ -1,29 +1,95 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.AccountsView">
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="18">
-    <Border Classes="card"><StackPanel Spacing="10"><TextBlock Classes="sectionTitle" Text="当前账户与角色" />
-      <ComboBox Name="AccountSelector" ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedAccount}" IsEnabled="{Binding CanEdit}"><ComboBox.ItemTemplate><DataTemplate><StackPanel Spacing="2"><TextBlock Text="{Binding DisplayName}" /><TextBlock Text="{Binding AuthenticationServer}" Classes="muted" FontSize="11" /></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-      <TextBlock Text="{Binding AccountDetail}" Classes="muted" /><TextBlock Text="{Binding PersistenceSummary}" Classes="muted" FontSize="12" />
-      <Button Name="RefreshAccountButton" Content="刷新授权" Command="{Binding RefreshAccountCommand}" />
-      <Expander Header="移除本机账户"><StackPanel Margin="0,10" Spacing="8"><CheckBox Name="ConfirmAccountRemoval" Content="确认仅从本机移除当前所选账户" IsChecked="{Binding ConfirmRemoval}" IsEnabled="{Binding CanEdit}" /><Button Name="RemoveAccountButton" Content="移除账户" Command="{Binding RemoveAccountCommand}" /></StackPanel></Expander>
-    </StackPanel></Border>
-    <Border Classes="card"><StackPanel Spacing="10"><TextBlock Classes="sectionTitle" Text="添加账户" />
-      <ComboBox Name="LoginProviderSelector" ItemsSource="{Binding Providers}" SelectedItem="{Binding SelectedProvider}" IsEnabled="{Binding CanEdit}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-      <StackPanel IsVisible="{Binding IsOffline}" Spacing="10"><TextBox Name="OfflinePlayerName" Text="{Binding PlayerName}" PlaceholderText="离线角色名称" IsEnabled="{Binding CanEdit}" /><TextBlock Text="离线角色可用于单机测试，不能进入需认证的社团服。" Classes="muted" /><Button Name="AddOfflineButton" Content="添加离线角色" Command="{Binding AddOfflineCommand}" /></StackPanel>
-      <StackPanel IsVisible="{Binding IsMicrosoft}" Spacing="10"><TextBlock Text="使用社团应用的设备代码授权，在微软官网完成登录；启动器不会询问微软密码。" Classes="muted" /><Button Name="LoginMicrosoftButton" Classes="primary" Content="开始微软设备授权" Command="{Binding LoginMicrosoftCommand}" /></StackPanel>
-      <StackPanel IsVisible="{Binding IsYggdrasil}" Spacing="10"><TextBlock Text="用户名与密码仅提交给当前选择的皮肤站。" Classes="muted" /><TextBox Name="YggdrasilUsername" Text="{Binding Username}" PlaceholderText="皮肤站邮箱 / 用户名" IsEnabled="{Binding CanEdit}" /><TextBox Name="YggdrasilPassword" Text="{Binding Password}" PasswordChar="●" PlaceholderText="皮肤站密码" IsEnabled="{Binding CanEdit}" /><Button Name="LoginYggdrasilButton" Classes="primary" Content="登录并获取角色" Command="{Binding LoginYggdrasilCommand}" /></StackPanel>
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="using:SHOU.Launcher.Desktop.Views" x:Class="SHOU.Launcher.Desktop.Views.AccountsView" FontSize="13">
+  <UserControl.Resources><local:AccountsSourceLabelConverter x:Key="AccountSourceLabel" /></UserControl.Resources>
+  <UserControl.Styles>
+    <Style Selector="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
+    <Style Selector="Button"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="8,4" /></Style>
+    <Style Selector="Button.accountChannel"><Setter Property="Height" Value="34" /><Setter Property="Padding" Value="4,3" /><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="BorderBrush" Value="{DynamicResource ClubInputBorder}" /><Setter Property="BorderThickness" Value="1" /></Style>
+    <Style Selector="Button.accountChannel.selected"><Setter Property="BorderThickness" Value="2" /><Setter Property="Background" Value="{DynamicResource ClubSelection}" /><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}" /></Style>
+    <Style Selector="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+    <Style Selector="TextBox"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="6,4" /><Setter Property="MinWidth" Value="0" /></Style>
+    <Style Selector="CheckBox"><Setter Property="MinHeight" Value="24" /></Style>
+    <Style Selector="TextBlock.accountHint"><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /><Setter Property="FontSize" Value="11" /></Style>
+    <Style Selector="Path.accountAvatar"><Setter Property="Stroke" Value="{DynamicResource ClubForeground}" /><Setter Property="StrokeThickness" Value="1.5" /><Setter Property="Stretch" Value="Uniform" /></Style>
+  </UserControl.Styles>
+  <ScrollViewer Name="AccountsPanelScroller" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Name="CompactAccountsPanel" Margin="20,12,20,8" Spacing="8">
+      <Grid Name="AccountChannelGrid" ColumnDefinitions="*,*" RowDefinitions="34,40">
+        <Button Name="MicrosoftChannelButton" Classes="accountChannel" Classes.selected="{Binding IsMicrosoftChannel}" Content="{Binding MicrosoftChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="microsoft" Margin="0,0,3,0" />
+        <Button Name="LittleSkinChannelButton" Grid.Column="1" Classes="accountChannel" Classes.selected="{Binding IsLittleSkinChannel}" Content="{Binding LittleSkinChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="littleskin" Margin="3,0,0,0" />
+        <Button Name="MuaChannelButton" Grid.Row="1" Classes="accountChannel" Classes.selected="{Binding IsMuaChannel}" Content="{Binding MuaChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="mua" Margin="0,6,3,0" />
+        <Button Name="OfflineChannelButton" Grid.Row="1" Grid.Column="1" Classes="accountChannel" Classes.selected="{Binding IsOfflineChannel}" Content="{Binding OfflineChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="offline" Margin="3,6,0,0" />
+      </Grid>
+      <ComboBox Name="LoginProviderSelector" IsVisible="False" ItemsSource="{Binding Providers}" SelectedItem="{Binding SelectedProvider}" IsEnabled="{Binding CanEdit}" />
+      <Grid ColumnDefinitions="*,40" Margin="0,6,0,0"><TextBlock Name="AccountChannelTitle" Text="{Binding ChannelTitle}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /><Button Grid.Column="1" Content="{Binding AllAccountsButtonLabel}" Command="{Binding ToggleAllAccountsCommand}" Padding="4,1" MinHeight="23" /></Grid>
+      <StackPanel Name="ChannelAccountPanel" IsVisible="{Binding ShowChannelAccount}" Spacing="5">
+        <Grid ColumnDefinitions="*,24,24">
+          <ComboBox Name="AccountSelector" ItemsSource="{Binding ChannelAccounts}" SelectedItem="{Binding SelectedChannelAccount}" IsEnabled="{Binding CanEdit}" HorizontalAlignment="Stretch" MinWidth="0" MinHeight="31" Padding="6,2">
+            <ComboBox.ItemTemplate><DataTemplate><StackPanel Spacing="0"><TextBlock Text="{Binding DisplayName}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding ., Converter={StaticResource AccountSourceLabel}}" Classes="accountHint" TextWrapping="NoWrap" /></StackPanel></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+          <Button Name="BeginAddAccountButton" Grid.Column="1" Content="+" Command="{Binding BeginAddAccountCommand}" Margin="4,0,0,0" Padding="2" MinWidth="0" ToolTip.Tip="添加当前渠道账户" />
+          <Button Name="RequestAccountRemovalButton" Grid.Column="2" Content="×" Command="{Binding RequestRemovalCommand}" Margin="4,0,0,0" Padding="2" MinWidth="0" ToolTip.Tip="移除所选本机账户" />
+        </Grid>
+        <TextBlock Text="此渠道尚无已选角色，可添加账户或在下拉列表中选择。" Classes="accountHint" IsVisible="{Binding ShowEmptyChannel}" />
+      </StackPanel>
+      <ListBox Name="AllAccountsSelector" IsVisible="{Binding ShowAllAccounts}" ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedAccount}" IsEnabled="{Binding CanEdit}" MaxHeight="300" Background="Transparent" BorderThickness="0" Padding="0">
+        <ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="38,*" Margin="10,7">
+          <Path Classes="accountAvatar" Width="25" Height="28" Data="M10,1 A4,4 0 1 1 9.9,1 M3,19 C3,10 17,10 17,19" />
+          <StackPanel Grid.Column="1" Spacing="2"><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" /><TextBlock Text="{Binding ., Converter={StaticResource AccountSourceLabel}}" Classes="accountHint" /></StackPanel>
+        </Grid></DataTemplate></ListBox.ItemTemplate>
+      </ListBox>
+      <StackPanel Name="SelectedAccountPanel" IsVisible="{Binding ShowSelectedAccount}" Spacing="3" Margin="0,12,0,0">
+        <Path Classes="accountAvatar" Width="42" Height="46" HorizontalAlignment="Center" Data="M10,1 A4,4 0 1 1 9.9,1 M3,19 C3,10 17,10 17,19" />
+        <TextBlock Text="{Binding SelectedPlayerName}" FontSize="14" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding SelectedPlayerSource}" Classes="accountHint" HorizontalAlignment="Center" />
+        <TextBlock Text="{Binding SelectedPlayerStatus}" Classes="accountHint" TextAlignment="Center" />
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6" Margin="0,6,0,0">
+          <Button Name="AccountSkinMenuButton" Content="皮肤" Padding="8,2" MinHeight="24"><Button.Flyout><MenuFlyout><MenuItem Header="修改皮肤（尚未接入）" IsEnabled="False" /><MenuItem Header="保存皮肤（尚未接入）" IsEnabled="False" /><MenuItem Header="刷新头像（尚未接入）" IsEnabled="False" /><MenuItem Header="修改披风（尚未接入）" IsEnabled="False" /><Separator /><MenuItem Header="3D 预览皮肤与披风（尚未接入）" IsEnabled="False" /></MenuFlyout></Button.Flyout></Button>
+          <Button Name="RefreshAccountButton" Content="刷新授权" Command="{Binding RefreshAccountCommand}" Padding="8,2" MinHeight="24" />
+        </StackPanel>
+        <TextBlock Text="头像、皮肤与 3D 预览尚未接入。" Classes="accountHint" TextAlignment="Center" Margin="0,5,0,0" />
+      </StackPanel>
+      <Border Name="AccountRemovalPanel" IsVisible="{Binding ShowRemoval}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8">
+        <StackPanel Spacing="6"><CheckBox Name="ConfirmAccountRemoval" Content="确认从本机移除此账户" IsChecked="{Binding ConfirmRemoval}" IsEnabled="{Binding CanEdit}" /><TextBlock Text="只移除本机授权档案，不删除网站账户。" Classes="accountHint" /><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8"><Button Name="RemoveAccountButton" Content="移除账户" Command="{Binding RemoveAccountCommand}" /><Button Content="返回" Command="{Binding CancelRemovalCommand}" /></StackPanel></StackPanel>
+      </Border>
+      <StackPanel Name="AddAccountPanel" IsVisible="{Binding IsAddingAccount}" Spacing="8">
+        <TextBlock Text="{Binding AddingAccountSummary}" Classes="accountHint" />
+        <StackPanel Name="OfflineAccountForm" IsVisible="{Binding IsOffline}" Spacing="11" Margin="0,10,0,0">
+          <Grid ColumnDefinitions="50,*"><TextBlock Text="玩家 ID" VerticalAlignment="Center" /><TextBox Name="OfflinePlayerName" Grid.Column="1" Text="{Binding PlayerName}" IsEnabled="{Binding CanEdit}" /></Grid>
+          <TextBlock Text="UUID 标准" FontWeight="SemiBold" HorizontalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12"><RadioButton Content="行业规范" IsChecked="True" IsEnabled="False" /><RadioButton Content="旧版" IsEnabled="False" /><RadioButton Content="自定义" IsEnabled="False" /></StackPanel>
+          <TextBlock Text="采用名称生成的离线 UUID；旧版与自定义 UUID 尚未接入。离线角色不能进入需要认证的服务器。" Classes="accountHint" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="返回" Command="{Binding EndAddAccountCommand}" /><Button Name="AddOfflineButton" Content="创建" Command="{Binding AddOfflineCommand}" Classes="primary" /></StackPanel>
+        </StackPanel>
+        <StackPanel Name="MicrosoftAccountForm" IsVisible="{Binding IsMicrosoft}" Spacing="15" Margin="0,14,0,0">
+          <Path Classes="accountAvatar" Width="42" Height="46" HorizontalAlignment="Center" Data="M10,1 A4,4 0 1 1 9.9,1 M3,19 C3,10 17,10 17,19" />
+          <Button Name="LoginMicrosoftButton" Classes="primary" Content="开始正版验证" Command="{Binding LoginMicrosoftCommand}" HorizontalAlignment="Center" />
+          <TextBlock Text="在微软官网输入设备代码完成授权。" Classes="accountHint" TextAlignment="Center" />
+          <Button Content="前往 Minecraft 官网" Command="{Binding OpenProviderWebsiteCommand}" HorizontalAlignment="Center" />
+          <Button Content="返回" Command="{Binding EndAddAccountCommand}" HorizontalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Name="YggdrasilAccountForm" IsVisible="{Binding IsYggdrasil}" Spacing="10" Margin="0,20,0,0">
+          <Grid ColumnDefinitions="50,*"><TextBlock Text="邮箱" VerticalAlignment="Center" /><TextBox Name="YggdrasilUsername" Grid.Column="1" Text="{Binding Username}" PlaceholderText="邮箱 / 用户名" IsEnabled="{Binding CanEdit}" /></Grid>
+          <Grid ColumnDefinitions="50,*"><TextBlock Text="密码" VerticalAlignment="Center" /><TextBox Name="YggdrasilPassword" Grid.Column="1" Text="{Binding Password}" PasswordChar="●" IsEnabled="{Binding CanEdit}" /></Grid>
+          <Button Content="前往官网" Command="{Binding OpenProviderWebsiteCommand}" HorizontalAlignment="Center" />
+          <Button Content="使用 OAuth 登录（尚未接入）" IsVisible="{Binding IsMuaChannel}" IsEnabled="False" HorizontalAlignment="Center" FontSize="11" />
+          <TextBlock Text="凭据仅提交给当前选择的皮肤站。" Classes="accountHint" TextAlignment="Center" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="返回" Command="{Binding EndAddAccountCommand}" /><Button Name="LoginYggdrasilButton" Classes="primary" Content="登录" Command="{Binding LoginYggdrasilCommand}" /></StackPanel>
+        </StackPanel>
+      </StackPanel>
       <ContentControl Name="AuthenticationProfileChallenge" Content="{Binding ProfileChallenge}" IsVisible="{Binding HasProfileChallenge}" HorizontalContentAlignment="Stretch">
         <ContentControl.ContentTemplate><DataTemplate>
-          <Border BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="8" Padding="18"><StackPanel Spacing="12">
-            <TextBlock Text="选择本次登录的角色" Classes="sectionTitle" />
-            <TextBlock Text="认证服务尚未绑定角色。请明确选择一个；其他可用角色不会自动获得本次授权。" Classes="muted" />
-            <ListBox Name="AuthenticationProfileSelector" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="3"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" /><TextBlock Text="{Binding Id}" FontSize="11" Classes="muted" /></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
-            <StackPanel Orientation="Horizontal" Spacing="8"><Button Name="ConfirmAuthenticationProfileButton" Classes="primary" Content="确认所选角色" Command="{Binding ConfirmCommand}" /><Button Name="CancelAuthenticationProfileButton" Content="取消本次登录" Command="{Binding CancelCommand}" /></StackPanel>
-            <TextBlock Text="离开账户页、关闭窗口或取消操作都会结束本次等待。" Classes="muted" FontSize="12" />
+          <Border BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8"><StackPanel Spacing="7">
+            <TextBlock Text="选择本次登录的角色" FontWeight="SemiBold" /><TextBlock Text="请明确选择一个角色，其他角色不会自动获得授权。" Classes="accountHint" />
+            <ListBox Name="AuthenticationProfileSelector" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" MaxHeight="160"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="2"><TextBlock Text="{Binding Name}" /><TextBlock Text="{Binding Id}" Classes="accountHint" /></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
+            <StackPanel Orientation="Horizontal" Spacing="6"><Button Name="ConfirmAuthenticationProfileButton" Classes="primary" Content="确认角色" Command="{Binding ConfirmCommand}" /><Button Name="CancelAuthenticationProfileButton" Content="取消登录" Command="{Binding CancelCommand}" /></StackPanel>
           </StackPanel></Border>
         </DataTemplate></ContentControl.ContentTemplate>
       </ContentControl>
-      <Border Name="DeviceCodePanel" IsVisible="{Binding HasDeviceChallenge}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="8" Padding="18"><StackPanel Spacing="10"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" FontSize="30" FontWeight="SemiBold" LetterSpacing="3" /><TextBlock Text="{Binding DeviceInstructions}" Classes="muted" /><WrapPanel><Button Content="打开微软授权页" Command="{Binding OpenVerificationCommand}" Margin="0,0,8,4" /><Button Content="复制授权代码" Click="CopyDeviceCode_Click" Margin="0,0,8,4" /></WrapPanel><TextBlock Text="可在底部取消当前授权。" Classes="muted" /></StackPanel></Border>
-    </StackPanel></Border>
-    <TextBlock Text="头像与跨平台 3D 皮肤预览尚未接入。账户列表以独立档案 ID 切换，不合并同名角色。" Classes="muted" FontSize="12" />
-  </StackPanel></ScrollViewer>
+      <Border Name="DeviceCodePanel" IsVisible="{Binding HasDeviceChallenge}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8">
+        <StackPanel Spacing="8"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" FontSize="24" FontWeight="SemiBold" LetterSpacing="2" HorizontalAlignment="Center" /><TextBlock Text="{Binding DeviceInstructions}" Classes="accountHint" /><WrapPanel><Button Content="打开微软授权页" Command="{Binding OpenVerificationCommand}" Margin="0,0,5,4" /><Button Content="复制代码" Click="CopyDeviceCode_Click" Margin="0,0,5,4" /></WrapPanel><TextBlock Text="可在底部取消当前授权。离开启动或账户页会结束等待。" Classes="accountHint" /></StackPanel>
+      </Border>
+      <Expander Name="AccountSecurityDetails" Header="账户与安全存储" Margin="0,8,0,0"><StackPanel Spacing="5" Margin="0,6"><TextBlock Text="{Binding AccountDetail}" Classes="accountHint" /><TextBlock Text="{Binding PersistenceSummary}" Classes="accountHint" /></StackPanel></Expander>
+    </StackPanel>
+  </ScrollViewer>
 </UserControl>

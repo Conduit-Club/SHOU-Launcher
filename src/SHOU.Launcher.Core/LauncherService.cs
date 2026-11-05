@@ -242,7 +242,9 @@ public sealed partial class LauncherService : ILauncherService
         Directory.CreateDirectory(temporary);
         return LaunchPlanBuilder.Build(new(installed.Version, java, Context(java), identity, instance.GameDirectory,
             installed.LibrariesDirectory, installed.AssetsDirectory, installed.NativesDirectory, installed.ClientJar,
-            installed.Assets.Id, instance.MemoryMiB ?? Snapshot.Settings.MemoryMiB, installed.LegacyExtractions, TemporaryDirectory: temporary));
+            installed.Assets.Id, instance.MemoryMiB ?? Snapshot.Settings.MemoryMiB, installed.LegacyExtractions, TemporaryDirectory: temporary,
+            WindowWidth: Snapshot.Settings.GameWindowWidth, WindowHeight: Snapshot.Settings.GameWindowHeight,
+            Fullscreen: Snapshot.Settings.GameFullscreen, MinimumMemoryMiB: Snapshot.Settings.MinimumMemoryMiB, CustomInfo: Snapshot.Settings.CustomInfo));
     }
     private ProtectedJavaLaunch? ProtectPlan(LaunchPlan original)
     {
@@ -292,8 +294,16 @@ public sealed partial class LauncherService : ILauncherService
         downloadOwners.RequireActive(taskId);
         current.Cancel(); return Task.CompletedTask;
     }
-    public Task RetryDownloadAsync(string taskId, CancellationToken cancellationToken = default) =>
-        InstallInstanceAsync(downloadOwners.Resolve(taskId).InstanceId, cancellationToken);
+    public async Task RetryDownloadAsync(string taskId, CancellationToken cancellationToken = default)
+    {
+        var owner = downloadOwners.Resolve(taskId).InstanceId;
+        if (owner.StartsWith("content:", StringComparison.Ordinal))
+        {
+            if (!contentTransfers.TryGetValue(owner[8..], out var file)) throw new InvalidOperationException("该资源下载记录已失效，请重新选择文件。");
+            _ = await DownloadContentAsync(file, cancellationToken).ConfigureAwait(false);
+        }
+        else await InstallInstanceAsync(owner, cancellationToken).ConfigureAwait(false);
+    }
     public Task SaveSettingsAsync(LauncherSettings settings, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     {
         ConfigurationStore.ValidateSettings(settings);
@@ -473,7 +483,7 @@ public sealed partial class LauncherService : ILauncherService
     private string ResolveClientId() => AuthenticationClient.ResolveMicrosoftClientId(null, Snapshot.Settings.MicrosoftClientId, build);
     private IReadOnlyList<DownloadSource> Sources() => DownloadSources.Parse(Snapshot.Settings.DownloadSourcesJson);
     private RuleContext Context(JavaInstallation java) => new(Snapshot.Platform.MinecraftOS, Snapshot.Platform.OSVersion, java.RuntimeArchitecture,
-        new Dictionary<string, bool> { ["is_demo_user"] = false, ["has_custom_resolution"] = false, ["has_quick_plays_support"] = false });
+        new Dictionary<string, bool> { ["is_demo_user"] = false, ["has_custom_resolution"] = Snapshot.Settings.GameWindowWidth is not null, ["has_quick_plays_support"] = false });
     private static bool PathEquals(string a, string b) => string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     private void EnsureIsolatedGamePath(string path)
     {

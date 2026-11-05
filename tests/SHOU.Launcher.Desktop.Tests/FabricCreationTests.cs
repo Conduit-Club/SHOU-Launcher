@@ -21,19 +21,18 @@ public sealed class FabricCreationTests
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
 
     [AvaloniaFact]
-    public async Task LoaderSelectionRoutesCreationToTheMatchingServiceContract()
+    public async Task CreationCommandsPreserveMatchingLoaderServiceContracts()
     {
         var fake = new FakeLauncherService();
         using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
         var window = Open(vm);
         try
         {
-            var selector = Find<ComboBox>(window, "NewInstanceLoaderSelector");
-            Assert.False(Find<StackPanel>(window, "FabricLoaderFields").IsVisible);
-            selector.SelectedItem = vm.Instances.LoaderChoices.Single(l => l.Id == "fabric"); Pump(window);
-            Assert.True(Find<StackPanel>(window, "FabricLoaderFields").IsVisible);
-            Assert.Equal("0.16.14", Find<TextBox>(window, "FabricLoaderVersion").Text);
-            Find<Button>(window, "CreateInstanceButton").Command!.Execute(null);
+            Assert.False(vm.Instances.IsFabricCreation);
+            vm.Instances.SelectedLoader = vm.Instances.LoaderChoices.Single(l => l.Id == "fabric"); Pump(window);
+            Assert.True(vm.Instances.IsFabricCreation);
+            Assert.Equal("0.16.14", vm.Instances.FabricLoaderVersion);
+            vm.Instances.CreateInstanceCommand.Execute(null);
             await vm.Instances.CreateInstanceCommand.ExecutionTask!; Pump(window);
             Assert.Equal(1, fake.FabricCreateCalls); Assert.Equal(0, fake.VanillaCreateCalls);
             Assert.Equal("1.21.1", fake.LastFabricRequest!.Value.GameVersion);
@@ -41,7 +40,7 @@ public sealed class FabricCreationTests
             var fabric = fake.Snapshot.Instances.Single(i => i.Loader == "fabric");
             Assert.Equal("0.16.14", fabric.LoaderVersion);
             Assert.Contains("Fabric Loader 0.16.14", vm.Instances.InstanceSummary);
-            selector.SelectedItem = vm.Instances.LoaderChoices.Single(l => l.Id == "vanilla"); Pump(window);
+            vm.Instances.SelectedLoader = vm.Instances.LoaderChoices.Single(l => l.Id == "vanilla"); Pump(window);
             await vm.Instances.CreateInstanceCommand.ExecuteAsync(null); Pump(window);
             Assert.Equal(1, fake.FabricCreateCalls); Assert.Equal(1, fake.VanillaCreateCalls);
             Assert.Equal("vanilla", vm.Instances.SelectedInstance!.Loader);
@@ -59,7 +58,7 @@ public sealed class FabricCreationTests
         {
             vm.Instances.SelectedLoader = vm.Instances.LoaderChoices.Single(l => l.Id == "fabric");
             vm.Instances.CreateInstanceCommand.Execute(null); Pump(window);
-            Assert.True(vm.IsBusy); Assert.False(Find<ComboBox>(window, "NewInstanceLoaderSelector").IsEffectivelyEnabled);
+            Assert.True(vm.IsBusy); Assert.False(vm.Instances.CreateInstanceCommand.CanExecute(null));
             vm.CancelOperationCommand.Execute(null);
             await vm.Instances.CreateInstanceCommand.ExecutionTask!.WaitAsync(TimeSpan.FromSeconds(5)); Pump(window);
             Assert.True(fake.FabricCreationCancelled); Assert.Single(fake.Snapshot.Instances);

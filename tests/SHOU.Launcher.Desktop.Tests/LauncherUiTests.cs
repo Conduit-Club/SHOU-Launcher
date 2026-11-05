@@ -25,7 +25,7 @@ public sealed class LauncherUiTests
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
 
     [AvaloniaFact]
-    public void SixPagesLoadRealControlTreesAndNavigateThroughBoundList()
+    public void FourPrimaryRoutesAndContextPagesLoadRealControlTrees()
     {
         var fake = new FakeLauncherService();
         using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
@@ -37,16 +37,20 @@ public sealed class LauncherUiTests
         {
             Assert.Equal("潮涌核心社启动器", window.Title);
             Assert.Equal("none", vm.Home.SelectedServerId);
-            Assert.Equal("潮涌核心社启动器", Find<TextBlock>(window, "BrandTitle").Text);
-            var navigation = window.FindControl<ListBox>("PageNavigation")!;
-            var expected = new[] { typeof(HomeView), typeof(InstancesView), typeof(DownloadsView), typeof(AccountsView), typeof(SettingsView), typeof(LogsView) };
-            for (var i = 0; i < expected.Length; i++)
+            var primary = new[] { ("LaunchNavigationButton", typeof(HomeView)), ("DownloadsNavigationButton", typeof(DownloadsView)),
+                ("SettingsNavigationButton", typeof(SettingsView)), ("ToolsNavigationButton", typeof(ToolsView)) };
+            foreach (var (name, expected) in primary)
             {
-                navigation.SelectedItem = vm.Pages[i]; Pump(window);
-                Assert.Same(vm.Pages[i], vm.SelectedPage);
-                Assert.Contains(window.GetVisualDescendants(), c => c.GetType() == expected[i]);
+                Find<Avalonia.Controls.Primitives.ToggleButton>(window, name).Command!.Execute(null); Pump(window);
+                Assert.Contains(window.GetVisualDescendants(), c => c.GetType() == expected);
             }
-            Assert.Empty(bindingSink.Errors);
+            vm.ShowAccountsCommand.Execute(null); Pump(window);
+            Assert.Contains(window.GetVisualDescendants(), c => c is AccountsView);
+            vm.ShowInstancesCommand.Execute(null); Pump(window);
+            Assert.Contains(window.GetVisualDescendants(), c => c is InstancesView);
+            vm.ShowLogsCommand.Execute(null); Pump(window);
+            Assert.Contains(window.GetVisualDescendants(), c => c is LogsView);
+            Assert.True(bindingSink.Errors.Count == 0, string.Join("\n", bindingSink.Errors));
         }
         finally { window.Close(); Logger.Sink = previousSink; }
     }
@@ -61,7 +65,7 @@ public sealed class LauncherUiTests
         {
             vm.Accounts.PlayerName = "BusyFixture";
             Assert.True(vm.Accounts.AddOfflineCommand.CanExecute(null));
-            vm.SelectedPage = vm.Instances; Pump(window);
+            vm.Instances.ShowInstanceSettingsCommand.Execute(null); Pump(window);
             var install = Find<Button>(window, "InstallInstanceButton");
             Assert.True(install.IsEnabled);
             install.Command!.Execute(null); Pump(window);

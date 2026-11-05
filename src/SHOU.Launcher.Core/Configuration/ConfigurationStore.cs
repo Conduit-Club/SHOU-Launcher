@@ -80,6 +80,13 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
         foreach (var property in typeof(LauncherSettings).GetProperties())
             if (!GeneratedSettingsSchema.Entries.Contains(property.Name, StringComparer.Ordinal)) throw new InvalidOperationException("Unregistered generated settings key: " + property.Name);
         if (settings.MemoryMiB is < 512 or > 32768) throw new ArgumentException("内存须在512–32768 MiB之间。");
+        if (settings.MinimumMemoryMiB is { } minimum && (minimum < 512 || minimum > settings.MemoryMiB))
+            throw new ArgumentException("初始内存须为512 MiB至最大内存之间的整数。");
+        if (settings.GameWindowWidth.HasValue != settings.GameWindowHeight.HasValue ||
+            settings.GameWindowWidth is < 320 or > 16384 || settings.GameWindowHeight is < 320 or > 16384)
+            throw new ArgumentException("自定义窗口宽高须同时填写，范围为320–16384。");
+        if (settings.CustomInfo is { } info && (info.Length > 256 || info.Any(char.IsControl)))
+            throw new ArgumentException("自定义信息须为不超过256字的单行文字。");
         if (settings.JavaExecutable is { Length: > 0 } java && !Path.IsPathFullyQualified(java)) throw new ArgumentException("Java路径必须为绝对路径。");
         if (settings.GameRoot is { Length: > 0 } root && !Path.IsPathFullyQualified(root)) throw new ArgumentException("游戏目录必须为绝对路径。");
         if (settings.Theme is not ("System" or "Light" or "Dark")) throw new ArgumentException("未知主题。");

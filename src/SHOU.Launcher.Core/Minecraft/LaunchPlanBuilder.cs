@@ -12,7 +12,8 @@ public sealed record LaunchIdentity(string PlayerName, string Uuid, string Acces
 public sealed record LaunchInputs(ResolvedVersion Version, JavaInstallation Java, RuleContext Context,
     LaunchIdentity Identity, string GameDirectory, string LibrariesDirectory, string AssetsDirectory,
     string NativesDirectory, string ClientJar, string AssetIndexId, int MemoryMiB,
-    IReadOnlyList<string>? LegacyExtractions = null, IReadOnlyList<string>? ExtraJvmArguments = null, string? TemporaryDirectory = null);
+    IReadOnlyList<string>? LegacyExtractions = null, IReadOnlyList<string>? ExtraJvmArguments = null, string? TemporaryDirectory = null,
+    int? WindowWidth = null, int? WindowHeight = null, bool Fullscreen = false, int? MinimumMemoryMiB = null, string? CustomInfo = null);
 
 public static class LaunchPlanBuilder
 {
@@ -22,6 +23,12 @@ public static class LaunchPlanBuilder
         if (input.Java.MajorVersion != input.Version.RequiredJavaMajor) throw new InvalidOperationException($"Version metadata requires Java {input.Version.RequiredJavaMajor}; selected Java is {input.Java.MajorVersion}.");
         if (input.Context.JavaArchitecture != input.Java.RuntimeArchitecture) throw new InvalidOperationException("Native rule architecture differs from actual selected Java.");
         if (input.MemoryMiB is < 512 or > 32768) throw new ArgumentOutOfRangeException(nameof(input.MemoryMiB));
+        if (input.MinimumMemoryMiB is { } minimum && (minimum < 512 || minimum > input.MemoryMiB))
+            throw new ArgumentOutOfRangeException(nameof(input.MinimumMemoryMiB));
+        if (input.WindowWidth.HasValue != input.WindowHeight.HasValue || input.WindowWidth is < 320 or > 16384 || input.WindowHeight is < 320 or > 16384)
+            throw new ArgumentOutOfRangeException(nameof(input.WindowWidth));
+        if (input.CustomInfo is { } info && (info.Length > 256 || info.Any(char.IsControl)))
+            throw new ArgumentException("Custom information must be single-line and bounded.", nameof(input.CustomInfo));
         var resolved = LibraryResolver.Resolve(input.Version.Metadata, input.Context);
         var classpath = resolved.ClasspathRelativePaths.Select(p => SafePath.Within(input.LibrariesDirectory, p)).Append(Path.GetFullPath(input.ClientJar)).ToArray();
         var mainClass = (string?)input.Version.Metadata["mainClass"] ?? throw new InvalidDataException("Version mainClass is missing.");
@@ -30,13 +37,14 @@ public static class LaunchPlanBuilder
             ["auth_player_name"] = input.Identity.PlayerName, ["auth_uuid"] = input.Identity.Uuid,
             ["auth_access_token"] = input.Identity.AccessToken, ["auth_session"] = input.Identity.AccessToken,
             ["user_type"] = input.Identity.UserType, ["user_properties"] = "{}",
-            ["version_name"] = input.Version.Id, ["version_type"] = (string?)input.Version.Metadata["type"] ?? "release",
+            ["version_name"] = input.Version.Id, ["version_type"] = string.IsNullOrWhiteSpace(input.CustomInfo) ? (string?)input.Version.Metadata["type"] ?? "release" : input.CustomInfo,
             ["game_directory"] = Path.GetFullPath(input.GameDirectory), ["assets_root"] = Path.GetFullPath(input.AssetsDirectory),
             ["game_assets"] = Path.Combine(input.AssetsDirectory, "virtual", input.AssetIndexId), ["assets_index_name"] = input.AssetIndexId,
             ["natives_directory"] = Path.GetFullPath(input.NativesDirectory), ["library_directory"] = Path.GetFullPath(input.LibrariesDirectory),
             ["classpath"] = string.Join(input.Context.ClasspathSeparator, classpath), ["classpath_separator"] = input.Context.ClasspathSeparator,
             ["launcher_name"] = "SHOU-Launcher", ["launcher_version"] = "1.5.0", ["clientid"] = input.Identity.ClientId ?? "",
-            ["auth_xuid"] = input.Identity.Xuid ?? "", ["resolution_width"] = "960", ["resolution_height"] = "600"
+            ["auth_xuid"] = input.Identity.Xuid ?? "", ["resolution_width"] = (input.WindowWidth ?? 960).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["resolution_height"] = (input.WindowHeight ?? 600).ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
         string Expand(string argument) => Regex.Replace(argument, @"\$\{([^}]+)\}", match => values.TryGetValue(match.Groups[1].Value, out var value)
             ? value : throw new InvalidDataException("Unknown launch argument placeholder: " + match.Groups[1].Value), RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
@@ -46,6 +54,11 @@ public static class LaunchPlanBuilder
         if (input.Context.OSName == "osx" && !jvm.Contains("-XstartOnFirstThread", StringComparer.Ordinal)) jvm.Add("-XstartOnFirstThread");
         if (jvm.Count(a => a == "-XstartOnFirstThread") > 1) throw new InvalidDataException("Duplicate -XstartOnFirstThread.");
         if (!jvm.Any(a => a.StartsWith("-Xmx", StringComparison.Ordinal))) jvm.Add("-Xmx" + input.MemoryMiB + "M");
+        if (input.MinimumMemoryMiB is { } initialMemory)
+        {
+            jvm.RemoveAll(a => a.StartsWith("-Xms", StringComparison.Ordinal));
+            jvm.Add("-Xms" + initialMemory + "M");
+        }
         if (input.ExtraJvmArguments is { } extras)
         {
             if (extras.Any(a => a is "-cp" or "-classpath" || a.StartsWith("-javaagent:", StringComparison.Ordinal)))
@@ -71,8 +84,21 @@ public static class LaunchPlanBuilder
         }
         if (input.Context.OSName != "windows" && jvm.Any(a => a.Contains("WINDOWS-ROOT", StringComparison.Ordinal))) throw new InvalidDataException("Windows truststore configuration entered a non-Windows plan.");
         var game = input.Version.Metadata["arguments"]?["game"] is JsonArray modernGame
-            ? ExpandArguments(modernGame, input.Context).Select(Expand).ToArray()
-            : TokenizeLegacy((string?)input.Version.Metadata["minecraftArguments"] ?? throw new InvalidDataException("Version game arguments are missing.")).Select(Expand).ToArray();
+            ? ExpandArguments(modernGame, input.Context).Select(Expand).ToList()
+            : TokenizeLegacy((string?)input.Version.Metadata["minecraftArguments"] ?? throw new InvalidDataException("Version game arguments are missing.")).Select(Expand).ToList();
+        if (input.WindowWidth is { } width && input.WindowHeight is { } height)
+        {
+            SetOption("--width", width.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            SetOption("--height", height.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+        if (input.Fullscreen && !game.Contains("--fullscreen", StringComparer.Ordinal)) game.Add("--fullscreen");
+        void SetOption(string name, string value)
+        {
+            var index = game.IndexOf(name);
+            if (index >= 0 && index + 1 < game.Count) game[index + 1] = value;
+            else if (index >= 0) throw new InvalidDataException("Incomplete game window argument.");
+            else { game.Add(name); game.Add(value); }
+        }
         var argv = jvm.Append(mainClass).Concat(game).ToArray();
         var diagnostics = new List<string>
         {

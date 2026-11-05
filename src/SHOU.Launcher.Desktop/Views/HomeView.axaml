@@ -1,20 +1,52 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.HomeView">
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="18">
-    <Border CornerRadius="12" ClipToBounds="True" Height="180">
-      <Grid><Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/campus-lake.jpg" Stretch="UniformToFill" /><Border Background="#8A171B26" />
-        <StackPanel Margin="24" VerticalAlignment="Bottom" Spacing="8"><TextBlock Name="BrandTitle" Text="{Binding BrandName}" FontSize="28" FontWeight="SemiBold" Foreground="White" /><TextBlock Text="从校园还原到自由创造" Foreground="White" FontSize="16" /></StackPanel>
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:views="using:SHOU.Launcher.Desktop.Views" x:Class="SHOU.Launcher.Desktop.Views.HomeView">
+  <Grid ColumnDefinitions="300,*">
+    <Border Grid.Column="1" ClipToBounds="True">
+      <Grid>
+        <Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/campus-lake.jpg" Stretch="UniformToFill"><Image.Effect><BlurEffect Radius="9" /></Image.Effect></Image>
+        <Border Background="#35FFFFFF" />
       </Grid>
     </Border>
-    <Border Classes="card"><StackPanel Spacing="12">
-      <DockPanel><Button Name="RefreshServersButton" DockPanel.Dock="Right" Content="刷新状态" Command="{Binding RefreshServersCommand}" /><TextBlock Classes="sectionTitle" Text="启动后前往" VerticalAlignment="Center" /></DockPanel>
-      <ListBox Name="ServerSelector" ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer}" IsEnabled="{Binding CanEdit}" BorderThickness="0" Background="Transparent">
-        <ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" Margin="4,6"><StackPanel Spacing="3"><TextBlock Text="{Binding Name}" FontWeight="SemiBold" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" /></StackPanel><TextBlock Grid.Column="1" Text="{Binding Status}" Classes="muted" VerticalAlignment="Center" Margin="12,0,0,0" /></Grid></DataTemplate></ListBox.ItemTemplate>
-      </ListBox>
-      <TextBlock Name="DestinationSummary" Text="{Binding DestinationSummary}" Classes="muted" />
-    </StackPanel></Border>
-    <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="社团入口" Classes="sectionTitle" /><WrapPanel>
-      <Button Content="社团 Wiki" Command="{Binding OpenWikiCommand}" Margin="0,0,8,8" /><Button Content="登录与入服指南" Command="{Binding OpenGuideCommand}" Margin="0,0,8,8" /><Button Content="版本与更新" Command="{Binding OpenReleasesCommand}" Margin="0,0,8,8" />
-    </WrapPanel><TextBlock Text="QQ群 756155087" Classes="muted" /></StackPanel></Border>
-    <Expander Header="平台与数据目录"><StackPanel Spacing="9" Margin="0,12"><TextBlock Text="{Binding PlatformSummary}" TextWrapping="Wrap" /><TextBlock Text="{Binding DataDirectory}" Classes="muted" /><TextBlock Text="{Binding CapabilitiesSummary}" Classes="muted" /><Button Content="打开数据目录" Command="{Binding OpenDataDirectoryCommand}" /></StackPanel></Expander>
-  </StackPanel></ScrollViewer>
+    <Border Name="LaunchAccountPanel" Background="{DynamicResource ClubSidebar}">
+      <Grid RowDefinitions="*,Auto">
+        <views:AccountsView DataContext="{Binding Root.Accounts}" />
+        <StackPanel Grid.Row="1" Margin="20,5,20,20" Spacing="10">
+          <Button Name="HomeLaunchButton" Classes="primary" Command="{Binding Root.Instances.LaunchCommand}" HorizontalAlignment="Stretch" Height="54" ToolTip.Tip="{Binding Root.Instances.LaunchPrerequisite}">
+            <StackPanel Spacing="3"><TextBlock Text="启动游戏" HorizontalAlignment="Center" /><TextBlock Text="{Binding SelectedInstanceName}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis" MaxWidth="232" HorizontalAlignment="Center" /></StackPanel>
+          </Button>
+          <Grid ColumnDefinitions="*,10,*">
+            <Button Name="HomeSelectInstanceButton" Content="实例选择" Command="{Binding Root.ShowInstancesCommand}" HorizontalAlignment="Stretch" Height="35" />
+            <Button Grid.Column="2" Name="HomeInstanceSettingsButton" Content="实例设置" Command="{Binding Root.Instances.ShowInstanceSettingsCommand}" HorizontalAlignment="Stretch" Height="35" />
+          </Grid>
+        </StackPanel>
+      </Grid>
+    </Border>
+    <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
+      <StackPanel Spacing="15" Margin="25">
+        <Border Classes="card" Padding="20" IsVisible="{Binding ShowClubIntroduction}">
+          <StackPanel Spacing="14">
+            <DockPanel>
+              <Border DockPanel.Dock="Right" Background="{DynamicResource ClubSelection}" CornerRadius="6" Padding="10,5" Margin="12,0,0,0"><StackPanel><TextBlock Text="社团在线" Classes="muted" FontSize="11" HorizontalAlignment="Center" /><TextBlock Text="{Binding OnlinePlayerSummary}" FontSize="20" FontWeight="Bold" HorizontalAlignment="Center" /></StackPanel></Border>
+              <StackPanel Orientation="Horizontal" Spacing="15"><Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="44" Height="44" /><StackPanel VerticalAlignment="Center"><TextBlock Name="BrandTitle" Text="{Binding ClubName}" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource ClubAccent}" /><TextBlock Text="五湖四海之士，汇于东海之滨" /></StackPanel></StackPanel>
+            </DockPanel>
+            <WrapPanel>
+              <Button Content="社团 Wiki" Command="{Binding OpenWikiCommand}" Height="32" Margin="0,0,8,0" />
+              <Button Content="登录与入服指南" Command="{Binding OpenGuideCommand}" Height="32" Margin="0,0,8,0" />
+              <Button Content="社团更新日志" Command="{Binding OpenReleasesCommand}" Height="32" Margin="0,0,8,0" />
+              <TextBlock Text="QQ群 756155087" FontSize="12" VerticalAlignment="Center" Margin="0,5,0,0" />
+            </WrapPanel>
+          </StackPanel>
+        </Border>
+        <Border Classes="card" IsVisible="{Binding ShowClubServers}">
+          <StackPanel Spacing="8">
+            <DockPanel Margin="0,0,0,1"><Button Name="RefreshServersButton" DockPanel.Dock="Right" Classes="flat" Content="刷新状态" Command="{Binding RefreshServersCommand}" FontSize="11" MinHeight="18" Height="18" Padding="6,1" /><TextBlock Text="启动后前往" Classes="sectionTitle" VerticalAlignment="Center" /></DockPanel>
+            <ListBox Name="ServerSelector" Classes="serverCards" ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer}" IsEnabled="{Binding CanEdit}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+              <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate></ListBox.ItemsPanel>
+              <ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="3" ToolTip.Tip="{Binding Status}"><TextBlock Text="{Binding Name}" FontSize="15" FontWeight="SemiBold" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" TextTrimming="CharacterEllipsis" /></StackPanel></DataTemplate></ListBox.ItemTemplate>
+            </ListBox>
+            <TextBlock Name="DestinationSummary" Text="{Binding DestinationSummary}" Foreground="{DynamicResource ClubAccent}" TextWrapping="Wrap" Margin="5,0" FontSize="12" />
+          </StackPanel>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
 </UserControl>

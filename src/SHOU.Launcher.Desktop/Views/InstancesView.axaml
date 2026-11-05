@@ -1,25 +1,92 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.InstancesView">
-  <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="18">
-    <Border Classes="card"><StackPanel Spacing="10">
-      <TextBlock Classes="sectionTitle" Text="当前实例" />
-      <ComboBox Name="InstanceSelector" ItemsSource="{Binding Instances}" SelectedItem="{Binding SelectedInstance}" IsEnabled="{Binding CanEdit}"><ComboBox.ItemTemplate><DataTemplate><StackPanel Spacing="3"><TextBlock Text="{Binding Name}" /><StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Text="{Binding VersionId}" Classes="muted" FontSize="11" /><TextBlock Text="{Binding Loader}" Classes="muted" FontSize="11" /><TextBlock Text="{Binding LoaderVersion}" Classes="muted" FontSize="11" /></StackPanel></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-      <TextBlock Text="{Binding InstanceSummary}" Classes="muted" />
-      <WrapPanel><Button Name="InstallInstanceButton" Content="安装 / 校验" Command="{Binding InstallCommand}" Margin="0,4,8,4" /><Button Name="LaunchGameButton" Classes="primary" Content="启动 Minecraft" Command="{Binding LaunchCommand}" Margin="0,4,8,4" /><Button Name="StopGameButton" Content="停止游戏" Command="{Binding StopGameCommand}" Margin="0,4,8,4" /><Button Content="检查启动计划" Command="{Binding InspectPlanCommand}" Margin="0,4,8,4" /></WrapPanel>
-      <TextBlock Text="{Binding LaunchPrerequisite}" Classes="muted" /><TextBox IsVisible="{Binding HasPlanDiagnostics}" Text="{Binding PlanDiagnostics}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="110" />
-    </StackPanel></Border>
-    <Border Classes="card"><StackPanel Spacing="10"><TextBlock Classes="sectionTitle" Text="新建实例" /><Grid ColumnDefinitions="*,180" RowDefinitions="Auto,Auto" IsEnabled="{Binding CanEdit}">
-      <TextBlock Text="实例名称" Classes="label" /><TextBlock Grid.Column="1" Text="Minecraft 版本" Classes="label" Margin="12,8,0,4" />
-      <TextBox Name="NewInstanceName" Grid.Row="1" Text="{Binding InstanceName}" PlaceholderText="实例名称" /><TextBox Name="NewVersionId" Grid.Row="1" Grid.Column="1" Text="{Binding VersionId}" PlaceholderText="例如 1.21.1" Margin="12,0,0,0" />
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" x:Class="SHOU.Launcher.Desktop.Views.InstancesView" x:Name="InstancePage">
+  <UserControl.Styles>
+    <Style Selector="ListBox.instanceList"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/></Style>
+    <Style Selector="ListBox.instanceList ListBoxItem"><Setter Property="Padding" Value="10,7"/><Setter Property="CornerRadius" Value="3"/><Setter Property="Margin" Value="0,1"/></Style>
+    <Style Selector="ListBox.instanceList ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource ClubSelection}"/></Style>
+    <Style Selector="TextBlock.instanceLabel"><Setter Property="Width" Value="105"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
+  </UserControl.Styles>
+  <Grid>
+    <Grid ColumnDefinitions="175,*" IsVisible="{Binding IsSelection}">
+      <Border Background="{DynamicResource ClubSidebar}" Padding="12,15">
+        <StackPanel Spacing="10"><TextBlock Text="游戏目录" Classes="muted" FontSize="11"/>
+          <TextBlock Text="{Binding GameDirectorySummary}" TextWrapping="Wrap" FontSize="11"/>
+          <Button Content="管理游戏目录" Command="{Binding Root.ShowSettingsCommand}" HorizontalAlignment="Stretch"/>
+          <Button Content="导入整合包" IsEnabled="False" ToolTip.Tip="整合包清单与依赖导入仍待移植。" HorizontalAlignment="Stretch"/>
+          <Separator Margin="0,4"/>
+          <TextBlock Text="选择实例后可双击或按 Enter 进入实例设置。" Classes="muted" FontSize="11"/>
+        </StackPanel>
+      </Border>
+      <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="24" Spacing="12">
+          <TextBox Name="InstanceSearch" Text="{Binding SearchText}" PlaceholderText="搜索实例名称、版本或加载器"/>
+          <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="{Binding InstanceCountSummary}" FontWeight="SemiBold"/>
+            <ListBox Name="InstanceSelector" Classes="instanceList" ItemsSource="{Binding FilteredInstances}" SelectedItem="{Binding SelectedInstance}" IsEnabled="{Binding CanEdit}" DoubleTapped="OpenSelectedInstance_DoubleTapped" KeyDown="OpenSelectedInstance_KeyDown">
+              <ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="32,*"><Border Width="25" Height="25" Background="{DynamicResource ClubSelection}" CornerRadius="3"><TextBlock Text="◇" FontSize="21" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                <StackPanel Grid.Column="1" Spacing="2"><TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/>
+                  <StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Text="{Binding VersionId}" Classes="muted" FontSize="11"/><TextBlock Text="{Binding Loader}" Classes="muted" FontSize="11"/><TextBlock Text="{Binding LoaderVersion}" Classes="muted" FontSize="11"/></StackPanel>
+                </StackPanel></Grid></DataTemplate></ListBox.ItemTemplate>
+            </ListBox>
+            <StackPanel Orientation="Horizontal" Spacing="8"><Button Name="OpenInstanceSettingsButton" Content="实例设置" Command="{Binding ShowInstanceSettingsCommand}"/><Button Content="下载新版本" Command="{Binding Root.ShowDownloadsCommand}"/></StackPanel>
+          </StackPanel></Border>
+        </StackPanel>
+      </ScrollViewer>
     </Grid>
-      <StackPanel Spacing="8" IsEnabled="{Binding CanEdit}"><TextBlock Text="加载器" Classes="label" /><ComboBox Name="NewInstanceLoaderSelector" ItemsSource="{Binding LoaderChoices}" SelectedItem="{Binding SelectedLoader}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-        <StackPanel Name="FabricLoaderFields" IsVisible="{Binding IsFabricCreation}" Spacing="4"><TextBlock Text="Fabric Loader 版本" Classes="label" /><TextBox Name="FabricLoaderVersion" Text="{Binding FabricLoaderVersion}" PlaceholderText="例如 0.16.14" /></StackPanel>
-      </StackPanel>
-      <TextBlock Text="{Binding CreationHint}" Classes="muted" FontSize="12" /><Button Name="CreateInstanceButton" Content="创建实例" Command="{Binding CreateInstanceCommand}" /><TextBlock Text="首个原版 / Fabric 案例使用 Minecraft 1.21.1；其他版本需按实际元数据和运行结果验证。" Classes="muted" FontSize="12" /></StackPanel></Border>
-    <Border Classes="card"><StackPanel Spacing="10"><DockPanel><Button DockPanel.Dock="Right" Content="发现 Java" Command="{Binding DiscoverJavaCommand}" /><TextBlock Classes="sectionTitle" Text="全局 Java 与内存" VerticalAlignment="Center" /></DockPanel>
-      <StackPanel IsEnabled="{Binding CanEdit}" Spacing="8"><ComboBox Name="JavaSelector" ItemsSource="{Binding JavaInstallations}" SelectedItem="{Binding SelectedJava}"><ComboBox.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding FullVersion}" /><TextBlock Text="{Binding ExecutablePath}" FontSize="11" Classes="muted" /></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox>
-      <Grid ColumnDefinitions="*,Auto"><TextBox Name="JavaPath" Text="{Binding JavaExecutable}" PlaceholderText="留空自动选择 Java，或填写绝对路径" /><Button Grid.Column="1" Content="浏览…" Click="PickJava_Click" Margin="8,0,0,0" /></Grid>
-      <Grid ColumnDefinitions="Auto,160,*"><TextBlock Text="最大内存（MiB）" VerticalAlignment="Center" Margin="0,0,12,0" /><NumericUpDown Grid.Column="1" Name="MemoryMiB" Minimum="512" Maximum="32768" Increment="256" Value="{Binding MemoryMiB}" /><TextBlock Grid.Column="2" Text="已有实例的独立覆盖仍优先。" Classes="muted" VerticalAlignment="Center" Margin="12,0,0,0" /></Grid></StackPanel>
-      <TextBlock Text="{Binding RuntimeDraftSummary}" Classes="muted" FontSize="12" /><WrapPanel><Button Content="应用 Java 与内存" Command="{Binding SaveRuntimeCommand}" Margin="0,4,8,4" /><Button Content="恢复自动选择" Command="{Binding AutomaticJavaCommand}" Margin="0,4,8,4" /></WrapPanel>
-    </StackPanel></Border>
-  </StackPanel></ScrollViewer>
+    <Grid ColumnDefinitions="150,*" IsVisible="{Binding !IsSelection}">
+      <Border Background="{DynamicResource ClubSidebar}"><StackPanel Margin="0,14,0,0" Spacing="4">
+        <TextBlock Text="游戏本体 / 游戏资源" Classes="muted" FontSize="11" Margin="13,0,0,6"/>
+        <ListBox Name="InstanceSectionNavigation" Classes="navigation" ItemsSource="{Binding Sections}" SelectedItem="{Binding SelectedSection}">
+          <ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="26,*"><TextBlock Text="{Binding Icon}" FontSize="17" VerticalAlignment="Center"/><TextBlock Grid.Column="1" Text="{Binding Title}" VerticalAlignment="Center"/></Grid></DataTemplate></ListBox.ItemTemplate>
+        </ListBox>
+      </StackPanel></Border>
+      <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
+        <StackPanel Margin="24" Spacing="14">
+          <Border Classes="card"><Grid ColumnDefinitions="38,*"><TextBlock Text="◇" FontSize="29" VerticalAlignment="Center"/><StackPanel Grid.Column="1" Spacing="3"><TextBlock Text="{Binding SelectedInstance.Name}" FontSize="15" TextTrimming="CharacterEllipsis"/><StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Text="{Binding SelectedInstance.VersionId}" Classes="muted"/><TextBlock Text="{Binding SelectedInstance.Loader}" Classes="muted"/><TextBlock Text="{Binding SelectedInstance.LoaderVersion}" Classes="muted"/></StackPanel></StackPanel></Grid></Border>
+          <StackPanel IsVisible="{Binding IsOverview}" Spacing="14">
+            <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="实例信息" Classes="sectionTitle"/>
+              <Grid ColumnDefinitions="*,*"><StackPanel Spacing="4"><TextBlock Text="Minecraft" FontSize="14"/><TextBlock Text="{Binding SelectedInstance.VersionId}" Classes="muted"/></StackPanel><StackPanel Grid.Column="1" Spacing="4"><TextBlock Text="{Binding SelectedInstance.Loader}" FontSize="14"/><TextBlock Text="{Binding SelectedInstance.LoaderVersion}" Classes="muted"/></StackPanel></Grid>
+            </StackPanel></Border>
+            <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="个性化" Classes="sectionTitle"/>
+              <Grid ColumnDefinitions="105,*"><TextBlock Text="实例名称" Classes="instanceLabel"/><TextBox Grid.Column="1" Name="InstanceDisplayName" Text="{Binding EditName}"/></Grid>
+              <StackPanel Orientation="Horizontal" Spacing="10"><Button Name="SaveInstanceNameButton" Content="修改实例名" Command="{Binding SaveInstanceSettingsCommand}"/><Button Content="加入收藏夹" IsEnabled="False" ToolTip.Tip="实例收藏管理仍待移植。"/></StackPanel>
+            </StackPanel></Border>
+            <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="快捷方式" Classes="sectionTitle"/><StackPanel Orientation="Horizontal" Spacing="10"><Button Content="实例文件夹" Command="{Binding OpenInstanceDirectoryCommand}"/><Button Content="管理游戏目录" Command="{Binding Root.ShowSettingsCommand}"/></StackPanel></StackPanel></Border>
+            <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="高级管理" Classes="sectionTitle"/>
+              <WrapPanel><Button Name="InstallInstanceButton" Content="补全 / 校验文件" Command="{Binding InstallCommand}" Margin="0,0,10,8"/><Button Name="LaunchGameButton" Content="测试游戏" Command="{Binding LaunchCommand}" Margin="0,0,10,8"/><Button Content="检查启动计划" Command="{Binding InspectPlanCommand}" Margin="0,0,10,8"/><Button Content="导出启动脚本" IsEnabled="False" ToolTip.Tip="受保护启动参数不可作为明文脚本导出。" Margin="0,0,10,8"/></WrapPanel>
+              <TextBlock Text="{Binding LaunchPrerequisite}" Classes="muted" FontSize="11"/>
+              <TextBox Text="{Binding PlanDiagnostics}" IsVisible="{Binding HasPlanDiagnostics}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="90"/>
+            </StackPanel></Border>
+          </StackPanel>
+          <StackPanel IsVisible="{Binding IsInstanceSettings}" Spacing="14">
+            <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="启动选项" Classes="sectionTitle"/>
+              <CheckBox Content="Java 跟随全局设置" IsChecked="{Binding UseGlobalJava}"/>
+              <Grid ColumnDefinitions="105,*"><TextBlock Text="独立 Java 路径" Classes="instanceLabel"/><TextBox Grid.Column="1" Text="{Binding InstanceJavaExecutable}" IsEnabled="{Binding !UseGlobalJava}" PlaceholderText="Java 可执行文件的绝对路径"/></Grid>
+              <CheckBox Content="内存跟随全局设置" IsChecked="{Binding UseGlobalMemory}"/>
+              <Grid ColumnDefinitions="105,*"><TextBlock Text="最大内存（MiB）" Classes="instanceLabel"/><NumericUpDown Grid.Column="1" Minimum="512" Maximum="32768" Increment="256" Value="{Binding InstanceMemoryMiB}" IsEnabled="{Binding !UseGlobalMemory}"/></Grid>
+              <Button Name="SaveInstanceSettingsButton" Content="保存实例设置" Command="{Binding SaveInstanceSettingsCommand}"/>
+            </StackPanel></Border>
+            <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="全局 Java 与内存" Classes="sectionTitle"/>
+              <ComboBox Name="JavaSelector" ItemsSource="{Binding JavaInstallations}" SelectedItem="{Binding SelectedJava}" IsEnabled="{Binding CanEdit}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding FullVersion}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+              <Grid ColumnDefinitions="*,Auto"><TextBox Name="JavaPath" Text="{Binding JavaExecutable}"/><Button Grid.Column="1" Content="浏览…" Click="PickJava_Click" Margin="8,0,0,0"/></Grid>
+              <NumericUpDown Name="MemoryMiB" Minimum="512" Maximum="32768" Increment="256" Value="{Binding MemoryMiB}"/>
+              <StackPanel Orientation="Horizontal" Spacing="8"><Button Content="发现 Java" Command="{Binding DiscoverJavaCommand}"/><Button Content="应用 Java 与内存" Command="{Binding SaveRuntimeCommand}"/></StackPanel>
+              <TextBlock Text="{Binding RuntimeDraftSummary}" Classes="muted" FontSize="11"/>
+            </StackPanel></Border>
+          </StackPanel>
+          <StackPanel IsVisible="{Binding IsModify}" Spacing="14"><Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="修改实例" Classes="sectionTitle"/><TextBlock Text="{Binding CapabilityReason}" Classes="muted"/><Button Content="重新校验当前实例" Command="{Binding InstallCommand}"/><Button Content="下载其他版本" Command="{Binding Root.ShowDownloadsCommand}"/></StackPanel></Border></StackPanel>
+          <StackPanel IsVisible="{Binding IsExport}" Spacing="14"><Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="导出实例" Classes="sectionTitle"/><TextBlock Text="SHOU 实例 ZIP" FontWeight="SemiBold"/><TextBlock Text="包含实例清单、模组、配置和资源；不包含启动器账户或凭据。游戏本体与运行库可按清单重新安装。" Classes="muted"/>
+            <CheckBox Content="包含存档" IsChecked="{Binding IncludeWorlds}"/><Button Name="ExportInstanceButton" Content="开始导出" Command="{Binding ExportInstanceCommand}"/>
+          </StackPanel></Border></StackPanel>
+          <StackPanel IsVisible="{Binding IsFileSection}" Spacing="14">
+            <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="{Binding SectionTitle}" Classes="sectionTitle"/>
+              <WrapPanel><Button Content="打开文件夹" Command="{Binding OpenContentDirectoryCommand}" Margin="0,0,8,0"/><Button Content="从文件安装" Click="ImportContent_Click" IsEnabled="{Binding CanImportContent}" Margin="0,0,8,0"/><Button Content="刷新" Command="{Binding RefreshContentCommand}" Margin="0,0,8,0"/><Button Content="启用 / 禁用模组" Command="{Binding ToggleModCommand}"/></WrapPanel>
+            </StackPanel></Border>
+            <Border Classes="card" IsVisible="{Binding IsContentEmpty}" Margin="70,52"><StackPanel Spacing="8"><TextBlock Text="{Binding ContentEmptyTitle}" Foreground="{DynamicResource ClubSelectionForeground}" HorizontalAlignment="Center"/><Separator/><TextBlock Text="{Binding CapabilityReason}" Classes="muted" TextAlignment="Center" FontSize="11"/></StackPanel></Border>
+            <ListBox Name="InstanceContentList" Classes="instanceList" ItemsSource="{Binding ContentEntries}" SelectedItem="{Binding SelectedContent}"><ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="30,*,110"><TextBlock Text="▣" FontSize="20" VerticalAlignment="Center"/><StackPanel Grid.Column="1" Spacing="3"><TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding RelativePath}" Classes="muted" FontSize="10"/></StackPanel><TextBlock Grid.Column="2" Text="{Binding Bytes, StringFormat='{}{0:N0} B'}" FontSize="10" Classes="muted" VerticalAlignment="Center" HorizontalAlignment="Right"/></Grid></DataTemplate></ListBox.ItemTemplate></ListBox>
+          </StackPanel>
+          <Border Classes="card" IsVisible="{Binding IsOtherSection}"><StackPanel Spacing="10"><TextBlock Text="{Binding SectionTitle}" Classes="sectionTitle"/><TextBlock Text="{Binding CapabilityReason}" Classes="muted"/><Button Content="打开实例文件夹" Command="{Binding OpenInstanceDirectoryCommand}"/></StackPanel></Border>
+          <TextBlock Name="InstanceFeedback" IsVisible="{Binding HasFeedback}" Text="{Binding Feedback}" TextWrapping="Wrap" Classes="muted"/>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+  </Grid>
 </UserControl>
