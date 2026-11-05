@@ -74,7 +74,17 @@ public partial class MainWindow
         var menu = WindowsCaptionMenu.GetSystemMenu(hwnd, false);
         if (menu == IntPtr.Zero) return;
         WindowsCaptionMenu.EnableMenuItem(menu, 0xf060, this.FindControl<Button>("CloseWindowButton")!.IsEnabled ? 0u : 1u);
-        WindowsCaptionMenu.PostMessage(hwnd, 0x0112, (IntPtr)(keyboard ? 0xf100 : 0xf090), keyboard ? (IntPtr)0x20 : coordinates);
+        if (keyboard)
+            WindowsCaptionMenu.PostMessage(hwnd, 0x0112, (IntPtr)0xf100, (IntPtr)0x20);
+        else
+        {
+            // SC_MOUSEMENU's low bits belong to Windows. Use the documented
+            // popup API for a caption context menu at the released pointer.
+            var packed = coordinates.ToInt64();
+            var command = WindowsCaptionMenu.TrackPopupMenuEx(menu, 0x0102,
+                unchecked((short)packed), unchecked((short)(packed >> 16)), hwnd, IntPtr.Zero);
+            if (command != 0) WindowsCaptionMenu.PostMessage(hwnd, 0x0112, (IntPtr)command, IntPtr.Zero);
+        }
     }
 
     private static class WindowsCaptionMenu
@@ -83,6 +93,7 @@ public partial class MainWindow
         [DllImport("user32.dll")] internal static extern uint EnableMenuItem(IntPtr menu, uint item, uint flags);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
         [DllImport("user32.dll")] internal static extern IntPtr SendMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
+        [DllImport("user32.dll")] internal static extern uint TrackPopupMenuEx(IntPtr menu, uint flags, int x, int y, IntPtr hwnd, IntPtr parameters);
     }
 
     private void UpdateWindowsCaption()
