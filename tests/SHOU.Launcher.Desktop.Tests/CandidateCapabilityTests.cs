@@ -29,11 +29,11 @@ public sealed class CandidateCapabilityTests
                 vm.SelectedPage = vm.Home; Pump(window);
                 var selector = Find<ListBox>(window, "ServerSelector");
                 selector.SelectedItem = vm.Home.Servers.Single(s => s.Id == "smp"); Pump(window);
-                Assert.Contains("尚未开放联机", vm.Home.DestinationSummary);
+                Assert.Contains("自动入服暂不可用", vm.Home.DestinationSummary);
                 Assert.False(vm.Instances.LaunchCommand.CanExecute(null));
                 vm.Instances.ShowInstanceSettingsCommand.Execute(null); Pump(window);
                 Assert.False(Find<Button>(window, "LaunchGameButton").IsEffectivelyEnabled);
-                Assert.Contains("尚未开放联机", vm.Instances.LaunchPrerequisite);
+                Assert.Contains("自动入服暂不可用", vm.Instances.LaunchPrerequisite);
                 Assert.Null(fake.LastLaunchServerId);
                 vm.Home.SelectedServer = vm.Home.Servers.Single(s => s.Id == "none"); Pump(window);
                 Assert.True(vm.Instances.LaunchCommand.CanExecute(null));

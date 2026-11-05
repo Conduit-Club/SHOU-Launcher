@@ -24,7 +24,7 @@ public sealed class HomePageViewModel : PageViewModel
         set { if (SetProperty(ref _selectedServer, value)) { OnPropertyChanged(nameof(DestinationSummary)); Owner.NotifyState(); } }
     }
     public string SelectedServerId => SelectedServer?.Id ?? "none";
-    public string DestinationSummary => SelectedServerId == "none" ? "只启动游戏，不自动连接服务器；本候选仅进行单机 / 离线验收。" : $"可查看 {SelectedServer?.Name} 的状态；本候选尚未开放联机，请选择“只启动游戏”。";
+    public string DestinationSummary => SelectedServerId == "none" ? "只启动游戏，不自动连接服务器。" : $"可查看 {SelectedServer?.Name} 的状态；自动入服暂不可用，请选择“只启动游戏”。";
     public string BrandName => Owner.Snapshot.Build.Name;
     public string ClubName => "潮涌核心社";
     public string SelectedInstanceName => Owner.Snapshot.Instances.FirstOrDefault(i => i.Id == Owner.Snapshot.SelectedInstanceId)?.Name ?? "尚未选择实例";

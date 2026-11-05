@@ -95,7 +95,7 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         {
             if (SelectedInstance is null) return "创建或选择一个实例。";
             if (!SelectedInstanceSupported) return $"当前候选不支持加载器 {SelectedInstance.Loader}，不会按原版安装或启动。";
-            if (Owner.Home.SelectedServerId != "none") return "本候选尚未开放联机，仅进行单机 / 离线验收；请在首页选择“只启动游戏”。";
+            if (Owner.Home.SelectedServerId != "none") return "自动入服暂不可用，请在首页选择“只启动游戏”。";
             var account = Owner.Snapshot.Accounts.FirstOrDefault(a => a.Id == Owner.Snapshot.SelectedAccountId);
             if (account is null) return "请在账户页添加并选择账户。";
             if (!SelectedInstance.Installed) return "首次启动会自动下载并校验游戏本体与加载器，然后启动。";
