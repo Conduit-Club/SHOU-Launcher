@@ -84,15 +84,18 @@ public sealed class JavaTrustOrchestrationTests
     [TestMethod, TestCategory("JavaTrustPosixLinks")]
     public async Task ObservationalLogHardLinkCannotModifyAnIndependentFixture()
     {
-        if (OperatingSystem.IsWindows()) Assert.Inconclusive("Native Windows hard-link creation is a separate gate.");
         await using var fixture = await Fixture.CreateAsync();
         var log = Path.Combine(fixture.Service.Paths.LogsDirectory, "launcher.log");
         if (File.Exists(log)) File.Move(log, log + ".fixture-preserved");
         var protectedFile = Path.Combine(TestFiles.Root(), "protected-hard-link-fixture");
         await File.WriteAllTextAsync(protectedFile, "independent protected hard-link bytes");
-        var link = await fixture.Processes.RunAsync(new("/bin/ln", [protectedFile, log], fixture.Service.Paths.DataDirectory,
-            Timeout: TimeSpan.FromSeconds(5)));
-        Assert.AreEqual(0, link.ExitCode, "The explicit owned POSIX hard-link fixture must be created.");
+        if (OperatingSystem.IsWindows()) NativeWindowsLinks.CreateHardLink(log, protectedFile);
+        else
+        {
+            var link = await fixture.Processes.RunAsync(new("/bin/ln", [protectedFile, log], fixture.Service.Paths.DataDirectory,
+                Timeout: TimeSpan.FromSeconds(5)));
+            Assert.AreEqual(0, link.ExitCode, "The explicit owned POSIX hard-link fixture must be created.");
+        }
         var result = await fixture.Service.CreateRepairedJavaCopyAsync(fixture.Java.Source.ExecutablePath);
         Assert.AreEqual(result.Java.ExecutablePath, fixture.Service.Snapshot.Settings.JavaExecutable);
         Assert.AreEqual("independent protected hard-link bytes", await File.ReadAllTextAsync(protectedFile));

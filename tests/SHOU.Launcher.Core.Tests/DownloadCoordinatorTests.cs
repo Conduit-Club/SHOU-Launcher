@@ -97,10 +97,10 @@ public sealed class DownloadCoordinatorTests
     [TestMethod]
     public async Task InternalDownloadAndCacheValidationRejectLinkedAncestor()
     {
-        if (OperatingSystem.IsWindows()) Assert.Inconclusive("Windows junction behavior has its own native gate.");
         var root = TestFiles.Root(); var other = TestFiles.Root();
         var target = Path.Combine(other, "client.jar"); await File.WriteAllTextAsync(target, "untouched");
-        Directory.CreateSymbolicLink(Path.Combine(root, "link"), other);
+        if (OperatingSystem.IsWindows()) await NativeWindowsLinks.CreateDirectoryJunctionAsync(Path.Combine(root, "link"), other);
+        else Directory.CreateSymbolicLink(Path.Combine(root, "link"), other);
         var request = new DownloadRequest([new Uri("https://library.invalid/file")], Path.Combine(root, "link/client.jar"),
             Sha256: Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes("untouched"))));
         using var http = new HttpClient();
