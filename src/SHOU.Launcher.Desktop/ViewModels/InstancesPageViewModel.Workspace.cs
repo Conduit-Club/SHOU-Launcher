@@ -165,7 +165,7 @@ public sealed partial class InstancesPageViewModel
     private void NotifyWorkspace()
     {
         foreach (var name in new[] { nameof(ContextTitle), nameof(IsOverview), nameof(IsInstanceSettings), nameof(IsModify), nameof(IsExport), nameof(IsFileSection), nameof(IsOtherSection),
-                     nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary), nameof(GameVersionLabel), nameof(HasModLoader), nameof(LoaderLabel) }) OnPropertyChanged(name);
+                     nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary), nameof(HasTruncatedScreenshots), nameof(IsModsSection), nameof(OpenContentFolderCaption), nameof(GameVersionLabel), nameof(HasModLoader), nameof(LoaderLabel) }) OnPropertyChanged(name);
         if (_workspaceReady) NotifyCommands();
     }
     private async Task SaveInstanceEditAsync()

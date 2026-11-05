@@ -21,6 +21,9 @@ public sealed partial class InstancesPageViewModel : IDisposable
     public ObservableCollection<InstanceScreenshotPreview> ScreenshotPreviews { get; } = [];
     public bool IsScreenshots => IsFileSection && SelectedSection.Key == "screenshots";
     public bool IsContentList => IsFileSection && !IsScreenshots;
+    public bool HasTruncatedScreenshots => ContentEntries.Count > 60;
+    public bool IsModsSection => IsFileSection && SelectedSection.Key == "mods";
+    public string OpenContentFolderCaption => "打开" + SectionTitle + "文件夹";
     public string ScreenshotSummary => ContentEntries.Count > 60 ? $"共 {ContentEntries.Count} 张截图，预览前 60 张；其余可在文件夹中查看。" : $"共 {ContentEntries.Count} 张截图";
 
     private void ClearScreenshotPreviews()
