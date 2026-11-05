@@ -18,7 +18,7 @@ public sealed class JavaTrustSettingsTests
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
     private static MainWindow Open(MainWindowViewModel vm)
     {
-        var window = new MainWindow { DataContext = vm }; window.Show(); vm.SelectedPage = vm.Settings; Pump(window); return window;
+        var window = new MainWindow { DataContext = vm }; window.Show(); vm.Settings.OpenJavaTrustToolsCommand.Execute(null); Pump(window); return window;
     }
     private static FakeLauncherService WithSelectedSource()
     {
@@ -34,6 +34,34 @@ public sealed class JavaTrustSettingsTests
             "21.0.13", 21, "Explicit protocol fixture", RuntimeArchitecture.Arm64, "derived-fixture");
         return new(java, SourceJava, "fixture-policy-v1", new string('a', 64), new string('b', 64),
             FixturePath("derived", "provenance.json"), [new(Path.Combine(home, "lib/security/cacerts"), true, new string('c', 64), false, true, "explicit fixture processing record")]);
+    }
+
+    [AvaloniaFact]
+    public async Task ToolsReuseSettingsAndRollbackOnlyAfterSuccessfulSourceProbe()
+    {
+        var fake = WithSelectedSource(); fake.JavaTrustCopyBehavior = (_, _) => Task.FromResult(Derivation());
+        using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
+        var window = Open(vm);
+        try
+        {
+            Assert.Same(vm.Settings, window.GetVisualDescendants().OfType<JavaTrustToolsView>().Single().DataContext);
+            Assert.DoesNotContain("network", SettingsPageViewModel.SectionIds);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "LobbyPage" or "LobbyNavigationButton");
+            await vm.Settings.CreateRepairedJavaCopyCommand.ExecuteAsync(null); Pump(window);
+            Assert.True(vm.Settings.HasJavaTrustRollback); var selected = fake.Snapshot.Settings.JavaExecutable;
+            fake.JavaTrustInspectBehavior = (_, _) => throw new IOException("Source no longer probes");
+            await vm.Settings.RestoreSourceJavaCommand.ExecuteAsync(null); Pump(window);
+            Assert.Equal(selected, fake.Snapshot.Settings.JavaExecutable); Assert.Equal(0, fake.SaveCalls);
+            fake.JavaTrustInspectBehavior = (_, _) => Task.FromResult<IReadOnlyList<JavaTrustFinding>>([]);
+            await vm.Settings.RestoreSourceJavaCommand.ExecuteAsync(null); Pump(window);
+            Assert.Equal(SourceJava, fake.Snapshot.Settings.JavaExecutable); Assert.Equal(1, fake.SaveCalls);
+            Assert.False(vm.Settings.HasJavaTrustRollback);
+            vm.Tools.ShowJavaSettingsCommand.Execute(null); Pump(window);
+            Assert.Same(vm.Settings, vm.SelectedPage); Assert.True(vm.Settings.IsJavaSection);
+            Find<Button>(window, "OpenJavaTrustToolsButton").Command!.Execute(null); Pump(window);
+            Assert.Same(vm.Tools, vm.SelectedPage); Assert.True(vm.Tools.IsJavaTrust);
+        }
+        finally { window.Close(); }
     }
 
     [AvaloniaFact]

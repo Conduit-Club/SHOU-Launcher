@@ -11,10 +11,10 @@
     <DataTemplate DataType="{x:Type vm:LogsPageViewModel}"><views:LogsView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:ToolsPageViewModel}"><views:ToolsView /></DataTemplate>
   </Window.DataTemplates>
-  <Border CornerRadius="6" ClipToBounds="True" Background="{DynamicResource ClubPageGradient}">
+  <Border Name="WindowSurface" CornerRadius="6" ClipToBounds="True" Background="{DynamicResource ClubPageGradient}">
     <Grid RowDefinitions="48,Auto,*,Auto">
       <Border Name="LauncherTitleBar" Background="{DynamicResource ClubTitleBar}" PointerPressed="TitleBar_PointerPressed">
-        <Grid Name="TitleBarLayout" ColumnDefinitions="300,*,80">
+        <Grid Name="TitleBarLayout" ColumnDefinitions="300,*,112">
           <StackPanel Name="WindowBrand" Orientation="Horizontal" Spacing="9" Margin="16,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" IsVisible="{Binding !IsContextPage}">
             <Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="26" Height="26" />
             <TextBlock Name="WindowBrandTitle" Text="{Binding WindowTitle}" Foreground="{DynamicResource ClubTitleForeground}" FontSize="13" FontWeight="Bold" VerticalAlignment="Center" MaxWidth="150" TextTrimming="CharacterEllipsis" />
@@ -40,6 +40,7 @@
           </Grid>
           <StackPanel Name="CustomWindowControls" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0">
             <Button Name="MinimizeWindowButton" Classes="windowControl" Click="MinimizeWindow_Click" AutomationProperties.Name="最小化"><Path Data="M 0,0 L 12,0" Width="12" Height="1" Stroke="{DynamicResource ClubTitleForeground}" StrokeThickness="1.5" /></Button>
+            <Button Name="MaximizeWindowButton" Classes="windowControl" Click="MaximizeWindow_Click" AutomationProperties.Name="最大化" ToolTip.Tip="最大化"><Path Name="MaximizeGlyph" Data="M 1,1 H 11 V 11 H 1 Z" Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource ClubTitleForeground}" StrokeThickness="1.3" /></Button>
             <Button Name="CloseWindowButton" Classes="windowControl" Click="CloseWindow_Click" AutomationProperties.Name="关闭窗口"><Path Data="M 0,0 L 10,10 M 10,0 L 0,10" Width="10" Height="10" Stroke="{DynamicResource ClubTitleForeground}" StrokeThickness="1.5" /></Button>
           </StackPanel>
         </Grid>

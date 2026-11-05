@@ -42,7 +42,7 @@ public sealed class WpfShellNavigationTests
         Assert.False(vm.BackCommand.CanExecute(null));
         vm.Tools.ShowToolboxCommand.Execute(null);
         Assert.True(vm.Tools.IsToolbox);
-        vm.Tools.ShowLobbyCommand.Execute(null);
-        Assert.True(vm.Tools.IsLobby);
+        vm.Tools.ShowJavaTrustCommand.Execute(null);
+        Assert.True(vm.Tools.IsJavaTrust);
     }
 }

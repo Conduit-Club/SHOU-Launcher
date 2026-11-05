@@ -58,6 +58,11 @@ public partial class MainWindow : Window
 
     private void ConfigurePlatformChrome()
     {
+        if (OperatingSystem.IsWindows())
+        {
+            ConfigureWindowsChrome();
+            return;
+        }
         if (!OperatingSystem.IsMacOS()) return;
         WindowDecorations = WindowDecorations.Full;
         ExtendClientAreaToDecorationsHint = true;
@@ -82,7 +87,7 @@ public partial class MainWindow : Window
 
     private void TitleBar_PointerPressed(object? sender, PointerPressedEventArgs e)
     {
-        if (OperatingSystem.IsMacOS()) return;
+        if (OperatingSystem.IsMacOS() || OperatingSystem.IsWindows()) return;
         if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed) return;
         for (var current = e.Source as Visual; current is not null; current = current.GetVisualParent())
             if (current is Button) return;
@@ -93,5 +98,9 @@ public partial class MainWindow : Window
     }
 
     private void MinimizeWindow_Click(object? sender, RoutedEventArgs e) => WindowState = WindowState.Minimized;
+    private void MaximizeWindow_Click(object? sender, RoutedEventArgs e)
+    {
+        if (CanMaximize) WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
+    }
     private void CloseWindow_Click(object? sender, RoutedEventArgs e) => Close();
 }

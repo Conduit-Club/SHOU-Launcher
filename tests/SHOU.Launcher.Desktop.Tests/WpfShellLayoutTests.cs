@@ -87,8 +87,8 @@ public sealed class WpfShellLayoutTests
         try
         {
             vm.ShowToolsCommand.Execute(null); Pump(window);
-            Assert.False(Find<Button>(window, "JoinLobbyButton").IsEffectivelyEnabled);
-            Assert.False(Find<Button>(window, "CreateLobbyButton").IsEffectivelyEnabled);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "JoinLobbyButton" or "CreateLobbyButton" or "LobbyNavigationButton");
+            Assert.Same(vm.Settings.InspectJavaTrustCommand, Find<Button>(window, "InspectJavaTrustButton").Command);
             Find<ToggleButton>(window, "ToolboxNavigationButton").Command!.Execute(null); Pump(window);
             Assert.True(vm.Tools.IsToolbox);
             var toolbox = Find<ToggleButton>(window, "ToolboxNavigationButton");

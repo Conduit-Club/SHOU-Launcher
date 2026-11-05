@@ -1,4 +1,4 @@
-<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:themes="using:SHOU.Launcher.Desktop.Themes" x:Class="SHOU.Launcher.Desktop.Views.ToolsView">
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:themes="using:SHOU.Launcher.Desktop.Themes" xmlns:views="using:SHOU.Launcher.Desktop.Views" x:Class="SHOU.Launcher.Desktop.Views.ToolsView">
   <UserControl.Styles>
     <Style Selector="TextBlock"><Setter Property="LineHeight" Value="18" /></Style>
     <Style Selector="Button"><Setter Property="Height" Value="28" /><Setter Property="Padding" Value="11,4" /></Style>
@@ -9,9 +9,9 @@
   <Grid ColumnDefinitions="121,*">
     <Border Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,0,1,0">
       <StackPanel>
-        <TextBlock Classes="contextHeading" Text="联机" />
-        <ToggleButton Name="LobbyNavigationButton" Classes="contextNavigation" IsChecked="{Binding IsLobby, Mode=OneWay}" Command="{Binding ShowLobbyCommand}">
-          <StackPanel Orientation="Horizontal" Spacing="10"><Path Classes="contextIcon" Data="{x:Static themes:ClubIcons.Link}" /><TextBlock Text="大厅" FontSize="15" LineHeight="20" VerticalAlignment="Center" /></StackPanel>
+        <TextBlock Classes="contextHeading" Text="运行环境" />
+        <ToggleButton Name="JavaTrustNavigationButton" Classes="contextNavigation" IsChecked="{Binding IsJavaTrust, Mode=OneWay}" Command="{Binding ShowJavaTrustCommand}">
+          <StackPanel Orientation="Horizontal" Spacing="10"><Path Classes="contextIcon" Data="{x:Static themes:ClubIcons.Settings}" /><TextBlock Text="Java 证书" FontSize="15" LineHeight="20" VerticalAlignment="Center" /></StackPanel>
         </ToggleButton>
         <TextBlock Classes="contextHeading" Text="奇妙小工具" />
         <ToggleButton Name="ToolboxNavigationButton" Classes="contextNavigation" IsChecked="{Binding IsToolbox, Mode=OneWay}" Command="{Binding ShowToolboxCommand}">
@@ -19,24 +19,12 @@
         </ToggleButton>
       </StackPanel>
     </Border>
-    <Grid Grid.Column="1" Name="LobbyPage" IsVisible="{Binding IsLobby}" RowDefinitions="Auto,*,Auto" Margin="20,14,20,20">
-      <Button IsEnabled="False" HorizontalAlignment="Right" Margin="0,0,12,12" ToolTip.Tip="{Binding LobbyCapabilityReason}"><StackPanel Orientation="Horizontal" Spacing="7"><Path Data="{x:Static themes:ClubIcons.Chat}" Width="13" Height="13" Stretch="Uniform" Stroke="{DynamicResource ClubForeground}" StrokeThickness="1.5" /><TextBlock Text="点击测试" LineHeight="18" /></StackPanel></Button>
-      <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled"><StackPanel Spacing="20">
-        <Border Name="JoinLobbyCard" Classes="card"><StackPanel Spacing="12">
-          <DockPanel><TextBlock DockPanel.Dock="Right" Text="联机服务尚未迁移" Classes="capability" LineHeight="18" ToolTip.Tip="{Binding LobbyCapabilityReason}" /><TextBlock Text="加入大厅" Classes="sectionTitle" LineHeight="18" /></DockPanel>
-          <StackPanel Spacing="3" Margin="5,0"><TextBlock Text="1、在下方输入朋友发送给你的大厅编号，单击【加入】" TextWrapping="Wrap" LineHeight="19" /><TextBlock Text="2、启动游戏，选择【多人游戏】，在局域网游戏中加入大厅" TextWrapping="Wrap" LineHeight="19" /></StackPanel>
-          <Grid ColumnDefinitions="*,10,50,10,50,10,50" Margin="5,0">
-            <TextBox Height="28" Name="LobbyCodeInput" PlaceholderText="编号应该长得像这样：U/NNN-AAAA-SSSS-EEEE" IsEnabled="False" />
-            <Button Grid.Column="2" Content="清除" IsEnabled="False" /><Button Grid.Column="4" Content="粘贴" IsEnabled="False" /><Button Grid.Column="6" Name="JoinLobbyButton" Classes="primary" Content="加入" IsEnabled="False" />
-          </Grid>
-        </StackPanel></Border>
-        <Expander Name="CreateLobbyCard" Header="创建大厅" IsExpanded="True"><StackPanel Spacing="12" Margin="20,0,20,20">
-          <StackPanel Spacing="4"><TextBlock Text="1、进入世界后，在游戏菜单中选择【对局域网开放】" TextWrapping="Wrap" LineHeight="19" /><TextBlock Text="2、在下方选择此游戏实例，单击【创建】" TextWrapping="Wrap" LineHeight="19" /><TextBlock Text="3、成功创建大厅后，复制大厅编号并发送给你的朋友" TextWrapping="Wrap" LineHeight="19" /></StackPanel>
-          <Grid ColumnDefinitions="*,10,80,10,50,10,50"><ComboBox IsEnabled="False" /><Button Grid.Column="2" Content="手动输入" IsEnabled="False" /><Button Grid.Column="4" Content="刷新" IsEnabled="False" /><Button Grid.Column="6" Name="CreateLobbyButton" Content="创建" IsEnabled="False" /></Grid>
-        </StackPanel></Expander>
-      </StackPanel></ScrollViewer>
-      <Border Grid.Row="2" Name="LobbyFooterCard" Classes="card" Padding="12,10" Margin="0,15,0,0"><StackPanel Spacing="2" HorizontalAlignment="Center"><TextBlock Text="联机服务尚未就绪" Classes="muted" LineHeight="18" HorizontalAlignment="Center" /><Button Classes="flat" Content="登录与入服指南" Command="{Binding Root.Home.OpenGuideCommand}" Height="28" /></StackPanel></Border>
-    </Grid>
+    <ScrollViewer Grid.Column="1" Name="JavaTrustPage" IsVisible="{Binding IsJavaTrust}" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Margin="25" Spacing="15">
+        <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="Java 证书诊断与修复" Classes="sectionTitle" /><TextBlock Text="先检查选定的 Java。需要修复时创建独立副本，通过核验后再选用；保留源 Java 和其它证书。" TextWrapping="Wrap" /><Button Content="Java 设置与自动修复偏好" Command="{Binding ShowJavaSettingsCommand}" HorizontalAlignment="Left" /></StackPanel></Border>
+        <views:JavaTrustToolsView DataContext="{Binding Root.Settings}" />
+      </StackPanel>
+    </ScrollViewer>
     <ScrollViewer Grid.Column="1" Name="ToolboxPage" IsVisible="{Binding IsToolbox}" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="25" Spacing="15">
         <Border Name="ToolboxActionsCard" Classes="card"><StackPanel Spacing="10">

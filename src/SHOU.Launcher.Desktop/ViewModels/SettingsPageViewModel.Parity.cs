@@ -10,7 +10,7 @@ public sealed record SettingsLogFile(string Name, string Modified, string Size, 
 
 public sealed partial class SettingsPageViewModel
 {
-    public static IReadOnlyList<string> SectionIds { get; } = ["launch", "java", "manage", "network", "appearance", "language", "misc", "about", "updates", "feedback", "logs"];
+    public static IReadOnlyList<string> SectionIds { get; } = ["launch", "java", "manage", "appearance", "language", "misc", "about", "updates", "feedback", "logs"];
     private string _selectedSection = "launch";
     public string SelectedSection
     {
@@ -18,14 +18,13 @@ public sealed partial class SettingsPageViewModel
         set
         {
             if (!SectionIds.Contains(value) || !SetProperty(ref _selectedSection, value)) return;
-            foreach (var property in new[] { nameof(IsLaunchSection), nameof(IsJavaSection), nameof(IsManageSection), nameof(IsNetworkSection), nameof(IsAppearanceSection), nameof(IsLanguageSection), nameof(IsMiscSection), nameof(IsAboutSection), nameof(IsUpdatesSection), nameof(IsFeedbackSection), nameof(IsLogsSection) }) OnPropertyChanged(property);
+            foreach (var property in new[] { nameof(IsLaunchSection), nameof(IsJavaSection), nameof(IsManageSection), nameof(IsAppearanceSection), nameof(IsLanguageSection), nameof(IsMiscSection), nameof(IsAboutSection), nameof(IsUpdatesSection), nameof(IsFeedbackSection), nameof(IsLogsSection) }) OnPropertyChanged(property);
             if (IsLogsSection) RefreshLogFiles();
         }
     }
     public bool IsLaunchSection => SelectedSection == "launch";
     public bool IsJavaSection => SelectedSection == "java";
     public bool IsManageSection => SelectedSection == "manage";
-    public bool IsNetworkSection => SelectedSection == "network";
     public bool IsAppearanceSection => SelectedSection == "appearance";
     public bool IsLanguageSection => SelectedSection == "language";
     public bool IsMiscSection => SelectedSection == "misc";

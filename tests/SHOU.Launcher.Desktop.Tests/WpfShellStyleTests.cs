@@ -204,7 +204,7 @@ public sealed class WpfShellStyleTests
         window.Show(); Pump(window);
         try
         {
-            Assert.Equal(OperatingSystem.IsMacOS() ? WindowDecorations.Full : WindowDecorations.None, window.WindowDecorations);
+            Assert.Equal(OperatingSystem.IsMacOS() ? WindowDecorations.Full : OperatingSystem.IsWindows() ? WindowDecorations.BorderOnly : WindowDecorations.None, window.WindowDecorations);
             Assert.Equal(48, Find<Border>(window, "LauncherTitleBar").Bounds.Height);
             Assert.Equal(!OperatingSystem.IsMacOS(), Find<StackPanel>(window, "CustomWindowControls").IsVisible);
             if (!OperatingSystem.IsMacOS()) return;

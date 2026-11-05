@@ -18,6 +18,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
     private long _javaTrustSelectionGeneration;
     private string _javaTrustStatus = "尚未扫描。请明确选择一个 Java 可执行文件。";
     private string _javaTrustProvenance = "";
+    private string _javaTrustRollbackSource = "";
     private decimal _memoryMiB = 2048;
     private string _language = "zh-CN";
     private string _theme = "System";
@@ -38,6 +39,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
         {
             if (!SetProperty(ref _javaExecutable, value)) return;
             ++_javaTrustSelectionGeneration;
+            _javaTrustRollbackSource = ""; OnPropertyChanged(nameof(HasJavaTrustRollback));
             JavaTrustFindings.Clear(); JavaTrustProvenance = "";
             JavaTrustStatus = "尚未扫描当前 Java。请先只读扫描，或创建独立修复副本。";
             OnPropertyChanged(nameof(HasExplicitJava));
@@ -51,6 +53,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
     public string JavaTrustStatus { get => _javaTrustStatus; private set => SetProperty(ref _javaTrustStatus, value); }
     public string JavaTrustProvenance { get => _javaTrustProvenance; private set { SetProperty(ref _javaTrustProvenance, value); OnPropertyChanged(nameof(HasJavaTrustProvenance)); } }
     public bool HasJavaTrustProvenance => JavaTrustProvenance.Length > 0;
+    public bool HasJavaTrustRollback => _javaTrustRollbackSource.Length > 0;
     public decimal MemoryMiB { get => _memoryMiB; set { if (SetProperty(ref _memoryMiB, value)) { MarkDirty(); OnPropertyChanged(nameof(MemorySummary)); } } }
     public string Language { get => _language; set { if (!string.IsNullOrWhiteSpace(value) && SetProperty(ref _language, value)) MarkDirty(); } }
     public string Theme { get => _theme; set { if (!string.IsNullOrWhiteSpace(value) && SetProperty(ref _theme, value)) MarkDirty(); } }
@@ -78,6 +81,8 @@ public sealed partial class SettingsPageViewModel : PageViewModel
     public AsyncRelayCommand OpenDataDirectoryCommand { get; }
     public AsyncRelayCommand InspectJavaTrustCommand { get; }
     public AsyncRelayCommand CreateRepairedJavaCopyCommand { get; }
+    public AsyncRelayCommand RestoreSourceJavaCommand { get; }
+    public RelayCommand OpenJavaTrustToolsCommand { get; }
 
     public SettingsPageViewModel(MainWindowViewModel owner) : base(owner, "设置", "游戏路径、运行时、界面与网络配置。保存后用于后续操作。")
     {
@@ -86,6 +91,8 @@ public sealed partial class SettingsPageViewModel : PageViewModel
         OpenDataDirectoryCommand = AsyncCommand(() => Owner.RunControlAsync("打开数据目录", ct => Owner.ExternalLauncher.OpenDirectoryAsync(DataDirectory, ct)));
         InspectJavaTrustCommand = AsyncCommand(InspectJavaTrustAsync, () => Owner.CanReadRemote && HasExplicitJava);
         CreateRepairedJavaCopyCommand = AsyncCommand(CreateRepairedJavaCopyAsync, () => CanEdit && HasExplicitJava);
+        RestoreSourceJavaCommand = AsyncCommand(RestoreSourceJavaAsync, () => CanEdit && HasJavaTrustRollback);
+        OpenJavaTrustToolsCommand = Command(() => { Owner.Tools.ShowJavaTrustCommand.Execute(null); Owner.ShowToolsCommand.Execute(null); });
         InitializeParity();
     }
     private void MarkDirty() { if (!_loading) { IsDirty = true; Feedback = ""; } }
@@ -175,10 +182,32 @@ public sealed partial class SettingsPageViewModel : PageViewModel
         }
         if (hadDraft) JavaExecutable = derivation.Java.ExecutablePath;
         else Load(Service.Snapshot.Settings);
+        _javaTrustRollbackSource = derivation.SourceJavaExecutable;
+        OnPropertyChanged(nameof(HasJavaTrustRollback)); NotifyCommands();
         ShowTrustFindings(derivation.Findings);
         JavaTrustProvenance = UiPrivacy.Redact($"策略：{derivation.PolicyId}\n原始 Java：{derivation.SourceJavaExecutable}\n选用副本：{derivation.Java.ExecutablePath}\n来源树 SHA-256：{derivation.SourceTreeSha256}\n副本树 SHA-256：{derivation.OutputTreeSha256}\n来源记录：{derivation.ProvenancePath}");
         JavaTrustStatus = "已创建并选用通过运行时探测的独立修复副本，Java 设置已保存；原始 Java 未修改。";
         Feedback = hadDraft ? "修复副本已选用；其余未保存设置仍保留在草稿中。" : "修复副本已创建，新的全局 Java 路径已保存。";
+    }
+    private async Task RestoreSourceJavaAsync()
+    {
+        var source = _javaTrustRollbackSource;
+        if (source.Length == 0) return;
+        var hadDraft = IsDirty;
+        var completed = await Owner.RunAsync("选回源 Java", async ct =>
+        {
+            // The production inspection first performs the normal runtime probe.
+            // A missing or broken source therefore cannot silently replace the working copy.
+            await Service.InspectJavaTrustAsync(source, ct);
+            ct.ThrowIfCancellationRequested();
+            await Service.SaveSettingsAsync(Service.Snapshot.Settings with { JavaExecutable = source }, ct);
+        });
+        if (!completed) { JavaTrustStatus = "回退失败或已取消，当前已保存的 Java 选择保持不变。"; return; }
+        if (hadDraft) JavaExecutable = source;
+        else Load(Service.Snapshot.Settings);
+        _javaTrustRollbackSource = ""; OnPropertyChanged(nameof(HasJavaTrustRollback)); NotifyCommands();
+        JavaTrustStatus = "已选回源 Java；修复副本与来源记录保留，可从 Java 设置重新选择。";
+        Feedback = hadDraft ? "源 Java 已选回，其余设置草稿保留。" : "源 Java 路径已保存。";
     }
     private void ShowTrustFindings(IReadOnlyList<JavaTrustFinding> findings)
     {

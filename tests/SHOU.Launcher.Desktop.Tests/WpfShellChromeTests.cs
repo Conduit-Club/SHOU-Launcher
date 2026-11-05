@@ -1,4 +1,8 @@
 using Avalonia;
+using Avalonia.Automation;
+using Avalonia.Controls.Chrome;
+using Avalonia.Input;
+using Avalonia.Interactivity;
 using Avalonia.Controls;
 using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
@@ -13,6 +17,34 @@ namespace SHOU.Launcher.Desktop.Tests;
 
 public sealed class WpfShellChromeTests
 {
+    [AvaloniaFact]
+    public void CaptionMaximizeAndRestoreChangeStateAndAccessibleName()
+    {
+        using var vm = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
+        var window = new MainWindow { DataContext = vm };
+        window.Show(); Pump(window);
+        try
+        {
+            var maximize = Find<Button>(window, "MaximizeWindowButton");
+            if (OperatingSystem.IsMacOS()) { Assert.False(maximize.IsEffectivelyVisible); return; }
+            var initial = window.ClientSize;
+            maximize.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump(window);
+            Assert.Equal(WindowState.Maximized, window.WindowState);
+            if (OperatingSystem.IsWindows())
+            {
+                Assert.Equal("还原", AutomationProperties.GetName(maximize));
+                Assert.Equal(WindowDecorations.BorderOnly, window.WindowDecorations);
+                Assert.Equal(WindowDecorationsElementRole.MaximizeButton, WindowDecorationProperties.GetElementRole(maximize));
+                Assert.Equal(WindowDecorationsElementRole.TitleBar, WindowDecorationProperties.GetElementRole(Find<Border>(window, "LauncherTitleBar")));
+            }
+            maximize.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump(window);
+            Assert.Equal(WindowState.Normal, window.WindowState);
+            Assert.Equal(initial, window.ClientSize);
+            Assert.Equal("最大化", AutomationProperties.GetName(maximize));
+        }
+        finally { window.Close(); }
+    }
+
     private static void Pump(Window window) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
     private static Rect Bounds(Control control, Window window) => new(control.TranslatePoint(default, window)!.Value, control.Bounds.Size);

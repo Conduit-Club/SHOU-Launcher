@@ -51,10 +51,9 @@ public sealed class WpfShellCompositionTests
         window.Show(); Pump(window);
         try
         {
-            Near(143, Find<Border>(window, "JoinLobbyCard").Bounds.Height);
-            Near(70, Find<Border>(window, "LobbyFooterCard").Bounds.Height);
-            Assert.False(Find<Button>(window, "JoinLobbyButton").IsEffectivelyEnabled);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "联机服务尚未迁移" && t.IsEffectivelyVisible);
+            Assert.True(vm.Tools.IsJavaTrust);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "JoinLobbyCard" or "LobbyFooterCard");
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "Java 证书诊断与修复" && t.IsEffectivelyVisible);
             vm.Tools.ShowToolboxCommand.Execute(null); Pump(window);
             Near(95, Find<Border>(window, "ToolboxActionsCard").Bounds.Height);
             Near(240, Find<Border>(window, "CustomDownloadCard").Bounds.Height);
