@@ -5,7 +5,7 @@
     <Style Selector="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
     <Style Selector="Border.card"><Setter Property="Padding" Value="15,12" /><Setter Property="CornerRadius" Value="6" /></Style>
     <Style Selector="Button.contextNavigation"><Setter Property="Height" Value="36" /><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="Padding" Value="14,0" /><Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="CornerRadius" Value="0" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Background" Value="Transparent" /></Style>
-    <Style Selector="Button.contextNavigation.selected"><Setter Property="Foreground" Value="{DynamicResource ClubAccent}" /><Setter Property="Background" Value="{DynamicResource ClubSelection}" /><Setter Property="BorderBrush" Value="{DynamicResource ClubAccent}" /><Setter Property="BorderThickness" Value="3,0,0,0" /><Setter Property="Padding" Value="11,0,14,0" /></Style>
+    <Style Selector="Button.contextNavigation.selected"><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}" /><Setter Property="Background" Value="Transparent" /><Setter Property="BorderBrush" Value="{DynamicResource ClubSelectionForeground}" /><Setter Property="BorderThickness" Value="3,0,0,0" /><Setter Property="Padding" Value="11,0,14,0" /></Style>
     <Style Selector="TextBlock.contextHeading"><Setter Property="Margin" Value="13,9,0,4" /><Setter Property="FontSize" Value="12" /><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /></Style>
     <Style Selector="TextBlock.settingLabel"><Setter Property="VerticalAlignment" Value="Center" /><Setter Property="Margin" Value="9,0,8,0" /></Style>
     <Style Selector="TextBlock.sectionTitle"><Setter Property="FontSize" Value="14" /><Setter Property="Margin" Value="0,0,0,5" /></Style>
@@ -17,6 +17,8 @@
     <Style Selector="Expander"><Setter Property="HorizontalAlignment" Value="Stretch" /></Style>
     <Style Selector="TextBlock.capability"><Setter Property="FontSize" Value="12" /><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /></Style>
     <Style Selector="Path.navIcon"><Setter Property="Width" Value="18" /><Setter Property="Height" Value="18" /><Setter Property="Stretch" Value="Uniform" /><Setter Property="Stroke" Value="{DynamicResource ClubForeground}" /><Setter Property="StrokeThickness" Value="1.6" /></Style>
+    <Style Selector="Button.contextNavigation.selected TextBlock"><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}"/></Style>
+    <Style Selector="Button.contextNavigation.selected Path.navIcon"><Setter Property="Stroke" Value="{DynamicResource ClubSelectionForeground}"/></Style>
   </UserControl.Styles>
   <Grid ColumnDefinitions="135,*">
     <Border Name="SettingsContextNavigation" Background="{DynamicResource ClubSurface}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,0,1,0">

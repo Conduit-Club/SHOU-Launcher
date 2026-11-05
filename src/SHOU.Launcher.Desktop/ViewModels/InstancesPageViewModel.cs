@@ -118,6 +118,7 @@ public sealed partial class InstancesPageViewModel : PageViewModel
             PlanDiagnostics = $"Java：{plan.JavaExecutable}\n架构：{plan.JavaRuntimeArchitecture}\n类路径：{plan.ClasspathEntries.Count} 项\n" + string.Join("\n", plan.RedactedDiagnostics.Select(s => UiPrivacy.Redact(s)));
         }), () => CanEdit && SelectedInstanceSupported && SelectedInstance?.Installed == true);
         InitializeWorkspace();
+        InitializeWorldWorkspace();
     }
     private async Task CreateInstanceAsync()
     {
@@ -165,5 +166,5 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         RefreshWorkspaceSnapshot(snapshot);
         base.Refresh(snapshot);
     }
-    public override void NotifyCommands() { base.NotifyCommands(); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(CanImportContent)); ScheduleContentRefresh(); }
+    public override void NotifyCommands() { base.NotifyCommands(); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(CanImportContent)); ScheduleContentRefresh(); NotifyWorldWorkspace(); }
 }

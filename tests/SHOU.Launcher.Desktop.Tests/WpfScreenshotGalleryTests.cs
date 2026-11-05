@@ -29,6 +29,12 @@ public sealed class WpfScreenshotGalleryTests
         using var owner = new MainWindowViewModel(service, new FakeExternalLauncher());
         await owner.InitializeAsync();
         owner.Instances.ShowInstanceSettingsCommand.Execute(null);
+        owner.Instances.BeginRenameCommand.Execute(null);
+        Assert.True(owner.Instances.IsRenameEditorOpen); Assert.True(owner.Instances.SaveRenameCommand.CanExecute(null));
+        owner.Instances.RenameDraft = "Renamed gallery fixture";
+        await owner.Instances.SaveRenameCommand.ExecuteAsync(null);
+        Assert.False(owner.Instances.IsRenameEditorOpen);
+        Assert.Equal("Renamed gallery fixture", service.Snapshot.Instances.Single().Name);
         owner.Instances.SelectedSection = owner.Instances.Sections.Single(s => s.Key == "screenshots");
         Dispatcher.UIThread.RunJobs();
         await (owner.Instances.RefreshContentCommand.ExecutionTask ?? Task.CompletedTask);

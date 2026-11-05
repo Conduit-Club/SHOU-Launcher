@@ -1,0 +1,101 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:themes="using:SHOU.Launcher.Desktop.Themes" x:Class="SHOU.Launcher.Desktop.Views.InstanceWorldsView" FontSize="13" KeyDown="Workspace_KeyDown">
+  <UserControl.Styles>
+    <Style Selector="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
+    <Style Selector="TextBox"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="7,4" /></Style>
+    <Style Selector="Button"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="10,4" /></Style>
+    <Style Selector="Button.worldQuick"><Setter Property="MinHeight" Value="34" /><Setter Property="Margin" Value="0,0,12,4" /></Style>
+    <Style Selector="Button.worldNavigation"><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="HorizontalContentAlignment" Value="Left" /><Setter Property="Height" Value="36" /><Setter Property="Padding" Value="14,0" /><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /><Setter Property="CornerRadius" Value="0" /></Style>
+    <Style Selector="Button.worldNavigation.selected"><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}" /><Setter Property="BorderBrush" Value="{DynamicResource ClubSelectionForeground}" /><Setter Property="BorderThickness" Value="3,0,0,0" /><Setter Property="Padding" Value="11,0,14,0" /></Style>
+    <Style Selector="ListBox.worldFiles"><Setter Property="Background" Value="Transparent" /><Setter Property="BorderThickness" Value="0" /></Style>
+    <Style Selector="ListBox.worldFiles ListBoxItem"><Setter Property="Padding" Value="7,6" /><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+    <Style Selector="ListBox.worldFiles ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource ClubSelection}" /></Style>
+    <Style Selector="TextBlock.worldLabel"><Setter Property="VerticalAlignment" Value="Center" /></Style>
+    <Style Selector="TextBlock.worldHint"><Setter Property="FontSize" Value="11" /><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /></Style>
+    <Style Selector="Button.worldNavigation.selected TextBlock"><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}"/></Style>
+    <Style Selector="Button.worldNavigation.selected Path"><Setter Property="Stroke" Value="{DynamicResource ClubSelectionForeground}"/></Style>
+  </UserControl.Styles>
+  <Grid ColumnDefinitions="150,*">
+    <Border Grid.Column="0" Background="{DynamicResource ClubSurface}" IsVisible="{Binding IsWorldDetails}">
+      <StackPanel Margin="0,14,0,0" Spacing="3">
+        <Button Name="WorldInformationNavigation" Classes="worldNavigation" Classes.selected="{Binding IsWorldInformationPage}" Command="{Binding ShowWorldInformationCommand}"><StackPanel Orientation="Horizontal" Spacing="12"><Path Data="M19,10 A9,9 0 1 1 1,10 A9,9 0 1 1 19,10 Z M10,8 V15 M10,4 V5" Width="18" Height="18" Stroke="{DynamicResource ClubForeground}" StrokeThickness="1.5" Stretch="Uniform"/><TextBlock Text="信息" VerticalAlignment="Center" /></StackPanel></Button>
+        <Button Name="WorldDatapacksNavigation" Classes="worldNavigation" Classes.selected="{Binding IsWorldDatapacksPage}" Command="{Binding ShowWorldDatapacksCommand}"><StackPanel Orientation="Horizontal" Spacing="12"><Path Data="{x:Static themes:ClubIcons.Document}" Width="18" Height="18" Stroke="{DynamicResource ClubForeground}" StrokeThickness="1.5" Stretch="Uniform"/><TextBlock Text="数据包" VerticalAlignment="Center" /></StackPanel></Button>
+        <TextBlock Text="快捷操作" Classes="worldHint" Margin="13,12,0,4" />
+        <Button Classes="worldNavigation" Content="▱  打开文件夹" Command="{Binding OpenWorldDirectoryCommand}" />
+        <Button Name="BackToWorldListButton" Classes="worldNavigation" Content="←  返回存档列表" Command="{Binding BackFromWorldCommand}" />
+      </StackPanel>
+    </Border>
+    <Border Grid.Column="1" Background="{DynamicResource ClubBackground}">
+      <Grid>
+        <ScrollViewer Name="WorldListScroller" IsVisible="{Binding IsWorldListPage}" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="24" Spacing="14">
+            <Border Classes="card" Padding="12,6"><TextBox Name="WorldSearchBox" Text="{Binding WorldSearchText}" PlaceholderText="搜索存档名称" BorderThickness="0" Background="Transparent" /></Border>
+            <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="快捷操作" Classes="sectionTitle" /><WrapPanel><Button Classes="worldQuick" Content="打开存档文件夹" Command="{Binding OpenWorldSavesDirectoryCommand}" /><Button Classes="worldQuick" Content="下载新资源" IsEnabled="False" ToolTip.Tip="世界资源下载入口尚未接入。" /><Button Classes="worldQuick" Content="粘贴剪贴板文件" IsEnabled="False" ToolTip.Tip="粘贴导入尚未接入。" /><Button Name="RefreshWorldsButton" Classes="worldQuick" Content="重新读取" Command="{Binding RefreshWorldsCommand}" /></WrapPanel><TextBlock Text="{Binding WorldWorkspaceCapability}" Classes="worldHint" /></StackPanel></Border>
+            <Border Classes="card"><StackPanel Spacing="10">
+              <Grid ColumnDefinitions="*,Auto"><TextBlock Name="WorldCountText" Text="{Binding WorldCountSummary}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="↕ 排序：文件名" Classes="muted" /></Grid>
+              <TextBlock Name="WorldListStatusText" Text="{Binding WorldListStatus}" IsVisible="{Binding ShowWorldListStatus}" Classes="muted" Margin="8,12" />
+              <ItemsControl Name="InstanceWorldList" ItemsSource="{Binding WorldRows}"><ItemsControl.ItemTemplate><DataTemplate>
+                <Grid ColumnDefinitions="38,*,30" Margin="8,6"><Border Width="31" Height="31" Background="{DynamicResource ClubSelection}" CornerRadius="3"><Path Data="{x:Static themes:ClubIcons.Globe}" Width="23" Height="23" Stroke="{DynamicResource ClubForeground}" StrokeThickness="1.4" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/></Border>
+                  <StackPanel Grid.Column="1" Spacing="1"><Button Name="OpenWorldDetailsButton" Classes="flat" Content="{Binding Name}" Command="{Binding OpenCommand}" Padding="0" MinHeight="23" HorizontalAlignment="Left" /><TextBlock Text="{Binding Subtitle}" Classes="worldHint" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /></StackPanel>
+                  <Button Grid.Column="2" Content="▷" IsEnabled="False" ToolTip.Tip="按世界快速游玩尚未接入。" Padding="3" />
+                </Grid>
+              </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+            </StackPanel></Border>
+          </StackPanel>
+        </ScrollViewer>
+        <ScrollViewer Name="WorldInformationScroller" IsVisible="{Binding IsWorldInformationPage}" HorizontalScrollBarVisibility="Disabled">
+          <StackPanel Margin="24" Spacing="14">
+            <Border Classes="card"><StackPanel Spacing="9"><TextBlock Text="存档详细信息" Classes="sectionTitle" />
+              <Grid ColumnDefinitions="105,*"><TextBlock Classes="worldLabel" Text="存档版本" /><TextBlock Grid.Column="1" Name="WorldVersionText" Text="{Binding WorldDetailVersion}" /></Grid>
+              <Grid ColumnDefinitions="105,*"><TextBlock Classes="worldLabel" Text="存档名称" /><TextBlock Grid.Column="1" Name="WorldNameText" Text="{Binding WorldDetailName}" /></Grid>
+              <Grid ColumnDefinitions="105,*,Auto"><TextBlock Classes="worldLabel" Text="种子" /><TextBlock Grid.Column="1" Name="WorldSeedText" Text="{Binding WorldSeedText}" /><Button Grid.Column="2" Content="复制" Click="CopyWorldSeed_Click" IsEnabled="{Binding HasWorldSeed}" Padding="6,1" MinHeight="22" /></Grid>
+              <Grid ColumnDefinitions="105,*"><TextBlock Classes="worldLabel" Text="最后一次游玩" /><TextBlock Grid.Column="1" Name="WorldLastPlayedText" Text="{Binding WorldDetailLastPlayed}" /></Grid>
+              <Grid ColumnDefinitions="105,*"><TextBlock Classes="worldLabel" Text="出生点（X/Y/Z）" /><TextBlock Grid.Column="1" Text="尚未读取" Classes="muted" /></Grid>
+              <Grid ColumnDefinitions="105,*"><TextBlock Classes="worldLabel" Text="游戏模式" /><TextBlock Grid.Column="1" Text="{Binding WorldGameModeText}" /></Grid>
+              <Grid ColumnDefinitions="105,*"><TextBlock Classes="worldLabel" Text="极限模式" /><TextBlock Grid.Column="1" Text="{Binding WorldHardcoreText}" /></Grid>
+              <Grid ColumnDefinitions="105,*"><TextBlock Classes="worldLabel" Text="游戏时长" /><TextBlock Grid.Column="1" Text="尚未读取" Classes="muted" /></Grid>
+            </StackPanel></Border>
+            <Border Classes="card"><StackPanel Spacing="9"><TextBlock Text="存档设置" Classes="sectionTitle" /><Grid ColumnDefinitions="105,120,*"><TextBlock Classes="worldLabel" Text="是否允许作弊" /><ComboBox Grid.Column="1" IsEnabled="False" PlaceholderText="尚未读取" /><TextBlock Grid.Column="2" Text="level.dat 保持只读" Classes="worldHint" Margin="12,0" VerticalAlignment="Center" /></Grid><Grid ColumnDefinitions="105,120,*"><TextBlock Classes="worldLabel" Text="游戏难度" /><ComboBox Grid.Column="1" IsEnabled="False" PlaceholderText="尚未读取" /><CheckBox Grid.Column="2" Content="锁定难度" IsEnabled="False" Margin="12,0" /></Grid></StackPanel></Border>
+            <TextBlock Text="{Binding WorldWorkspaceCapability}" Classes="worldHint" />
+          </StackPanel>
+        </ScrollViewer>
+        <DockPanel IsVisible="{Binding IsWorldDatapacksPage}">
+          <Border Name="WorldDatapackSelectionBar" DockPanel.Dock="Bottom" Classes="card" IsVisible="{Binding HasSelectedDatapacks}" Margin="24,4,24,12" Padding="12,8">
+            <StackPanel Spacing="6"><TextBlock Text="{Binding DatapackSelectionSummary}" HorizontalAlignment="Center" /><WrapPanel HorizontalAlignment="Center"><Button Content="更新" IsEnabled="False" ToolTip.Tip="版本更新尚未验证。" /><Button Name="EnableWorldDatapacksButton" Content="启用" IsEnabled="False" ToolTip.Tip="未实现 level.dat 启停状态写入。" Margin="6,0" /><Button Content="禁用" IsEnabled="False" ToolTip.Tip="未实现 level.dat 启停状态写入。" /><Button Content="删除" IsEnabled="False" ToolTip.Tip="数据包删除尚未接入。" Margin="6,0" /><Button Name="ClearWorldDatapackSelectionButton" Content="取消选择" Command="{Binding ClearWorldDatapackSelectionCommand}" /></WrapPanel></StackPanel>
+          </Border>
+          <ScrollViewer Name="WorldDatapacksScroller" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="24" Spacing="14">
+            <Border Classes="card" Padding="12,6"><TextBox Name="DatapackSearchBox" Text="{Binding DatapackSearchText}" PlaceholderText="搜索数据包文件名" BorderThickness="0" Background="Transparent" /></Border>
+            <Border Classes="card"><WrapPanel><Button Classes="worldQuick" Content="打开文件夹" Command="{Binding OpenWorldDatapacksDirectoryCommand}" /><Button Name="ImportWorldDatapackButton" Classes="worldQuick" Content="从文件安装" Click="ImportWorldDatapack_Click" IsEnabled="{Binding CanImportWorldDatapack}" /><Button Classes="worldQuick" Content="下载新数据包" IsEnabled="False" ToolTip.Tip="数据包下载入口尚未接入。" /><Button Name="SelectAllWorldDatapacksButton" Classes="worldQuick" Content="全选" Command="{Binding SelectAllWorldDatapacksCommand}" /><Button Classes="worldQuick" Content="重新读取" Command="{Binding RefreshWorldDatapacksCommand}" /></WrapPanel></Border>
+            <Border Classes="card"><StackPanel Spacing="9"><Grid ColumnDefinitions="*,Auto"><StackPanel Orientation="Horizontal" Spacing="16"><TextBlock Name="WorldDatapackCountText" Text="{Binding DatapackCountSummary}" FontWeight="SemiBold" /><TextBlock Text="可更新（未检查）" Classes="muted" /></StackPanel><TextBlock Grid.Column="1" Text="↕ 排序：文件名" Classes="muted" /></Grid>
+              <TextBlock Name="WorldDatapackStatusText" Text="{Binding DatapackListStatus}" Classes="worldHint" />
+              <ListBox Name="WorldDatapackList" Classes="worldFiles" ItemsSource="{Binding DatapackRows}" SelectedItems="{Binding SelectedDatapacks, Mode=OneWay}" SelectionMode="Multiple,Toggle">
+                <ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="38,*"><Border Width="31" Height="31" Background="{DynamicResource ClubSelection}" CornerRadius="3"><TextBlock Text="▤" FontSize="21" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border><StackPanel Grid.Column="1" Spacing="2"><TextBlock Text="{Binding Name}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding Subtitle}" Classes="worldHint" /><TextBlock Text="{Binding Status}" Classes="worldHint" FontSize="10" /></StackPanel></Grid></DataTemplate></ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel></Border>
+            <TextBlock Text="{Binding WorldWorkspaceFeedback}" Classes="muted" />
+          </StackPanel></ScrollViewer>
+        </DockPanel>
+        <DockPanel IsVisible="{Binding IsInstanceServersPage}">
+          <Border Name="InstanceServersSaveBar" DockPanel.Dock="Bottom" Classes="card" IsVisible="{Binding IsServerDraftDirty}" Margin="24,4,24,12" Padding="12,8">
+            <StackPanel Spacing="7"><TextBlock Name="ServerDraftStatusText" Text="{Binding ServerDraftStatus}" Classes="worldHint" /><StackPanel Orientation="Horizontal" Spacing="8"><Button Name="SaveInstanceServersButton" Classes="primary" Content="保存服务器" Command="{Binding SaveInstanceServersCommand}" /><Button Name="DiscardInstanceServersButton" Content="放弃草稿并重新读取" Command="{Binding DiscardInstanceServersCommand}" /></StackPanel></StackPanel>
+          </Border>
+          <ScrollViewer Name="InstanceServersScroller" HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="24" Spacing="14">
+            <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="快捷操作" Classes="sectionTitle" /><WrapPanel><Button Name="RefreshInstanceServersButton" Classes="worldQuick" Content="刷新服务器列表" Command="{Binding RefreshInstanceServersCommand}" /><Button Name="AddInstanceServerButton" Classes="worldQuick" Content="添加新服务器" Command="{Binding AddInstanceServerCommand}" /></WrapPanel><TextBlock Text="{Binding WorldWorkspaceCapability}" Classes="worldHint" /></StackPanel></Border>
+            <TextBlock Name="ServerListStatusText" Text="{Binding ServerListStatus}" Classes="worldHint" />
+            <ListBox Name="InstanceServerList" Classes="worldFiles" ItemsSource="{Binding InstanceServerRows}" SelectedItem="{Binding SelectedInstanceServer}">
+              <ListBox.ItemTemplate><DataTemplate><Border Classes="card" Padding="8,6" Margin="0,3"><Grid ColumnDefinitions="38,*,Auto,Auto"><Border Width="33" Height="33" Background="{DynamicResource ClubSelection}" CornerRadius="4"><TextBlock Text="▱" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border><StackPanel Grid.Column="1" Spacing="2"><TextBlock Text="{Binding Name}" /><TextBlock Text="{Binding Address}" Classes="worldHint" /></StackPanel><Button Grid.Column="2" Content="▷" IsEnabled="False" ToolTip.Tip="快捷连接尚未接入。" Padding="5" Margin="6,0" /><Button Name="EditInstanceServerButton" Grid.Column="3" Content="⚙" Tag="{Binding}" Click="EditInstanceServer_Click" Padding="5" /></Grid></Border></DataTemplate></ListBox.ItemTemplate>
+            </ListBox>
+            <Border Classes="card" IsVisible="{Binding HasServerBackup}"><StackPanel Spacing="5"><TextBlock Text="上次保存前的备份" FontWeight="SemiBold" /><TextBlock Name="ServerBackupPathText" Text="{Binding ServerBackupPath}" Classes="worldHint" /></StackPanel></Border>
+            <TextBlock Name="WorldWorkspaceFeedbackText" Text="{Binding WorldWorkspaceFeedback}" Classes="muted" />
+          </StackPanel></ScrollViewer>
+        </DockPanel>
+      </Grid>
+    </Border>
+    <Grid Grid.ColumnSpan="2" Name="InstanceServerEditorOverlay" IsVisible="{Binding IsServerEditorOpen}" Background="#66000000">
+      <Border Classes="card" Width="420" MaxWidth="600" HorizontalAlignment="Center" VerticalAlignment="Center" Padding="20">
+        <StackPanel Spacing="12"><TextBlock Text="{Binding ServerEditorTitle}" Classes="sectionTitle" /><Grid ColumnDefinitions="66,*"><TextBlock Text="名称" VerticalAlignment="Center" /><TextBox Name="InstanceServerNameDraft" Grid.Column="1" Text="{Binding ServerNameDraft}" MaxLength="128" IsEnabled="{Binding WorldWorkspaceCanWrite}" /></Grid><Grid ColumnDefinitions="66,*"><TextBlock Text="地址" VerticalAlignment="Center" /><TextBox Name="InstanceServerAddressDraft" Grid.Column="1" Text="{Binding ServerAddressDraft}" PlaceholderText="主机名或 IP:端口" MaxLength="1024" IsEnabled="{Binding WorldWorkspaceCanWrite}" /></Grid><TextBlock Text="先更新草稿，再显式保存到当前隔离实例。" Classes="worldHint" />
+          <WrapPanel HorizontalAlignment="Right"><Button Name="RemoveInstanceServerDraftButton" Content="从草稿移除" Command="{Binding RemoveInstanceServerCommand}" IsVisible="{Binding IsEditingExistingServer}" Margin="0,0,8,0" /><Button Name="CancelInstanceServerEditorButton" Content="取消" Command="{Binding CancelInstanceServerEditorCommand}" Margin="0,0,8,0" /><Button Name="ApplyInstanceServerDraftButton" Classes="primary" Content="应用到草稿" Command="{Binding ApplyInstanceServerDraftCommand}" IsDefault="True" /></WrapPanel>
+        </StackPanel>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

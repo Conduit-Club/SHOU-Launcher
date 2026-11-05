@@ -8,6 +8,7 @@ using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.Platform.Storage;
 using SHOU.Launcher.Desktop.ViewModels;
+using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Desktop.Views;
 
@@ -52,11 +53,11 @@ public partial class InstancesView
         }, DispatcherPriority.Loaded);
     }
     private void OpenSelectedInstance_DoubleTapped(object? sender, TappedEventArgs e)
-    { if (DataContext is InstancesPageViewModel vm && vm.ShowInstanceSettingsCommand.CanExecute(null)) vm.ShowInstanceSettingsCommand.Execute(null); }
+    { if (DataContext is InstancesPageViewModel vm && sender is ListBox list && list.SelectedItem is GameInstance selected && vm.OpenVisibleInstanceCommand.CanExecute(selected)) vm.OpenVisibleInstanceCommand.Execute(selected); }
     private void OpenSelectedInstance_KeyDown(object? sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Enter || DataContext is not InstancesPageViewModel vm || !vm.ShowInstanceSettingsCommand.CanExecute(null)) return;
-        vm.ShowInstanceSettingsCommand.Execute(null); e.Handled = true;
+        if (e.Key != Key.Enter || DataContext is not InstancesPageViewModel vm || sender is not ListBox list || list.SelectedItem is not GameInstance selected || !vm.OpenVisibleInstanceCommand.CanExecute(selected)) return;
+        vm.OpenVisibleInstanceCommand.Execute(selected); e.Handled = true;
     }
     private async void ImportContent_Click(object? sender, RoutedEventArgs e)
     {
@@ -69,5 +70,18 @@ public partial class InstancesView
                 await vm.ImportContentFileAsync(file.TryGetLocalPath() ?? throw new InvalidOperationException("请选择本机文件。"));
         }
         catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+    private async void OpenSavesDirectory_Click(object? sender, RoutedEventArgs e) => await OpenInstanceSubdirectoryAsync("saves");
+    private async void OpenModsDirectory_Click(object? sender, RoutedEventArgs e) => await OpenInstanceSubdirectoryAsync("mods");
+    private Task OpenInstanceSubdirectoryAsync(string name) => DataContext is InstancesPageViewModel { SelectedInstance: { } instance } vm
+        ? vm.Root.RunControlAsync("打开实例文件夹", async ct =>
+        {
+            var path = SHOU.Launcher.Core.IO.SafePath.Within(instance.GameDirectory, name);
+            Directory.CreateDirectory(path); await vm.Root.ExternalLauncher.OpenDirectoryAsync(path, ct);
+        }) : Task.CompletedTask;
+    private void RenameEditor_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key != Key.Escape || DataContext is not InstancesPageViewModel vm) return;
+        vm.CancelRenameCommand.Execute(null); e.Handled = true;
     }
 }

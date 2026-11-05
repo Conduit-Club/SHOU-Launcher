@@ -23,13 +23,25 @@ public sealed partial class InstancesPageViewModel
     private string? _draftInstanceId;
     private InstanceContentEntry? _selectedContent;
     private bool _pendingContentRefresh, _contentRefreshScheduled, _workspaceDisposed;
+    private bool _isRenameEditorOpen;
+    private string _renameDraft = "";
+    private string? _renamingInstance;
+    public string GameVersionLabel => SelectedInstance is { Loader: "fabric", LoaderVersion: { } loader } instance && instance.VersionId.StartsWith("fabric-loader-" + loader + "-", StringComparison.Ordinal)
+        ? instance.VersionId[("fabric-loader-" + loader + "-").Length..] : SelectedInstance?.VersionId ?? "";
+    public bool HasModLoader => SelectedInstance is { Loader: not "vanilla" };
+    public string LoaderLabel => SelectedInstance?.Loader == "fabric" ? "Fabric" : SelectedInstance?.Loader ?? "";
+    public bool IsRenameEditorOpen { get => _isRenameEditorOpen; private set { if (SetProperty(ref _isRenameEditorOpen, value)) NotifyCommands(); } }
+    public string RenameDraft { get => _renameDraft; set => SetProperty(ref _renameDraft, value); }
+    public RelayCommand BeginRenameCommand { get; private set; } = null!;
+    public RelayCommand CancelRenameCommand { get; private set; } = null!;
+    public AsyncRelayCommand SaveRenameCommand { get; private set; } = null!;
     public IReadOnlyList<InstanceSectionChoice> Sections { get; } = [new("overview", "概览", "◉"), new("settings", "设置", "⚙"),
         new("modify", "修改", "↻"), new("export", "导出", "⇧"), new("worlds", "存档", "▣"), new("screenshots", "截图", "▧"),
         new("mods", "模组", "◇"), new("resourcepacks", "资源包", "▤"), new("shaders", "光影包", "☼"),
         new("schematics", "投影原理图", "▥"), new("servers", "服务器", "▱"), new("relations", "模组关系", "⌘")];
     public ObservableCollection<GameInstance> FilteredInstances { get; } = [];
     public ObservableCollection<InstanceContentEntry> ContentEntries { get; } = [];
-    public bool IsSelection { get => _isSelection; private set { if (SetProperty(ref _isSelection, value)) NotifyWorkspace(); } }
+    public bool IsSelection { get => _isSelection; private set { if (SetProperty(ref _isSelection, value)) { if (value) IsRenameEditorOpen = false; NotifyWorkspace(); } } }
     public string SearchText { get => _searchText; set { if (SetProperty(ref _searchText, value)) FilterInstances(); } }
     public string InstanceCountSummary => $"全部实例（{FilteredInstances.Count}）";
     public string GameDirectorySummary => Owner.Snapshot.Settings.GameRoot ?? Service.Paths.InstancesDirectory;
@@ -41,6 +53,7 @@ public sealed partial class InstancesPageViewModel
         {
             if (value is null || !SetProperty(ref _selectedSection, value)) return;
             Feedback = ""; ContentEntries.Clear(); SelectedContent = null; ClearScreenshotPreviews(); NotifyWorkspace();
+            ActivateWorldWorkspace(value.Key);
             _pendingContentRefresh = IsFileSection;
             ScheduleContentRefresh();
         }
@@ -49,8 +62,8 @@ public sealed partial class InstancesPageViewModel
     public bool IsInstanceSettings => !IsSelection && SelectedSection?.Key == "settings";
     public bool IsModify => !IsSelection && SelectedSection?.Key == "modify";
     public bool IsExport => !IsSelection && SelectedSection?.Key == "export";
-    public bool IsFileSection => !IsSelection && SelectedSection?.Key is "worlds" or "screenshots" or "mods" or "resourcepacks" or "shaders" or "schematics";
-    public bool IsOtherSection => !IsSelection && !IsOverview && !IsInstanceSettings && !IsModify && !IsExport && !IsFileSection;
+    public bool IsFileSection => !IsSelection && SelectedSection?.Key is "screenshots" or "mods" or "resourcepacks" or "shaders" or "schematics";
+    public bool IsOtherSection => !IsSelection && !IsOverview && !IsInstanceSettings && !IsModify && !IsExport && !IsFileSection && SelectedSection?.Key is not ("worlds" or "servers");
     public bool ModsUnsupported => SelectedSection?.Key == "mods" && SelectedInstance?.Loader == "vanilla";
     public bool IsContentEmpty => ContentEntries.Count == 0;
     public bool CanImportContent => IsFileSection && SelectedSection.Key != "worlds" && !ModsUnsupported && CanEdit && Service is IInstanceWorkspaceService;
@@ -74,6 +87,7 @@ public sealed partial class InstancesPageViewModel
     public bool HasFeedback => Feedback.Length > 0;
     public InstanceContentEntry? SelectedContent { get => _selectedContent; set { if (SetProperty(ref _selectedContent, value)) NotifyWorkspace(); } }
     public RelayCommand ShowInstanceSettingsCommand { get; private set; } = null!;
+    public RelayCommand<GameInstance?> OpenVisibleInstanceCommand { get; private set; } = null!;
     public RelayCommand ShowSelectionCommand { get; private set; } = null!;
     public RelayCommand NavigateBackCommand { get; private set; } = null!;
     public AsyncRelayCommand SaveInstanceSettingsCommand { get; private set; } = null!;
@@ -86,8 +100,20 @@ public sealed partial class InstancesPageViewModel
     {
         _selectedSection = Sections[0];
         ShowInstanceSettingsCommand = Command(() => { IsSelection = false; SelectedSection = Sections[0]; Owner.SelectedPage = this; RefreshWorkspaceSnapshot(Owner.Snapshot); }, () => SelectedInstance is not null);
+        OpenVisibleInstanceCommand = new(instance =>
+        {
+            if (instance is not null && FilteredInstances.Contains(instance) && SelectedInstance?.Id == instance.Id) ShowInstanceSettingsCommand.Execute(null);
+        }, instance => instance is not null && FilteredInstances.Contains(instance) && SelectedInstance?.Id == instance.Id);
+        BeginRenameCommand = Command(() => { _renamingInstance = SelectedInstance!.Id; RenameDraft = SelectedInstance.Name; IsRenameEditorOpen = true; }, () => CanEdit && SelectedInstance is not null && Service is IInstanceWorkspaceService);
+        CancelRenameCommand = Command(() => IsRenameEditorOpen = false);
+        SaveRenameCommand = AsyncCommand(async () =>
+        {
+            var instance = SelectedInstance!;
+            if (await Owner.RunAsync("修改实例名", ct => ((IInstanceWorkspaceService)Service).UpdateInstanceAsync(instance.Id, new(RenameDraft.Trim(), instance.JavaExecutable, instance.MemoryMiB), ct)))
+            { IsRenameEditorOpen = false; Feedback = "实例名称已保存。"; }
+        }, () => IsRenameEditorOpen && CanEdit && SelectedInstance?.Id == _renamingInstance && Service is IInstanceWorkspaceService);
         ShowSelectionCommand = Command(() => { IsSelection = true; Owner.SelectedPage = this; });
-        NavigateBackCommand = Command(() => { if (IsSelection) Owner.SelectedPage = Owner.Home; else IsSelection = true; });
+        NavigateBackCommand = Command(() => { if (IsWorldDetails) BackFromWorldCommand.Execute(null); else if (IsSelection) Owner.SelectedPage = Owner.Home; else IsSelection = true; });
         SaveInstanceSettingsCommand = AsyncCommand(SaveInstanceEditAsync, () => CanEdit && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         RefreshContentCommand = AsyncCommand(RefreshContentAsync, () => SelectedInstance is not null && IsFileSection && Owner.CanReadRemote && Service is IInstanceWorkspaceService);
         RefreshContentCommand.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(RefreshContentCommand.IsRunning)) ScheduleContentRefresh(); };
@@ -139,7 +165,7 @@ public sealed partial class InstancesPageViewModel
     private void NotifyWorkspace()
     {
         foreach (var name in new[] { nameof(ContextTitle), nameof(IsOverview), nameof(IsInstanceSettings), nameof(IsModify), nameof(IsExport), nameof(IsFileSection), nameof(IsOtherSection),
-                     nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary) }) OnPropertyChanged(name);
+                     nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary), nameof(GameVersionLabel), nameof(HasModLoader), nameof(LoaderLabel) }) OnPropertyChanged(name);
         if (_workspaceReady) NotifyCommands();
     }
     private async Task SaveInstanceEditAsync()

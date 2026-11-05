@@ -5,6 +5,7 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
 using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using SHOU.Launcher.Desktop.ViewModels;
@@ -20,6 +21,130 @@ public sealed class WpfShellStyleTests
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
     private static ContentPresenter Presenter(Control control) => control.GetVisualDescendants().OfType<ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter" && ReferenceEquals(p.TemplatedParent, control));
     private static void ColorIs(string hex, IBrush? brush) => Assert.Equal(Color.Parse(hex), Assert.IsAssignableFrom<ISolidColorBrush>(brush).Color);
+    private static T Part<T>(Control control, string name) where T : Control => control.GetVisualDescendants().OfType<T>().Single(part => part.Name == name && ReferenceEquals(part.TemplatedParent, control));
+    private static void State(Control control, string state)
+    {
+        control.IsEnabled = !state.StartsWith("disabled", StringComparison.Ordinal);
+        var classes = (IPseudoClasses)control.Classes;
+        foreach (var name in new[] { ":pointerover", ":pressed", ":focus", ":focus-visible", ":focus-within" }) classes.Remove(name);
+        if (state is "pointerover" or "disabled-pointerover") classes.Add(":pointerover");
+        if (state == "pressed") classes.Add(":pressed");
+        if (state == "focus") foreach (var name in new[] { ":focus", ":focus-visible", ":focus-within" }) classes.Add(name);
+    }
+
+    [AvaloniaFact]
+    public void CheckedControlPresentersAndGlyphsUseThemeColorsWithoutFadingDisabledText()
+    {
+        var checkBox = new CheckBox { Content = "自动保存", IsThreeState = true };
+        var radio = new RadioButton { Content = "自动选择" };
+        var window = new Window { Width = 420, Height = 160, Content = new StackPanel { Margin = new Thickness(16), Children = { checkBox, radio } } };
+        window.Show(); Pump(window);
+        try
+        {
+            foreach (var dark in new[] { false, true })
+            {
+                window.RequestedThemeVariant = dark ? ThemeVariant.Dark : ThemeVariant.Light;
+                var foreground = dark ? "#F0DDEB" : "#5C3A54";
+                var muted = dark ? "#BEA8B9" : "#927B8B";
+                var surface = dark ? "#302634" : "#FCF6FB";
+                var border = dark ? "#49384A" : "#EADDE6";
+                var selection = dark ? "#233E4D" : "#EDF8FE";
+                var selectionForeground = dark ? "#8ED6F4" : "#26799F";
+                foreach (var isChecked in new bool?[] { false, true, null })
+                {
+                    checkBox.IsChecked = isChecked; radio.IsChecked = isChecked == true;
+                    foreach (var state in new[] { "normal", "pointerover", "pressed", "focus", "disabled", "disabled-pointerover" })
+                    {
+                        State(checkBox, state); State(radio, state); Pump(window);
+                        var disabled = !checkBox.IsEnabled;
+                        foreach (var control in new Control[] { checkBox, radio })
+                        {
+                            ColorIs(disabled ? muted : foreground, ((TemplatedControl)control).Foreground);
+                            ColorIs(disabled ? muted : foreground, Presenter(control).Foreground);
+                            ColorIs(disabled ? muted : foreground, control.GetVisualDescendants().OfType<AccessText>().Single().Foreground);
+                            Assert.Equal(1, control.Opacity);
+                            Assert.Equal(!disabled, control.IsEffectivelyEnabled);
+                        }
+                        var rectangle = Part<Border>(checkBox, "NormalRectangle");
+                        if (disabled)
+                        {
+                            ColorIs(surface, rectangle.Background); ColorIs(border, rectangle.BorderBrush);
+                            ColorIs(muted, Part<Avalonia.Controls.Shapes.Path>(checkBox, "CheckGlyph").Fill);
+                            ColorIs(muted, Part<Avalonia.Controls.Shapes.Ellipse>(radio, "CheckGlyph").Fill);
+                        }
+                        else if (isChecked != false)
+                        {
+                            ColorIs(selection, rectangle.Background); ColorIs(selectionForeground, rectangle.BorderBrush);
+                            ColorIs(selectionForeground, Part<Avalonia.Controls.Shapes.Path>(checkBox, "CheckGlyph").Fill);
+                        }
+                    }
+                }
+            }
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void InputTemplatePartsKeepReadableThemeColorsThroughHoverFocusAndDisable()
+    {
+        var combo = new ComboBox { ItemsSource = new[] { "自动", "手动" }, SelectedIndex = 0 };
+        var numeric = new NumericUpDown { Value = 128, Minimum = 0, Maximum = 1024 };
+        var textBox = new TextBox { Text = "启动参数" };
+        var window = new Window { Width = 420, Height = 240, Content = new StackPanel { Margin = new Thickness(16), Spacing = 8, Children = { combo, numeric, textBox } } };
+        window.Show(); Pump(window);
+        try
+        {
+            var numericText = Part<TextBox>(numeric, "PART_TextBox");
+            var spinner = Part<ButtonSpinner>(numeric, "PART_Spinner");
+            foreach (var dark in new[] { false, true })
+            {
+                window.RequestedThemeVariant = dark ? ThemeVariant.Dark : ThemeVariant.Light;
+                var foreground = dark ? "#F0DDEB" : "#5C3A54";
+                var muted = dark ? "#BEA8B9" : "#927B8B";
+                var sidebar = dark ? "#2B222F" : "#FFF9FC";
+                var hover = dark ? "#493047" : "#FBE8F4";
+                var surface = dark ? "#302634" : "#FCF6FB";
+                var border = dark ? "#49384A" : "#EADDE6";
+                var selection = dark ? "#233E4D" : "#EDF8FE";
+                var focusBorder = dark ? "#8ED6F4" : "#26799F";
+                foreach (var state in new[] { "normal", "pointerover", "pressed", "focus", "disabled", "disabled-pointerover" })
+                {
+                    State(combo, state); State(numeric, state); State(textBox, state);
+                    var textClasses = (IPseudoClasses)numericText.Classes;
+                    foreach (var name in new[] { ":pointerover", ":focus" }) textClasses.Remove(name);
+                    if (state is "pointerover" or "disabled-pointerover") textClasses.Add(":pointerover");
+                    if (state == "focus") textClasses.Add(":focus");
+                    Pump(window);
+                    var disabled = !combo.IsEnabled;
+                    var expectedText = disabled ? muted : foreground;
+                    ColorIs(expectedText, Part<ContentControl>(combo, "ContentPresenter").Foreground);
+                    ColorIs(expectedText, combo.GetVisualDescendants().OfType<TextBlock>().Single(text => text.Text == "自动").Foreground);
+                    ColorIs(expectedText, Part<PathIcon>(combo, "DropDownGlyph").Foreground);
+                    ColorIs(expectedText, numericText.Foreground);
+                    ColorIs(expectedText, Part<TextPresenter>(numericText, "PART_TextPresenter").Foreground);
+                    ColorIs(expectedText, Part<TextPresenter>(textBox, "PART_TextPresenter").Foreground);
+                    Assert.Equal((byte)0, Assert.IsAssignableFrom<ISolidColorBrush>(Part<Border>(numericText, "PART_BorderElement").Background).Color.A);
+                    var comboBackground = Part<Border>(combo, "Background");
+                    ColorIs(disabled ? surface : state == "pointerover" ? hover : state == "pressed" ? selection : sidebar, comboBackground.Background);
+                    if (state == "focus")
+                    {
+                        var highlight = Part<Border>(combo, "HighlightBackground");
+                        Assert.True(highlight.IsVisible); ColorIs(sidebar, highlight.Background); ColorIs(focusBorder, highlight.BorderBrush);
+                    }
+                    if (disabled)
+                    {
+                        ColorIs(border, comboBackground.BorderBrush);
+                        ColorIs(surface, spinner.Background); ColorIs(border, spinner.BorderBrush);
+                        ColorIs(surface, Part<Border>(textBox, "PART_BorderElement").Background);
+                        ColorIs(border, Part<Border>(textBox, "PART_BorderElement").BorderBrush);
+                        Assert.False(numericText.IsEffectivelyEnabled);
+                    }
+                    foreach (var control in new Control[] { combo, numeric, numericText, textBox }) Assert.Equal(1, control.Opacity);
+                }
+            }
+        }
+        finally { window.Close(); }
+    }
 
     [AvaloniaFact]
     public void SelectedNavigationAndServerCardsKeepClubColorsInEveryPointerState()

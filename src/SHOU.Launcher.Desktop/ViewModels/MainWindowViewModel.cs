@@ -138,7 +138,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         : ReferenceEquals(SelectedPage, Tools) ? "tools" : "launch";
     public bool IsContextPage => ReferenceEquals(SelectedPage, Instances) || ReferenceEquals(SelectedPage, Accounts) || ReferenceEquals(SelectedPage, Logs)
         || (ReferenceEquals(SelectedPage, Downloads) && Downloads.IsResourceDetail);
-    public string NavigationTitle => ReferenceEquals(SelectedPage, Instances) ? Instances.ContextTitle
+    public string NavigationTitle => ReferenceEquals(SelectedPage, Instances) ? (Instances.IsWorldDetails ? Instances.WorldContextTitle : Instances.ContextTitle)
         : ReferenceEquals(SelectedPage, Downloads) && Downloads.IsResourceDetail ? "资源下载 - " + Downloads.ProjectTitle : SelectedPage.Title;
     public bool IsLaunchSelected => CurrentSection == "launch";
     public bool IsDownloadsSelected => CurrentSection == "download";
@@ -234,7 +234,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     private void OnSnapshotChanged(object? sender, LauncherSnapshot snapshot) => Dispatch(() => ApplySnapshot(Service.Snapshot));
     private void OnInstancesPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (e.PropertyName == nameof(Instances.ContextTitle) && ReferenceEquals(SelectedPage, Instances))
+        if (e.PropertyName is nameof(Instances.ContextTitle) or nameof(Instances.WorldContextTitle) or nameof(Instances.IsWorldDetails) && ReferenceEquals(SelectedPage, Instances))
             OnPropertyChanged(nameof(NavigationTitle));
     }
     private void OnDownloadsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)

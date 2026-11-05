@@ -48,6 +48,12 @@ public sealed class WpfInstanceSelectionTests
         Assert.Equal(current.Id, owner.Instances.SelectedInstance?.Id);
         Assert.Equal(current.Id, ((SHOU.Launcher.Core.Abstractions.GameInstance?)view.GetVisualDescendants().OfType<ListBox>().Single(c => c.Name == "InstanceSelector").SelectedItem)?.Id);
         Assert.True(owner.Instances.LaunchCommand.CanExecute(null));
+        search.Text = "no matching fixture"; Pump();
+        var open = view.GetVisualDescendants().OfType<Button>().Single(c => c.Name == "OpenInstanceSettingsButton");
+        Assert.False(open.IsEffectivelyEnabled);
+        Assert.False(owner.Instances.OpenVisibleInstanceCommand.CanExecute(null));
+        Assert.True(owner.Instances.ShowInstanceSettingsCommand.CanExecute(null));
+        Assert.Equal(current.Id, owner.Instances.SelectedInstance?.Id);
         window.Close();
     }
 }
