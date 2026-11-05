@@ -1,12 +1,12 @@
-# Mac WPF 对等迁移候选 R5
+# Mac WPF 对等迁移候选 R5.1
 
 2026-11-05。本轮继续三个既有功能分支与 cleanroom 分工，仅本地分阶段提交。没有推送、合并 PR、打标签、发布、删除 WPF 或切换 Windows 默认入口。完整替代 WPF 的门禁尚未通过。
 
 ## 候选与来源
 
-- 产品提交：`0a1110e582a9212c2c16c7d5dc8ed6bc5172e7e0`，干净 detached 工作树构建，`source_dirty=false`。
-- 本地包：`.shou-dev/dist/WPF-PARITY/r5/osx-arm64/SHOU-Launcher-osx-arm64-v1.5.0-dev.g0a1110e5.zip`。
-- 大小：48,184,637 字节。SHA-256：`c3e33993008d2e171ff04064a43ee33096d83c3b1a13e4ab6d4e7eca0e4cb6e6`。
+- 产品提交：`6eae12d113cbf04d70ce81084413456ecd49a903`，干净 detached 工作树构建，`source_dirty=false`。
+- 本地包：`.shou-dev/dist/WPF-PARITY/r5.1/osx-arm64/SHOU-Launcher-osx-arm64-v1.5.0-dev.g6eae12d1.zip`。
+- 大小：48,184,766 字节。SHA-256：`e97b522175f7686fa1a39edc43567b91b4467fe480fcbe49524650f06885d91b`。
 - .NET SDK 10.0.403 / Avalonia 12.1.5 / Release / osx-arm64 / 自包含多文件；本地 ad-hoc 签名，未公证。
 - ZIP 重新解包后通过 `codesign --verify --deep --strict`；运行环境移除 SDK/PCL 构建输入与工具 PATH，程序目录没有 `.env`。
 
@@ -25,15 +25,19 @@
 
 ## 验证与边界
 
-完整 Core **296 通过、3 显式跳过**；Desktop **96 通过、0 跳过**。编译均零警告、零错误。不累加 worker、重试或重复执行的数量。跳过的是需显式启用的真实 Java 运行时/信任库集成测试；本轮未再次启用。
+完整 Core **296 通过、3 显式跳过**；Desktop **97 通过、0 跳过**。编译均零警告、零错误。不累加 worker、重试或重复执行的数量。R5.1 的 132 份 Core 源码和测试与已验证的 R5 逐文件 SHA-256 一致，因此沿用该 Core 全量结果；Desktop 已重新运行完整套件。跳过的是需显式启用的真实 Java 运行时/信任库集成测试；本轮未再次启用。
 
 Core 回归包含真实文件/ZIP/NBT、写盘失败回退、未知字段保持、版本与内容修订冲突、链接/路径/体积限制、错误主类不记成功收据，以及稀疏文件触发处理器整体预算取消。UI 包含实际鼠标打开菜单、3D 拖动/缩放、最小窗口布局、三个剪贴板并发/离页/释放回归及世界草稿取消/冲突。Headless 不代表原生窗口或真实线上认证；剪贴板竞态用真实 PNG 头与转交对象身份验证，不把 Headless 的占位位图尺寸当成真实解码尺寸。
 
-官方实时安装及启动计划：Minecraft 1.21.1 + Forge 52.1.21、NeoForge 21.1.265、Quilt 0.30.2 均通过。最终 R5 ZIP 另移走既有 NeoForge 成功收据，强制重新运行官方处理器，15.3 秒完成，安装/计划 PASS；这不是游戏主菜单证据。
+官方实时安装及启动计划：Minecraft 1.21.1 + Forge 52.1.21、NeoForge 21.1.265、Quilt 0.30.2 均通过。R5 `0a1110e5` 的 ZIP 另移走既有 NeoForge 成功收据，强制重新运行官方处理器，15.3 秒完成，安装/计划 PASS；R5.1 的加载器 Core 代码相同。这不是游戏主菜单证据。
 
 RC1 `0d927f5` 已在 Mac 实窗验证皮肤菜单、原生 PNG 选择保存、真实头像/3D 旋转缩放/复位/Esc、实例描述/分类/收藏、截图复制调用/回收/恢复、本机 MRpack 预检与完整导入；正常关闭 exit0。导入配置字节正确，实例尚未安装游戏本体，且没有混入下载 sidecar。Mac 弹层改在所属窗口内承载，并经真实菜单验证；早期独立原生菜单无法被 CUA 主窗口观察的记录保留。
 
-最终 R5 GUI 首次启动遇到 `AvaloniaNativeRenderTimer.EnsureRegistered`，CUA 随后明确确认 Mac 锁屏。最终世界编辑实窗验收等待用户解锁；原始失败保留，未把它计为通过。CUA 截图仅在对话中显示，不声称已有本地截图文件。外部 Preview 绑定超时，跨应用图片粘贴也未计为通过。
+R5 GUI 首次启动遇到 `AvaloniaNativeRenderTimer.EnsureRegistered`，CUA 随后明确确认 Mac 锁屏。用户解锁后，同一 ZIP 成功完成世界设置保存、数据包启用→禁用→启用、显式重读及正常关闭 exit0。独立 NBT 解析核对四份备份，首份 SHA-256 与原始 `level.dat` 完全相同；仅作弊、难度与两项包列表变化，种子 42、出生点 10/64/-20、世界时间 6000、实验特性及未知字段保留。原始锁屏失败记录仍保留。
+
+这轮实窗另发现实例列表设置按钮未跳转、数据包汇总仍显示旧提示。R5.1 将按钮改为对当前可见实例执行无参命令，保留隐藏行禁用检查；增加六实例、主窗口、无参激活及实际鼠标点击回归，并同步刷新数据包汇总提示。R5.1 ZIP 重新解包验签后，在移除 SDK/PCL 构建输入的 Mac 实窗验证按钮正常进入、保存的作弊/困难难度及两个已启用包重读、汇总提示正确。⌘W 关闭 exit0、无超时，世界文件哈希未因重读变化。此前 R5 和所有原始报告均保留。
+
+CUA 截图仅在对话中显示，不声称已有本地截图文件。外部 Preview 绑定超时，跨应用图片粘贴未计为通过。世界文件写入验收也不等同于 Minecraft 游戏内重新加载世界。
 
 本轮所有重任务使用既有预算/单锁入口，21 项 Git/分支守卫和 4 项生产空间判定边界通过。已有原始计划、`.env`、旧候选、报告和旧工程保留。源码、分支头、TRX、候选、原生操作和未完成项的机器证据位于 `.shou-dev/reports/wpf-parity-r5/`。
 
@@ -45,6 +49,6 @@ RC1 `0d927f5` 已在 Mac 实窗验证皮肤菜单、原生 PNG 选择保存、�
 - 普通数据根的世界/服务器文件操作、其它存档/包格式、数据包更新/删除/排序、游戏内重载、直接进入世界、服务器 ping/快捷连接。
 - 真实在线外观读取验收、认证上传与披风穿戴；当前写入入口为官网。
 - 完整高级启动选项、全文语言切换、自动更新、工具/联机大厅、内嵌更新历史、全部主题与通用弹窗，以及 54 类页面逐页视觉对等。
-- 最终世界实窗验收等待解锁；跨应用图片粘贴未验。
+- 跨应用图片粘贴未验。
 
 主要一手接口依据：[Modrinth 版本 API](https://docs.modrinth.com/api/operations/getversion/)、[MRpack 格式](https://support.modrinth.com/en/articles/8802351-modrinth-modpack-format-mrpack)、[Quilt Meta](https://meta.quiltmc.org/)、[Forge 官方安装器 CLI](https://github.com/MinecraftForge/Installer/blob/2.0/src/main/java/net/minecraftforge/installer/SimpleInstaller.java)。各 worker 的交付 JSON 另记录外观与 NBT 契约依据、原始哈希和首轮失败。
