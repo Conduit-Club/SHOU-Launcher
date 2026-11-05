@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Security.Cryptography;
 using System.Text.Json;
 using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Core.Downloads;
@@ -120,10 +121,77 @@ public sealed class CurseForgePackResolver
         catch (Exception ex) when (ex is JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException or FormatException or ArgumentException)
         { return new(null, [], ex is InvalidDataException ? ex.Message : "官方服务返回的文件元数据无效，未下载任何文件。"); }
     }
-    public Task DownloadAsync(CurseForgePackFile file, string path, IProgress<TransferProgress>? progress = null, CancellationToken ct = default)
+    public async Task DownloadAsync(CurseForgePackFile file, string path, IProgress<TransferProgress>? progress = null, CancellationToken ct = default)
     {
-        if (!AllowedCurseForgeUri(file.DownloadUri) && !ContentInstallFiles.AllowedUri(file.DownloadUri)) throw new InvalidDataException("文件来源不在官方 CDN 允许范围。");
-        return new VerifiedDownloader(http).DownloadAsync(new([file.DownloadUri], path, file.Sha1, Size: file.Size), progress, ct);
+        var label = DownloadLabel(file);
+        if (!AllowedDownloadUri(file.DownloadUri)) throw new InvalidDataException(label + "：文件来源不在官方 CDN 允许范围。");
+        if (!ContentInstallFiles.Hash(file.Sha1, 40) || file.Size is <= 0 or > PackArchiveReader.MaximumFileBytes || file.Sha512 is not null && !ContentInstallFiles.Hash(file.Sha512, 128))
+            throw new InvalidDataException(label + "：文件哈希或大小无效。");
+        using var redirects = new CdnRedirectHandler(http); using var downloads = new HttpClient(redirects) { Timeout = Timeout.InfiniteTimeSpan };
+        try { await new VerifiedDownloader(downloads).DownloadAsync(new([file.DownloadUri], path, file.Sha1, Size: file.Size), progress, ct).ConfigureAwait(false); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is AggregateException or HttpRequestException or IOException or InvalidDataException or OperationCanceledException)
+        { throw new IOException(label + "：下载失败；" + (redirects.FailureReason ?? "文件传输或 SHA-1/大小校验失败。")); }
+        if (file.Sha512 is not null)
+        {
+            string digest;
+            try
+            {
+                VerifiedDownloader.RejectLink(path); await using var bytes = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
+                digest = Convert.ToHexStringLower(await SHA512.HashDataAsync(bytes, ct).ConfigureAwait(false));
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (ex is IOException or InvalidDataException) { throw new IOException(label + "：无法读取已下载文件进行 SHA-512 校验。"); }
+            if (!digest.Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException(label + "：下载文件 SHA-512 校验失败。");
+        }
+    }
+    private static bool AllowedDownloadUri(Uri uri) => AllowedCurseForgeUri(uri) || ContentInstallFiles.AllowedUri(uri);
+    private static string DownloadLabel(CurseForgePackFile file)
+    {
+        var name = new string(Path.GetFileName(file.Path).Where(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_' or ' ' or '+' or '(' or ')').Take(120).ToArray());
+        return $"项目 {file.ProjectId} / 文件 {file.FileId}（{(name.Length == 0 ? "文件" : name)}）";
+    }
+    // This wrapper is used only by file downloads. API requests keep the caller's no-redirect transport directly.
+    private sealed class CdnRedirectHandler(HttpClient transport) : HttpMessageHandler
+    {
+        internal string? FailureReason { get; private set; }
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+        {
+            if (request.Method != HttpMethod.Get || request.Content is not null || request.RequestUri is null) throw Failure("文件下载仅接受无请求体的 GET。");
+            var uri = request.RequestUri; var visited = new HashSet<string>(StringComparer.Ordinal);
+            for (var hops = 0; ; hops++)
+            {
+                if (!AllowedDownloadUri(uri)) throw Failure("重定向目标不在官方 CDN 允许范围。");
+                if (!visited.Add(uri.AbsoluteUri)) throw Failure("检测到 CDN 重定向循环。");
+                if (transport.DefaultRequestHeaders.Contains("x-api-key") || transport.DefaultRequestHeaders.Authorization is not null || transport.DefaultRequestHeaders.Contains("Cookie")) throw Failure("专用文件下载客户端携带了全局鉴权头，已拒绝下载。");
+                // Clone only download range validators; never forward authorization, cookies, Host, or arbitrary headers.
+                using var forwarded = new HttpRequestMessage(HttpMethod.Get, uri);
+                forwarded.Headers.Range = request.Headers.Range; forwarded.Headers.IfRange = request.Headers.IfRange;
+                HttpResponseMessage response;
+                try { response = await transport.SendAsync(forwarded, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false); }
+                catch (HttpRequestException) { throw Failure("官方 CDN 网络连接失败。"); }
+                if (response.RequestMessage?.RequestUri is { } actual && actual != uri)
+                { response.Dispose(); throw Failure("专用 CDN 客户端发生未受校验的自动重定向，已拒绝文件。"); }
+                if ((int)response.StatusCode is >= 300 and < 400)
+                {
+                    try
+                    {
+                        var status = (int)response.StatusCode;
+                        if (status is not (301 or 302 or 303 or 307 or 308)) throw Failure($"不支持的 CDN 重定向状态 HTTP {status}。");
+                        if (hops >= 3) throw Failure($"CDN 重定向超过 3 跳（HTTP {status}）。");
+                        var location = response.Headers.Location;
+                        if (location is null || location.OriginalString.Length > 2048 || location.OriginalString.Any(char.IsControl) || !Uri.TryCreate(uri, location, out var next)) throw Failure($"CDN 重定向缺少有效 Location（HTTP {status}）。");
+                        if (!AllowedDownloadUri(next)) throw Failure($"CDN 重定向来源被拒绝（HTTP {status}）。");
+                        uri = next;
+                    }
+                    finally { response.Dispose(); }
+                    continue;
+                }
+                FailureReason = response.IsSuccessStatusCode ? null : $"官方 CDN 返回 HTTP {(int)response.StatusCode}。";
+                return response;
+            }
+        }
+        private HttpRequestException Failure(string reason) { FailureReason = reason; return new HttpRequestException(reason); }
     }
     private async Task<JsonDocument> GetJsonAsync(Uri uri, bool sendKey, CancellationToken ct)
     {

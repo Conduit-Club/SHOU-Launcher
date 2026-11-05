@@ -44,6 +44,7 @@ public sealed class LocalPackTests
         {
             ct.ThrowIfCancellationRequested(); var uri = request.RequestUri!; var key = request.Headers.TryGetValues("x-api-key", out var keys) ? keys.Single() : null; Requests.Enqueue((uri.Host, key));
             if (uri.Host == "api.curseforge.com") Assert.AreEqual(FixtureKey, key); else Assert.IsNull(key, "API key reached a non-CurseForge request.");
+            if (uri.Host != "api.curseforge.com") { Assert.IsNull(request.Headers.Authorization); Assert.IsFalse(request.Headers.Contains("Cookie")); }
             if (Override?.Invoke(request) is { } replaced) return Task.FromResult(replaced);
             if (uri.Host == "api.curseforge.com")
             {
@@ -58,7 +59,7 @@ public sealed class LocalPackTests
                 var asset = assets.Single(a => uri.AbsolutePath.EndsWith(a.Sha1, StringComparison.Ordinal)); Assert.AreEqual("?algorithm=sha1", uri.Query);
                 return Task.FromResult(ScriptedHttpHandler.Json(new JsonObject { ["files"] = new JsonArray(new JsonObject { ["filename"] = asset.Name, ["url"] = asset.Url, ["size"] = asset.Bytes.Length, ["hashes"] = new JsonObject { ["sha1"] = asset.Sha1, ["sha512"] = asset.Sha512 } }) }.ToJsonString()));
             }
-            if (uri.Host is "edge.forgecdn.net" or "cdn.modrinth.com")
+            if (uri.Host is "edge.forgecdn.net" or "media.forgecdn.net" or "mediafilez.forgecdn.net" or "cdn.modrinth.com")
             { var asset = assets.Single(a => uri.AbsolutePath.EndsWith("/" + a.Name, StringComparison.Ordinal)); return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(asset.Bytes) }); }
             // Exercise the existing source resolver without allowing a fixture to contact any real host.
             if (uri.Scheme == "https" && uri.IsDefaultPort && (uri.Host is "meta.fabricmc.net" or "bmclapi2.bangbang93.com")
@@ -119,6 +120,93 @@ public sealed class LocalPackTests
         Assert.AreEqual(canResolve ? 1 : 0, result.Files.Count); Assert.AreEqual(canResolve ? 0 : 1, result.BlockedFiles.Count);
         if (reason is not null) Assert.IsTrue(result.BlockedFiles[0].Contains(reason, StringComparison.Ordinal));
         Assert.IsTrue(handler.Requests.All(r => r.Host == "api.curseforge.com"), "Unavailable or archived files without a direct URL must not trigger hash fallback or CDN downloads.");
+    }
+    [TestMethod]
+    [DataRow(301, false)]
+    [DataRow(302, false)]
+    [DataRow(303, false)]
+    [DataRow(307, false)]
+    [DataRow(308, false)]
+    [DataRow(302, true)]
+    public async Task FileRedirectsStayOnOfficialCdnsAndCompleteActualHashVerifiedDownloads(int status, bool fallback)
+    {
+        var asset = Mod(fallback); using var handler = new FixtureApi(asset); using var http = new HttpClient(handler); var resolver = new CurseForgePackResolver(http, FixtureKey);
+        var file = (await resolver.ResolveAsync([new(asset.Project, asset.FileId, true)], "1.21.1", "fabric")).Files.Single();
+        var targetUri = fallback ? "https://cdn.modrinth.com/data/fixture/redirect/fixture.jar" : "https://mediafilez.forgecdn.net/files/1/2/fixture.jar";
+        handler.Override = request => request.RequestUri == file.DownloadUri
+            ? new((HttpStatusCode)status) { Headers = { Location = new(targetUri) } } : null;
+        var target = Path.Combine(TestFiles.Root(), "download.jar"); await resolver.DownloadAsync(file, target);
+        CollectionAssert.AreEqual(asset.Bytes, await File.ReadAllBytesAsync(target)); Assert.IsTrue(handler.Requests.Any(r => r.Host == new Uri(targetUri).Host && r.Key is null));
+    }
+    [TestMethod]
+    public async Task FileRedirectsPreserveResumeValidatorsWithoutForwardingCredentials()
+    {
+        var asset = Mod(); using var handler = new FixtureApi(asset); using var http = new HttpClient(handler); var resolver = new CurseForgePackResolver(http, FixtureKey);
+        var file = (await resolver.ResolveAsync([new(asset.Project, asset.FileId, true)], "1.21.1", "fabric")).Files.Single(); var target = Path.Combine(TestFiles.Root(), "resumed.jar");
+        await File.WriteAllBytesAsync(target + ".part", asset.Bytes[..3]); await File.WriteAllTextAsync(target + ".part.resume.json", new JsonObject { ["Url"] = asset.Url, ["ETag"] = "\"fixture\"" }.ToJsonString());
+        var hops = 0; handler.Override = request =>
+        {
+            Interlocked.Increment(ref hops); Assert.AreEqual(3L, request.Headers.Range!.Ranges.Single().From); Assert.AreEqual("\"fixture\"", request.Headers.IfRange!.EntityTag!.Tag);
+            if (request.RequestUri!.Host == "edge.forgecdn.net") return new(HttpStatusCode.Found) { Headers = { Location = new("https://mediafilez.forgecdn.net/files/1/2/fixture.jar") } };
+            var response = new HttpResponseMessage(HttpStatusCode.PartialContent) { Content = new ByteArrayContent(asset.Bytes[3..]) };
+            response.Content.Headers.ContentRange = new(3, asset.Bytes.Length - 1, asset.Bytes.Length); return response;
+        };
+        await resolver.DownloadAsync(file, target); Assert.AreEqual(2, hops); CollectionAssert.AreEqual(asset.Bytes, await File.ReadAllBytesAsync(target));
+    }
+    [TestMethod]
+    public async Task FileDownloadRejectsCredentialsAddedToTheCallerClientAfterConstruction()
+    {
+        var asset = Mod(); using var handler = new FixtureApi(asset); using var http = new HttpClient(handler); var resolver = new CurseForgePackResolver(http, FixtureKey);
+        var file = (await resolver.ResolveAsync([new(asset.Project, asset.FileId, true)], "1.21.1", "fabric")).Files.Single(); var count = handler.Requests.Count;
+        http.DefaultRequestHeaders.Add("x-api-key", FixtureKey);
+        var error = await Assert.ThrowsAsync<IOException>(() => resolver.DownloadAsync(file, Path.Combine(TestFiles.Root(), "download.jar")));
+        Assert.AreEqual(count, handler.Requests.Count); Assert.IsFalse(error.ToString().Contains(FixtureKey, StringComparison.Ordinal));
+    }
+    [TestMethod]
+    [DataRow("http")]
+    [DataRow("userinfo")]
+    [DataRow("fragment")]
+    [DataRow("unknown")]
+    [DataRow("api")]
+    [DataRow("port")]
+    [DataRow("missing")]
+    [DataRow("oversized")]
+    [DataRow("loop")]
+    [DataRow("hops")]
+    [DataRow("status")]
+    [DataRow("sha1")]
+    [DataRow("size")]
+    [DataRow("sha512")]
+    public async Task FileRedirectFailuresAreBoundedAndExposeOnlySafeFileContext(string scenario)
+    {
+        const string querySecret = "fixture-query-must-not-leak", bodySecret = "fixture-body-must-not-leak", headerSecret = "fixture-header-must-not-leak";
+        var asset = Mod(scenario == "sha512"); using var handler = new FixtureApi(asset); using var http = new HttpClient(handler); var resolver = new CurseForgePackResolver(http, FixtureKey);
+        var file = (await resolver.ResolveAsync([new(asset.Project, asset.FileId, true)], "1.21.1", "fabric")).Files.Single();
+        file = file with { DownloadUri = new Uri(file.DownloadUri.AbsoluteUri + "?private=" + querySecret), Sha512 = scenario == "sha512" ? new string('0', 128) : file.Sha512 };
+        var calls = 0; handler.Override = request =>
+        {
+            var call = Interlocked.Increment(ref calls);
+            if (scenario == "sha512") return null;
+            if (scenario is "sha1" or "size") { var bytes = scenario == "size" ? asset.Bytes.Append((byte)0).ToArray() : asset.Bytes.ToArray(); if (scenario == "sha1") bytes[0] ^= 1; return new(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) }; }
+            if (scenario == "status") { var denied = new HttpResponseMessage(HttpStatusCode.ServiceUnavailable) { Content = new StringContent(bodySecret) }; denied.Headers.TryAddWithoutValidation("X-Fixture", headerSecret); return denied; }
+            var location = scenario switch
+            {
+                "http" => "http://mediafilez.forgecdn.net/files/1/2/fixture.jar", "userinfo" => "https://user:password@mediafilez.forgecdn.net/files/1/2/fixture.jar",
+                "fragment" => "https://mediafilez.forgecdn.net/files/1/2/fixture.jar#fragment", "unknown" => "https://unknown.invalid/files/fixture.jar?private=" + querySecret,
+                "api" => "https://api.curseforge.com/v1/mods/101", "port" => "https://mediafilez.forgecdn.net:444/files/1/2/fixture.jar",
+                "loop" => request.RequestUri!.AbsoluteUri, "hops" => "https://mediafilez.forgecdn.net/files/1/2/step-" + call + ".jar",
+                "oversized" => "https://mediafilez.forgecdn.net/files/" + new string('a', 2048), _ => null
+            };
+            return new(HttpStatusCode.Found) { Headers = { Location = location is null ? null : new Uri(location) } };
+        };
+        var target = Path.Combine(TestFiles.Root(), "download.jar"); var error = await Assert.ThrowsAsync<Exception>(() => resolver.DownloadAsync(file, target));
+        Assert.IsTrue(error is IOException or InvalidDataException); var safe = error.ToString(); Assert.IsTrue(safe.Contains("项目 101 / 文件 1001（fixture.jar）", StringComparison.Ordinal));
+        foreach (var secret in new[] { querySecret, bodySecret, headerSecret, FixtureKey, "user:password" }) Assert.IsFalse(safe.Contains(secret, StringComparison.Ordinal));
+        Assert.IsTrue(calls is > 0 and <= 8, "Each verified download may retry once, with at most three redirects per attempt.");
+        Assert.IsFalse(handler.Requests.Any(r => r.Host == "unknown.invalid"));
+        if (scenario == "status") Assert.IsTrue(safe.Contains("HTTP 503", StringComparison.Ordinal));
+        if (scenario == "sha512") Assert.IsTrue(safe.Contains("SHA-512", StringComparison.Ordinal));
+        if (scenario is "sha1" or "size") { Assert.IsTrue(safe.Contains("SHA-1/大小", StringComparison.Ordinal)); Assert.IsFalse(File.Exists(target)); }
     }
     [TestMethod]
     public async Task MissingKeyAndApiDenialListEveryUnresolvedRequiredFileWithoutLeakingSecret()
