@@ -203,11 +203,13 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public string InstallationName { get => _installationName; set { if (SetProperty(ref _installationName, value ?? "")) NotifyInstallDraft(); } }
     public string InstallationValidation => string.IsNullOrWhiteSpace(InstallationName) ? "请输入安装名称。"
         : InstallationName.Trim().Length > 80 ? "安装名称最多 80 个字符。"
+        : !ValidAdditionalLoader ? AdditionalLoaderValidation
         : Owner.Snapshot.Instances.Any(i => string.Equals(i.Name, InstallationName.Trim(), StringComparison.OrdinalIgnoreCase)) ? "已有同名实例，请修改安装名称。"
         : "名称可用。";
     public bool ValidInstallation => _selectedVersion is { CanInstall: true } && !string.IsNullOrWhiteSpace(InstallationName) && InstallationName.Trim().Length <= 80
-        && !Owner.Snapshot.Instances.Any(i => string.Equals(i.Name, InstallationName.Trim(), StringComparison.OrdinalIgnoreCase));
-    public string InstallationSummary => _selectedFabric is { } fabric ? $"Minecraft {SelectedVersionId} + Fabric Loader {fabric.Version}" : $"Minecraft {SelectedVersionId} · 原版";
+        && ValidAdditionalLoader && !Owner.Snapshot.Instances.Any(i => string.Equals(i.Name, InstallationName.Trim(), StringComparison.OrdinalIgnoreCase));
+    public string InstallationSummary => _selectedAdditionalLoader is { } loader ? $"Minecraft {SelectedVersionId} + {LoaderTitle(loader.Loader)} {loader.Version}"
+        : _selectedFabric is { } fabric ? $"Minecraft {SelectedVersionId} + Fabric Loader {fabric.Version}" : $"Minecraft {SelectedVersionId} · 原版";
     public ObservableCollection<LoaderCatalogVersion> FabricVersions { get; } = [];
     public LoaderCatalogVersion? SelectedFabric
     {
@@ -216,11 +218,13 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         {
             var previousDefault = DefaultInstallationName;
             if (!SetProperty(ref _selectedFabric, value)) return;
+            if (value is not null) ClearAdditionalSelection();
             if (InstallationName == previousDefault) InstallationName = DefaultInstallationName;
             NotifyInstallDraft();
         }
     }
-    private string DefaultInstallationName => _selectedFabric is { } fabric ? $"{SelectedVersionId}-Fabric_{fabric.Version}" : SelectedVersionId;
+    private string DefaultInstallationName => _selectedAdditionalLoader is { } loader ? $"{SelectedVersionId}-{LoaderTitle(loader.Loader)}_{loader.Version}"
+        : _selectedFabric is { } fabric ? $"{SelectedVersionId}-Fabric_{fabric.Version}" : SelectedVersionId;
     public string FabricStatus { get => _fabricStatus; private set => SetProperty(ref _fabricStatus, value); }
     public string InstallStatus { get => _installStatus; private set => SetProperty(ref _installStatus, value); }
     public bool HasCreatedInstance => _createdInstanceId is not null;
@@ -254,6 +258,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public string InstallerDescription => SelectedCategory.Id == "installer-minecraft"
         ? "Minecraft 的自动创建、依赖下载与校验已接入。独立安装包保存尚未迁移，可返回自动安装。"
         : SelectedCategory.Id == "installer-fabric" ? "Fabric Loader 可在 Minecraft 自动安装配置中选择。独立 Fabric 安装器下载尚未迁移。"
+        : SelectedCategory.Id is "installer-forge" or "installer-neoforge" ? $"{SelectedCategory.Title}自动安装已在Minecraft配置页接入；独立安装器下载保存尚未迁移。"
         : $"{SelectedCategory.Title} 的安装器下载与安装链尚未迁移。";
 
     public AsyncRelayCommand RefreshCatalogCommand { get; }
@@ -274,13 +279,14 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public AsyncRelayCommand OpenInstallerPageCommand { get; }
 
     public DownloadsPageViewModel(MainWindowViewModel owner, ILauncherCatalogService? catalog = null, string? favoritesPath = null,
-        IContentInstallationService? contentInstall = null, IModrinthPackService? modrinthPacks = null)
+        IContentInstallationService? contentInstall = null, IModrinthPackService? modrinthPacks = null, ILoaderInstanceService? loaderService = null)
         : base(owner, "下载", "Minecraft 自动安装与社区资源")
     {
         _catalog = catalog ?? Service as ILauncherCatalogService;
         _imageToken = _imageLifetime.Token;
         _favoritesPathOverride = favoritesPath;
         InitializeContentInstallation(contentInstall, modrinthPacks);
+        InitializeAdditionalLoaders(loaderService);
         DownloadCategoryViewModel Category(string id, string title) => new(this, id, title, ClubIcons.ForDownloadCategory(id));
         MinecraftCategory = Category("minecraft", "Minecraft");
         CommunityCategories = [Category("mod", "模组"), Category("modpack", "整合包"), Category("datapack", "数据包"), Category("resourcepack", "资源包"), Category("shader", "光影包"), Category("world", "世界"), Category("favorites", "收藏夹")];
@@ -296,7 +302,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         BackToListCommand = Command(BackToList);
         ShowAutomaticInstallCommand = Command(() => SelectCategory("minecraft"));
         RefreshFabricCommand = AsyncCommand(RefreshFabricAsync, () => CanQuery && _selectedVersion is not null);
-        ClearFabricCommand = Command(() => SelectedFabric = null, () => CanEdit && SelectedFabric is not null);
+        ClearFabricCommand = Command(ClearAllLoaders, () => CanEdit && (SelectedFabric is not null || SelectedAdditionalLoader is not null));
         InstallVersionCommand = AsyncCommand(InstallVersionAsync, () => CanEdit && ValidInstallation);
         ShowCreatedInstanceCommand = Command(() => Owner.ShowInstancesCommand.Execute(null), () => HasCreatedInstance);
         RefreshReleasesCommand = AsyncCommand(RefreshReleasesAsync, () => CanQuery && _selectedProject is not null);
@@ -373,6 +379,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         if (!CanEdit || !version.CanInstall) return;
         ++_requestRevision;
         _selectedVersion = version; _selectedFabric = null; _createdInstanceId = null;
+        ResetAdditionalLoaders();
         _isConfiguration = true; _isResourceDetail = false; FabricVersions.Clear();
         _installationName = DefaultInstallationName; InstallStatus = "";
         FabricStatus = "点击读取，查询当前 Minecraft 版本的 Fabric Loader。";
@@ -407,11 +414,12 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private async Task InstallVersionAsync()
     {
         if (!ValidInstallation || _selectedVersion is null) return;
-        var name = InstallationName.Trim(); var version = _selectedVersion.Id; var fabric = SelectedFabric?.Version;
+        var name = InstallationName.Trim(); var version = _selectedVersion.Id; var fabric = SelectedFabric?.Version; var loader = SelectedAdditionalLoader;
         InstallStatus = "正在创建并安装实例…";
         var success = await Owner.RunAsync("创建并安装游戏", async ct =>
         {
-            var instance = fabric is null ? await Service.CreateInstanceAsync(name, version, ct)
+            var instance = loader is not null ? await _loaderService!.CreateLoaderInstanceAsync(name, version, loader.Loader, loader.Version, ct)
+                : fabric is null ? await Service.CreateInstanceAsync(name, version, ct)
                 : await Service.CreateFabricInstanceAsync(name, version, fabric, ct);
             _createdInstanceId = instance.Id; OnPropertyChanged(nameof(HasCreatedInstance));
             await Service.InstallInstanceAsync(instance.Id, ct);
@@ -545,6 +553,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         foreach (var row in Projects.Concat(FavoriteProjects)) row.OpenCommand.NotifyCanExecuteChanged();
         foreach (var file in ReleaseGroups.SelectMany(g => g.Releases).SelectMany(r => r.Files)) { file.DownloadCommand.NotifyCanExecuteChanged(); file.InstallCommand.NotifyCanExecuteChanged(); }
         ImportLocalPackCommand?.NotifyCanExecuteChanged(); ReadCachedPackCommand?.NotifyCanExecuteChanged();
+        foreach (var loader in AdditionalLoaders) loader.NotifyState();
         base.NotifyCommands(); OnPropertyChanged(nameof(CanQuery));
     }
 }

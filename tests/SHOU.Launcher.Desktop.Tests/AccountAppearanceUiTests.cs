@@ -25,7 +25,13 @@ public sealed class AccountAppearanceUiTests
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
     private static void Click(Window window, string name) { var button = Find<Button>(window, name); if (button.Command is { } command) { Assert.True(command.CanExecute(button.CommandParameter)); command.Execute(button.CommandParameter); } else button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump(window); }
     private static MenuItem Menu(Window window, string name) => ((MenuFlyout)Find<Button>(window, "AccountSkinMenuButton").Flyout!).Items.OfType<MenuItem>().Single(item => item.Name == name);
-    private static void OpenMenu(Window window) { var button = Find<Button>(window, "AccountSkinMenuButton"); button.Flyout!.ShowAt(button); Pump(window); }
+    private static void OpenMenu(Window window)
+    {
+        var button = Find<Button>(window, "AccountSkinMenuButton");
+        var center = button.TranslatePoint(new Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(center, MouseButton.Left); window.MouseUp(center, MouseButton.Left); Pump(window);
+        Assert.True(button.Flyout!.IsOpen); Assert.True(Menu(window, "ChangeAccountSkinMenuItem").IsEffectivelyVisible);
+    }
 
     [AvaloniaFact]
     public async Task LocalPickerCancelPreservesSkinAndConfirmedSelectionActuallyPersistsCapturedModel()
