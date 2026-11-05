@@ -458,7 +458,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
             // Only complete our own transitional state; never overwrite a newer Error/Running.
             Set(s => s.State == state ? s with { State = game is null ? "Ready" : "Running" } : s);
         }
-        catch (OperationCanceledException) { MarkDownloads("Cancelled", null); Set(s => s with { State = game is null ? "Ready" : "Running", Error = "操作已取消，已有实例文件保留；可重新执行安装。" }); throw; }
+        catch (OperationCanceledException) { MarkDownloads("Cancelled", null); Set(s => s with { State = game is null ? "Ready" : "Running", Error = "操作已取消，可稍后重试。" }); throw; }
         catch (Exception ex) { var message = SafeError(ex); MarkDownloads("Failed", message); Set(s => s with { State = "Error", Error = message }); Log("Error", message); throw; }
         finally { operation.Release(); }
     }

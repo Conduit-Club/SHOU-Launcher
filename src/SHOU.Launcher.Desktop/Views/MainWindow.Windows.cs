@@ -35,26 +35,28 @@ public partial class MainWindow
 
     private IntPtr WindowsCaptionMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        // BorderOnly keeps resizing/snap but DefWindowProc does not expose the
-        // caption menu on every Windows version. Use that same native system menu.
-        var keyboard = message == 0x0104 && wParam.ToInt64() == 0x20; // WM_SYSKEYDOWN / VK_SPACE
+        // Consume the gesture before a focused Button handles Space. Dispatch the
+        // standard system command so Windows owns its keyboard/menu loop.
+        if (message == 0x0106 && wParam.ToInt64() == 0x20) // WM_SYSCHAR / Space
+        {
+            handled = true;
+            return IntPtr.Zero;
+        }
+        var keyboard = message == 0x0104 && wParam.ToInt64() == 0x20; // WM_SYSKEYDOWN / Space
         var rightClick = message == 0x00A5 && wParam.ToInt64() == 2; // WM_NCRBUTTONUP / HTCAPTION
         if (!keyboard && !rightClick) return IntPtr.Zero;
         handled = true;
         var menu = WindowsCaptionMenu.GetSystemMenu(hwnd, false);
         if (menu == IntPtr.Zero) return IntPtr.Zero;
-        var point = keyboard ? this.PointToScreen(new Point(0, 48))
-            : new PixelPoint((short)(lParam.ToInt64() & 0xffff), (short)((lParam.ToInt64() >> 16) & 0xffff));
-        var command = WindowsCaptionMenu.TrackPopupMenuEx(menu, 0x0102, point.X, point.Y, hwnd, IntPtr.Zero);
-        if (command != 0) WindowsCaptionMenu.PostMessage(hwnd, 0x0112, (IntPtr)command, IntPtr.Zero); // WM_SYSCOMMAND
-        WindowsCaptionMenu.PostMessage(hwnd, 0, IntPtr.Zero, IntPtr.Zero);
+        WindowsCaptionMenu.EnableMenuItem(menu, 0xf060, this.FindControl<Button>("CloseWindowButton")!.IsEnabled ? 0u : 1u);
+        WindowsCaptionMenu.PostMessage(hwnd, 0x0112, (IntPtr)(keyboard ? 0xf100 : 0xf090), keyboard ? (IntPtr)0x20 : lParam);
         return IntPtr.Zero;
     }
 
     private static class WindowsCaptionMenu
     {
         [DllImport("user32.dll")] internal static extern IntPtr GetSystemMenu(IntPtr hwnd, [MarshalAs(UnmanagedType.Bool)] bool revert);
-        [DllImport("user32.dll")] internal static extern uint TrackPopupMenuEx(IntPtr menu, uint flags, int x, int y, IntPtr hwnd, IntPtr parameters);
+        [DllImport("user32.dll")] internal static extern uint EnableMenuItem(IntPtr menu, uint item, uint flags);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool PostMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam);
     }
 

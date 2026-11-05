@@ -106,3 +106,11 @@
 真实 Temurin 21.0.13 默认 cacerts 为无密码、无 MacData 的纯证书 PKCS12，首包原读取器返回未知；[JDK 18 官方发行说明](https://www.oracle.com/java/technologies/javase/18-relnote-issues.html)明确记录这一格式。现仅在 Java 公开信任库扫描显式允许该格式，仍拒绝私钥/秘密/嵌套/未认证加密、损坏 MAC、尾随数据与超预算；原严格 API 默认保持不变。新回归后完整 Core 332 通过/18 显式跳过、Desktop 117 通过/0 跳过。真实副本修复与新包菜单待验。
 
 只读旧凭据核对已用发布包的 WindowsLegacyCredentialReader 解密当前用户 PCLCE 的 Profile 容器，仅输出字段结构与保留布尔值；源配置和 UserKey 哈希相同。没有把缓存/密钥/令牌复制到任务目录、SMB、报告或 Git；尚未进行账户导入、刷新或正版游戏。
+
+## Java 原生互操作补验
+
+`59d8a30d` win-x64 Release ZIP 已实际验证工具页只读扫描、识别精确撤信任指纹、取消保持源选择、重试成功、验证后选用、重复执行复用同一变体及显式回退。独立 Python/OpenSSL 核验原 JDK 490 文件哈希不变，受控源副本不变，119 张证书仅移除指定 1 张、其它 118 张保留，阻止名单由 38 项增为 54 项且原项保留；两份备份、收据前后哈希与实际文件吻合。派生 java.exe -version exit0。详情见任务 reports/java-independent-verification.json、java-reuse.json、java-rollback.json 与 evidence-r7-stage1-rc2。
+
+取消后的未完成 Java 副本按既有隔离设计留在 .staging 中，未登记或选用；保留这一磁盘清理缺口，不将其列为已清理完成。未删除该诊断副本、源 Java、备份或来源记录。
+
+菜单复测确认标准 SC_KEYMENU 消息能打开候选原生系统菜单，但第一版在按键按下时直接 TrackPopupMenu 的路径未通过实体 Alt+Space/右击测试。改为截获原始手势并交回 Windows 标准系统命令、抑制重复 WM_SYSCHAR；取消提示也改为不含安装专属措辞。修正后的实体交互仍待下一包，不能用系统消息诊断替代键盘通过。
