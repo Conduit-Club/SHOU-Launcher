@@ -32,22 +32,31 @@
         </Grid>
         <TextBlock Text="此渠道尚无已选角色，可添加账户或在下拉列表中选择。" Classes="accountHint" IsVisible="{Binding ShowEmptyChannel}" />
       </StackPanel>
-      <ListBox Name="AllAccountsSelector" IsVisible="{Binding ShowAllAccounts}" ItemsSource="{Binding Accounts}" SelectedItem="{Binding SelectedAccount}" IsEnabled="{Binding CanEdit}" MaxHeight="300" Background="Transparent" BorderThickness="0" Padding="0">
+      <ListBox Name="AllAccountsSelector" IsVisible="{Binding ShowAllAccounts}" ItemsSource="{Binding AppearanceAccountRows}" SelectedItem="{Binding SelectedAppearanceAccountRow}" IsEnabled="{Binding CanEdit}" MaxHeight="300" Background="Transparent" BorderThickness="0" Padding="0">
         <ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="38,*" Margin="10,7">
-          <Path Classes="accountAvatar" Width="25" Height="28" Data="M10,1 A4,4 0 1 1 9.9,1 M3,19 C3,10 17,10 17,19" />
-          <StackPanel Grid.Column="1" Spacing="2"><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" /><TextBlock Text="{Binding ., Converter={StaticResource AccountSourceLabel}}" Classes="accountHint" /></StackPanel>
+          <local:AccountSkinAvatarControl Skin="{Binding Skin}" Width="28" Height="28" />
+          <StackPanel Grid.Column="1" Spacing="2"><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" /><TextBlock Text="{Binding SourceName}" Classes="accountHint" /></StackPanel>
         </Grid></DataTemplate></ListBox.ItemTemplate>
       </ListBox>
       <StackPanel Name="SelectedAccountPanel" IsVisible="{Binding ShowSelectedAccount}" Spacing="3" Margin="0,12,0,0">
-        <Path Classes="accountAvatar" Width="42" Height="46" HorizontalAlignment="Center" Data="M10,1 A4,4 0 1 1 9.9,1 M3,19 C3,10 17,10 17,19" />
+        <Button Name="AccountAvatarPreviewButton" Classes="flat" Padding="0" Margin="0,0,0,6" HorizontalAlignment="Center" IsEnabled="{Binding CanPreviewAccountSkin}" ToolTip.Tip="{Binding AccountAppearanceSummary}" Click="PreviewAccountSkin_Click"><local:AccountSkinAvatarControl Name="SelectedAccountAvatar" Skin="{Binding AccountSkin}" Width="64" Height="64" /></Button>
         <TextBlock Text="{Binding SelectedPlayerName}" FontSize="14" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
         <TextBlock Text="{Binding SelectedPlayerSource}" Classes="accountHint" HorizontalAlignment="Center" />
         <TextBlock Text="{Binding SelectedPlayerStatus}" Classes="accountHint" TextAlignment="Center" />
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="6" Margin="0,6,0,0">
-          <Button Name="AccountSkinMenuButton" Content="皮肤" Padding="8,2" MinHeight="24"><Button.Flyout><MenuFlyout><MenuItem Header="修改皮肤（尚未接入）" IsEnabled="False" /><MenuItem Header="保存皮肤（尚未接入）" IsEnabled="False" /><MenuItem Header="刷新头像（尚未接入）" IsEnabled="False" /><MenuItem Header="修改披风（尚未接入）" IsEnabled="False" /><Separator /><MenuItem Header="3D 预览皮肤与披风（尚未接入）" IsEnabled="False" /></MenuFlyout></Button.Flyout></Button>
+          <Button Name="AccountSkinMenuButton" Content="皮肤" Padding="8,2" MinHeight="24"><Button.Flyout><MenuFlyout>
+            <MenuItem Name="ChangeAccountSkinMenuItem" Header="修改皮肤" Click="ChangeAccountSkin_Click" ToolTip.Tip="{Binding AccountAppearanceCapability}" />
+            <MenuItem Name="SaveAccountSkinMenuItem" Header="保存皮肤" IsEnabled="{Binding CanSaveSkinPng}" Click="SaveAccountSkin_Click" />
+            <MenuItem Name="RefreshAccountSkinMenuItem" Header="刷新头像" Command="{Binding RefreshAppearanceCommand}" />
+            <MenuItem Name="ChangeAccountCapeMenuItem" Header="修改披风" Click="ViewAccountCapes_Click" />
+            <Separator /><MenuItem Header="允许 3D 皮肤展示" ToggleType="CheckBox" IsChecked="{Binding Allow3DPreview}" />
+            <MenuItem Name="PreviewAccountSkinMenuItem" Header="3D 预览皮肤与披风" IsEnabled="{Binding CanPreviewAccountSkin}" Click="PreviewAccountSkin_Click" />
+          </MenuFlyout></Button.Flyout></Button>
           <Button Name="RefreshAccountButton" Content="刷新授权" Command="{Binding RefreshAccountCommand}" Padding="8,2" MinHeight="24" />
         </StackPanel>
-        <TextBlock Text="头像、皮肤与 3D 预览尚未接入。" Classes="accountHint" TextAlignment="Center" Margin="0,5,0,0" />
+        <TextBlock Text="{Binding AccountAppearanceSummary}" Classes="accountHint" TextAlignment="Center" ToolTip.Tip="{Binding AccountAppearanceCapability}" Margin="0,5,0,0" />
+        <TextBlock Text="{Binding AccountAppearanceStatus}" Classes="accountHint" TextAlignment="Center" IsVisible="{Binding HasAccountAppearanceMessage}" />
+        <Button Content="取消读取外观" Command="{Binding CancelAppearanceReadCommand}" IsVisible="{Binding IsAccountAppearanceBusy}" HorizontalAlignment="Center" />
       </StackPanel>
       <Border Name="AccountRemovalPanel" IsVisible="{Binding ShowRemoval}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8">
         <StackPanel Spacing="6"><CheckBox Name="ConfirmAccountRemoval" Content="确认从本机移除此账户" IsChecked="{Binding ConfirmRemoval}" IsEnabled="{Binding CanEdit}" /><TextBlock Text="只移除本机授权档案，不删除网站账户。" Classes="accountHint" /><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8"><Button Name="RemoveAccountButton" Content="移除账户" Command="{Binding RemoveAccountCommand}" /><Button Content="返回" Command="{Binding CancelRemovalCommand}" /></StackPanel></StackPanel>

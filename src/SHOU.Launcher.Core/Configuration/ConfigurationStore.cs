@@ -28,11 +28,14 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
                 root = JsonNode.Parse(await File.ReadAllTextAsync(file, ct).ConfigureAwait(false)) as JsonObject
                     ?? throw new InvalidDataException("Configuration root is invalid.");
                 if (((int?)root["schemaVersion"] ?? 1) > 1) { canWrite = false; throw new InvalidDataException("Configuration uses a future schema; writing is disabled."); }
-                return new(root["settings"]?.Deserialize<LauncherSettings>(JsonOptions) ?? new(),
-                    root["instances"]?.Deserialize<GameInstance[]>(JsonOptions) ?? [], root["accounts"]?.Deserialize<AccountProfile[]>(JsonOptions) ?? [],
+                var settings = root["settings"]?.Deserialize<LauncherSettings>(JsonOptions) ?? new();
+                var instances = root["instances"]?.Deserialize<GameInstance[]>(JsonOptions) ?? [];
+                ValidateInstances(instances, settings);
+                return new(settings,
+                    instances, root["accounts"]?.Deserialize<AccountProfile[]>(JsonOptions) ?? [],
                     (string?)root["selectedAccountId"], (string?)root["selectedInstanceId"]);
             }
-            catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException or InvalidOperationException)
+            catch (Exception ex) when (ex is JsonException or InvalidDataException or IOException or InvalidOperationException or ArgumentException)
             { canWrite = false; throw new InvalidDataException("Configuration cannot be read safely; original file is preserved and writes are disabled.", ex); }
         }
         finally { gate.Release(); }
@@ -44,12 +47,26 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
         {
             if (!canWrite) throw new InvalidOperationException("Persistence is disabled after a configuration read failure.");
             ValidateSettings(state.Settings);
+            ValidateInstances(state.Instances, state.Settings);
             var next = (JsonObject)root.DeepClone();
             next["schemaVersion"] = 1;
             var settings = root["settings"]?.DeepClone() as JsonObject ?? new JsonObject();
             foreach (var property in JsonSerializer.SerializeToNode(state.Settings, JsonOptions)!.AsObject()) settings[property.Key] = property.Value?.DeepClone();
             next["settings"] = settings;
-            next["instances"] = JsonSerializer.SerializeToNode(state.Instances, JsonOptions);
+            var oldInstances = (root["instances"] as JsonArray ?? []).OfType<JsonObject>().Where(n => (string?)n["id"] is not null).ToDictionary(n => (string)n["id"]!, StringComparer.Ordinal);
+            var mergedInstances = new JsonArray();
+            foreach (var instance in state.Instances)
+            {
+                var node = oldInstances.TryGetValue(instance.Id, out var old) ? (JsonObject)old.DeepClone() : new JsonObject();
+                foreach (var property in JsonSerializer.SerializeToNode(instance, JsonOptions)!.AsObject())
+                {
+                    if (property.Key == "presentation" && property.Value is JsonObject values && node[property.Key] is JsonObject existing)
+                    { foreach (var item in values) existing[item.Key] = item.Value?.DeepClone(); }
+                    else node[property.Key] = property.Value?.DeepClone();
+                }
+                mergedInstances.Add(node);
+            }
+            next["instances"] = mergedInstances;
             if (writeAccounts)
             {
                 next["accounts"] = JsonSerializer.SerializeToNode(state.Accounts, JsonOptions);
@@ -97,6 +114,21 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
             throw new ArgumentException("代理须为不含凭据的HTTP(S)地址。");
         if (settings.Aria2 is { Enabled: true } aria && (!Uri.TryCreate(aria.Endpoint, UriKind.Absolute, out var endpoint) || endpoint.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(endpoint.UserInfo) || !string.IsNullOrEmpty(endpoint.Query) || !string.IsNullOrEmpty(endpoint.Fragment)))
             throw new ArgumentException("aria2 RPC须为不含凭据的HTTP(S)地址。");
+    }
+    public static void ValidateInstances(IReadOnlyList<GameInstance> instances, LauncherSettings settings)
+    {
+        if (instances.Count > 10000 || instances.Any(i => i is null) || instances.Select(i => i.Id).Distinct(StringComparer.Ordinal).Count() != instances.Count) throw new InvalidDataException("实例数量超限或标识重复。");
+        foreach (var instance in instances)
+        {
+            Core.IO.SafePath.Identifier(instance.Id);
+            if (string.IsNullOrWhiteSpace(instance.Name) || instance.Name.Length > 160 || instance.Name.Any(char.IsControl)) throw new InvalidDataException("实例名称无效。");
+            if (instance.GameVersionId is { } version) Core.IO.SafePath.Identifier(version);
+            if (instance.MemoryMiB is < 512 or > 32768 || settings.MinimumMemoryMiB > (instance.MemoryMiB ?? settings.MemoryMiB)) throw new InvalidDataException("实例内存设置无效。");
+            if (instance.Presentation is not { } presentation) continue;
+            if (presentation.Icon is null || presentation.Category is null || presentation.Description is null || presentation.LaunchCount < 0 || presentation.Icon.Length > 80 || presentation.Icon.Any(char.IsControl)
+                || presentation.Category.Length > 80 || presentation.Category.Any(char.IsControl) || presentation.Description.Length > 4096
+                || presentation.Description.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))) throw new InvalidDataException("实例个性化数据无效。");
+        }
     }
     public async ValueTask DisposeAsync() { await gate.WaitAsync().ConfigureAwait(false); gate.Release(); gate.Dispose(); }
 }

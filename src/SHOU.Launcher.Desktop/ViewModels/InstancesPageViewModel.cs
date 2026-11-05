@@ -72,14 +72,23 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         get => _selectedJava;
         set { if (SetProperty(ref _selectedJava, value) && value is not null && !_refreshing) JavaExecutable = value.ExecutablePath; }
     }
-    public string InstanceSummary => SelectedInstance is { } item ? $"Minecraft {item.VersionId} · {LoaderSummary(item)} · {(item.Installed ? "已安装" : "尚未安装")}\n{item.GameDirectory}" : "尚未选择实例。";
+    public string InstanceSummary => SelectedInstance is { } item ? $"Minecraft {DisplayGameVersion(item)} · {LoaderSummary(item)} · {(item.Installed ? "已安装" : "尚未安装")}\n{item.GameDirectory}" : "尚未选择实例。";
     private static string LoaderSummary(GameInstance item) => item.Loader switch
     {
         "vanilla" => "原版",
         "fabric" => "Fabric Loader " + (string.IsNullOrWhiteSpace(item.LoaderVersion) ? "版本缺失" : item.LoaderVersion),
+        "quilt" or "forge" or "neoforge" => item.Loader + " " + item.LoaderVersion,
         _ => "未支持的加载器：" + item.Loader
     };
-    private bool SelectedInstanceSupported => SelectedInstance?.Loader is "vanilla" or "fabric";
+    private bool SelectedInstanceSupported
+    {
+        get
+        {
+            if (SelectedInstance is not { Loader: "vanilla" or "fabric" or "quilt" or "forge" or "neoforge" } instance) return false;
+            try { _ = Core.Instances.InstanceIdentity.GameVersion(instance); return true; }
+            catch (InvalidDataException) { return false; }
+        }
+    }
     public string LaunchPrerequisite
     {
         get
@@ -118,6 +127,9 @@ public sealed partial class InstancesPageViewModel : PageViewModel
             PlanDiagnostics = $"Java：{plan.JavaExecutable}\n架构：{plan.JavaRuntimeArchitecture}\n类路径：{plan.ClasspathEntries.Count} 项\n" + string.Join("\n", plan.RedactedDiagnostics.Select(s => UiPrivacy.Redact(s)));
         }), () => CanEdit && SelectedInstanceSupported && SelectedInstance?.Installed == true);
         InitializeWorkspace();
+        InitializePresentation();
+        InitializeScreenshotActions();
+        InitializePackExport();
         InitializeWorldWorkspace();
     }
     private async Task CreateInstanceAsync()
@@ -166,5 +178,5 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         RefreshWorkspaceSnapshot(snapshot);
         base.Refresh(snapshot);
     }
-    public override void NotifyCommands() { base.NotifyCommands(); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(CanImportContent)); ScheduleContentRefresh(); NotifyWorldWorkspace(); }
+    public override void NotifyCommands() { base.NotifyCommands(); foreach (var image in ScreenshotPreviews) image.RemoveCommand.NotifyCanExecuteChanged(); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(CanImportContent)); ScheduleContentRefresh(); NotifyWorldWorkspace(); }
 }

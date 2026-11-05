@@ -17,7 +17,7 @@ public sealed class NetworkOptions
 public sealed record NetworkConfiguration(ProxySettings Proxy, Aria2Settings Aria2, long Revision);
 
 /// <summary>System/Direct/Custom are handled without any legacy Windows registry initialization.</summary>
-public sealed class ConfigurableNetworkHandler(NetworkOptions options) : HttpMessageHandler
+public sealed class ConfigurableNetworkHandler(NetworkOptions options, bool allowAutoRedirect = true) : HttpMessageHandler
 {
     private readonly SemaphoreSlim gate = new(1, 1);
     private readonly Dictionary<long, HttpMessageInvoker> clients = [];
@@ -46,7 +46,7 @@ public sealed class ConfigurableNetworkHandler(NetworkOptions options) : HttpMes
                         System.Security.Cryptography.CryptographicOperations.ZeroMemory(raw);
                     }
                 }
-                var handler = new SocketsHttpHandler { UseProxy = proxySettings.Mode != ProxyMode.Direct, Proxy = proxy,
+                var handler = new SocketsHttpHandler { UseProxy = proxySettings.Mode != ProxyMode.Direct, Proxy = proxy, AllowAutoRedirect = allowAutoRedirect,
                     ConnectTimeout = TimeSpan.FromSeconds(15), PooledConnectionLifetime = TimeSpan.FromMinutes(5),
                     AutomaticDecompression = DecompressionMethods.All };
                 invoker = new HttpMessageInvoker(handler, true); clients.Add(revision, invoker);

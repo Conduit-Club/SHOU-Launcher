@@ -31,6 +31,14 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
         {
             var path = SafePath.Within(librariesDirectory, file.RelativePath);
             var sha1 = file.Sha1;
+            if (file.Generated)
+            {
+                if (sha1?.Length != 40 || !File.Exists(path)) throw new InvalidDataException("加载器生成库缺失，请重新安装加载器。");
+                await using var local = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true);
+                if (!string.Equals(Convert.ToHexStringLower(await SHA1.HashDataAsync(local, token)), sha1, StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("加载器生成库已变化，请重新安装加载器。");
+                return;
+            }
             if (string.IsNullOrWhiteSpace(sha1))
             {
                 sha1 = await ReadChecksumAsync(file.Url, token).ConfigureAwait(false);

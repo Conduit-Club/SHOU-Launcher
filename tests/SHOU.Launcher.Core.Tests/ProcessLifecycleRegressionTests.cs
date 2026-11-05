@@ -36,6 +36,7 @@ public sealed class ProcessLifecycleRegressionTests
         Assert.AreEqual("Error", service.Snapshot.State);
         Assert.IsNotNull(service.Snapshot.Error);
         Assert.IsNull(service.Snapshot.GameProcessId);
+        Assert.AreEqual(1L, service.Snapshot.Instances.Single().Presentation!.LaunchCount);
         Assert.IsTrue(service.GetRecentLogs().Any(log => log.Message.Contains("code=17", StringComparison.Ordinal)));
     }
 

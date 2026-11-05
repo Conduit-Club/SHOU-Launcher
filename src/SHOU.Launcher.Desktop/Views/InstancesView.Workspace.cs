@@ -14,6 +14,12 @@ namespace SHOU.Launcher.Desktop.Views;
 
 public partial class InstancesView
 {
+    private async void CopyScreenshot_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not InstancesPageViewModel vm || sender is not Control { DataContext: InstanceScreenshotPreview item }) return;
+        try { await vm.CopyScreenshotAsync(item, TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问图片剪贴板。")); }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
     private InstancesPageViewModel? _workspaceVm;
     private bool _workspaceAttached;
     private void WorkspaceAttached(object? sender, VisualTreeAttachmentEventArgs e) { _workspaceAttached = true; BindWorkspace(); }

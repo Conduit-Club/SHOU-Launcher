@@ -108,20 +108,25 @@ public sealed class ContentFileRowViewModel
     public string Name => File.FileName;
     public string Detail => $"{File.Size / 1048576d:0.00} MiB · SHA-1 {File.Sha1[..Math.Min(12, File.Sha1.Length)]}…";
     public AsyncRelayCommand DownloadCommand { get; }
-    public ContentFileRowViewModel(DownloadsPageViewModel owner, ContentFile file)
+    public AsyncRelayCommand InstallCommand { get; }
+    public bool ShowInstallButton { get; }
+    public ContentFileRowViewModel(DownloadsPageViewModel owner, ContentFile file, ContentRelease? release = null)
     {
         File = file;
         DownloadCommand = new(() => owner.DownloadFileAsync(file), () => owner.CanEdit && owner.CatalogAvailable);
+        InstallCommand = new(() => owner.InstallResourceAsync(release!, file), () => owner.CanInstallResource(release));
+        ShowInstallButton = owner.ShowResourceInstall;
     }
 }
 public sealed record ContentReleaseRowViewModel(ContentRelease Release, IReadOnlyList<ContentFileRowViewModel> Files)
 {
     public string Name => Release.Name;
-    public string Detail => $"{Release.Version} · {Release.Published.LocalDateTime:yyyy/M/d HH:mm}";
+    public string Detail => $"{Release.Version} · {Release.Published.LocalDateTime:yyyy/M/d HH:mm}" +
+        (Release.Environment is "server_only" or "server_only_client_optional" or "dedicated_server_only" ? " · 服务器专用，客户端不支持安装" : "");
 }
 public sealed record ContentReleaseGroupViewModel(string Header, IReadOnlyList<ContentReleaseRowViewModel> Releases);
 
-public sealed class DownloadsPageViewModel : PageViewModel, IDisposable
+public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
 {
     private readonly ILauncherCatalogService? _catalog;
     private readonly CancellationTokenSource _imageLifetime = new();
@@ -226,7 +231,7 @@ public sealed class DownloadsPageViewModel : PageViewModel, IDisposable
     public string ProjectTile => ProjectTitle.Length == 0 ? "?" : System.Globalization.StringInfo.GetNextTextElement(ProjectTitle);
     public ObservableCollection<ContentReleaseGroupViewModel> ReleaseGroups { get; } = [];
     public bool HasReleases => ReleaseGroups.Count > 0;
-    public string LastDownloadPath { get => _lastDownloadPath; private set { if (SetProperty(ref _lastDownloadPath, value)) { OnPropertyChanged(nameof(HasDownloadedFile)); OpenDownloadDirectoryCommand.NotifyCanExecuteChanged(); } } }
+    public string LastDownloadPath { get => _lastDownloadPath; private set { if (SetProperty(ref _lastDownloadPath, value)) { OnPropertyChanged(nameof(HasDownloadedFile)); OpenDownloadDirectoryCommand.NotifyCanExecuteChanged(); ReadCachedPackCommand.NotifyCanExecuteChanged(); } } }
     public bool HasDownloadedFile => LastDownloadPath.Length > 0;
     public ObservableCollection<ContentProjectRowViewModel> FavoriteProjects { get; } = [];
     public bool HasFavorites => FavoriteProjects.Count > 0;
@@ -268,12 +273,14 @@ public sealed class DownloadsPageViewModel : PageViewModel, IDisposable
     public AsyncRelayCommand OpenDownloadDirectoryCommand { get; }
     public AsyncRelayCommand OpenInstallerPageCommand { get; }
 
-    public DownloadsPageViewModel(MainWindowViewModel owner, ILauncherCatalogService? catalog = null, string? favoritesPath = null)
+    public DownloadsPageViewModel(MainWindowViewModel owner, ILauncherCatalogService? catalog = null, string? favoritesPath = null,
+        IContentInstallationService? contentInstall = null, IModrinthPackService? modrinthPacks = null)
         : base(owner, "下载", "Minecraft 自动安装与社区资源")
     {
         _catalog = catalog ?? Service as ILauncherCatalogService;
         _imageToken = _imageLifetime.Token;
         _favoritesPathOverride = favoritesPath;
+        InitializeContentInstallation(contentInstall, modrinthPacks);
         DownloadCategoryViewModel Category(string id, string title) => new(this, id, title, ClubIcons.ForDownloadCategory(id));
         MinecraftCategory = Category("minecraft", "Minecraft");
         CommunityCategories = [Category("mod", "模组"), Category("modpack", "整合包"), Category("datapack", "数据包"), Category("resourcepack", "资源包"), Category("shader", "光影包"), Category("world", "世界"), Category("favorites", "收藏夹")];
@@ -322,6 +329,7 @@ public sealed class DownloadsPageViewModel : PageViewModel, IDisposable
     private void NotifyPage()
     {
         foreach (var category in Categories) category.RefreshSelection();
+        NotifyContentInstallationPage();
         foreach (var name in new[] { nameof(SelectedCategory), nameof(IsCatalogPage), nameof(IsSearchPage), nameof(IsInstallerPage), nameof(IsFavoritesPage), nameof(IsTasksPage), nameof(IsConfiguration), nameof(IsResourceDetail), nameof(ShowCategorySidebar), nameof(SearchPlaceholder), nameof(SearchSupported), nameof(SearchCapabilityReason), nameof(PageSummary), nameof(InstallerTitle), nameof(InstallerDescription), nameof(HasProjects) }) OnPropertyChanged(name);
         NotifyCommands();
     }
@@ -434,6 +442,7 @@ public sealed class DownloadsPageViewModel : PageViewModel, IDisposable
     {
         if (!CanQuery) return;
         ++_requestRevision; _selectedProject = project; _isResourceDetail = true; _isConfiguration = false;
+        ResetResourceInstallStatus();
         ReleaseGroups.Clear(); LastDownloadPath = "";
         foreach (var name in new[] { nameof(SelectedProject), nameof(ProjectTitle), nameof(ProjectDescription), nameof(ProjectDetail), nameof(ProjectTile), nameof(IsProjectFavorite), nameof(FavoriteAction), nameof(HasReleases) }) OnPropertyChanged(name);
         NotifyPage(); await RefreshReleasesAsync();
@@ -449,7 +458,7 @@ public sealed class DownloadsPageViewModel : PageViewModel, IDisposable
             if (revision != _requestRevision) return;
             ReleaseGroups.Clear();
             foreach (var group in releases.OrderByDescending(r => r.Published).GroupBy(r => string.Join(" / ", r.Loaders) + " " + (r.GameVersions.Count > 3 ? $"{r.GameVersions[0]} 等 {r.GameVersions.Count} 个版本" : string.Join(" / ", r.GameVersions))))
-                ReleaseGroups.Add(new(group.Key.Trim(), group.Select(r => new ContentReleaseRowViewModel(r, r.Files.OrderByDescending(f => f.Primary).Select(f => new ContentFileRowViewModel(this, f)).ToArray())).ToArray()));
+                ReleaseGroups.Add(new(group.Key.Trim(), group.Select(r => new ContentReleaseRowViewModel(r, r.Files.OrderByDescending(f => f.Primary).Select(f => new ContentFileRowViewModel(this, f, r)).ToArray())).ToArray()));
             RequestStatus = releases.Count == 0 ? "没有匹配当前版本与加载器的文件。" : $"已读取 {releases.Count} 个资源版本。";
             OnPropertyChanged(nameof(HasReleases)); NotifyCommands();
         });
@@ -526,6 +535,7 @@ public sealed class DownloadsPageViewModel : PageViewModel, IDisposable
             if (row is null) Tasks.Insert(i, new(Owner, task));
             else { row.Update(task); if (Tasks.IndexOf(row) != i) Tasks.Move(Tasks.IndexOf(row), i); }
         }
+        RefreshContentTargets(snapshot);
         OnPropertyChanged(nameof(IsEmpty)); OnPropertyChanged(nameof(Summary)); NotifyInstallDraft(); base.Refresh(snapshot);
     }
     public override void NotifyCommands()
@@ -533,7 +543,8 @@ public sealed class DownloadsPageViewModel : PageViewModel, IDisposable
         foreach (var task in Tasks) { task.CancelCommand.NotifyCanExecuteChanged(); task.RetryCommand.NotifyCanExecuteChanged(); }
         foreach (var row in LatestVersions.Concat(VersionGroups.SelectMany(g => g.Versions))) row.SelectCommand.NotifyCanExecuteChanged();
         foreach (var row in Projects.Concat(FavoriteProjects)) row.OpenCommand.NotifyCanExecuteChanged();
-        foreach (var file in ReleaseGroups.SelectMany(g => g.Releases).SelectMany(r => r.Files)) file.DownloadCommand.NotifyCanExecuteChanged();
+        foreach (var file in ReleaseGroups.SelectMany(g => g.Releases).SelectMany(r => r.Files)) { file.DownloadCommand.NotifyCanExecuteChanged(); file.InstallCommand.NotifyCanExecuteChanged(); }
+        ImportLocalPackCommand?.NotifyCanExecuteChanged(); ReadCachedPackCommand?.NotifyCanExecuteChanged();
         base.NotifyCommands(); OnPropertyChanged(nameof(CanQuery));
     }
 }

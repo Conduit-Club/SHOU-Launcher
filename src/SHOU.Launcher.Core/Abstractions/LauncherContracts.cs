@@ -19,7 +19,9 @@ public sealed record LauncherSettings(string? GameRoot = null, string? JavaExecu
     bool GameFullscreen = false, int? MinimumMemoryMiB = null, string? CustomInfo = null);
 public sealed record GameInstance(string Id, string Name, string VersionId, string GameDirectory,
     string? JavaExecutable = null, int? MemoryMiB = null, string Loader = "vanilla", string? LoaderVersion = null,
-    bool Installed = false);
+    bool Installed = false, string? GameVersionId = null, InstancePresentation? Presentation = null);
+public sealed record InstancePresentation(string Icon = "auto", string Category = "auto", string Description = "",
+    bool Favorite = false, long LaunchCount = 0);
 public enum AccountKind { Offline, Microsoft, Yggdrasil }
 public sealed record AccountProfile(string Id, AccountKind Kind, string DisplayName, string PlayerUuid,
     string? AuthenticationServer = null, bool Persisted = false, string Status = "本地档案",

@@ -6,7 +6,7 @@ using SHOU.Launcher.Core.IO;
 namespace SHOU.Launcher.Core.Minecraft;
 
 public sealed record LibraryFile(string Name, string RelativePath, Uri Url, string? Sha1, long? Size,
-    bool LegacyNative = false, IReadOnlyList<string>? Excludes = null);
+    bool LegacyNative = false, IReadOnlyList<string>? Excludes = null, bool Generated = false);
 public sealed record LibraryResolution(IReadOnlyList<LibraryFile> Files, IReadOnlyList<string> ClasspathRelativePaths);
 
 public static class LibraryResolver
@@ -54,7 +54,7 @@ public static class LibraryResolver
         var path = (string?)file["path"] ?? MavenPath(name);
         var url = (string?)file["url"] ?? throw new InvalidDataException("Library download URL missing.");
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("http" or "https")) throw new InvalidDataException("Invalid library URL.");
-        return new(name, path, uri, (string?)file["sha1"], (long?)file["size"], native);
+        return new(name, path, uri, (string?)file["sha1"], (long?)file["size"], native, Generated: (bool?)file["shouGenerated"] ?? false);
     }
     public static string MavenPath(string coordinate)
     {

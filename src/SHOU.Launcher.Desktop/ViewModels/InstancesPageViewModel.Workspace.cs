@@ -26,8 +26,7 @@ public sealed partial class InstancesPageViewModel
     private bool _isRenameEditorOpen;
     private string _renameDraft = "";
     private string? _renamingInstance;
-    public string GameVersionLabel => SelectedInstance is { Loader: "fabric", LoaderVersion: { } loader } instance && instance.VersionId.StartsWith("fabric-loader-" + loader + "-", StringComparison.Ordinal)
-        ? instance.VersionId[("fabric-loader-" + loader + "-").Length..] : SelectedInstance?.VersionId ?? "";
+    public string GameVersionLabel => SelectedInstance is { } instance ? DisplayGameVersion(instance) : "";
     public bool HasModLoader => SelectedInstance is { Loader: not "vanilla" };
     public string LoaderLabel => SelectedInstance?.Loader == "fabric" ? "Fabric" : SelectedInstance?.Loader ?? "";
     public bool IsRenameEditorOpen { get => _isRenameEditorOpen; private set { if (SetProperty(ref _isRenameEditorOpen, value)) NotifyCommands(); } }
@@ -73,7 +72,7 @@ public sealed partial class InstancesPageViewModel
     {
         "servers" => "服务器列表的 NBT 编辑与单实例连接仍待移植，可直接在游戏内管理；原文件保持。",
         "relations" => "模组依赖关系的解析与图形视图仍待移植。",
-        "modify" => "当前可重新校验原版与 Fabric。其他加载器的安装及迁移尚未开放。",
+        "modify" => "可重新校验原版、Fabric、Quilt、Forge 与 NeoForge。切换加载器请创建独立实例，保留当前文件。",
         _ when ModsUnsupported => "此实例尚未安装模组加载器，请先选择支持模组的实例。",
         _ => "列表来自当前实例目录。可打开文件夹，或导入支持的本机文件。"
     };
@@ -140,6 +139,8 @@ public sealed partial class InstancesPageViewModel
     private void RefreshWorkspaceSnapshot(LauncherSnapshot snapshot)
     {
         if (!_workspaceReady) return;
+        RefreshPresentation();
+        RefreshPackExport();
         FilterInstances();
         if (SelectedInstance is { } selected && (_draftInstanceId != selected.Id || !_instanceDraftDirty))
         {
@@ -154,7 +155,7 @@ public sealed partial class InstancesPageViewModel
     private void FilterInstances()
     {
         var query = SearchText.Trim();
-        var rows = Instances.Where(i => query.Length == 0 || (i.Name + " " + i.VersionId + " " + i.Loader).Contains(query, StringComparison.OrdinalIgnoreCase)).ToArray();
+        var rows = Instances.Where(i => (!FavoritesOnly || i.Presentation?.Favorite == true) && (query.Length == 0 || (i.Name + " " + i.VersionId + " " + i.Loader + " " + i.Presentation?.Description + " " + i.Presentation?.Category).Contains(query, StringComparison.OrdinalIgnoreCase))).ToArray();
         if (!FilteredInstances.SequenceEqual(rows))
         {
             FilteredInstances.Clear(); foreach (var row in rows) FilteredInstances.Add(row);

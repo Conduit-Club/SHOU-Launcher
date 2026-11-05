@@ -110,9 +110,29 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
         var document = await ReadAsync("https://api.modrinth.com/v2/project/" + projectId + "/version" + (args.Count == 0 ? "" : "?" + string.Join('&', args)), true, ct, n => n is JsonArray).ConfigureAwait(false);
         var data = document.Data;
         if (data is not JsonArray versions || versions.Count > 10000) throw new InvalidDataException("资源版本响应无效。");
-        return versions.Take(250).Select(n => new ContentRelease(SafePath.Identifier((string?)n?["id"] ?? ""), (string?)n?["name"] ?? "",
-            (string?)n?["version_number"] ?? "", DateTimeOffset.TryParse((string?)n?["date_published"], out var date) ? date : DateTimeOffset.MinValue,
-            Strings(n?["game_versions"]), Strings(n?["loaders"]), (n?["files"] as JsonArray ?? []).Select(f =>
+        return versions.Take(250).Select(ParseRelease).ToArray();
+    }
+    public async Task<ContentRelease> ReleaseAsync(string releaseId, CancellationToken ct = default)
+    {
+        SafePath.Identifier(releaseId);
+        var result = await ReadAsync("https://api.modrinth.com/v2/version/" + releaseId, true, ct, n => n is JsonObject).ConfigureAwait(false);
+        return ParseRelease(result.Data);
+    }
+    public async Task<ContentProject> ProjectAsync(string projectId, CancellationToken ct = default)
+    {
+        SafePath.Identifier(projectId);
+        var result = await ReadAsync("https://api.modrinth.com/v2/project/" + projectId, true, ct, n => n is JsonObject).ConfigureAwait(false);
+        var n = result.Data;
+        var id = SafePath.Identifier((string?)n["id"] ?? "");
+        var slug = SafePath.Identifier((string?)n["slug"] ?? id);
+        var kind = (string?)n["project_type"] ?? "";
+        if (kind is not ("mod" or "modpack" or "resourcepack" or "shader")) throw new InvalidDataException("未知资源类型。");
+        return new(id, slug, (string?)n["title"] ?? id, (string?)n["description"] ?? "", "", (long?)n["downloads"] ?? 0,
+            kind, (string?)n["icon_url"], new Uri("https://modrinth.com/" + kind + "/" + slug), (string?)n["client_side"] ?? "unknown");
+    }
+    private static ContentRelease ParseRelease(JsonNode? n)
+    {
+        var files = (n?["files"] as JsonArray ?? []).Select(f =>
             {
                 var name = (string?)f?["filename"] ?? "";
                 if (name.Length is 0 or > 200 || name.Contains('/') || name.Contains('\\') || name is "." or "..") throw new InvalidDataException("资源文件名无效。");
@@ -124,7 +144,14 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
                 var size = (long?)f?["size"] ?? -1;
                 if (size is < 0 or > 2147483648) throw new InvalidDataException("资源文件大小无效。");
                 return new ContentFile(name, uri, hash.ToLowerInvariant(), size, (bool?)f?["primary"] ?? false);
-            }).ToArray())).ToArray();
+            }).ToArray();
+        var dependencies = (n?["dependencies"] as JsonArray ?? []);
+        if (files.Length > 64 || dependencies.Count > 128) throw new InvalidDataException("资源文件或依赖数量超限。");
+        return new ContentRelease(SafePath.Identifier((string?)n?["id"] ?? ""), (string?)n?["name"] ?? "",
+            (string?)n?["version_number"] ?? "", DateTimeOffset.TryParse((string?)n?["date_published"], out var date) ? date : DateTimeOffset.MinValue,
+            Strings(n?["game_versions"]), Strings(n?["loaders"]), files,
+            dependencies.Select(d => new ContentDependency((string?)d?["dependency_type"] ?? "", (string?)d?["project_id"], (string?)d?["version_id"], (string?)d?["file_name"])).ToArray(),
+            (string?)n?["project_id"], (string?)n?["environment"] ?? "unknown");
     }
     private static string[] Strings(JsonNode? node) => node is JsonArray values ? values.Select(v => (string?)v ?? "").ToArray() : [];
     public async Task<byte[]> IconAsync(string url, CancellationToken ct = default)

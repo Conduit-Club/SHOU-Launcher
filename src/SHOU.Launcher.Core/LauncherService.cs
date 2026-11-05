@@ -120,7 +120,7 @@ public sealed partial class LauncherService : ILauncherService
         if (string.IsNullOrWhiteSpace(name) || name.Length > 80) throw new ArgumentException("请输入1–80字符实例名称。");
         SafePath.Identifier(versionId);
         var instance = new GameInstance(Guid.NewGuid().ToString("N"), name.Trim(), versionId,
-            SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")));
+            SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")), GameVersionId: versionId);
         await ExecuteAsync("Ready", async ct =>
         {
             Directory.CreateDirectory(instance.GameDirectory);
@@ -140,7 +140,7 @@ public sealed partial class LauncherService : ILauncherService
         {
             var profile = await new FabricMetadataProvider(http, Paths.CacheDirectory, Sources).CacheProfileAsync(gameVersionId, loaderVersion, ct).ConfigureAwait(false);
             created = new(Guid.NewGuid().ToString("N"), name.Trim(), profile,
-                SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")), Loader: "fabric", LoaderVersion: loaderVersion);
+                SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")), Loader: "fabric", LoaderVersion: loaderVersion, GameVersionId: gameVersionId);
             Directory.CreateDirectory(created.GameDirectory);
             var candidate = Snapshot with { Instances = Snapshot.Instances.Append(created).ToArray(), SelectedInstanceId = created.Id };
             await PersistCandidateAsync(candidate, ct).ConfigureAwait(false);
@@ -166,9 +166,28 @@ public sealed partial class LauncherService : ILauncherService
     private async Task<(InstalledGame Game, JavaInstallation Java)> PrepareInstanceCoreAsync(GameInstance instance, CancellationToken ct)
     {
         EnsureIsolatedGamePath(instance.GameDirectory);
-        if (instance.Loader is not ("vanilla" or "fabric")) throw new PlatformNotSupportedException("当前预览尚未实现此loader的processor链。");
+        if (instance.Loader is not ("vanilla" or "fabric" or "quilt" or "forge" or "neoforge")) throw new PlatformNotSupportedException("当前预览尚未实现此loader的processor链。");
+        if (instance.Loader != "vanilla") _ = Instances.InstanceIdentity.GameVersion(instance);
         var resolver = new VersionMetadataResolver(http, downloader, Paths.CacheDirectory, Sources);
+        if (instance.Loader is "forge" or "neoforge")
+        {
+            var vanilla = await resolver.ResolveAsync(Instances.InstanceIdentity.GameVersion(instance), ct).ConfigureAwait(false);
+            var processorJava = await SelectInstanceJavaAsync(instance, vanilla, ct).ConfigureAwait(false);
+            await OfficialLoaders.EnsureInstalledAsync(instance, vanilla, processorJava, Context(processorJava), new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
+        }
         var version = await resolver.ResolveAsync(instance.VersionId, ct).ConfigureAwait(false);
+        ValidateLoaderProfile(instance, version);
+        var java = await SelectInstanceJavaAsync(instance, version, ct).ConfigureAwait(false);
+        var context = Context(java);
+        var gameFiles = await new MinecraftInstaller(http, downloader, Paths.CacheDirectory, Sources).InstallAsync(version, context,
+            instance.GameDirectory, new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
+        var installedInstances = Snapshot.Instances.Select(i => i.Id == instance.Id ? i with { Installed = true } : i).ToArray();
+        await PersistCandidateAsync(Snapshot with { Instances = installedInstances }, ct).ConfigureAwait(false);
+        Set(s => s with { Instances = installedInstances });
+        return (gameFiles, java);
+    }
+    private async Task<JavaInstallation> SelectInstanceJavaAsync(GameInstance instance, ResolvedVersion version, CancellationToken ct)
+    {
         var preferred = instance.JavaExecutable ?? Snapshot.Settings.JavaExecutable;
         var candidates = await platform.JavaDiscovery.DiscoverAsync(new(preferred, Paths.RuntimesDirectory, version.RequiredJavaMajor,
             Snapshot.Platform.HardwareArchitecture), ct).ConfigureAwait(false);
@@ -193,12 +212,7 @@ public sealed partial class LauncherService : ILauncherService
             java = derivation.Java;
             Set(s => s with { JavaInstallations = s.JavaInstallations.Where(j => !SameJavaPath(j.ExecutablePath, java.ExecutablePath)).Append(java).ToArray() });
         }
-        var context = Context(java);
-        var gameFiles = await new MinecraftInstaller(http, downloader, Paths.CacheDirectory, Sources).InstallAsync(version, context,
-            instance.GameDirectory, new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
-        Set(s => s with { Instances = s.Instances.Select(i => i.Id == instance.Id ? i with { Installed = true } : i).ToArray() });
-        await PersistAsync(ct).ConfigureAwait(false);
-        return (gameFiles, java);
+        return java;
     }
     public async Task<LaunchPlan> BuildLaunchPlanAsync(string instanceId, CancellationToken cancellationToken = default)
     {
@@ -272,6 +286,7 @@ public sealed partial class LauncherService : ILauncherService
         Set(s => s with { State = "Running", GameProcessId = process.ProcessId });
         Log("Info", "已启动本次Java游戏进程，PID=" + process.ProcessId + "；主菜单仍需独立真实观察。");
         gameObserver = ObserveGameAsync(process, collector, generation);
+        await RecordInstanceLaunchAsync(instanceId).ConfigureAwait(false);
     }, cancellationToken);
     private async Task ObserveGameAsync(IManagedProcess process, ProcessLogCollector collector, long generation)
     {
@@ -297,6 +312,7 @@ public sealed partial class LauncherService : ILauncherService
     public async Task RetryDownloadAsync(string taskId, CancellationToken cancellationToken = default)
     {
         var owner = downloadOwners.Resolve(taskId);
+        if (await TryRetryContentOperationAsync(owner.Generation, cancellationToken).ConfigureAwait(false)) return;
         if (owner.InstanceId.StartsWith("content:", StringComparison.Ordinal))
         {
             if (!contentTransfers.TryGetValue(owner.Generation, out var file)) throw new InvalidOperationException("该资源下载记录已失效，请重新选择文件。");
@@ -446,7 +462,7 @@ public sealed partial class LauncherService : ILauncherService
             // Only complete our own transitional state; never overwrite a newer Error/Running.
             Set(s => s.State == state ? s with { State = game is null ? "Ready" : "Running" } : s);
         }
-        catch (OperationCanceledException) { MarkDownloads("Cancelled", null); Set(s => s with { State = game is null ? "Ready" : "Running", Error = "操作已取消，已校验文件与部分下载保留。" }); throw; }
+        catch (OperationCanceledException) { MarkDownloads("Cancelled", null); Set(s => s with { State = game is null ? "Ready" : "Running", Error = "操作已取消，已有实例文件保留；可重新执行安装。" }); throw; }
         catch (Exception ex) { var message = SafeError(ex); MarkDownloads("Failed", message); Set(s => s with { State = "Error", Error = message }); Log("Error", message); throw; }
         finally { operation.Release(); }
     }

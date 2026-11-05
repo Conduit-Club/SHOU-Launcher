@@ -38,6 +38,10 @@ public static class ClubIcons
         _ => Cube
     };
 
+    public static string ForInstanceIcon(string? key) => key switch
+    {
+        "fabric" => Cloth, "quilt" => Layers, "forge" => Toolbox, "neoforge" => Fox, _ => Cube
+    };
     public static string ForInstanceSection(string key) => key switch
     {
         "overview" => "M1,1 H9 V9 H1 Z M12,1 H20 V9 H12 Z M1,12 H9 V20 H1 Z M12,12 H20 V20 H12 Z",

@@ -99,6 +99,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
             ConfirmRemoval = false;
         }, () => CanEdit && SelectedAccount is not null && ConfirmRemoval);
         InitializeAccountPanel();
+        InitializeAccountAppearance();
     }
     private async Task LoginMicrosoftAsync()
     {
@@ -187,11 +188,13 @@ public sealed partial class AccountsPageViewModel : PageViewModel
     }
     internal void OnNavigatingAway()
     {
+        CancelAccountAppearanceWork();
         Password = "";
         if (_authenticationActive) Owner.CancelOperationCommand.Execute(null);
     }
     internal void CancelAuthenticationState(CancellationToken token)
     {
+        CancelAccountAppearanceWork();
         if (!_authenticationActive && ProfileChallenge is null && _challenge is null) return;
         ++_authenticationGeneration;
         _authenticationActive = false;
@@ -214,6 +217,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
             if (!Accounts.SequenceEqual(snapshot.Accounts)) { Accounts.Clear(); foreach (var account in snapshot.Accounts) Accounts.Add(account); }
             SelectedAccount = Accounts.FirstOrDefault(a => a.Id == snapshot.SelectedAccountId);
             RefreshAccountPanel();
+            RefreshAccountAppearanceRows();
             OnPropertyChanged(nameof(AccountDetail)); OnPropertyChanged(nameof(PersistenceSummary));
         }
         finally { _refreshing = false; }
