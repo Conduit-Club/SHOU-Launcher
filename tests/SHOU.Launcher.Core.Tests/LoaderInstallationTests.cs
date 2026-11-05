@@ -27,6 +27,14 @@ public sealed class LoaderInstallationTests
     }
 
     [TestMethod]
+    public async Task QuiltCatalogWithoutStablePropertyPrefersCurrentFormalVersion()
+    {
+        using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(ScriptedHttpHandler.Json("""[{"loader":{"version":"0.20.0-beta.9"}},{"loader":{"version":"0.30.1"}},{"loader":{"version":"0.30.2"}}]"""))));
+        var choices = await new LoaderCatalog(http).GetAsync("quilt", "1.21.1", default);
+        Assert.AreEqual("0.30.2", choices[0].Version); Assert.IsTrue(choices[0].Stable); Assert.IsFalse(choices[^1].Stable);
+    }
+
+    [TestMethod]
     public async Task CompletedProcessorImportsGeneratedLibraryAndReceiptSkipsRepeatExecution()
     {
         using var fixture = new Fixture(); var recipe = await fixture.Cache();
@@ -47,6 +55,8 @@ public sealed class LoaderInstallationTests
     [DataRow("failure")]
     [DataRow("cancel")]
     [DataRow("wrong-parent")]
+    [DataRow("wrong-main")]
+    [DataRow("bloat")]
     [DataRow("link")]
     public async Task FailedProcessorCannotCommitProfileReceiptOrEscapeStage(string failure)
     {
@@ -67,6 +77,18 @@ public sealed class LoaderInstallationTests
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => bad.Cache()); Assert.AreEqual(0, bad.Runner.Count);
         using var large = new Fixture("oversize");
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => large.Cache()); Assert.AreEqual(0, large.Downloads.Count);
+    }
+
+    [TestMethod]
+    public async Task RecipeAndProfileAliasesCannotOverwriteAnotherCacheFile()
+    {
+        foreach (var name in new[] { "loader-recipe.json", "1.21.1-forge-52.1.21.json" })
+        {
+            using var f = new Fixture(); var folder = Path.Combine(f.CacheRoot, "versions/1.21.1-forge-52.1.21"); Directory.CreateDirectory(folder);
+            var sentinel = Path.Combine(f.CacheRoot, "keep.json"); await File.WriteAllTextAsync(sentinel, "preserve this cache file");
+            File.CreateSymbolicLink(Path.Combine(folder, name), sentinel);
+            await Assert.ThrowsAsync<IOException>(() => f.Cache()); Assert.AreEqual("preserve this cache file", await File.ReadAllTextAsync(sentinel));
+        }
     }
 
     [TestMethod]
@@ -124,7 +146,7 @@ public sealed class LoaderInstallationTests
         }
         internal static JsonObject ProfileNode(string id, string parent) => new()
         {
-            ["id"] = id, ["inheritsFrom"] = parent, ["mainClass"] = "fixture.Main",
+            ["id"] = id, ["inheritsFrom"] = parent, ["mainClass"] = "cpw.mods.bootstraplauncher.BootstrapLauncher",
             ["libraries"] = new JsonArray(new JsonObject { ["name"] = "fixture:generated:1", ["downloads"] = new JsonObject { ["artifact"] = new JsonObject { ["path"] = "fixture/generated.jar", ["url"] = "" } } })
         };
         internal static string Hash(byte[] bytes) => Convert.ToHexStringLower(SHA1.HashData(bytes));
@@ -153,7 +175,15 @@ public sealed class LoaderInstallationTests
             if (failure == "cancel") return new(-1, "", "", Cancelled: true);
             var path = Path.Combine(spec.WorkingDirectory, "versions/1.21.1-forge-52.1.21/1.21.1-forge-52.1.21.json");
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            await File.WriteAllTextAsync(path, Fixture.ProfileNode("1.21.1-forge-52.1.21", failure == "wrong-parent" ? "1.20" : "1.21.1").ToJsonString(), cancellationToken);
+            var profile = Fixture.ProfileNode("1.21.1-forge-52.1.21", failure == "wrong-parent" ? "1.20" : "1.21.1");
+            if (failure == "wrong-main") profile["mainClass"] = "wrong.Main";
+            await File.WriteAllTextAsync(path, profile.ToJsonString(), cancellationToken);
+            if (failure == "bloat")
+            {
+                Directory.CreateDirectory(Path.Combine(spec.WorkingDirectory, "tmp"));
+                using (var sparse = File.Create(Path.Combine(spec.WorkingDirectory, "tmp/bloat.bin"))) sparse.SetLength(2L * 1024 * 1024 * 1024 + 1);
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
             var library = Path.Combine(spec.WorkingDirectory, "libraries/fixture/generated.jar"); Directory.CreateDirectory(Path.GetDirectoryName(library)!);
             if (failure == "link") File.CreateSymbolicLink(library, path);
             else await File.WriteAllBytesAsync(library, Fixture.Generated, cancellationToken);

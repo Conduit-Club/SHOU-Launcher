@@ -23,7 +23,7 @@ public static class ScreenshotTrash
     public static async Task<IReadOnlyList<ScreenshotTrashEntry>> ListAsync(GameInstance instance, CancellationToken ct = default)
     {
         var root = Literal(instance, Root); if (!Directory.Exists(root)) return [];
-        var folders = Directory.GetDirectories(root); if (folders.Length > 1000) throw new InvalidDataException("截图回收记录超过1000条，请先恢复需要的文件。");
+        var folders = Directory.EnumerateDirectories(root).Take(1001).ToArray(); if (folders.Length > 1000) throw new InvalidDataException("截图回收记录超过1000条，请先恢复需要的文件。");
         var result = new List<ScreenshotTrashEntry>();
         foreach (var folder in folders)
         {

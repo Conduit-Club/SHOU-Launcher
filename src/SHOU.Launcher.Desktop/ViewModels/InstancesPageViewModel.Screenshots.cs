@@ -23,6 +23,8 @@ public sealed class InstanceScreenshotPreview(string instanceId, InstanceContent
 public sealed partial class InstancesPageViewModel : IDisposable
 {
     private int _screenshotGeneration;
+    private long _screenshotCopyTicket;
+    private readonly SemaphoreSlim _screenshotClipboardGate = new(1, 1);
     private string? _trashInstanceId;
     private IReadOnlyList<ScreenshotTrashEntry> _screenshotTrash = [];
     public AsyncRelayCommand RestoreScreenshotCommand { get; private set; } = null!;
@@ -37,6 +39,7 @@ public sealed partial class InstancesPageViewModel : IDisposable
     private void ClearScreenshotPreviews()
     {
         _screenshotGeneration++;
+        Interlocked.Increment(ref _screenshotCopyTicket);
         foreach (var item in ScreenshotPreviews) item.Dispose();
         ScreenshotPreviews.Clear();
     }
@@ -76,17 +79,32 @@ public sealed partial class InstancesPageViewModel : IDisposable
             { Feedback = "已恢复截图，原位置的同名文件不会被覆盖。"; await RefreshContentCommand.ExecuteAsync(null); }
         }, () => CanEdit && IsScreenshots && SelectedInstance?.Id == _trashInstanceId && _screenshotTrash.Count > 0 && Service is IScreenshotTrashService);
     }
-    public Task CopyScreenshotAsync(InstanceScreenshotPreview item, IClipboard clipboard) => Owner.RunControlAsync("复制截图", async ct =>
+    public Task CopyScreenshotAsync(InstanceScreenshotPreview item, IClipboard clipboard)
     {
-        if (SelectedInstance?.Id != item.InstanceId || !IsScreenshots) throw new InvalidOperationException("截图页面已变化，请重新选择。");
-        var files = await ((IInstanceWorkspaceService)Service).ListInstanceContentAsync(item.InstanceId, "screenshots", ct);
-        var file = files.SingleOrDefault(f => f.RelativePath == item.RelativePath) ?? throw new FileNotFoundException("截图已移动，请刷新。");
-        var bitmap = await Task.Run(() => DecodeScreenshot(file, false), ct) ?? throw new InvalidDataException("截图无法安全解码。");
-        var transfer = new OwnedBitmapTransfer(bitmap);
-        try { ct.ThrowIfCancellationRequested(); await clipboard.SetDataAsync(transfer); }
-        catch { transfer.Dispose(); throw; }
-        Feedback = "图片已复制到剪贴板。";
-    });
+        var ticket = Interlocked.Increment(ref _screenshotCopyTicket); var generation = _screenshotGeneration;
+        bool Current() => !_workspaceDisposed && ticket == Interlocked.Read(ref _screenshotCopyTicket) && generation == _screenshotGeneration && SelectedInstance?.Id == item.InstanceId && IsScreenshots;
+        return Owner.RunControlAsync("复制截图", async ct =>
+        {
+            if (!Current()) return;
+            var files = await ((IInstanceWorkspaceService)Service).ListInstanceContentAsync(item.InstanceId, "screenshots", ct);
+            if (!Current()) return;
+            var file = files.SingleOrDefault(f => f.RelativePath == item.RelativePath) ?? throw new FileNotFoundException("截图已移动，请刷新。");
+            var bitmap = await Task.Run(() => DecodeScreenshot(file, false), ct) ?? throw new InvalidDataException("截图无法安全解码。");
+            var transfer = new OwnedBitmapTransfer(bitmap); var transferred = false;
+            try
+            {
+                await _screenshotClipboardGate.WaitAsync(ct);
+                try
+                {
+                    if (!Current()) return;
+                    ct.ThrowIfCancellationRequested(); await clipboard.SetDataAsync(transfer); transferred = true;
+                    if (Current()) Feedback = "图片已复制到剪贴板。";
+                }
+                finally { _screenshotClipboardGate.Release(); }
+            }
+            finally { if (!transferred) transfer.Dispose(); }
+        });
+    }
     private sealed class OwnedBitmapTransfer : IAsyncDataTransfer, IDataTransfer
     {
         private readonly DataTransfer data = new(); private Bitmap? bitmap;

@@ -15,7 +15,7 @@
         <StackPanel Spacing="10"><TextBlock Text="游戏目录" Classes="muted" FontSize="11"/>
           <TextBlock Text="{Binding GameDirectorySummary}" TextWrapping="Wrap" FontSize="11"/>
           <Button Content="管理游戏目录" Command="{Binding Root.ShowSettingsCommand}" HorizontalAlignment="Stretch"/>
-          <Button Content="导入整合包" IsEnabled="False" ToolTip.Tip="整合包清单与依赖导入仍待移植。" HorizontalAlignment="Stretch"/>
+          <Button Name="OpenInstancePackImport" Content="导入整合包" Command="{Binding OpenPackImportCommand}" HorizontalAlignment="Stretch"/>
           <Separator Margin="0,4"/>
           <TextBlock Text="选择实例后可双击或按 Enter 进入实例设置。" Classes="muted" FontSize="11"/>
         </StackPanel>

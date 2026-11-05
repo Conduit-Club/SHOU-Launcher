@@ -14,7 +14,7 @@ public sealed record InstanceWorldLimits(int MaxServers = 2048, int MaxWorlds = 
     int MaxPackEntries = 10000, int MaxPackEntryBytes = 64 * 1024 * 1024, int MaxCompressionRatio = 200);
 
 /// <summary>Only explicitly selected isolated instance paths are passed by the service. Existing NBT is retained as a tree.</summary>
-public sealed class InstanceWorldStore
+public sealed partial class InstanceWorldStore
 {
     private readonly string dataRoot, gameRoot;
     private readonly NbtLimits nbtLimits;

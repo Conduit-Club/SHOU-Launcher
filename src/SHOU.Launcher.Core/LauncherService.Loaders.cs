@@ -44,10 +44,7 @@ public sealed partial class LauncherService : ILoaderInstanceService
                 : (await OfficialLoaders.CacheAsync(loader, gameVersion, loaderVersion, ct).ConfigureAwait(false)).ProfileId;
             created = new(Guid.NewGuid().ToString("N"), name.Trim(), profile,
                 SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")), Loader: loader, LoaderVersion: loaderVersion, GameVersionId: gameVersion);
-            Directory.CreateDirectory(created.GameDirectory);
-            var candidate = Snapshot with { Instances = Snapshot.Instances.Append(created).ToArray(), SelectedInstanceId = created.Id };
-            await PersistCandidateAsync(candidate, ct).ConfigureAwait(false);
-            Set(s => s with { Instances = candidate.Instances, SelectedInstanceId = created.Id });
+            await RegisterNewInstanceAsync(created, ct).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
         return created!;
     }
@@ -59,9 +56,18 @@ public sealed partial class LauncherService : ILoaderInstanceService
         if ((string?)profile["inheritsFrom"] != gameVersion || !id.Contains(loaderVersion, StringComparison.Ordinal) || (string?)profile["mainClass"] != "org.quiltmc.loader.impl.launch.knot.KnotClient")
             throw new InvalidDataException("Quilt配置身份不匹配。");
         _ = VersionMetadataResolver.ParseVersion(text, id);
-        var path = SafePath.Within(Paths.CacheDirectory, "versions/" + id + "/" + id + ".json"); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var relative = "versions/" + id + "/" + id + ".json";
+        var path = Content.ContentInstallFiles.Literal(Paths.CacheDirectory, relative);
+        var sidecar = Content.ContentInstallFiles.Literal(Paths.CacheDirectory, relative + ".sha256");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         var temporary = path + ".tmp-" + Guid.NewGuid().ToString("N");
-        try { await File.WriteAllTextAsync(temporary, text, ct); File.Move(temporary, path, true); await File.WriteAllTextAsync(path + ".sha256", Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))), ct); }
+        try
+        {
+            await File.WriteAllTextAsync(temporary, text, ct); Downloads.VerifiedDownloader.RejectLink(path); File.Move(temporary, path, true);
+            var hashStage = sidecar + ".tmp-" + Guid.NewGuid().ToString("N");
+            try { await File.WriteAllTextAsync(hashStage, Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(text))), ct); Downloads.VerifiedDownloader.RejectLink(sidecar); File.Move(hashStage, sidecar, true); }
+            finally { if (File.Exists(hashStage)) File.Delete(hashStage); }
+        }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
         return id;
     }

@@ -117,23 +117,21 @@ public sealed partial class LauncherService : ILauncherService
     public async Task<GameInstance> CreateInstanceAsync(string name, string versionId, CancellationToken cancellationToken = default)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(false);
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 80) throw new ArgumentException("请输入1–80字符实例名称。");
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 80 || name.Any(char.IsControl)) throw new ArgumentException("请输入1–80字的单行实例名称。");
         SafePath.Identifier(versionId);
         var instance = new GameInstance(Guid.NewGuid().ToString("N"), name.Trim(), versionId,
             SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")), GameVersionId: versionId);
         await ExecuteAsync("Ready", async ct =>
         {
-            Directory.CreateDirectory(instance.GameDirectory);
-            Set(s => s with { Instances = s.Instances.Append(instance).ToArray(), SelectedInstanceId = instance.Id });
-            await PersistAsync(ct).ConfigureAwait(false);
+            await RegisterNewInstanceAsync(instance, ct).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
         return instance;
     }
     public Task SelectInstanceAsync(string instanceId, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
-    { _ = FindInstance(instanceId); Set(s => s with { SelectedInstanceId = instanceId }); await PersistAsync(ct).ConfigureAwait(false); }, cancellationToken);
+    { _ = FindInstance(instanceId); await PersistCandidateAsync(Snapshot with { SelectedInstanceId = instanceId }, ct).ConfigureAwait(false); Set(s => s with { SelectedInstanceId = instanceId }); }, cancellationToken);
     public async Task<GameInstance> CreateFabricInstanceAsync(string name, string gameVersionId, string loaderVersion, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(name) || name.Length > 80) throw new ArgumentException("请输入1–80字符实例名称。");
+        if (string.IsNullOrWhiteSpace(name) || name.Length > 80 || name.Any(char.IsControl)) throw new ArgumentException("请输入1–80字的单行实例名称。");
         _ = FabricMetadataProvider.ProfileId(gameVersionId, loaderVersion);
         GameInstance? created = null;
         await ExecuteAsync("Installing", async ct =>
@@ -141,10 +139,7 @@ public sealed partial class LauncherService : ILauncherService
             var profile = await new FabricMetadataProvider(http, Paths.CacheDirectory, Sources).CacheProfileAsync(gameVersionId, loaderVersion, ct).ConfigureAwait(false);
             created = new(Guid.NewGuid().ToString("N"), name.Trim(), profile,
                 SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")), Loader: "fabric", LoaderVersion: loaderVersion, GameVersionId: gameVersionId);
-            Directory.CreateDirectory(created.GameDirectory);
-            var candidate = Snapshot with { Instances = Snapshot.Instances.Append(created).ToArray(), SelectedInstanceId = created.Id };
-            await PersistCandidateAsync(candidate, ct).ConfigureAwait(false);
-            Set(s => s with { Instances = candidate.Instances, SelectedInstanceId = created.Id });
+            await RegisterNewInstanceAsync(created, ct).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
         return created!;
     }

@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using CommunityToolkit.Mvvm.Input;
+using CommunityToolkit.Mvvm.ComponentModel;
 using Avalonia.Threading;
 using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Core.IO;
@@ -23,11 +24,19 @@ public sealed class InstanceWorldRowViewModel
     { Summary = summary; OpenCommand = new(() => open(this), () => !HasError); }
 }
 
-public sealed record InstanceDatapackRowViewModel(WorldDatapackFile File)
+public sealed class InstanceDatapackRowViewModel(WorldDatapackFile file) : ObservableObject
 {
+    public WorldDatapackFile File { get; } = file;
+    private WorldDatapackState? details;
+    public WorldDatapackState? Details
+    {
+        get => details;
+        internal set { if (SetProperty(ref details, value)) { OnPropertyChanged(nameof(Subtitle)); OnPropertyChanged(nameof(Status)); OnPropertyChanged(nameof(Description)); } }
+    }
     public string Name => File.Name;
-    public string Subtitle => (File.IsDirectory ? "文件夹" : $"{File.Size ?? 0:N0} B") + " · " + File.Modified.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
-    public string Status => File.Status;
+    public string Description => Details?.Description ?? "";
+    public string Subtitle => (Description.Length > 0 ? Description + " · " : "") + (File.IsDirectory ? "文件夹" : $"{File.Size ?? 0:N0} B") + " · " + File.Modified.ToLocalTime().ToString("g", CultureInfo.CurrentCulture);
+    public string Status => Details is { } data ? (data.Enabled switch { true => "已启用", false => "已禁用", _ => "未列入世界配置" }) + (data.PackFormat is { } format ? $" · 格式 {format}" : "") + " · " + data.Capability : File.Status;
 }
 
 public sealed record InstanceServerDraftViewModel(Guid DraftId, int? ExistingIndex, string Name, string Address);
@@ -76,7 +85,8 @@ public sealed partial class InstancesPageViewModel
     public string WorldWorkspaceCapability => Service is not IInstanceWorldService ? "此服务尚未接入存档与服务器读写。"
         : !Service.Paths.IsIsolated ? "当前并非隔离数据目录，存档和服务器文件的读取与写入已禁用。"
         : SelectedInstance is null || SelectedInstance.Id != Owner.Snapshot.SelectedInstanceId ? "请先选定当前隔离实例。"
-        : Owner.HasRunningGame ? "仅当前隔离实例可读取；保存服务器或导入文件前，请先停止游戏。"
+        : Owner.HasRunningGame ? "仅当前隔离实例可读取；写入前请先停止游戏。"
+        : Service is IInstanceWorldEditService ? "仅当前选中的隔离实例可读取和保存；世界设置与数据包启停需要显式保存。"
         : "仅当前选中的隔离实例可读取和保存；level.dat 保持只读。";
     public string WorldContextTitle => IsWorldDetails ? "存档管理 · " + SelectedWorldRow?.Name : "实例设置 · " + SelectedInstance?.Name;
     public string WorldWorkspaceFeedback => _worldDraft.Feedback;
@@ -156,7 +166,7 @@ public sealed partial class InstancesPageViewModel
         CancelInstanceServerEditorCommand = Command(() => { _worldDraft.EditorOpen = false; NotifyWorldPresentation(); });
         foreach (var command in new[] { RefreshWorldsCommand, RefreshInstanceServersCommand, RefreshWorldDatapacksCommand })
             command.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(AsyncRelayCommand.IsRunning) && !command.IsRunning) ScheduleUnreadWorldSection(); };
-        _worldWorkspaceReady = true; NotifyWorldWorkspace();
+        _worldWorkspaceReady = true; InitializeWorldEditing(); NotifyWorldWorkspace();
     }
     public void ActivateWorldWorkspace(string sectionKey)
     {
@@ -180,6 +190,7 @@ public sealed partial class InstancesPageViewModel
         OnPropertyChanged(nameof(IsEditingExistingServer));
         foreach (var name in new[] { nameof(IsWorldWorkspaceSection), nameof(IsWorldListPage), nameof(IsWorldDetails), nameof(IsWorldInformationPage), nameof(IsWorldDatapacksPage), nameof(IsInstanceServersPage), nameof(WorldWorkspaceCanRead), nameof(WorldWorkspaceCanWrite), nameof(WorldWorkspaceCapability), nameof(WorldContextTitle), nameof(WorldWorkspaceFeedback), nameof(WorldRows), nameof(WorldSearchText), nameof(WorldCountSummary), nameof(WorldListStatus), nameof(ShowWorldListStatus), nameof(SelectedWorldRow), nameof(WorldDetailName), nameof(WorldDetailVersion), nameof(WorldDetailLastPlayed), nameof(WorldSeedText), nameof(HasWorldSeed), nameof(WorldGameModeText), nameof(WorldHardcoreText), nameof(DatapackRows), nameof(SelectedDatapacks), nameof(DatapackSearchText), nameof(DatapackCountSummary), nameof(DatapackSelectionSummary), nameof(HasSelectedDatapacks), nameof(DatapackListStatus), nameof(CanImportWorldDatapack), nameof(InstanceServerRows), nameof(SelectedInstanceServer), nameof(IsServerDraftDirty), nameof(HasServerConflict), nameof(ServerDraftStatus), nameof(ServerListStatus), nameof(IsServerEditorOpen), nameof(ServerEditorTitle), nameof(ServerNameDraft), nameof(ServerAddressDraft), nameof(ServerBackupPath), nameof(HasServerBackup) }) OnPropertyChanged(name);
         NotifyWorldCommands();
+        NotifyWorldEditing();
         ScheduleUnreadWorldSection();
     }
     private void ScheduleUnreadWorldSection()
@@ -234,7 +245,7 @@ public sealed partial class InstancesPageViewModel
     private void EnsurePackDraft()
     {
         if (SelectedWorldRow is not { } row || _worldDraft.Packs.ContainsKey(row.DirectoryName)) return;
-        var packs = new WorldPackDraft(); packs.Selected.CollectionChanged += (_, _) => { if (ReferenceEquals(CurrentWorldPacks, packs)) { OnPropertyChanged(nameof(HasSelectedDatapacks)); OnPropertyChanged(nameof(DatapackSelectionSummary)); } };
+        var packs = new WorldPackDraft(); packs.Selected.CollectionChanged += (_, _) => { if (ReferenceEquals(CurrentWorldPacks, packs)) { OnPropertyChanged(nameof(HasSelectedDatapacks)); OnPropertyChanged(nameof(DatapackSelectionSummary)); NotifyWorldEditingCommands(); } };
         _worldDraft.Packs.Add(row.DirectoryName, packs);
     }
     private static void FillPacks(WorldPackDraft packs, IReadOnlyList<WorldDatapackFile> rows)
@@ -243,7 +254,7 @@ public sealed partial class InstancesPageViewModel
     }
     private static void FilterPackRows(WorldPackDraft packs)
     {
-        packs.Filtered.Clear(); foreach (var row in packs.Rows.Where(row => row.Name.Contains(packs.Query.Trim(), StringComparison.OrdinalIgnoreCase)).OrderBy(row => row.Name, StringComparer.Ordinal)) packs.Filtered.Add(row);
+        packs.Filtered.Clear(); foreach (var row in packs.Rows.Where(row => (row.Name + " " + row.Description).Contains(packs.Query.Trim(), StringComparison.OrdinalIgnoreCase)).OrderBy(row => row.Name, StringComparer.Ordinal)) packs.Filtered.Add(row);
     }
     private async Task RefreshWorldPacksAsync()
     {
@@ -252,6 +263,7 @@ public sealed partial class InstancesPageViewModel
         var completed = await Owner.RunAsync("读取世界数据包", async ct => rows = await ((IInstanceWorldService)Service).GetWorldDatapacksAsync(instance.Id, world.DirectoryName, ct), true);
         if (completed && rows is not null) FillPacks(packs, rows); else packs.Phase = WorldReadPhase.Error;
         if (ReferenceEquals(CurrentWorldPacks, packs)) NotifyWorldPresentation();
+        if (completed && ReferenceEquals(CurrentWorldPacks, packs) && Service is IInstanceWorldEditService && !IsWorldSettingsDirty) await ReadWorldEditStateAsync(false);
     }
     public async Task<bool> ImportWorldDatapackFileAsync(string path, string? expectedInstanceId = null, string? expectedWorldDirectory = null, string? expectedGameDirectory = null)
     {
@@ -268,7 +280,9 @@ public sealed partial class InstancesPageViewModel
         });
         if (rows is not null) FillPacks(packs, rows);
         draft.Feedback = completed && imported is not null ? $"已导入 {imported.Name}。{imported.Status}" : imported is not null ? "文件已导入，但列表刷新失败，请重新读取。" : "导入未完成，请重新读取核对文件列表。";
-        if (ReferenceEquals(draft, _worldDraft)) NotifyWorldPresentation(); return completed;
+        if (ReferenceEquals(draft, _worldDraft)) NotifyWorldPresentation();
+        if (completed && ReferenceEquals(draft, _worldDraft) && Service is IInstanceWorldEditService && !IsWorldSettingsDirty) await ReadWorldEditStateAsync(false);
+        return completed;
     }
     private async Task ReadInstanceServersAsync(bool discardDraft)
     {

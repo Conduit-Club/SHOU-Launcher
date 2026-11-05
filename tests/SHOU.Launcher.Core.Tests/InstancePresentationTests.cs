@@ -48,16 +48,21 @@ public sealed class InstancePresentationTests
         var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
         await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
-        await service.InitializeAsync(); var instance = await service.CreateInstanceAsync("Fixture", "1.21.1");
+        await service.InitializeAsync(); var other = await service.CreateInstanceAsync("Other", "1.21.1"); var instance = await service.CreateInstanceAsync("Fixture", "1.21.1");
         await service.UpdateInstancePresentationAsync(instance.Id, new("quilt", "测试", "saved", true));
-        var persisted = service.Snapshot.Instances.Single().Presentation!;
+        var persisted = service.Snapshot.Instances.Single(i => i.Id == instance.Id).Presentation!;
         Assert.AreEqual(0, persisted.LaunchCount);
         var file = Path.Combine(platform.Paths.LocalDataDirectory, "shou.desktop.v1.json"); var backup = file + ".fixture-backup";
         File.Move(file, backup); Directory.CreateDirectory(file);
         try
         {
             await Assert.ThrowsAsync<IOException>(() => service.UpdateInstancePresentationAsync(instance.Id, new("forge", "常用", "unsaved", false)));
-            Assert.AreEqual(persisted, service.Snapshot.Instances.Single().Presentation);
+            Assert.AreEqual(persisted, service.Snapshot.Instances.Single(i => i.Id == instance.Id).Presentation);
+            var directories = Directory.GetDirectories(platform.Paths.InstancesDirectory).Order().ToArray();
+            await Assert.ThrowsAsync<IOException>(() => service.CreateInstanceAsync("Cannot save", "1.21.1"));
+            Assert.AreEqual(2, service.Snapshot.Instances.Count); CollectionAssert.AreEqual(directories, Directory.GetDirectories(platform.Paths.InstancesDirectory).Order().ToArray());
+            await Assert.ThrowsAsync<IOException>(() => service.SelectInstanceAsync(other.Id));
+            Assert.AreEqual(instance.Id, service.Snapshot.SelectedInstanceId);
         }
         finally { Directory.Delete(file); File.Move(backup, file); }
     }
@@ -69,5 +74,19 @@ public sealed class InstancePresentationTests
         Assert.AreEqual("1.21.1", InstanceIdentity.GameVersion(fabric));
         Assert.AreEqual("1.21.1", InstanceIdentity.GameVersion(fabric with { Loader = "forge", VersionId = "1.21.1-forge-52.1.21", GameVersionId = "1.21.1" }));
         Assert.ThrowsExactly<InvalidDataException>(() => InstanceIdentity.GameVersion(fabric with { Loader = "unknown" }));
+    }
+
+    [TestMethod]
+    public async Task QuiltChecksumAliasPreservesSentinelAndDoesNotRegisterInstance()
+    {
+        using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(ScriptedHttpHandler.Json("""{"id":"quilt-loader-0.30.2-1.21.1","inheritsFrom":"1.21.1","mainClass":"org.quiltmc.loader.impl.launch.knot.KnotClient","libraries":[]}"""))));
+        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        await using var processes = (ProcessRunner)platform.Processes;
+        await using var service = new LauncherService(platform, http, downloader, new NetworkOptions()); await service.InitializeAsync();
+        var folder = Path.Combine(platform.Paths.CacheDirectory, "versions/quilt-loader-0.30.2-1.21.1"); Directory.CreateDirectory(folder);
+        var sentinel = Path.Combine(platform.Paths.CacheDirectory, "keep.txt"); await File.WriteAllTextAsync(sentinel, "must survive");
+        File.CreateSymbolicLink(Path.Combine(folder, "quilt-loader-0.30.2-1.21.1.json.sha256"), sentinel);
+        await Assert.ThrowsAsync<IOException>(() => service.CreateLoaderInstanceAsync("Fixture", "1.21.1", "quilt", "0.30.2"));
+        Assert.AreEqual("must survive", await File.ReadAllTextAsync(sentinel)); Assert.IsEmpty(service.Snapshot.Instances);
     }
 }

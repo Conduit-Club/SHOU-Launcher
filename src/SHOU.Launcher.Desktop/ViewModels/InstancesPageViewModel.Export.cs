@@ -14,7 +14,11 @@ public sealed partial class InstancesPageViewModel
     public bool ExportPackOptions { get => _exportPackOptions; set => SetProperty(ref _exportPackOptions, value); }
     public bool ExportPackLocalFiles { get => _exportPackLocalFiles; set => SetProperty(ref _exportPackLocalFiles, value); }
     public AsyncRelayCommand ExportModrinthPackCommand { get; private set; } = null!;
-    private void InitializePackExport() => ExportModrinthPackCommand = AsyncCommand(async () =>
+    public RelayCommand OpenPackImportCommand { get; private set; } = null!;
+    private void InitializePackExport()
+    {
+        OpenPackImportCommand = Command(() => { Owner.Downloads.SelectCategory("modpack"); Owner.SelectedPage = Owner.Downloads; }, () => CanEdit && Service is IModrinthPackService);
+        ExportModrinthPackCommand = AsyncCommand(async () =>
     {
         var instance = SelectedInstance!; var selected = new List<string>();
         void AddExisting(string relative)
@@ -30,6 +34,7 @@ public sealed partial class InstancesPageViewModel
         if (await Owner.RunAsync("导出Modrinth整合包", async ct => output = await ((IModrinthPackService)Service).ExportModrinthPackAsync(instance.Id, options, ct)))
             Feedback = "已导出客户端整合包至 " + output;
     }, () => CanEdit && (SelectedInstance?.Loader is "vanilla" or "fabric") && Service is IModrinthPackService);
+    }
     private void RefreshPackExport()
     {
         if (_exportDraftInstanceId == SelectedInstance?.Id) return;
