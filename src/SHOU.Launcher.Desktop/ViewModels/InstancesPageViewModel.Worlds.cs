@@ -109,7 +109,7 @@ public sealed partial class InstancesPageViewModel
     public string DatapackCountSummary => $"全部（{DatapackRows.Count}）";
     public string DatapackSelectionSummary => $"已选择 {CurrentWorldPacks.Selected.Count} 个文件";
     public bool HasSelectedDatapacks => CurrentWorldPacks.Selected.Count > 0;
-    public string DatapackListStatus => CurrentWorldPacks.Phase switch { WorldReadPhase.Unread => "尚未读取此世界的数据包文件。", WorldReadPhase.Loading => "正在读取数据包…", WorldReadPhase.Error => "读取失败，请重新读取。", _ => DatapackRows.Count == 0 ? "当前搜索范围内没有数据包文件。" : "仅列出文件；版本兼容性与启停状态未验证。" };
+    public string DatapackListStatus => CurrentWorldPacks.Phase switch { WorldReadPhase.Unread => "尚未读取此世界的数据包文件。", WorldReadPhase.Loading => "正在读取数据包…", WorldReadPhase.Error => "读取失败，请重新读取。", _ => DatapackRows.Count == 0 ? "当前搜索范围内没有数据包文件。" : CurrentWorldSettings is { Phase: WorldReadPhase.Ready, State.CanToggleDatapacks: true } ? "已读取 level.dat 启停状态；格式与可用操作见每行。" : "仅列出文件；版本兼容性与启停状态未验证。" };
     public bool CanImportWorldDatapack => WorldWorkspaceCanWrite && ReferenceEquals(Owner.SelectedPage, this) && IsWorldDatapacksPage && SelectedWorldRow is { HasError: false };
     public ObservableCollection<InstanceServerDraftViewModel> InstanceServerRows => _worldDraft.Servers;
     public InstanceServerDraftViewModel? SelectedInstanceServer { get => _worldDraft.SelectedServer; set { if (ReferenceEquals(_worldDraft.SelectedServer, value)) return; _worldDraft.SelectedServer = value; OnPropertyChanged(); NotifyWorldCommands(); } }

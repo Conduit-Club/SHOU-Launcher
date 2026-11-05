@@ -31,7 +31,7 @@
                   <StackPanel Orientation="Horizontal" Spacing="6"><TextBlock Text="{Binding VersionId}" Classes="muted" FontSize="11"/><TextBlock Text="{Binding Loader}" Classes="muted" FontSize="11"/><TextBlock Text="{Binding LoaderVersion}" Classes="muted" FontSize="11"/></StackPanel>
                 </StackPanel></Grid></DataTemplate></ListBox.ItemTemplate>
             </ListBox>
-            <StackPanel Orientation="Horizontal" Spacing="8"><Button Name="OpenInstanceSettingsButton" Content="实例设置" Command="{Binding OpenVisibleInstanceCommand}" CommandParameter="{Binding #InstanceSelector.SelectedItem}"/><Button Content="下载新版本" Command="{Binding Root.ShowDownloadsCommand}"/></StackPanel>
+            <StackPanel Orientation="Horizontal" Spacing="8"><Button Name="OpenInstanceSettingsButton" Content="实例设置" Command="{Binding OpenSelectedVisibleInstanceCommand}"/><Button Content="下载新版本" Command="{Binding Root.ShowDownloadsCommand}"/></StackPanel>
           </StackPanel></Border>
         </StackPanel>
       </ScrollViewer>

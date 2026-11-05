@@ -1,5 +1,8 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using SHOU.Launcher.Desktop.ViewModels;
@@ -10,6 +13,30 @@ namespace SHOU.Launcher.Desktop.Tests;
 
 public sealed class WpfInstanceSelectionTests
 {
+    [AvaloniaFact]
+    public async Task MainWindowInstanceButtonOpensVisibleSelectionAfterChangingSixInstanceList()
+    {
+        var service = new FakeLauncherService(); var first = service.Snapshot.Instances.Single() with
+        { Presentation = new("auto", "测试", "R5 saved metadata", true) };
+        var rows = Enumerable.Range(0, 6).Select(i => i == 0 ? first : first with { Id = "fixture-" + i, Name = "Fixture " + i }).ToArray();
+        service.Publish(service.Snapshot with { Instances = rows, SelectedInstanceId = rows[^1].Id });
+        using var owner = new MainWindowViewModel(service, new FakeExternalLauncher()); await owner.InitializeAsync();
+        var window = new MainWindow { DataContext = owner }; window.Show(); owner.SelectedPage = owner.Instances;
+        void Pump() { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
+        Pump();
+        var selector = window.GetVisualDescendants().OfType<ListBox>().Single(c => c.Name == "InstanceSelector");
+        selector.SelectedItem = owner.Instances.Instances.First(i => i.Id == first.Id); Pump();
+        var button = window.GetVisualDescendants().OfType<Button>().Single(c => c.Name == "OpenInstanceSettingsButton");
+        Assert.True(button.IsEffectivelyEnabled);
+        Assert.True(button.Command!.CanExecute(null));
+        button.Command.Execute(null); Pump(); Assert.False(owner.Instances.IsSelection);
+        owner.Instances.ShowSelectionCommand.Execute(null); Pump();
+        var center = button.TranslatePoint(new Avalonia.Point(button.Bounds.Width / 2, button.Bounds.Height / 2), window)!.Value;
+        window.MouseDown(center, MouseButton.Left); window.MouseUp(center, MouseButton.Left); Pump();
+        Assert.False(owner.Instances.IsSelection); Assert.Equal(first.Id, owner.Instances.SelectedInstance?.Id);
+        owner.Instances.ShowSelectionCommand.Execute(null); owner.Instances.SearchText = "no matching fixture"; Pump();
+        Assert.False(button.IsEffectivelyEnabled); window.Close();
+    }
     [AvaloniaFact]
     public async Task SwitchingInstanceSectionStartsAtTopOfNewPage()
     {

@@ -87,6 +87,7 @@ public sealed partial class InstancesPageViewModel
     {
         if (!worldEditingReady) return;
         ApplyWorldPackDetails();
+        OnPropertyChanged(nameof(DatapackListStatus));
         foreach (var name in new[] { nameof(SelectedWorldPermission), nameof(SelectedWorldDifficulty), nameof(WorldDifficultyLocked), nameof(IsWorldSettingsDirty), nameof(HasWorldSettingsConflict), nameof(ShowWorldSettingsSaveActions), nameof(CanEditWorldMetadata), nameof(CanEditWorldDifficulty), nameof(WorldSettingsStatus), nameof(WorldSettingsFeedback), nameof(WorldEditBackupPath), nameof(HasWorldEditBackup), nameof(WorldSpawnText), nameof(WorldRuntimeText), nameof(CanEnableSelectedDatapacks), nameof(CanDisableSelectedDatapacks) }) OnPropertyChanged(name);
         NotifyWorldEditingCommands(); ScheduleUnreadWorldEditing();
     }

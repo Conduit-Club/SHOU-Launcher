@@ -87,6 +87,7 @@ public sealed partial class InstancesPageViewModel
     public InstanceContentEntry? SelectedContent { get => _selectedContent; set { if (SetProperty(ref _selectedContent, value)) NotifyWorkspace(); } }
     public RelayCommand ShowInstanceSettingsCommand { get; private set; } = null!;
     public RelayCommand<GameInstance?> OpenVisibleInstanceCommand { get; private set; } = null!;
+    public RelayCommand OpenSelectedVisibleInstanceCommand { get; private set; } = null!;
     public RelayCommand ShowSelectionCommand { get; private set; } = null!;
     public RelayCommand NavigateBackCommand { get; private set; } = null!;
     public AsyncRelayCommand SaveInstanceSettingsCommand { get; private set; } = null!;
@@ -103,6 +104,7 @@ public sealed partial class InstancesPageViewModel
         {
             if (instance is not null && FilteredInstances.Contains(instance) && SelectedInstance?.Id == instance.Id) ShowInstanceSettingsCommand.Execute(null);
         }, instance => instance is not null && FilteredInstances.Contains(instance) && SelectedInstance?.Id == instance.Id);
+        OpenSelectedVisibleInstanceCommand = Command(() => OpenVisibleInstanceCommand.Execute(SelectedInstance), () => OpenVisibleInstanceCommand.CanExecute(SelectedInstance));
         BeginRenameCommand = Command(() => { _renamingInstance = SelectedInstance!.Id; RenameDraft = SelectedInstance.Name; IsRenameEditorOpen = true; }, () => CanEdit && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         CancelRenameCommand = Command(() => IsRenameEditorOpen = false);
         SaveRenameCommand = AsyncCommand(async () =>
@@ -162,6 +164,7 @@ public sealed partial class InstancesPageViewModel
             OnPropertyChanged(nameof(SelectedInstance));
         }
         OnPropertyChanged(nameof(InstanceCountSummary));
+        OpenSelectedVisibleInstanceCommand?.NotifyCanExecuteChanged();
     }
     private void NotifyWorkspace()
     {
