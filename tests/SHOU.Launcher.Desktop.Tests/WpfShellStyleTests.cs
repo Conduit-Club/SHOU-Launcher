@@ -177,10 +177,20 @@ public sealed class WpfShellStyleTests
                 ColorIs("#AC2F6C", Presenter(server).BorderBrush);
                 ColorIs("#5C3A54", Presenter(server).Foreground);
                 ColorIs("#5C3A54", server.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "只启动游戏").Foreground);
+                Assert.True(server.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single(path => path.Classes.Contains("serverSelectionCheck")).IsVisible);
                 if (state.Length > 0) { ((IPseudoClasses)navigation.Classes).Remove(state); ((IPseudoClasses)server.Classes).Remove(state); }
             }
             var other = selector.GetVisualDescendants().OfType<ListBoxItem>().Single(item => !item.IsSelected);
             ColorIs("#5C3A54", other.GetVisualDescendants().OfType<TextBlock>().Single(t => t.Text == "社团生存").Foreground);
+            Assert.False(other.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single(path => path.Classes.Contains("serverSelectionCheck")).IsVisible);
+            selector.SelectedItem = other.DataContext; Pump(window);
+            Assert.True(other.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single(path => path.Classes.Contains("serverSelectionCheck")).IsVisible);
+            Assert.False(server.GetVisualDescendants().OfType<Avalonia.Controls.Shapes.Path>().Single(path => path.Classes.Contains("serverSelectionCheck")).IsVisible);
+            var refresh = Find<Button>(window, "RefreshServersButton");
+            Assert.Same(vm.Home.RefreshServersCommand, refresh.Command);
+            Assert.Equal("刷新服务器状态", Avalonia.Automation.AutomationProperties.GetName(refresh));
+            Assert.IsType<Avalonia.Controls.Shapes.Path>(refresh.Content);
+            Assert.Equal(18, refresh.Bounds.Height);
         }
         finally { window.Close(); Application.Current.RequestedThemeVariant = previousTheme; }
     }
@@ -200,7 +210,9 @@ public sealed class WpfShellStyleTests
             if (!OperatingSystem.IsMacOS()) return;
             Assert.True(window.ExtendClientAreaToDecorationsHint);
             Assert.Equal(48, window.ExtendClientAreaTitleBarHeightHint);
-            Assert.Equal(80, Find<StackPanel>(window, "WindowBrand").Margin.Left);
+            Assert.Equal(2, Grid.GetColumn(Find<StackPanel>(window, "WindowBrand")));
+            Assert.Equal(16, Find<StackPanel>(window, "WindowBrand").Margin.Right);
+            Assert.Equal(80, Find<Grid>(window, "ContextHeader").Margin.Left);
             window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.OemComma, KeyModifiers = KeyModifiers.Meta });
             Assert.Same(vm.Settings, vm.SelectedPage);
             window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.W, KeyModifiers = KeyModifiers.Meta });

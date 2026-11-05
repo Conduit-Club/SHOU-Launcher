@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
         ConfigurePlatformChrome();
+        InitializePackDrop();
         Opened += async (_, _) => { if (DataContext is MainWindowViewModel vm) await vm.InitializeAsync(); };
         Closed += (_, _) => { if (DataContext is MainWindowViewModel vm) vm.Dispose(); };
         KeyDown += (_, e) =>
@@ -61,11 +62,20 @@ public partial class MainWindow : Window
         WindowDecorations = WindowDecorations.Full;
         ExtendClientAreaToDecorationsHint = true;
         ExtendClientAreaTitleBarHeightHint = 48;
-        this.FindControl<StackPanel>("WindowBrand")!.Margin = new Thickness(80, 0, 0, 0);
-        this.FindControl<StackPanel>("ContextHeader")!.Margin = new Thickness(80, 0, 0, 0);
+        this.FindControl<Grid>("TitleBarLayout")!.ColumnDefinitions = new ColumnDefinitions("*,Auto,*");
+        var brand = this.FindControl<StackPanel>("WindowBrand")!;
+        Grid.SetColumn(brand, 2);
+        brand.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
+        brand.Margin = new Thickness(0, 0, 16, 0);
+        var navigation = this.FindControl<StackPanel>("PrimaryNavigation")!;
+        navigation.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
+        navigation.Margin = new Thickness(0);
+        var context = this.FindControl<Grid>("ContextHeader")!;
+        Grid.SetColumnSpan(context, 3);
+        context.Margin = new Thickness(80, 0, 16, 0);
         this.FindControl<StackPanel>("CustomWindowControls")!.IsVisible = false;
         WindowDecorationProperties.SetElementRole(this.FindControl<Border>("LauncherTitleBar")!, WindowDecorationsElementRole.TitleBar);
-        foreach (var button in this.FindControl<StackPanel>("PrimaryNavigation")!.Children.OfType<Button>())
+        foreach (var button in navigation.Children.OfType<Button>())
             WindowDecorationProperties.SetElementRole(button, WindowDecorationsElementRole.User);
         WindowDecorationProperties.SetElementRole(this.FindControl<Button>("BackNavigationButton")!, WindowDecorationsElementRole.User);
     }

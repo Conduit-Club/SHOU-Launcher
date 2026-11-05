@@ -2,8 +2,9 @@
   <UserControl.Resources>
     <DataTemplate x:Key="ModrinthPackImportTemplate">
       <Border Classes="card"><StackPanel Spacing="8" IsEnabled="{Binding CanEdit}">
-        <TextBlock Text="导入本机 Modrinth 整合包" Classes="sectionTitle" />
-        <WrapPanel><Button Name="ReadModrinthPackButton" Content="选择 .mrpack…" Click="PickModrinthPack_Click" IsEnabled="{Binding PackServiceAvailable}" Margin="0,0,8,0" /><Button Content="读取已下载的整合包" Command="{Binding ReadCachedPackCommand}" IsVisible="{Binding HasDownloadedFile}" /></WrapPanel>
+        <TextBlock Text="安装本机整合包" Classes="sectionTitle" />
+        <TextBlock Text="将 .zip 或 .mrpack 拖入窗口，也可选择文件。" Classes="muted" />
+        <WrapPanel><Button Name="ReadModrinthPackButton" Content="选择整合包…" Click="PickModrinthPack_Click" IsEnabled="{Binding PackServiceAvailable}" Margin="0,0,8,0" /><Button Content="读取已下载的整合包" Command="{Binding ReadCachedPackCommand}" IsVisible="{Binding HasDownloadedFile}" /></WrapPanel>
         <TextBlock Text="{Binding LocalPackPath}" Classes="muted" FontSize="11" TextTrimming="CharacterEllipsis" />
         <StackPanel IsVisible="{Binding HasPackInspection}" Spacing="6"><TextBlock Text="新实例名称" /><TextBox Name="ModrinthPackInstanceName" Text="{Binding PackInstanceName}" />
           <Expander Header="客户端可选文件（默认不安装）" IsVisible="{Binding HasOptionalPackFiles}"><ItemsControl ItemsSource="{Binding OptionalPackFiles}" Margin="12"><ItemsControl.ItemTemplate><DataTemplate><CheckBox Content="{Binding Path}" IsChecked="{Binding Selected}" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Expander>

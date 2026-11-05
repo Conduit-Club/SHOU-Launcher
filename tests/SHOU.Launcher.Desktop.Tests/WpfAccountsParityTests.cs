@@ -1,5 +1,8 @@
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
 using Avalonia.Headless.XUnit;
+using Avalonia.Media;
+using Avalonia.Styling;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using SHOU.Launcher.Core.Abstractions;
@@ -39,6 +42,52 @@ public sealed class WpfAccountsParityTests
             Assert.Equal("microsoft", root.Accounts.SelectedProvider.Id); Assert.Single(root.Accounts.ChannelAccounts);
             Assert.Equal("ms", root.Accounts.SelectedChannelAccount!.Id);
             Assert.Equal(4, window.GetVisualDescendants().OfType<Button>().Count(b => b.Classes.Contains("accountChannel")));
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void StorageDetailsStayInTheExistingSelectorTooltipWithoutAnExtraAccountPanel()
+    {
+        using var root = new MainWindowViewModel(ServiceWithProfiles(), new FakeExternalLauncher());
+        var window = new Window { Width = 300, Height = 474, Content = new AccountsView { DataContext = root.Accounts } };
+        window.Show(); Pump(window);
+        var selector = Find<ComboBox>(window, "AccountSelector");
+        try
+        {
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Expander>(), expander => expander.Name == "AccountSecurityDetails");
+            ToolTip.SetIsOpen(selector, true); Pump(window);
+            var tip = Assert.IsType<StackPanel>(ToolTip.GetTip(selector));
+            var details = tip.Children.OfType<TextBlock>().ToArray();
+            Assert.Equal(2, details.Length);
+            Assert.Equal(root.Accounts.AccountDetail, details[0].Text);
+            Assert.Equal(root.Accounts.PersistenceSummary, details[1].Text);
+            Assert.Same(root.Accounts.RefreshAccountCommand, Find<Button>(window, "RefreshAccountButton").Command);
+            Assert.Same(root.Accounts.BeginAddAccountCommand, Find<Button>(window, "BeginAddAccountButton").Command);
+            Assert.Same(root.Accounts.RequestRemovalCommand, Find<Button>(window, "RequestAccountRemovalButton").Command);
+        }
+        finally { ToolTip.SetIsOpen(selector, false); window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void SelectedProviderUsesAnAccentOutlineAndReadableTextWithoutABlueFill()
+    {
+        using var root = new MainWindowViewModel(ServiceWithProfiles(), new FakeExternalLauncher());
+        var window = new Window { Width = 300, Height = 474, Content = new AccountsView { DataContext = root.Accounts } };
+        window.Show(); Pump(window);
+        try
+        {
+            var channel = Find<Button>(window, "MicrosoftChannelButton");
+            Assert.True(channel.Classes.Contains("selected"));
+            var presenter = channel.GetVisualDescendants().OfType<ContentPresenter>().Single(part => part.Name == "PART_ContentPresenter" && ReferenceEquals(part.TemplatedParent, channel));
+            foreach (var dark in new[] { false, true })
+            {
+                window.RequestedThemeVariant = dark ? ThemeVariant.Dark : ThemeVariant.Light; Pump(window);
+                Assert.Equal((byte)0, Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color.A);
+                Assert.Equal(Color.Parse(dark ? "#F0DDEB" : "#5C3A54"), Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Foreground).Color);
+                Assert.Equal(Color.Parse(dark ? "#EF9CC8" : "#AC2F6C"), Assert.IsAssignableFrom<ISolidColorBrush>(presenter.BorderBrush).Color);
+                Assert.Equal(new Avalonia.Thickness(2), presenter.BorderThickness);
+            }
         }
         finally { window.Close(); }
     }

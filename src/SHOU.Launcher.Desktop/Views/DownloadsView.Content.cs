@@ -17,8 +17,8 @@ public partial class DownloadsView
         try
         {
             var storage = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境不支持本机文件选择。");
-            var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "选择本机Modrinth整合包", AllowMultiple = false,
-                FileTypeFilter = [new FilePickerFileType("Modrinth整合包") { Patterns = ["*.mrpack"] }] });
+            var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "选择本机整合包", AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("Minecraft 整合包") { Patterns = ["*.mrpack", "*.zip"] }] });
             if (files.FirstOrDefault()?.TryGetLocalPath() is { } path) await vm.ReadLocalPackAsync(path);
         }
         catch (Exception ex) { vm.Root.ShowError("读取整合包失败：" + UiPrivacy.Redact(ex.Message)); }

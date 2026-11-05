@@ -279,13 +279,14 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public AsyncRelayCommand OpenInstallerPageCommand { get; }
 
     public DownloadsPageViewModel(MainWindowViewModel owner, ILauncherCatalogService? catalog = null, string? favoritesPath = null,
-        IContentInstallationService? contentInstall = null, IModrinthPackService? modrinthPacks = null, ILoaderInstanceService? loaderService = null)
+        IContentInstallationService? contentInstall = null, IModrinthPackService? modrinthPacks = null, ILoaderInstanceService? loaderService = null,
+        ILocalPackService? localPacks = null)
         : base(owner, "下载", "Minecraft 自动安装与社区资源")
     {
         _catalog = catalog ?? Service as ILauncherCatalogService;
         _imageToken = _imageLifetime.Token;
         _favoritesPathOverride = favoritesPath;
-        InitializeContentInstallation(contentInstall, modrinthPacks);
+        InitializeContentInstallation(contentInstall, modrinthPacks, localPacks ?? catalog as ILocalPackService);
         InitializeAdditionalLoaders(loaderService);
         DownloadCategoryViewModel Category(string id, string title) => new(this, id, title, ClubIcons.ForDownloadCategory(id));
         MinecraftCategory = Category("minecraft", "Minecraft");

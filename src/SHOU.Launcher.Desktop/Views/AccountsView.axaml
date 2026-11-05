@@ -5,7 +5,7 @@
     <Style Selector="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
     <Style Selector="Button"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="8,4" /></Style>
     <Style Selector="Button.accountChannel"><Setter Property="Height" Value="34" /><Setter Property="Padding" Value="4,3" /><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="BorderBrush" Value="{DynamicResource ClubInputBorder}" /><Setter Property="BorderThickness" Value="1" /></Style>
-    <Style Selector="Button.accountChannel.selected"><Setter Property="BorderThickness" Value="2" /><Setter Property="Background" Value="{DynamicResource ClubSelection}" /><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}" /></Style>
+    <Style Selector="Button.accountChannel.selected"><Setter Property="BorderThickness" Value="2" /><Setter Property="BorderBrush" Value="{DynamicResource ClubAccent}" /><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
     <Style Selector="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
     <Style Selector="TextBox"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="6,4" /><Setter Property="MinWidth" Value="0" /></Style>
     <Style Selector="CheckBox"><Setter Property="MinHeight" Value="24" /></Style>
@@ -26,6 +26,7 @@
         <Grid ColumnDefinitions="*,24,24">
           <ComboBox Name="AccountSelector" ItemsSource="{Binding ChannelAccounts}" SelectedItem="{Binding SelectedChannelAccount}" IsEnabled="{Binding CanEdit}" HorizontalAlignment="Stretch" MinWidth="0" MinHeight="31" Padding="6,2">
             <ComboBox.ItemTemplate><DataTemplate><StackPanel Spacing="0"><TextBlock Text="{Binding DisplayName}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding ., Converter={StaticResource AccountSourceLabel}}" Classes="accountHint" TextWrapping="NoWrap" /></StackPanel></DataTemplate></ComboBox.ItemTemplate>
+            <ToolTip.Tip><StackPanel Name="AccountStorageTooltip" MaxWidth="320" Spacing="5"><TextBlock Text="{Binding AccountDetail}" TextWrapping="Wrap" /><TextBlock Text="{Binding PersistenceSummary}" TextWrapping="Wrap" /></StackPanel></ToolTip.Tip>
           </ComboBox>
           <Button Name="BeginAddAccountButton" Grid.Column="1" Content="+" Command="{Binding BeginAddAccountCommand}" Margin="4,0,0,0" Padding="2" MinWidth="0" ToolTip.Tip="添加当前渠道账户" />
           <Button Name="RequestAccountRemovalButton" Grid.Column="2" Content="×" Command="{Binding RequestRemovalCommand}" Margin="4,0,0,0" Padding="2" MinWidth="0" ToolTip.Tip="移除所选本机账户" />
@@ -98,7 +99,6 @@
       <Border Name="DeviceCodePanel" IsVisible="{Binding HasDeviceChallenge}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8">
         <StackPanel Spacing="8"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" FontSize="24" FontWeight="SemiBold" LetterSpacing="2" HorizontalAlignment="Center" /><TextBlock Text="{Binding DeviceInstructions}" Classes="accountHint" /><WrapPanel><Button Content="打开微软授权页" Command="{Binding OpenVerificationCommand}" Margin="0,0,5,4" /><Button Content="复制代码" Click="CopyDeviceCode_Click" Margin="0,0,5,4" /></WrapPanel><TextBlock Text="可在底部取消当前授权。离开启动或账户页会结束等待。" Classes="accountHint" /></StackPanel>
       </Border>
-      <Expander Name="AccountSecurityDetails" Header="账户与安全存储" Margin="0,8,0,0"><StackPanel Spacing="5" Margin="0,6"><TextBlock Text="{Binding AccountDetail}" Classes="accountHint" /><TextBlock Text="{Binding PersistenceSummary}" Classes="accountHint" /></StackPanel></Expander>
     </StackPanel>
   </ScrollViewer>
 </UserControl>
