@@ -34,7 +34,7 @@ public sealed class AccountPersistenceRegressionTests
     {
         await using var fixture = await Fixture.CreateAsync();
         Directory.CreateDirectory(fixture.Config);
-        await Assert.ThrowsAsync<IOException>(() => fixture.Service.AddOfflineAccountAsync("UnsavedDraft"));
+        await TestFiles.AssertDirectoryCommitFailureAsync(() => fixture.Service.AddOfflineAccountAsync("UnsavedDraft"));
         Assert.AreEqual(0, fixture.Service.Snapshot.Accounts.Count);
         Assert.IsNull(fixture.Service.Snapshot.SelectedAccountId);
     }
@@ -44,7 +44,7 @@ public sealed class AccountPersistenceRegressionTests
     {
         await using var fixture = await Fixture.CreateAsync();
         Directory.CreateDirectory(fixture.Config);
-        await Assert.ThrowsAsync<IOException>(() => fixture.Service.LoginYggdrasilAsync(new("http://127.0.0.1/ygg"), "fixture", "fixture-only"));
+        await TestFiles.AssertDirectoryCommitFailureAsync(() => fixture.Service.LoginYggdrasilAsync(new("http://127.0.0.1/ygg"), "fixture", "fixture-only"));
         Assert.AreEqual(1, fixture.Credentials.Writes, "Protected write happened; a sidecar failure must still not publish saved UI state.");
         Assert.AreEqual(0, fixture.Service.Snapshot.Accounts.Count);
         Assert.IsNull(fixture.Service.Snapshot.SelectedAccountId);
@@ -72,7 +72,7 @@ public sealed class AccountPersistenceRegressionTests
         var original = JsonNode.Parse(await File.ReadAllTextAsync(fixture.Config))!;
         File.Move(fixture.Config, fixture.Config + ".preserved-fixture");
         Directory.CreateDirectory(fixture.Config);
-        await Assert.ThrowsAsync<IOException>(() => fixture.Service.RefreshAccountAsync("existing"));
+        await TestFiles.AssertDirectoryCommitFailureAsync(() => fixture.Service.RefreshAccountAsync("existing"));
         Assert.AreEqual("initial-fixture-token", fixture.SeenTokens.Single());
         Assert.IsFalse(fixture.Service.Snapshot.CanPersistAccounts);
         Assert.IsFalse(fixture.Service.Snapshot.Accounts.Single().Persisted);

@@ -277,7 +277,7 @@ public sealed class LocalPackTests
         if (scenario == "cancel") handler.Override = request => { if (request.RequestUri!.Host == "cdn.modrinth.com") cancellation.Cancel(); return null; };
         var request = new LocalPackImportRequest(source, inspection.ArchiveSha256, "Imported fixture");
         if (scenario == "cancel") await Assert.ThrowsAsync<OperationCanceledException>(() => service.ImportLocalPackAsync(request, cancellation.Token));
-        else if (scenario == "persist-failure") await Assert.ThrowsAsync<IOException>(() => service.ImportLocalPackAsync(request));
+        else if (scenario == "persist-failure") await TestFiles.AssertDirectoryCommitFailureAsync(() => service.ImportLocalPackAsync(request));
         else
         {
             var result = await service.ImportLocalPackAsync(request); Assert.HasCount(1, service.Snapshot.Instances); Assert.AreEqual("fabric", result.Instance.Loader); Assert.AreEqual("0.16.14", result.Instance.LoaderVersion); Assert.AreEqual("1.21.1", result.Instance.GameVersionId); Assert.IsFalse(result.Instance.Installed);

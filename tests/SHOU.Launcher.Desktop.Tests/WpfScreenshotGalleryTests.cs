@@ -17,7 +17,7 @@ public sealed class WpfScreenshotGalleryTests
     [AvaloniaFact]
     public async Task GalleryReadsRealPngBoundsRejectsMalformedImageAndClearsOnNavigation()
     {
-        var root = Path.Combine("/Users/moear/Code/SHOU-Launcher/.shou-dev/test-data/wpf-parity/gallery", Guid.NewGuid().ToString("N"));
+        var root = FixturePaths.Create("gallery");
         using var http = new HttpClient(); var downloads = new VerifiedDownloader(http);
         var platform = PlatformServicesFactory.Create(new(root), downloads);
         using var lease = platform.DataLock.Acquire(platform.Paths);

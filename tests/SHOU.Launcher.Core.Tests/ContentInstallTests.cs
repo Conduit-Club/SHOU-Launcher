@@ -87,7 +87,7 @@ public sealed class ContentInstallTests
         var plan = await f.Plan();
         async Task Download(ContentFile file, string target, CancellationToken ct)
         { await f.Download(file, target, ct); Directory.CreateDirectory(Path.Combine(f.Root, ContentInstallFiles.ManifestName)); }
-        await Assert.ThrowsAsync<IOException>(() => ContentInstallFiles.InstallAsync(f.Instance, plan, Download));
+        await TestFiles.AssertDirectoryCommitFailureAsync(() => ContentInstallFiles.InstallAsync(f.Instance, plan, Download));
         Assert.IsFalse(File.Exists(Path.Combine(f.Root, "mods/main.jar")));
         CollectionAssert.AreEqual(f.Catalog.Bytes, await File.ReadAllBytesAsync(Path.Combine(f.Root, "mods/api.jar")));
     }

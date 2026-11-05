@@ -62,7 +62,11 @@ public sealed class WindowsLegacyCredentialTests
     [DataRow(2u)]
     public void AuthenticatedFieldFormatsDecryptAndRejectTamperedTags(uint version)
     {
-        var encoded = AuthenticatedField(version, "fake token 中文 with spaces");
+        // Independent Python cryptography 50.0.2 / OpenSSL fixture. The host OS
+        // cannot generate ChaCha20-Poly1305 on Windows 10, which is what this tests.
+        var encoded = version == 1
+            ? "RU5DIQAAAAEAAABJAwQFBgcICQoLDA0ODxAREgECAwQFBgcICQoLDDiHkwl2H50+BcevX2ntTuUM3h9J2fBart3zJjJNQZzxDioH4nSwI2Njou1Yag=="
+            : AuthenticatedField(version, "fake token 中文 with spaces");
         Assert.AreEqual("fake token 中文 with spaces", LegacyFieldDecryptor.Decrypt(encoded, Key));
         Assert.IsTrue(LegacyFieldDecryptor.HasAuthenticationTag(encoded));
         var damaged = Convert.FromBase64String(encoded); damaged[12 + (version == 1 ? 28 : 12)] ^= 1;

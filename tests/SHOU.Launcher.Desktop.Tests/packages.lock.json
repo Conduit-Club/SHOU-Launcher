@@ -171,6 +171,11 @@
           "Avalonia.Skia": "12.1.5"
         }
       },
+      "BouncyCastle.Cryptography": {
+        "type": "Transitive",
+        "resolved": "2.7.0",
+        "contentHash": "U+12df8UEWHgBi04YVf/Lgi2dy3SItlIYvHjjEVa/BngCQIzDCDRBk50DDByCfDvSbe5pRNFr3b7UrVK2kMcLw=="
+      },
       "CommunityToolkit.Mvvm": {
         "type": "Transitive",
         "resolved": "8.4.2",
@@ -406,6 +411,7 @@
         "dependencies": {
           "Avalonia.Desktop": "[12.1.5, )",
           "Avalonia.Themes.Fluent": "[12.1.5, )",
+          "BouncyCastle.Cryptography": "[2.7.0, )",
           "CommunityToolkit.Mvvm": "[8.4.2, )",
           "PlainToolkit.CngProtectedData": "[2.1.0, )",
           "SHOU.Launcher.Core": "[1.5.0, )",

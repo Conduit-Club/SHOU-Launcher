@@ -430,8 +430,13 @@ internal readonly record struct WorldFileIdentity(ulong Device, ulong Index, ulo
         if (!BitConverter.IsLittleEndian) throw new PlatformNotSupportedException("World identity currently requires little-endian native hosts.");
         if (OperatingSystem.IsWindows())
         {
-            using var handle = CreateFile(path, 0, 7, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero);
-            if (handle.IsInvalid) throw new IOException("Cannot obtain world path identity."); return FromHandle(handle);
+            // Managed IO accepts long paths. Match that spelling at the native identity boundary,
+            // including UNC paths, after the caller has validated the physical path containment.
+            var nativePath = path.StartsWith(@"\\?\", StringComparison.Ordinal) ? path
+                : path.StartsWith(@"\\", StringComparison.Ordinal) ? @"\\?\UNC\" + path[2..]
+                : @"\\?\" + path;
+            using var handle = CreateFile(nativePath, 0, 7, IntPtr.Zero, 3, 0x02200000, IntPtr.Zero);
+            if (handle.IsInvalid) throw new IOException("Cannot obtain world path identity.", new System.ComponentModel.Win32Exception(Marshal.GetLastWin32Error())); return FromHandle(handle);
         }
         var bytes = new byte[256];
         if (OperatingSystem.IsMacOS()) { if (LStat(path, bytes) != 0) throw new IOException("Cannot stat world path."); return Darwin(bytes); }

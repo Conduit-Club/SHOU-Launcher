@@ -108,8 +108,30 @@ public static class LegacyFieldDecryptor
         var plaintext = new byte[data.Length - 44];
         try
         {
-            using var chacha = new ChaCha20Poly1305(derived);
-            chacha.Decrypt(data.Slice(16, 12), data[44..], data.Slice(28, 16), plaintext);
+            if (ChaCha20Poly1305.IsSupported)
+            {
+                using var chacha = new ChaCha20Poly1305(derived);
+                chacha.Decrypt(data.Slice(16, 12), data[44..], data.Slice(28, 16), plaintext);
+            }
+            else
+            {
+                // Windows 10 lacks the OS primitive. Retain authenticated read compatibility
+                // through the maintained managed provider; never downgrade to the v0 cipher.
+                var cipher = new Org.BouncyCastle.Crypto.Modes.ChaCha20Poly1305();
+                cipher.Init(false, new Org.BouncyCastle.Crypto.Parameters.AeadParameters(
+                    new Org.BouncyCastle.Crypto.Parameters.KeyParameter(derived), 128, data.Slice(16, 12).ToArray()));
+                var authenticated = new byte[data.Length - 28];
+                data[44..].CopyTo(authenticated); data.Slice(28, 16).CopyTo(authenticated.AsSpan(data.Length - 44));
+                try
+                {
+                    var count = cipher.ProcessBytes(authenticated, 0, authenticated.Length, plaintext, 0);
+                    count += cipher.DoFinal(plaintext, count);
+                    if (count != plaintext.Length) throw new CryptographicException("Invalid authenticated plaintext length.");
+                }
+                catch (Org.BouncyCastle.Crypto.InvalidCipherTextException ex)
+                { throw new CryptographicException("Legacy field authentication failed.", ex); }
+                finally { CryptographicOperations.ZeroMemory(authenticated); cipher.Reset(); }
+            }
             return plaintext;
         }
         catch { CryptographicOperations.ZeroMemory(plaintext); throw; }

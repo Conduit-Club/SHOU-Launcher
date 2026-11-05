@@ -150,7 +150,7 @@ public sealed class ModrinthPackTests
             var inspection = await service.InspectModrinthPackAsync(archive); var request = new ModrinthPackImportRequest(archive, inspection.ArchiveSha256, "Imported fixture");
             if (scenario == "persist-failure") Directory.CreateDirectory(Path.Combine(platform.Paths.LocalDataDirectory, "shou.desktop.v1.json"));
             if (scenario == "cancel") await Assert.ThrowsAsync<OperationCanceledException>(() => service.ImportModrinthPackAsync(request, cancellation.Token));
-            else if (scenario == "persist-failure") await Assert.ThrowsAsync<IOException>(() => service.ImportModrinthPackAsync(request));
+            else if (scenario == "persist-failure") await TestFiles.AssertDirectoryCommitFailureAsync(() => service.ImportModrinthPackAsync(request));
             else
             {
                 var result = await service.ImportModrinthPackAsync(request);

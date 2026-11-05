@@ -67,9 +67,10 @@ public sealed class LaunchPlanTests
     }
     [TestMethod] public void ThirdPartyPlanRequiresInjectorAndNeverAddsWindowsTrustOnMac()
     {
-        var input = Inputs(); var identity = input.Identity with { AuthenticationServer = new Uri("https://skin.mualliance.ltd/api/union/yggdrasil"), InjectorPath = "/fixture/injector space.jar", PrefetchedMetadataBase64 = "e30=" };
+        var injector = Path.Combine(TestFiles.Root(), "injector space.jar");
+        var input = Inputs(); var identity = input.Identity with { AuthenticationServer = new Uri("https://skin.mualliance.ltd/api/union/yggdrasil"), InjectorPath = injector, PrefetchedMetadataBase64 = "e30=" };
         var plan = LaunchPlanBuilder.Build(input with { Identity = identity });
-        Assert.IsTrue(plan.Arguments.Any(a => a == "-javaagent:/fixture/injector space.jar=https://skin.mualliance.ltd/api/union/yggdrasil"));
+        Assert.IsTrue(plan.Arguments.Any(a => a == "-javaagent:" + injector + "=https://skin.mualliance.ltd/api/union/yggdrasil"));
         Assert.IsTrue(plan.Arguments.Contains("-Dauthlibinjector.side=client"));
         Assert.IsFalse(plan.Arguments.Any(a => a.Contains("WINDOWS-ROOT", StringComparison.Ordinal)));
         Assert.ThrowsExactly<InvalidOperationException>(() => LaunchPlanBuilder.Build(input with { Identity = identity with { InjectorPath = null } }));

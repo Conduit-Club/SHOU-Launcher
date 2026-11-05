@@ -47,6 +47,15 @@ public sealed class MinecraftRulesTests
 
 internal static class TestFiles
 {
+    // Moving a regular staging file over a directory is EISDIR/IOException on Unix
+    // and ERROR_ACCESS_DENIED/UnauthorizedAccessException on Windows. Keep all
+    // transaction/rollback assertions while checking the host's concrete failure.
+    public static async Task AssertDirectoryCommitFailureAsync(Func<Task> action)
+    {
+        if (OperatingSystem.IsWindows()) await Assert.ThrowsAsync<UnauthorizedAccessException>(action);
+        else await Assert.ThrowsAsync<IOException>(action);
+    }
+
     public static string Root()
     {
         var basis = Environment.GetEnvironmentVariable("SHOU_DEV_ROOT") ?? throw new InvalidOperationException("Tests require guarded task environment.");

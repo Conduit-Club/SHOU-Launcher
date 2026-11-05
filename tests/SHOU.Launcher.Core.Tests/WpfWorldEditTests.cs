@@ -13,6 +13,23 @@ namespace SHOU.Launcher.Core.Tests;
 [TestClass]
 public sealed class WpfWorldEditTests
 {
+    [TestMethod]
+    public async Task LongChineseAndSpacePathSavesMetadataAndExactBackup()
+    {
+        var root = Path.Combine(TestFiles.Root(), "中文 长目录 " + new string('a', 70), new string('b', 70));
+        var game = Path.Combine(root, "独立实例");
+        var world = Path.Combine(game, "saves", "world"); Directory.CreateDirectory(world);
+        var level = Path.Combine(world, "level.dat");
+        var original = LevelBytes(); await File.WriteAllBytesAsync(level, original);
+        var store = new InstanceWorldStore(root, game);
+        var state = await store.GetEditStateAsync("world");
+        var saved = await store.SaveMetadataAsync("world", state.Revision, new(true, 3, false));
+        Assert.IsNotNull(saved.BackupPath); Assert.IsTrue(saved.BackupPath.Length > 260);
+        CollectionAssert.AreEqual(original, await File.ReadAllBytesAsync(saved.BackupPath));
+        Assert.IsTrue((await store.GetEditStateAsync("world")).Values.AllowCommands);
+        Assert.IsFalse(Directory.EnumerateFiles(world, ".shou-world-*.tmp").Any());
+    }
+
     [TestMethod, DataRow(false), DataRow(true)]
     public async Task MetadataSaveChangesOnlyThreeAuthorizedBytesAndKeepsExactOriginalBackup(bool gzip)
     {

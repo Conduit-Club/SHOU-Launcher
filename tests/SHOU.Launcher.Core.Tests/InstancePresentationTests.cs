@@ -56,12 +56,12 @@ public sealed class InstancePresentationTests
         File.Move(file, backup); Directory.CreateDirectory(file);
         try
         {
-            await Assert.ThrowsAsync<IOException>(() => service.UpdateInstancePresentationAsync(instance.Id, new("forge", "常用", "unsaved", false)));
+            await TestFiles.AssertDirectoryCommitFailureAsync(() => service.UpdateInstancePresentationAsync(instance.Id, new("forge", "常用", "unsaved", false)));
             Assert.AreEqual(persisted, service.Snapshot.Instances.Single(i => i.Id == instance.Id).Presentation);
             var directories = Directory.GetDirectories(platform.Paths.InstancesDirectory).Order().ToArray();
-            await Assert.ThrowsAsync<IOException>(() => service.CreateInstanceAsync("Cannot save", "1.21.1"));
+            await TestFiles.AssertDirectoryCommitFailureAsync(() => service.CreateInstanceAsync("Cannot save", "1.21.1"));
             Assert.AreEqual(2, service.Snapshot.Instances.Count); CollectionAssert.AreEqual(directories, Directory.GetDirectories(platform.Paths.InstancesDirectory).Order().ToArray());
-            await Assert.ThrowsAsync<IOException>(() => service.SelectInstanceAsync(other.Id));
+            await TestFiles.AssertDirectoryCommitFailureAsync(() => service.SelectInstanceAsync(other.Id));
             Assert.AreEqual(instance.Id, service.Snapshot.SelectedInstanceId);
         }
         finally { Directory.Delete(file); File.Move(backup, file); }

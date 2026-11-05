@@ -194,7 +194,7 @@ internal sealed class FakeCapabilities : IPlatformCapabilities
 }
 internal sealed class FakePaths : IAppPaths
 {
-    private const string Root = "/Users/moear/Code/SHOU-Launcher/.shou-dev/test-data/night/ui/headless-fixture";
+    private readonly string Root = FixturePaths.Create("headless");
     public string DataDirectory => Root;
     public string SharedDataDirectory => Root + "/shared";
     public string LocalDataDirectory => Root + "/local";

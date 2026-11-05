@@ -14,7 +14,7 @@ namespace SHOU.Launcher.Desktop.Tests;
 public sealed class WpfDownloadsTests
 {
     private static readonly DateTimeOffset FixtureDate = new(2025, 1, 2, 3, 4, 0, TimeSpan.Zero);
-    private static string FixturePath(string name) => Path.Combine("/Users/moear/Code/SHOU-Launcher/.shou-dev/test-data/wpf-parity/downloads", Guid.NewGuid().ToString("N"), name);
+    private static string FixturePath(string name) => Path.Combine(FixturePaths.Create("downloads"), name);
     private static ContentProject Project(string id = "fixture-project", string? icon = null) => new(id, id, "Fixture Resource", "Fixture description", "Fixture author", 12, "mod", icon, new("https://modrinth.com/mod/" + id));
     private static void Pump(Window window) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);

@@ -16,7 +16,7 @@ public sealed class WpfInstancePresentationTests
     [AvaloniaFact]
     public async Task ActualControlsSavePresentationFavoriteFilterAndCancelDescriptionDraft()
     {
-        var root = Path.Combine("/Users/moear/Code/SHOU-Launcher/.shou-dev/test-data/wpf-parity/presentation", Guid.NewGuid().ToString("N"));
+        var root = FixturePaths.Create("presentation");
         using var http = new HttpClient(); var downloads = new VerifiedDownloader(http);
         var platform = PlatformServicesFactory.Create(new(root), downloads); using var lease = platform.DataLock.Acquire(platform.Paths);
         await using var processes = (ProcessRunner)platform.Processes;
