@@ -108,4 +108,18 @@ R3首次启动遇到锁屏下原生渲染计时器注册失败，保留失败记
 
 需要补齐未支持加载器、内容安装/依赖、世界/服务器/数据包、皮肤/工具/主题与完整设置/弹窗行为；完成Windows原生运行、旧配置/实例/禁用Java导入、旧→新→旧数据往返、DPAPI/密钥兼容和双入口互斥。通过这些门禁后才切Windows默认入口和移除旧工程；此次没有删除WPF。
 
+## 本地 Mac 候选 R4
+
+2026-11-05，产品源码`dde1d8ea50f74f836f146b95ea94ef045a8a9d71`。候选来自干净detached构建树，`source_dirty=false`；.NET SDK10.0.403 / Avalonia12.1.5 / Release / osx-arm64 / 自包含。签名为本地ad-hoc，未公证。
+
+归档：`.shou-dev/dist/WPF-PARITY/r4/osx-arm64/SHOU-Launcher-osx-arm64-v1.5.0-dev.gdde1d8ea.zip`，47,987,629字节。SHA-256：`5dc22e4e1927cc1f4bae9163b85d400408a2adca5f609a5b9927e9d5cc230ced`。
+
+R4从该ZIP重新解压并通过`codesign --verify --deep --strict`，在移除SDK/PCL构建变量与工具PATH的环境启动。外部CUA已核验首页、实例上下文、最终三列画廊及正确工具栏；重启后仍可读取R3保存的服务器、世界种子42和两个数据包ZIP。⌘W关闭后exit0，无超时、无遗留候选进程；临时屏幕唤醒随验收进程结束。
+
+完整回归：Core221通过/3项专用运行时与在线测试跳过，Desktop71通过/0失败/0跳过，编译零警告/错误。R4与R3的Core源码/测试树相同；原生ZIP导入、服务器显式保存/备份和真实Modrinth下载的完整操作证据在R3，R4补验持久数据重读与最后画廊修正。Minecraft主菜单与Quit的前轮N5证据单列，本轮未重做这一项。
+
+三个本地分支均保留阶段提交：整合`features/wpf-parity`，窗口/下载`features/wpf-parity-shell@852ffaa8`，设置/世界`features/wpf-parity-settings@bce79852`。worker改动以校验后的自有文件补丁整合；未推送、未合并PR、未发布。旧WPF入口、原`.env`及未跟踪任务计划保留。21项Git/分支守卫检查通过；本轮重任务已结束。
+
+完整机器记录：`.shou-dev/reports/wpf-parity/FINAL.json`，包含归档与参考哈希、分支提交、TRX、实窗观察与未完成清单；R1/R2/R3的失败和修正记录均保留。实窗截图由CUA直接显示在对话中，未声称存在本地截图文件。上表的54类仍分别标注范围，完整视觉与业务对等尚待补齐。
+
 本机原始参考与证据位于`.shou-dev/references/wpf-20261105/`及`.shou-dev/reports/wpf-parity/`。外部API依据：[Modrinth搜索](https://docs.modrinth.com/api/operations/searchprojects/)、[项目版本](https://docs.modrinth.com/api/operations/getprojectversions/)、[Fabric Meta](https://github.com/FabricMC/fabric-meta/blob/master/README.md)。
