@@ -17,6 +17,30 @@ namespace SHOU.Launcher.Desktop.Tests;
 
 public sealed class WpfShellStyleTests
 {
+    [AvaloniaFact]
+    public void SelectedNavigationTextKeepsReadableContrastAgainstItsPillInBothThemes()
+    {
+        static double Luminance(Color color)
+        {
+            static double Linear(byte channel) { var c = channel / 255d; return c <= .04045 ? c / 12.92 : Math.Pow((c + .055) / 1.055, 2.4); }
+            return .2126 * Linear(color.R) + .7152 * Linear(color.G) + .0722 * Linear(color.B);
+        }
+        using var root = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
+        var window = new MainWindow { DataContext = root }; window.Show(); Pump(window);
+        try
+        {
+            foreach (var theme in new[] { ThemeVariant.Light, ThemeVariant.Dark })
+            {
+                window.RequestedThemeVariant = theme; Pump(window);
+                var presenter = Presenter(Find<ToggleButton>(window, "LaunchNavigationButton"));
+                var foreground = Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Foreground).Color;
+                var background = Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color;
+                var a = Luminance(foreground); var b = Luminance(background);
+                Assert.True((Math.Max(a, b) + .05) / (Math.Min(a, b) + .05) >= 4.5, $"Selected navigation contrast is too low in {theme}.");
+            }
+        }
+        finally { window.Close(); }
+    }
     private static void Pump(Window window) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
     private static ContentPresenter Presenter(Control control) => control.GetVisualDescendants().OfType<ContentPresenter>().Single(p => p.Name == "PART_ContentPresenter" && ReferenceEquals(p.TemplatedParent, control));

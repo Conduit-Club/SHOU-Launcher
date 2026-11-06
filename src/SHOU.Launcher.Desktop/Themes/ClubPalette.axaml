@@ -13,6 +13,7 @@
       <SolidColorBrush x:Key="ClubTitleForeground">#FFFFFF</SolidColorBrush>
       <SolidColorBrush x:Key="ClubSelection">#EDF8FE</SolidColorBrush>
       <SolidColorBrush x:Key="ClubSelectionForeground">#26799F</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubTitleSelectionForeground">#26799F</SolidColorBrush>
       <SolidColorBrush x:Key="ClubHover">#FBE8F4</SolidColorBrush>
       <SolidColorBrush x:Key="ClubErrorBackground">#FFF1E5</SolidColorBrush>
       <SolidColorBrush x:Key="ClubErrorForeground">#9B3C32</SolidColorBrush>
@@ -33,6 +34,7 @@
       <SolidColorBrush x:Key="ClubTitleForeground">#FFFFFF</SolidColorBrush>
       <SolidColorBrush x:Key="ClubSelection">#233E4D</SolidColorBrush>
       <SolidColorBrush x:Key="ClubSelectionForeground">#8ED6F4</SolidColorBrush>
+      <SolidColorBrush x:Key="ClubTitleSelectionForeground">#26799F</SolidColorBrush>
       <SolidColorBrush x:Key="ClubHover">#493047</SolidColorBrush>
       <SolidColorBrush x:Key="ClubErrorBackground">#4C302E</SolidColorBrush>
       <SolidColorBrush x:Key="ClubErrorForeground">#FFD0BE</SolidColorBrush>
