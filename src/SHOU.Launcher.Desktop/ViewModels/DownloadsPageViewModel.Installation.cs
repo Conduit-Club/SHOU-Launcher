@@ -28,6 +28,7 @@ public sealed partial class DownloadsPageViewModel
     private string _localPackPath = "", _packName = "", _packStatus = "将 .zip 或 .mrpack 拖入窗口，或选择本机整合包；确认清单后安装到独立新实例。";
     private ModrinthPackInspection? _packInspection;
     private LocalPackInspection? _localPackInspection;
+    private IReadOnlyList<string> _packImportDetails = [];
     private int _packRevision;
     public ObservableCollection<ContentTargetChoice> ContentInstallTargets { get; } = [];
     public ContentTargetChoice? SelectedInstallTarget
@@ -45,7 +46,8 @@ public sealed partial class DownloadsPageViewModel
     public ModrinthPackInspection? PackInspection => _packInspection;
     public LocalPackInspection? DetectedLocalPack => _localPackInspection;
     public bool HasPackInspection => _localPackInspection is not null || _packInspection is not null;
-    public string PackDetails => string.Join(Environment.NewLine, _localPackInspection?.Warnings ?? _packInspection?.Warnings ?? []);
+    public string PackDetails => string.Join(Environment.NewLine,
+        (_localPackInspection?.Warnings ?? _packInspection?.Warnings ?? []).Concat(_packImportDetails).Distinct(StringComparer.Ordinal));
     public bool HasPackDetails => PackDetails.Length > 0;
     private bool CanImportLocalPack => _localPackInspection?.CanImport ?? _packInspection?.CanImport ?? false;
     public ObservableCollection<PackOptionalFileViewModel> OptionalPackFiles { get; } = [];
@@ -102,7 +104,7 @@ public sealed partial class DownloadsPageViewModel
     public async Task ReadLocalPackAsync(string path)
     {
         if (!PackServiceAvailable || !CanEdit) return;
-        var revision = ++_packRevision; _localPackPath = path; _packInspection = null; _localPackInspection = null; OptionalPackFiles.Clear();
+        var revision = ++_packRevision; _localPackPath = path; _packInspection = null; _localPackInspection = null; _packImportDetails = []; OptionalPackFiles.Clear();
         OnPropertyChanged(nameof(LocalPackPath)); OnPropertyChanged(nameof(PackInspection)); OnPropertyChanged(nameof(HasPackInspection)); OnPropertyChanged(nameof(HasOptionalPackFiles));
         OnPropertyChanged(nameof(PackDetails)); OnPropertyChanged(nameof(HasPackDetails));
         ModrinthPackInspection? inspected = null;
@@ -134,6 +136,8 @@ public sealed partial class DownloadsPageViewModel
         var request = new ModrinthPackImportRequest(_localPackPath, hash, PackInstanceName, selected);
         ModrinthPackImportResult? imported = null; var revision = _packRevision;
         LocalPackImportResult? local = null;
+        _packImportDetails = [];
+        OnPropertyChanged(nameof(PackDetails)); OnPropertyChanged(nameof(HasPackDetails));
         PackStatus = "正在校验文件并导入独立新实例…";
         var success = await Owner.RunAsync("导入整合包", async ct =>
         {
@@ -141,10 +145,15 @@ public sealed partial class DownloadsPageViewModel
             else imported = await _packs!.ImportModrinthPackAsync(request, ct);
         });
         if (revision != _packRevision || _disposed) return;
-        PackStatus = success ? local is not null
-            ? $"已创建 {local.Instance.Name} 并装入 {local.InstalledFiles} 个文件。游戏本体在首次启动时下载。" + string.Join(" ", local.Warnings)
-            : $"已创建 {imported!.Instance.Name} 并装入 {imported.InstalledFiles} 个文件；跳过 {imported.SkippedServerFiles} 个服务器文件与 {imported.SkippedOptionalFiles} 个未选可选文件。游戏本体在首次启动时下载。"
-            : Owner.ErrorMessage ?? "导入已取消，未登记新实例。";
+        if (success)
+        {
+            _packImportDetails = local?.Warnings ?? [];
+            if (imported is { } result && (result.SkippedServerFiles > 0 || result.SkippedOptionalFiles > 0))
+                _packImportDetails = [$"跳过 {result.SkippedServerFiles} 个服务器文件与 {result.SkippedOptionalFiles} 个未选可选文件。"];
+            PackStatus = $"已创建 {local?.Instance.Name ?? imported!.Instance.Name}，装入 {local?.InstalledFiles ?? imported!.InstalledFiles} 个文件。首次启动会补全游戏本体。";
+        }
+        else PackStatus = Owner.ErrorMessage ?? "导入已取消，未登记新实例。";
+        OnPropertyChanged(nameof(PackDetails)); OnPropertyChanged(nameof(HasPackDetails));
     }
     private void NotifyContentInstallationPage()
     {
