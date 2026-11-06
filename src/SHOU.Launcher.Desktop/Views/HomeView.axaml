@@ -25,7 +25,7 @@
         <Grid Name="HomeLaunchProgressPanel" Grid.RowSpan="2" RowDefinitions="*,Auto" Margin="20,20,20,20" IsVisible="{Binding Root.IsHomeLaunching}">
           <StackPanel VerticalAlignment="Center" Spacing="12" Margin="4,0">
             <views:ClubIcon Kind="play" Width="44" Height="44" Foreground="{DynamicResource ClubAccent}" HorizontalAlignment="Center" Margin="0,0,0,8" />
-            <TextBlock Text="正在启动游戏" FontSize="21" LineHeight="28" Foreground="{DynamicResource ClubAccent}" HorizontalAlignment="Center" />
+            <TextBlock Name="HomeLaunchHeading" Text="{Binding Root.LaunchHeading}" FontSize="21" LineHeight="28" Foreground="{DynamicResource ClubAccent}" HorizontalAlignment="Center" />
             <TextBlock Name="LaunchInstanceTitle" Text="{Binding Root.LaunchInstanceName}" ToolTip.Tip="{Binding Root.LaunchInstanceName}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" HorizontalAlignment="Stretch" TextAlignment="Center" Foreground="{DynamicResource ClubAccent}" />
             <ProgressBar Name="HomeLaunchProgress" IsIndeterminate="{Binding Root.IsLaunchProgressIndeterminate}" Value="{Binding Root.LaunchProgress}" Foreground="{DynamicResource ClubAccent}" Background="{DynamicResource ClubBorder}" Minimum="0" Maximum="100" Height="4" Margin="0,6" />
             <Grid ColumnDefinitions="Auto,12,*" RowDefinitions="Auto,Auto" HorizontalAlignment="Center" Margin="0,8,0,0">

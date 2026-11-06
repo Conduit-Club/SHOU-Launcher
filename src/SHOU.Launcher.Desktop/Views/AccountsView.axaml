@@ -44,7 +44,7 @@
           <ToolTip.Tip><StackPanel Name="AccountAvatarTooltip" MaxWidth="320" Spacing="5"><TextBlock Text="{Binding SelectedPlayerStatus}" TextWrapping="Wrap" /><TextBlock Text="{Binding AccountAppearanceSummary}" TextWrapping="Wrap" /><TextBlock Text="{Binding AccountAppearanceCapability}" TextWrapping="Wrap" /></StackPanel></ToolTip.Tip>
           <local:AccountSkinAvatarControl Name="SelectedAccountAvatar" Skin="{Binding AccountSkin}" Width="64" Height="64" />
         </Button>
-        <TextBlock Text="{Binding SelectedPlayerName}" FontSize="16" LineHeight="22" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding SelectedPlayerName}" FontSize="16" LineHeight="22" MaxWidth="240" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip.Tip="{Binding SelectedPlayerName}" />
         <TextBlock Text="{Binding SelectedPlayerSource}" Classes="accountHint" HorizontalAlignment="Center" />
         <Border Name="AccountToolbarHost" Height="32" Width="112" Margin="0,8,0,0" HorizontalAlignment="Center" CornerRadius="6" Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" BoxShadow="0 1 4 0 #16000000" Opacity="0" IsHitTestVisible="False">
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">

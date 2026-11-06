@@ -36,6 +36,11 @@ public sealed class OneClickLaunchTests
             Assert.True(Find<Grid>(fixture.Window, "HomeLaunchProgressPanel").IsEffectivelyVisible);
             Assert.False(Find<AccountsView>(fixture.Window, "HomeAccountsView").IsEffectivelyVisible);
             Assert.False(Find<Border>(fixture.Window, "OperationBar").IsVisible);
+            Assert.Equal("正在启动游戏", Find<TextBlock>(fixture.Window, "HomeLaunchHeading").Text);
+            var snapshot = fixture.Service.Snapshot;
+            fixture.Service.Publish(snapshot with { LaunchActivity = new(snapshot.Instances[0].Id, snapshot.Instances[0].Name, "等待游戏窗口", "离线角色") });
+            Pump(fixture.Window);
+            Assert.Equal("已启动游戏", Find<TextBlock>(fixture.Window, "HomeLaunchHeading").Text);
             Assert.False(fixture.Launch.IsEffectivelyEnabled);
             Assert.Null(fixture.Service.LastLaunchServerId); Assert.Null(fixture.Service.Snapshot.GameProcessId);
             Assert.False(fixture.Service.Snapshot.Instances.Single().Installed);

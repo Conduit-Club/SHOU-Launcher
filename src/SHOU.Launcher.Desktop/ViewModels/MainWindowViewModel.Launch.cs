@@ -9,6 +9,7 @@ public sealed partial class MainWindowViewModel
     public bool IsHomeLaunching => homeLaunching;
     public string LaunchInstanceName => Snapshot.LaunchActivity?.InstanceName ?? launchInstanceName;
     public string LaunchStage => Snapshot.LaunchActivity?.Stage ?? (Snapshot.State == "Installing" ? "下载并检查游戏文件" : "准备游戏");
+    public string LaunchHeading => Snapshot.LaunchActivity?.Stage == "等待游戏窗口" ? "已启动游戏" : "正在启动游戏";
     public string LaunchAuthentication => Snapshot.LaunchActivity?.Authentication ??
         (Snapshot.Accounts.FirstOrDefault(a => a.Id == Snapshot.SelectedAccountId)?.Kind switch
         { AccountKind.Microsoft => "微软正版验证", AccountKind.Yggdrasil => "外置账户验证", _ => "离线角色" });
@@ -27,7 +28,7 @@ public sealed partial class MainWindowViewModel
     }
     private void NotifyLaunchPresentation()
     {
-        foreach (var property in new[] { nameof(IsHomeLaunching), nameof(LaunchInstanceName), nameof(LaunchStage),
+        foreach (var property in new[] { nameof(IsHomeLaunching), nameof(LaunchInstanceName), nameof(LaunchStage), nameof(LaunchHeading),
             nameof(LaunchAuthentication), nameof(IsLaunchProgressIndeterminate), nameof(LaunchProgress), nameof(LaunchTransferSummary) })
             OnPropertyChanged(property);
     }
