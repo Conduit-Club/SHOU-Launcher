@@ -22,7 +22,7 @@ public sealed class ClubIcon : Control
         "folder-open", "folder-plus", "gauge", "git-pull-request-arrow", "globe", "grid-2x2", "hammer", "heart-filled",
         "heart-off", "heart", "image", "info", "layers", "layout-dashboard", "layout-list", "link-2-off", "link-2",
         "list-x", "list", "log-out", "message-circle", "minus", "monitor-cog", "move-down", "move-up", "music", "network",
-        "package-plus", "package", "palette", "pencil", "play", "power", "puzzle", "refresh-cw", "rocket", "rotate-ccw",
+        "package-plus", "package", "palette", "pencil", "pickaxe", "play", "power", "puzzle", "refresh-cw", "rocket", "rotate-ccw",
         "save", "scroll-text", "scroll", "search", "server", "settings", "share-2", "shield-check", "shirt", "sparkles",
         "tool-case", "trash-2", "triangle-alert", "upload", "user-plus", "user", "wrench", "x"
     };

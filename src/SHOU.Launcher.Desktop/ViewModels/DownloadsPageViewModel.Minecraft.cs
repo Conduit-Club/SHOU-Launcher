@@ -25,10 +25,16 @@ public sealed partial class DownloadsPageViewModel
         if (!_catalogLoaded && !_catalogRequestActive && IsCatalogPage && ReferenceEquals(Owner.SelectedPage, this))
             _catalogRequested = true;
         TryStartCatalogRequest();
+        if (IsSearchPage && (!_searchCompleted || DateTimeOffset.UtcNow - _searchFetched > TimeSpan.FromMinutes(5))) _searchRequested = true;
+        TryStartSearchRequest();
+        if (IsSearchPage && !IsPageLoading) RestoreSearchIcons();
+        if (IsSearchPage && !SearchSupported) SetRequestStatus(SearchCapabilityReason);
+        if (IsConfiguration) StartAutomaticLoaders();
+        if (IsInstallerPage) StartInstallerCatalog();
     }
     private void TryStartCatalogRequest()
     {
-        if (!_catalogRequested || _catalogLoaded || _catalogRequestActive || _loading || !CanQuery
+        if (!_catalogRequested || _catalogLoaded || _catalogRequestActive || !CanQuery
             || !IsCatalogPage || !ReferenceEquals(Owner.SelectedPage, this)) return;
         _catalogRequested = false;
         _ = RefreshCatalogAsync(false);

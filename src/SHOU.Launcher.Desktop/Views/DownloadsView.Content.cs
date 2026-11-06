@@ -1,4 +1,5 @@
 using Avalonia;
+using Avalonia.Input;
 using Avalonia.Controls;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
@@ -11,6 +12,16 @@ namespace SHOU.Launcher.Desktop.Views;
 
 public partial class DownloadsView
 {
+    private void DownloadsView_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && DataContext is DownloadsPageViewModel { IsLoading: true } vm)
+        { vm.CancelBrowseCommand.Execute(null); e.Handled = true; }
+    }
+    private void ContentSearch_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && DataContext is DownloadsPageViewModel vm && vm.SearchCommand.CanExecute(null))
+        { vm.SearchCommand.Execute(null); e.Handled = true; }
+    }
     private async void PickModrinthPack_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not DownloadsPageViewModel vm || !vm.CanEdit || !vm.PackServiceAvailable) return;

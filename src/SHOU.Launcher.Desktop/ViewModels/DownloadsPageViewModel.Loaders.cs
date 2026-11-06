@@ -9,16 +9,24 @@ public sealed class AdditionalLoaderCatalogViewModel(DownloadsPageViewModel owne
 {
     public string Id { get; } = id;
     public string Title { get; } = title;
+    public Avalonia.Media.IImage Icon => LoaderArtwork.For(Id);
     public ObservableCollection<LoaderVersionChoice> Versions { get; } = [];
     public LoaderVersionChoice? SelectedVersion { get => owner.SelectedAdditionalLoader?.Loader == Id ? owner.SelectedAdditionalLoader : null; set => owner.SelectAdditionalLoader(Id, value); }
     private string _status = "";
-    public string Status { get => _status; internal set => SetProperty(ref _status, value); }
+    private bool _isLoading;
+    public bool Loaded { get; internal set; }
+    public bool IsLoading { get => _isLoading; internal set { if (SetProperty(ref _isLoading, value)) NotifyState(); } }
+    public string Summary => SelectedVersion?.Version ?? (IsLoading ? "正在获取版本…" : Versions.Count > 0 ? owner.SelectedVersionId == "1.21.1" ? "可以添加" : "仅浏览" : Loaded ? "无可用版本" : Status.Length > 0 ? "读取失败" : "");
+    public bool HasSelection => SelectedVersion is not null;
+    public string Status { get => _status; internal set { if (SetProperty(ref _status, value)) OnPropertyChanged(nameof(Summary)); } }
     public bool CanEdit => owner.CanEdit;
     public AsyncRelayCommand RefreshCommand { get; } = new(() => owner.RefreshAdditionalLoaderAsync(id), () => owner.CanReadAdditionalLoader);
     public RelayCommand ClearCommand { get; } = new(() => owner.SelectAdditionalLoader(id, null), () => owner.CanEdit && owner.SelectedAdditionalLoader?.Loader == id);
     internal void NotifyState()
     {
         OnPropertyChanged(nameof(SelectedVersion)); OnPropertyChanged(nameof(CanEdit));
+        OnPropertyChanged(nameof(Summary));
+        OnPropertyChanged(nameof(HasSelection));
         RefreshCommand.NotifyCanExecuteChanged(); ClearCommand.NotifyCanExecuteChanged();
     }
 }
@@ -26,6 +34,15 @@ public sealed class AdditionalLoaderCatalogViewModel(DownloadsPageViewModel owne
 public sealed partial class DownloadsPageViewModel
 {
     private ILoaderInstanceService? _loaderService;
+    private bool _fabricLoading, _fabricLoaded;
+    public bool FabricLoading { get => _fabricLoading; private set { if (SetProperty(ref _fabricLoading, value)) OnPropertyChanged(nameof(FabricSummary)); } }
+    public string FabricSummary => SelectedFabric?.Version ?? (FabricLoading ? "正在获取版本…" : FabricVersions.Count > 0 ? "可以添加" : _fabricLoaded ? "无可用版本" : FabricStatus.Length > 0 ? "读取失败" : "");
+    private void StartAutomaticLoaders()
+    {
+        if (!IsConfiguration || !CanQuery) return;
+        if (!_fabricLoaded && !FabricLoading) _ = RefreshFabricAsync();
+        foreach (var loader in AdditionalLoaders.Where(x => !x.Loaded && !x.IsLoading)) _ = RefreshAdditionalLoaderAsync(loader.Id);
+    }
     private LoaderVersionChoice? _selectedAdditionalLoader;
     public IReadOnlyList<AdditionalLoaderCatalogViewModel> AdditionalLoaders { get; private set; } = [];
     public LoaderVersionChoice? SelectedAdditionalLoader => _selectedAdditionalLoader;
@@ -64,9 +81,10 @@ public sealed partial class DownloadsPageViewModel
     {
         if (!CanReadAdditionalLoader || _loaderService is null) return;
         var catalog = AdditionalLoaders.Single(c => c.Id == loader); var game = SelectedVersionId; var revision = _requestRevision;
+        if (catalog.IsLoading) return;
         var previous = catalog.SelectedVersion?.Version;
-        catalog.Status = "正在读取" + catalog.Title + "官方目录…";
-        var success = await QueryAsync("读取" + catalog.Title + "目录", revision, async ct =>
+        catalog.IsLoading = true; catalog.Status = "";
+        try { await ReadBrowseAsync("获取 " + catalog.Title + " 版本", revision, async ct =>
         {
             var versions = await _loaderService.GetLoaderVersionsAsync(loader, game, ct); ct.ThrowIfCancellationRequested();
             if (revision != _requestRevision || !IsConfiguration) return;
@@ -84,14 +102,15 @@ public sealed partial class DownloadsPageViewModel
             }
             catalog.Status = versions.Count == 0 ? "此 Minecraft 版本没有可用的 " + catalog.Title + " 构建。"
                 : game == "1.21.1" ? "" : "此 Minecraft 版本暂不支持安装此加载器。";
-        });
-        if (revision == _requestRevision)
-        { if (!success) catalog.Status = RequestStatus; else SetRequestStatus("", false); }
+            catalog.Loaded = true;
+        }, "loader-" + loader, page: false, failure: message => catalog.Status = message); }
+        finally { if (revision == _requestRevision) { catalog.IsLoading = false; catalog.NotifyState(); } }
     }
     private void ResetAdditionalLoaders()
     {
         ClearAdditionalSelection();
-        foreach (var catalog in AdditionalLoaders) { catalog.Versions.Clear(); catalog.Status = ""; }
+        foreach (var catalog in AdditionalLoaders) { catalog.Versions.Clear(); catalog.Loaded = false; catalog.IsLoading = false; catalog.Status = ""; }
+        _fabricLoaded = false; FabricLoading = false;
     }
     private void ClearAllLoaders()
     {

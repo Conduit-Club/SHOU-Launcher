@@ -117,8 +117,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             if (value is null) return;
             if (ReferenceEquals(value, _selectedPage)) { NotifyNavigation(); if (ReferenceEquals(value, Downloads)) Downloads.OnNavigatedTo(); return; }
             var leavingAccounts = ReferenceEquals(_selectedPage, Accounts) || ReferenceEquals(_selectedPage, Home);
+            var leavingDownloads = ReferenceEquals(_selectedPage, Downloads);
             if (!SetProperty(ref _selectedPage, value)) return;
             if (leavingAccounts) Accounts.OnNavigatingAway();
+            if (leavingDownloads) Downloads.OnNavigatingAway();
             NotifyNavigation();
             if (ReferenceEquals(value, Downloads)) Downloads.OnNavigatedTo();
         }
@@ -133,6 +135,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsSettingsSelected));
         OnPropertyChanged(nameof(IsToolsSelected));
         OnPropertyChanged(nameof(ShowOperationStatus));
+        OnPropertyChanged(nameof(OperationInset));
         BackCommand.NotifyCanExecuteChanged();
     }
     public string CurrentSection => ReferenceEquals(SelectedPage, Downloads) ? "download"
@@ -160,6 +163,10 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool CanReadRemote => !_disposed && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
     public bool HasRunningGame => !_disposed && (Snapshot.State == "Running" || Snapshot.GameProcessId is not null);
     public bool ShowOperationStatus => IsBusy && (!IsHomeLaunching || !ReferenceEquals(SelectedPage, Home));
+    public Thickness OperationInset => new(ReferenceEquals(SelectedPage, Downloads) ? Downloads.ShowCategorySidebar ? 180 : 0
+        : ReferenceEquals(SelectedPage, Settings) || ReferenceEquals(SelectedPage, Tools) ? 135
+        : ReferenceEquals(SelectedPage, Instances) ? Instances.IsSelection ? 175 : 150
+        : ReferenceEquals(SelectedPage, Home) ? 300 : 0, 0, 0, 0);
     public string? ErrorMessage => _errorMessage;
     public bool HasError => !string.IsNullOrWhiteSpace(_errorMessage);
 

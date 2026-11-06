@@ -77,8 +77,8 @@ public sealed class WpfDownloadsTests
         using var owner = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
         using var vm = new DownloadsPageViewModel(owner, catalog, FixturePath("favorites.json"));
         var pending = vm.RefreshCatalogCommand.ExecuteAsync(null);
-        Assert.True(owner.IsBusy);
-        owner.CancelOperationCommand.Execute(null);
+        Assert.False(owner.IsBusy); Assert.True(vm.IsLoading);
+        vm.CancelBrowseCommand.Execute(null);
         await pending;
         Assert.False(vm.HasCatalog);
         Assert.Contains("取消", vm.RequestStatus);

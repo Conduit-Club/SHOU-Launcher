@@ -63,14 +63,15 @@ public sealed class WpfDownloadsLoaderTests
     public async Task LateCatalogAndCancelledReadCannotSelectOrCreateAnotherRoute()
     {
         var service = new FakeLauncherService(); using var owner = new MainWindowViewModel(service, new FakeExternalLauncher()); var fixture = new LoaderFixture(service);
-        using var vm = new DownloadsPageViewModel(owner, fixture, Favorites(), loaderService: fixture); vm.SelectVersion(new("1.21.1", "release", DateTimeOffset.UtcNow));
+        using var vm = new DownloadsPageViewModel(owner, fixture, Favorites(), loaderService: fixture);
         var response = new TaskCompletionSource<IReadOnlyList<LoaderVersionChoice>>(); fixture.Behavior = (_, _, _) => response.Task;
+        vm.SelectVersion(new("1.21.1", "release", DateTimeOffset.UtcNow));
         var pending = vm.AdditionalLoaders[0].RefreshCommand.ExecuteAsync(null); vm.SelectCategory("mod");
         response.SetResult([new("forge", "stale-fixture", true)]); await pending;
         Assert.Empty(vm.AdditionalLoaders[0].Versions); Assert.Null(vm.SelectedAdditionalLoader); Assert.Empty(fixture.Created);
-        vm.SelectVersion(new("1.21.1", "release", DateTimeOffset.UtcNow));
         fixture.Behavior = async (_, _, ct) => { await Task.Delay(Timeout.Infinite, ct); return []; };
-        pending = vm.AdditionalLoaders[0].RefreshCommand.ExecuteAsync(null); owner.CancelOperationCommand.Execute(null); await pending;
+        vm.SelectVersion(new("1.21.1", "release", DateTimeOffset.UtcNow));
+        pending = vm.AdditionalLoaders[0].RefreshCommand.ExecuteAsync(null); vm.CancelBrowseCommand.Execute(null); await pending;
         Assert.Contains("取消", vm.AdditionalLoaders[0].Status); Assert.Empty(vm.AdditionalLoaders[0].Versions);
     }
 

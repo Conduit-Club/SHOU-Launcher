@@ -12,14 +12,14 @@ public sealed class CatalogNavigationTests
     public async Task RoutineCatalogSuccessIsQuietButOfflineNoticeAndErrorsRemainVisible()
     {
         var service = new CatalogService(); using var owner = new MainWindowViewModel(service, new FakeExternalLauncher());
-        owner.ShowDownloadsCommand.Execute(null); await Settle(() => !owner.IsBusy);
+        owner.ShowDownloadsCommand.Execute(null); await Settle(() => !owner.Downloads.IsLoading);
         Assert.False(owner.Downloads.ShowRequestStatus);
         service.Next = _ => Task.FromResult(CatalogService.Games with { Notice = "Offline cache fixture notice" });
         await owner.Downloads.RefreshCatalogCommand.ExecuteAsync(null); Assert.True(owner.Downloads.ShowRequestStatus);
-        owner.Downloads.SelectCategory("mod"); Assert.False(owner.Downloads.ShowRequestStatus);
+        owner.Downloads.SelectCategory("mod"); Assert.DoesNotContain("Offline cache", owner.Downloads.RequestStatus);
         owner.Downloads.SelectCategory("minecraft"); Assert.True(owner.Downloads.ShowRequestStatus);
         service.Next = _ => throw new IOException("Fixture network error");
-        await owner.Downloads.RefreshCatalogCommand.ExecuteAsync(null); Assert.True(owner.Downloads.ShowRequestStatus); Assert.True(owner.HasError);
+        await owner.Downloads.RefreshCatalogCommand.ExecuteAsync(null); Assert.True(owner.Downloads.ShowRequestStatus); Assert.False(owner.HasError);
         service.Next = _ => Task.FromResult(CatalogService.Games);
         await owner.Downloads.RefreshCatalogCommand.ExecuteAsync(null); Assert.False(owner.Downloads.ShowRequestStatus);
     }
@@ -27,12 +27,12 @@ public sealed class CatalogNavigationTests
     public async Task FirstEntryUsesCacheAndManualRefreshForcesNetworkWithoutLosingRowsOnNavigation()
     {
         var service = new CatalogService(); using var owner = new MainWindowViewModel(service, new FakeExternalLauncher());
-        owner.ShowDownloadsCommand.Execute(null); await Settle(() => !owner.IsBusy);
+        owner.ShowDownloadsCommand.Execute(null); await Settle(() => !owner.Downloads.IsLoading);
         Assert.Equal(1, service.Reads); Assert.Equal(0, service.Refreshes); Assert.Contains("本地缓存", owner.Downloads.CatalogSource);
         var pending = new TaskCompletionSource<GameCatalog>(); service.Next = _ => pending.Task;
         var refresh = owner.Downloads.RefreshCatalogCommand.ExecuteAsync(null);
         owner.Downloads.SelectCategory("mod"); pending.SetResult(CatalogService.Games with { FromCache = false }); await refresh;
-        Assert.Equal(1, service.Refreshes); Assert.Contains("输入条件", owner.Downloads.RequestStatus);
+        Assert.Equal(1, service.Refreshes); Assert.DoesNotContain("Minecraft", owner.Downloads.RequestStatus);
         owner.Downloads.SelectCategory("installer-minecraft");
         Assert.True(owner.Downloads.HasCatalog); Assert.Single(owner.Downloads.LatestVersions);
         Assert.Equal(1, service.Reads); Assert.Equal(1, service.Refreshes);
@@ -50,19 +50,20 @@ public sealed class CatalogNavigationTests
     public async Task ChangingDownloadSourcesDiscardsOldInFlightCatalogAndReadsTheNewSource()
     {
         var response = new TaskCompletionSource<GameCatalog>();
-        var service = new CatalogService { Next = _ => response.Task }; using var owner = new MainWindowViewModel(service, new FakeExternalLauncher());
+        var service = new CatalogService();
+        service.Next = _ => service.Reads == 1 ? response.Task : Task.FromResult(CatalogService.Games with { Source = "new-source.example" });
+        using var owner = new MainWindowViewModel(service, new FakeExternalLauncher());
         owner.ShowDownloadsCommand.Execute(null); Assert.Equal(1, service.Reads);
         await service.SaveSettingsAsync(service.Snapshot.Settings with { DownloadSourcesJson = "[]" });
-        service.Next = _ => Task.FromResult(CatalogService.Games with { Source = "new-source.example" });
         response.SetResult(CatalogService.Games with { Source = "obsolete.example" });
-        await Settle(() => service.Reads == 2 && !owner.IsBusy);
+        await Settle(() => service.Reads == 2 && !owner.Downloads.IsLoading);
         Assert.Contains("new-source.example", owner.Downloads.CatalogSource); Assert.DoesNotContain("obsolete", owner.Downloads.CatalogSource);
     }
     [AvaloniaFact]
     public async Task PackageBrowsingPreservesAutomaticInstallationNameVersionAndLoaderDraft()
     {
         var service = new CatalogService(); using var owner = new MainWindowViewModel(service, new FakeExternalLauncher());
-        owner.ShowDownloadsCommand.Execute(null); await Settle(() => !owner.IsBusy);
+        owner.ShowDownloadsCommand.Execute(null); await Settle(() => !owner.Downloads.IsLoading);
         var vm = owner.Downloads; vm.SelectVersion(CatalogService.Games.Versions[0]); vm.InstallationName = "保留 中文 draft";
         Assert.Empty(vm.FabricStatus);
         await vm.RefreshFabricCommand.ExecuteAsync(null); vm.SelectedFabric = vm.FabricVersions.Single();

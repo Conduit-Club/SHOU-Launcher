@@ -6,11 +6,13 @@ using SHOU.Launcher.Core.IO;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService : ILauncherCatalogService, IMinecraftCatalogCacheService
+public sealed partial class LauncherService : ILauncherCatalogService, IMinecraftCatalogCacheService, IContentCategoryCatalogService
 {
     private readonly CachedGameCatalog gameCatalogCache;
     private readonly ConcurrentDictionary<string, ContentFile> contentTransfers = new(StringComparer.Ordinal);
     private LauncherCatalog Catalog => new(http, Sources);
+    public async Task<IReadOnlyList<ContentCategory>> GetContentCategoriesAsync(CancellationToken cancellationToken = default)
+    { await InitializeAsync(cancellationToken).ConfigureAwait(false); return await Catalog.CategoriesAsync(cancellationToken).ConfigureAwait(false); }
     public Task<GameCatalog> GetGameCatalogAsync(CancellationToken cancellationToken = default) => ReadGameCatalogAsync(false, cancellationToken);
     public Task<GameCatalog> RefreshGameCatalogAsync(CancellationToken cancellationToken = default) => ReadGameCatalogAsync(true, cancellationToken);
     private async Task<GameCatalog> ReadGameCatalogAsync(bool refresh, CancellationToken ct)

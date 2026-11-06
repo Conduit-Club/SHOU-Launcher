@@ -350,6 +350,11 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     public async Task RetryDownloadAsync(string taskId, CancellationToken cancellationToken = default)
     {
         var owner = downloadOwners.Resolve(taskId);
+        if (owner.InstanceId.StartsWith("installer-file:", StringComparison.Ordinal))
+        {
+            if (!installerTransfers.TryGetValue(owner.Generation, out var installer)) throw new InvalidOperationException("安装器记录已失效，请重新选择版本。");
+            await SaveInstallerAsync(installer.Version, installer.Destination, cancellationToken).ConfigureAwait(false); return;
+        }
         if (owner.InstanceId.StartsWith("minecraft-package:", StringComparison.Ordinal))
         {
             if (!packageTransfers.TryGetValue(owner.Generation, out var package)) throw new InvalidOperationException("该文件记录已失效，请重新选择版本。");

@@ -12,7 +12,7 @@
     <DataTemplate DataType="{x:Type vm:ToolsPageViewModel}"><views:ToolsView /></DataTemplate>
   </Window.DataTemplates>
   <Border Name="WindowSurface" CornerRadius="6" ClipToBounds="True" Background="{DynamicResource ClubPageGradient}">
-    <Grid RowDefinitions="48,Auto,*,Auto">
+    <Grid RowDefinitions="48,Auto,*">
       <Border Name="LauncherTitleBar" Background="{DynamicResource ClubTitleBar}" PointerPressed="TitleBar_PointerPressed">
         <Grid Name="TitleBarLayout" ColumnDefinitions="300,*,112">
           <StackPanel Name="WindowBrand" Orientation="Horizontal" Spacing="9" Margin="16,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" IsVisible="{Binding !IsContextPage}">
@@ -51,12 +51,10 @@
         <DockPanel><Button DockPanel.Dock="Right" Classes="flat" Content="关闭提示" Command="{Binding DismissErrorCommand}" Margin="10,0,0,0" /><TextBlock Name="GlobalErrorText" Text="{Binding ErrorMessage}" Foreground="{DynamicResource ClubErrorForeground}" TextWrapping="Wrap" VerticalAlignment="Center" /></DockPanel>
       </Border>
       <ContentControl Grid.Row="2" Name="PageContent" Content="{Binding SelectedPage}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
-      <Border Grid.Row="3" Name="OperationBar" IsVisible="{Binding ShowOperationStatus}" Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,1,0,0" Padding="12,5">
-        <DockPanel>
-          <Button Name="CancelOperationButton" DockPanel.Dock="Right" Content="取消当前操作" Command="{Binding CancelOperationCommand}" IsVisible="{Binding IsBusy}" Margin="10,0,0,0" />
-          <ProgressBar DockPanel.Dock="Right" IsVisible="{Binding IsBusy}" IsIndeterminate="True" Width="100" Height="3" Margin="12,0" />
-          <TextBlock Name="OperationStatus" Text="{Binding StateSummary}" VerticalAlignment="Center" />
-        </DockPanel>
+      <Border Grid.Row="2" Name="OperationBar" IsVisible="{Binding ShowOperationStatus}" Margin="{Binding OperationInset}" Background="#22000000">
+        <Border Classes="card" HorizontalAlignment="Center" VerticalAlignment="Center" MinWidth="180" MaxWidth="320" Padding="22,18">
+          <StackPanel Spacing="12"><views:LoadingGlyph HorizontalAlignment="Center" Foreground="{DynamicResource ClubAccent}"/><TextBlock Name="OperationStatus" Text="{Binding StateSummary}" FontSize="15" LineHeight="22" TextAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource ClubAccent}"/><Button Name="CancelOperationButton" Content="取消" Command="{Binding CancelOperationCommand}" HorizontalAlignment="Center"/></StackPanel>
+        </Border>
       </Border>
     </Grid>
   </Border>

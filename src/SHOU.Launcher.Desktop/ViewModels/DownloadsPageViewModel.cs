@@ -83,6 +83,14 @@ public sealed class ContentProjectRowViewModel : ObservableObject, IDisposable
     public string Description => Project.Description;
     public string Tile => Title.Length == 0 ? "?" : System.Globalization.StringInfo.GetNextTextElement(Title);
     public string Detail => $"{Project.Author}  ·  下载 {Project.Downloads:N0} 次  ·  Modrinth";
+    public string Downloads => Project.Downloads >= 100000000 ? $"{Project.Downloads / 100000000d:0.##} 亿" : Project.Downloads >= 10000 ? $"{Project.Downloads / 10000d:0.##} 万" : Project.Downloads.ToString("N0");
+    public string Tags => string.Join(" · ", (Project.Categories ?? []).Where(c => c is not ("fabric" or "forge" or "neoforge" or "quilt" or "datapack")).Take(2).Select(DownloadsPageViewModel.CategoryName));
+    public bool HasTags => Tags.Length > 0;
+    public string Compatibility => string.Join(" / ", (Project.Categories ?? []).Where(c => c is "fabric" or "forge" or "neoforge" or "quilt"))
+        + (Project.GameVersions is { Count: > 0 } versions ? " " + versions[0] + (versions.Count > 1 ? " 等" : "") : "");
+    public string Updated => Project.Updated is { } date ? date.LocalDateTime.ToString("yyyy/M/d") : "";
+    public bool HasUpdated => Project.Updated is not null;
+    public bool HasCompatibility => Compatibility.Trim().Length > 0;
     public AsyncRelayCommand OpenCommand { get; }
     public ContentProjectRowViewModel(DownloadsPageViewModel owner, ContentProject project)
     {
@@ -198,18 +206,18 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public bool HasCatalog => LatestVersions.Count > 0 || VersionGroups.Count > 0;
     public ObservableCollection<GameCatalogRowViewModel> LatestVersions { get; } = [];
     public ObservableCollection<GameCatalogGroupViewModel> VersionGroups { get; } = [];
-    public string QueryText { get => _queryText; set => SetProperty(ref _queryText, value ?? ""); }
-    public string GameVersionFilter { get => _gameVersionFilter; set => SetProperty(ref _gameVersionFilter, value ?? ""); }
+    public string QueryText { get => _queryText; set { if (SetProperty(ref _queryText, value ?? "")) FiltersChanged(); } }
+    public string GameVersionFilter { get => _gameVersionFilter; set { if (SetProperty(ref _gameVersionFilter, value ?? "")) FiltersChanged(); } }
     public IReadOnlyList<string> LoaderFilters { get; } = ["任意", "Fabric", "Forge", "NeoForge", "Quilt"];
-    public string LoaderFilter { get => _loaderFilter; set => SetProperty(ref _loaderFilter, value ?? "任意"); }
+    public string LoaderFilter { get => _loaderFilter; set { if (SetProperty(ref _loaderFilter, value ?? "任意")) FiltersChanged(); } }
     public IReadOnlyList<ContentSortChoice> SortChoices { get; } = [new("relevance", "默认"), new("downloads", "下载数量"), new("follows", "收藏数量"), new("newest", "最新发布"), new("updated", "最近更新")];
-    public ContentSortChoice SelectedSort { get => _selectedSort; set { if (value is not null) SetProperty(ref _selectedSort, value); } }
+    public ContentSortChoice SelectedSort { get => _selectedSort; set { if (value is not null && SetProperty(ref _selectedSort, value)) FiltersChanged(); } }
     public ObservableCollection<ContentProjectRowViewModel> Projects { get; } = [];
     public bool HasProjects => Projects.Count > 0;
     public string SearchPlaceholder => "搜索" + SelectedCategory.Title;
     public bool SearchSupported => SelectedCategory.Id != "world";
     public string SearchCapabilityReason => SelectedCategory.Id == "world"
-        ? "当前资源接口尚未提供世界 / 地图检索。" : "当前来源为 Modrinth；其他来源与标签筛选尚未迁移。";
+        ? "当前资源接口尚未提供世界 / 地图检索。" : "当前来源为 Modrinth。";
     public string PageSummary => $"第 {_searchOffset / 30 + 1} 页 · {Projects.Count} 项";
     public string QueryCapabilityReason => CatalogAvailable ? "" : "目录服务尚未接入，当前可在实例页手动创建并安装游戏。";
     public string SelectedVersionId => _selectedVersion?.Id ?? "";
@@ -235,6 +243,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             if (value is not null) ClearAdditionalSelection();
             if (InstallationName == previousDefault) InstallationName = DefaultInstallationName;
             NotifyInstallDraft();
+            OnPropertyChanged(nameof(FabricSummary));
         }
     }
     private string DefaultInstallationName => _selectedAdditionalLoader is { } loader ? $"{SelectedVersionId}-{LoaderTitle(loader.Loader)}_{loader.Version}"
@@ -264,6 +273,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         "installer-neoforge" => "https://neoforged.net/",
         "installer-cleanroom" => "https://cleanroommc.com/",
         "installer-fabric" => "https://fabricmc.net/use/installer/",
+        "installer-quilt" => "https://quiltmc.org/",
         "installer-legacyfabric" => "https://legacyfabric.net/",
         "installer-labymod" => "https://laby.net/client",
         "installer-liteloader" => "https://www.liteloader.com/",
@@ -306,15 +316,17 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         DownloadCategoryViewModel Category(string id, string title) => new(this, id, title, ClubIcons.ForDownloadCategory(id));
         MinecraftCategory = Category("minecraft", "Minecraft");
         CommunityCategories = [Category("mod", "模组"), Category("modpack", "整合包"), Category("datapack", "数据包"), Category("resourcepack", "资源包"), Category("shader", "光影包"), Category("world", "世界"), Category("favorites", "收藏夹")];
-        InstallerCategories = [Category("installer-minecraft", "Minecraft"), Category("installer-optifine", "OptiFine"), Category("installer-forge", "Forge"), Category("installer-neoforge", "NeoForge"), Category("installer-cleanroom", "Cleanroom"), Category("installer-fabric", "Fabric"), Category("installer-legacyfabric", "Legacy Fabric"), Category("installer-labymod", "LabyMod"), Category("installer-liteloader", "LiteLoader")];
+        InstallerCategories = [Category("installer-minecraft", "Minecraft"), Category("installer-optifine", "OptiFine"), Category("installer-forge", "Forge"), Category("installer-neoforge", "NeoForge"), Category("installer-cleanroom", "Cleanroom"), Category("installer-fabric", "Fabric"), Category("installer-quilt", "Quilt"), Category("installer-legacyfabric", "Legacy Fabric"), Category("installer-labymod", "LabyMod"), Category("installer-liteloader", "LiteLoader")];
         TasksCategory = Category("tasks", "下载任务");
         _selectedCategory = MinecraftCategory;
-        _selectedSort = SortChoices[0];
+        _selectedSort = SortChoices.First(s => s.Id == "downloads");
+        InitializeBrowsing();
+        InitializeInstallerBrowsing();
         RefreshCatalogCommand = AsyncCommand(() => RefreshCatalogAsync(true), () => CanQuery && !_catalogRequestActive);
         SearchCommand = AsyncCommand(() => SearchAsync(0), () => CanQuery && IsSearchPage && SearchSupported);
         NextPageCommand = AsyncCommand(() => SearchAsync(_searchOffset + 30), () => CanQuery && _searchCompleted && Projects.Count == 30);
         PreviousPageCommand = AsyncCommand(() => SearchAsync(Math.Max(0, _searchOffset - 30)), () => CanQuery && _searchCompleted && _searchOffset > 0);
-        ResetFiltersCommand = Command(() => { QueryText = ""; GameVersionFilter = ""; LoaderFilter = "任意"; SelectedSort = SortChoices[0]; }, () => CanEdit);
+        ResetFiltersCommand = Command(() => { QueryText = ""; GameVersionFilter = ""; LoaderFilter = "任意"; SelectedSort = SortChoices.First(s => s.Id == "downloads"); SelectedContentCategory = ContentCategoryChoices[0]; FiltersChanged(); }, () => CanEdit);
         BackToListCommand = Command(BackToList);
         ShowAutomaticInstallCommand = Command(() => SelectCategory("minecraft"));
         RefreshFabricCommand = AsyncCommand(RefreshFabricAsync, () => CanQuery && _selectedVersion is not null);
@@ -339,12 +351,15 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         if (selected is null) return;
         if (!ReferenceEquals(_selectedCategory, selected))
         {
+            SaveSearchDraft();
             ++_requestRevision;
+            CancelBrowseReads(); _catalogRequestActive = false;
             _selectedCategory = selected;
             _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
             _searchOffset = 0; _searchCompleted = false; ClearProjectRows(Projects);
             SetRequestStatus(id is "minecraft" or "installer-minecraft" ? _catalogStatus
                 : id == "world" ? SearchCapabilityReason : "输入条件后点击搜索。", id is "minecraft" or "installer-minecraft" && _catalogMessageVisible);
+            if (IsSearchPage) RestoreSearchDraft(id);
         }
         NotifyPage();
         OnNavigatedTo();
@@ -352,29 +367,16 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private void NotifyPage()
     {
         OnPropertyChanged(nameof(ShowRequestStatus));
+        OnPropertyChanged(nameof(InstallerIntroduction));
         foreach (var category in Categories) category.RefreshSelection();
         OnPropertyChanged(nameof(IsPackageDetail)); OnPropertyChanged(nameof(CatalogPurpose));
         NotifyContentInstallationPage();
         foreach (var name in new[] { nameof(SelectedCategory), nameof(IsCatalogPage), nameof(IsSearchPage), nameof(IsInstallerPage), nameof(IsFavoritesPage), nameof(IsTasksPage), nameof(IsConfiguration), nameof(IsResourceDetail), nameof(ShowCategorySidebar), nameof(SearchPlaceholder), nameof(SearchSupported), nameof(SearchCapabilityReason), nameof(PageSummary), nameof(InstallerTitle), nameof(InstallerDescription), nameof(HasProjects) }) OnPropertyChanged(name);
         NotifyCommands();
+        NotifyBrowseState();
     }
-    private async Task<bool> QueryAsync(string label, int revision, Func<CancellationToken, Task> action)
-    {
-        if (!CanQuery) return false;
-        _loading = true; OnPropertyChanged(nameof(IsLoading)); SetRequestStatus(label + "…");
-        try
-        {
-            var success = await Owner.RunAsync(label, async ct =>
-            {
-                using var lifetime = CancellationTokenSource.CreateLinkedTokenSource(ct, _imageToken);
-                try { await action(lifetime.Token); }
-                catch (OperationCanceledException) when (_disposed && !ct.IsCancellationRequested) { }
-            }, true);
-            if (!success && revision == _requestRevision) SetRequestStatus(Owner.ErrorMessage ?? "查询已取消，可重试。");
-            return success;
-        }
-        finally { _loading = false; OnPropertyChanged(nameof(IsLoading)); OnPropertyChanged(nameof(ShowRequestStatus)); NotifyCommands(); }
-    }
+    private Task<bool> QueryAsync(string label, int revision, Func<CancellationToken, Task> action)
+        => ReadBrowseAsync(label, revision, action);
     private async Task RefreshCatalogAsync(bool forceRefresh)
     {
         if (_catalogRequestActive || !CanQuery) return;
@@ -402,43 +404,44 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             if (IsCatalogPage) SetRequestStatus(_catalogStatus, _catalogMessageVisible);
             OnPropertyChanged(nameof(HasCatalog)); NotifyCommands();
         }); }
-        finally { _catalogRequestActive = false; NotifyCommands(); }
+        finally { if (revision == _requestRevision && sourceRevision == _catalogSourceRevision) _catalogRequestActive = false; NotifyCommands(); }
     }
     public void SelectVersion(GameCatalogVersion version)
     {
         if (!CanEdit || !version.CanInstall) return;
         if (SelectedCategory.Id == "installer-minecraft") { _ = OpenPackageVersionAsync(version); return; }
-        ++_requestRevision;
+        ++_requestRevision; CancelBrowseReads();
         if (_selectedVersion?.Id == version.Id && _createdInstanceId is null)
-        { _isConfiguration = true; _isResourceDetail = false; _isPackageDetail = false; NotifyPage(); return; }
+        { _isConfiguration = true; _isResourceDetail = false; _isPackageDetail = false; NotifyPage(); StartAutomaticLoaders(); return; }
         _selectedVersion = version; _selectedFabric = null; _createdInstanceId = null;
         ResetAdditionalLoaders();
         _isConfiguration = true; _isResourceDetail = false; _isPackageDetail = false; FabricVersions.Clear();
         _installationName = DefaultInstallationName; InstallStatus = "";
         FabricStatus = "";
         OnPropertyChanged(nameof(InstallationName)); OnPropertyChanged(nameof(SelectedVersionId)); OnPropertyChanged(nameof(SelectedFabric)); OnPropertyChanged(nameof(HasCreatedInstance));
-        NotifyInstallDraft(); NotifyPage();
+        NotifyInstallDraft(); NotifyPage(); StartAutomaticLoaders();
     }
     private void BackToList()
     {
-        ++_requestRevision; _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
+        ++_requestRevision; CancelBrowseReads(); _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
         SetRequestStatus(IsCatalogPage ? _catalogStatus : _searchCompleted ? $"已返回 {Projects.Count} 项资源。" : "输入条件后点击搜索。", IsCatalogPage && _catalogMessageVisible);
         NotifyPage();
     }
     private async Task RefreshFabricAsync()
     {
         var revision = _requestRevision; var game = SelectedVersionId;
-        FabricStatus = "正在读取 Fabric Loader 版本…";
-        var success = await QueryAsync("读取 Fabric 目录", revision, async ct =>
+        if (!CanQuery || _selectedVersion is null || FabricLoading) return;
+        FabricLoading = true; FabricStatus = "";
+        try { await ReadBrowseAsync("获取 Fabric 版本", revision, async ct =>
         {
             var versions = await _catalog!.GetFabricCatalogAsync(game, ct); ct.ThrowIfCancellationRequested();
             if (revision != _requestRevision) return;
             FabricVersions.Clear(); foreach (var version in versions) FabricVersions.Add(version);
             if (SelectedFabric is not null && !versions.Contains(SelectedFabric)) SelectedFabric = null;
             FabricStatus = versions.Count == 0 ? "此 Minecraft 版本没有可用的 Fabric Loader。" : "";
-        });
-        if (revision == _requestRevision)
-        { if (!success) FabricStatus = RequestStatus; else SetRequestStatus("", false); }
+            _fabricLoaded = true;
+        }, "loader-fabric", page: false, failure: message => FabricStatus = message); }
+        finally { if (revision == _requestRevision) { FabricLoading = false; OnPropertyChanged(nameof(FabricSummary)); } }
     }
     private void NotifyInstallDraft()
     {
@@ -465,17 +468,20 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private async Task SearchAsync(int offset)
     {
         if (!SearchSupported) return;
-        if (QueryText.Length > 256) { Owner.ShowError("搜索关键词最多 256 个字符。"); return; }
+        if (QueryText.Length > 256) { SetRequestStatus("搜索关键词最多 256 个字符。"); return; }
+        _filterDelay?.Cancel(); _searchRequested = false;
         var revision = ++_requestRevision;
-        var query = new ContentQuery(SelectedCategory.Id, QueryText.Trim(), NullIfBlank(GameVersionFilter), LoaderFilter == "任意" ? null : LoaderFilter.ToLowerInvariant(), SelectedSort.Id, offset);
+        _ = ReadContentCategoriesAsync(revision);
+        var query = new ContentQuery(SelectedCategory.Id, QueryText.Trim(), NullIfBlank(GameVersionFilter), LoaderFilter == "任意" ? null : LoaderFilter.ToLowerInvariant(), SelectedSort.Id, offset, NullIfBlank(SelectedContentCategory.Id));
         await QueryAsync("查询社区资源", revision, async ct =>
         {
             var projects = await _catalog!.SearchContentAsync(query, ct); ct.ThrowIfCancellationRequested();
             if (revision != _requestRevision) return;
             ClearProjectRows(Projects); foreach (var project in projects) Projects.Add(new(this, project));
-            _searchOffset = offset; _searchCompleted = true;
+            _searchOffset = offset; _searchCompleted = true; _searchFetched = DateTimeOffset.UtcNow;
             SetRequestStatus(projects.Count == 0 ? "没有符合条件的资源，请调整搜索条件。" : $"已返回 {projects.Count} 项资源。", projects.Count == 0);
-            OnPropertyChanged(nameof(HasProjects)); OnPropertyChanged(nameof(PageSummary)); NotifyCommands();
+            OnPropertyChanged(nameof(HasProjects)); OnPropertyChanged(nameof(PageSummary)); NotifyBrowseState(); NotifyCommands();
+            SaveSearchDraft();
             using var images = CancellationTokenSource.CreateLinkedTokenSource(ct, _imageToken);
             await Task.WhenAll(Projects.ToArray().Select(p => p.LoadIconAsync(_catalog!, _imageGate, images.Token)));
         });
@@ -483,7 +489,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public async Task OpenProjectAsync(ContentProject project)
     {
         if (!CanQuery) return;
-        ++_requestRevision; _selectedProject = project; _isResourceDetail = true; _isConfiguration = false;
+        ++_requestRevision; CancelBrowseReads(); _selectedProject = project; _isResourceDetail = true; _isConfiguration = false;
         ResetResourceInstallStatus();
         ReleaseGroups.Clear(); LastDownloadPath = "";
         foreach (var name in new[] { nameof(SelectedProject), nameof(ProjectTitle), nameof(ProjectDescription), nameof(ProjectDetail), nameof(ProjectTile), nameof(IsProjectFavorite), nameof(FavoriteAction), nameof(HasReleases) }) OnPropertyChanged(name);
@@ -562,7 +568,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public void Dispose()
     {
         if (_disposed) return;
-        _disposed = true; ++_requestRevision; _imageLifetime.Cancel();
+        _disposed = true; ++_requestRevision; CancelBrowseReads(); _imageLifetime.Cancel();
         ClearProjectRows(Projects); ClearProjectRows(FavoriteProjects);
         _imageLifetime.Dispose();
     }
@@ -571,6 +577,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         if (_catalogSourceConfiguration != snapshot.Settings.DownloadSourcesJson)
         {
             _catalogSourceConfiguration = snapshot.Settings.DownloadSourcesJson; ++_catalogSourceRevision;
+            if (_browseReads.TryGetValue("page", out var read) && IsCatalogPage) { read.Cancellation.Cancel(); _catalogRequestActive = false; }
             _catalogLoaded = false; _catalogRequested = true; _catalogStatus = "下载来源已更改，正在重新读取版本目录…";
             LatestVersions.Clear(); VersionGroups.Clear(); OnPropertyChanged(nameof(HasCatalog));
             _catalogMessageVisible = false;
@@ -597,6 +604,6 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         ImportLocalPackCommand?.NotifyCanExecuteChanged(); ReadCachedPackCommand?.NotifyCanExecuteChanged();
         foreach (var loader in AdditionalLoaders) loader.NotifyState();
         base.NotifyCommands(); OnPropertyChanged(nameof(CanQuery));
-        TryStartCatalogRequest();
+        TryStartCatalogRequest(); TryStartSearchRequest();
     }
 }

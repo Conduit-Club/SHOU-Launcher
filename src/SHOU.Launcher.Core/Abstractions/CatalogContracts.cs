@@ -9,9 +9,15 @@ public interface IMinecraftCatalogCacheService
 }
 public sealed record LoaderCatalogVersion(string Version, bool Stable);
 public sealed record ContentQuery(string Kind, string Search = "", string? GameVersion = null, string? Loader = null,
-    string Sort = "relevance", int Offset = 0);
+    string Sort = "relevance", int Offset = 0, string? Category = null);
 public sealed record ContentProject(string Id, string Slug, string Title, string Description, string Author,
-    long Downloads, string Kind, string? IconUrl, Uri PageUri, string ClientSide = "unknown");
+    long Downloads, string Kind, string? IconUrl, Uri PageUri, string ClientSide = "unknown",
+    IReadOnlyList<string>? Categories = null, IReadOnlyList<string>? GameVersions = null, DateTimeOffset? Updated = null);
+public sealed record ContentCategory(string Id, string Kind);
+public interface IContentCategoryCatalogService
+{
+    Task<IReadOnlyList<ContentCategory>> GetContentCategoriesAsync(CancellationToken cancellationToken = default);
+}
 public sealed record ContentFile(string FileName, Uri Uri, string Sha1, long Size, bool Primary = false);
 public sealed record ContentRelease(string Id, string Name, string Version, DateTimeOffset Published,
     IReadOnlyList<string> GameVersions, IReadOnlyList<string> Loaders, IReadOnlyList<ContentFile> Files,

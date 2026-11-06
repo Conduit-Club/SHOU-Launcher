@@ -80,13 +80,17 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
     public async Task<IReadOnlyList<ContentProject>> SearchAsync(ContentQuery query, CancellationToken ct = default)
     {
         var type = query.Kind switch { "mod" => "mod", "modpack" => "modpack", "resourcepack" => "resourcepack",
-            "shader" => "shader", "datapack" => "mod", _ => throw new NotSupportedException("此来源尚不支持这类内容。") };
+            "shader" => "shader", "datapack" => "datapack", _ => throw new NotSupportedException("此来源尚不支持这类内容。") };
         if (query.Search.Length > 256 || query.Offset is < 0 or > 10000) throw new ArgumentException("搜索条件超出范围。");
         if (query.Sort is not ("relevance" or "downloads" or "follows" or "newest" or "updated")) throw new ArgumentException("未知排序。");
         var facets = new List<string[]> { new[] { "project_type:" + type } };
-        if (query.Kind == "datapack") facets.Add(["categories:datapack"]);
         if (!string.IsNullOrWhiteSpace(query.GameVersion)) facets.Add(["versions:" + query.GameVersion]);
         if (!string.IsNullOrWhiteSpace(query.Loader)) facets.Add(["categories:" + query.Loader]);
+        if (!string.IsNullOrWhiteSpace(query.Category))
+        {
+            if (query.Category.Length > 80 || query.Category.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-')) throw new ArgumentException("标签无效。");
+            facets.Add(["categories:" + query.Category]);
+        }
         var url = "https://api.modrinth.com/v2/search?limit=30&offset=" + query.Offset + "&query=" + Uri.EscapeDataString(query.Search)
             + "&index=" + query.Sort + "&facets=" + Uri.EscapeDataString(JsonSerializer.Serialize(facets));
         var document = await ReadAsync(url, true, ct, n => n["hits"] is JsonArray).ConfigureAwait(false);
@@ -96,10 +100,20 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
         {
             var id = SafePath.Identifier((string?)n?["project_id"] ?? "");
             var slug = SafePath.Identifier((string?)n?["slug"] ?? id);
+            var pageType = (string?)n?["project_type"];
+            if (pageType is not ("mod" or "modpack" or "resourcepack" or "shader" or "datapack")) pageType = type;
             return new ContentProject(id, slug, (string?)n?["title"] ?? id, (string?)n?["description"] ?? "",
                 (string?)n?["author"] ?? "", (long?)n?["downloads"] ?? 0, query.Kind, (string?)n?["icon_url"],
-                new Uri("https://modrinth.com/" + type + "/" + slug));
+                new Uri("https://modrinth.com/" + pageType + "/" + slug), Categories: ReadStrings(n?["categories"]), GameVersions: ReadStrings(n?["versions"]),
+                Updated: DateTimeOffset.TryParse((string?)n?["date_modified"], out var updated) ? updated : null);
         }).ToArray();
+    }
+    private static string[] ReadStrings(JsonNode? node) => node is JsonArray array ? array.Take(5000).Select(x => (string?)x ?? "").Where(x => x.Length is > 0 and <= 160).ToArray() : [];
+    public async Task<IReadOnlyList<ContentCategory>> CategoriesAsync(CancellationToken ct = default)
+    {
+        var document = await ReadAsync("https://api.modrinth.com/v2/tag/category", true, ct, n => n is JsonArray).ConfigureAwait(false);
+        return ((JsonArray)document.Data).Take(2000).Select(n => new ContentCategory((string?)n?["name"] ?? "", (string?)n?["project_type"] ?? ""))
+            .Where(c => c.Id.Length is > 0 and <= 80 && c.Id.All(x => char.IsAsciiLetterOrDigit(x) || x == '-') && c.Kind is "mod" or "modpack" or "resourcepack" or "shader" or "datapack").Distinct().ToArray();
     }
     public async Task<IReadOnlyList<ContentRelease>> ReleasesAsync(string projectId, string? gameVersion, string? loader, CancellationToken ct = default)
     {

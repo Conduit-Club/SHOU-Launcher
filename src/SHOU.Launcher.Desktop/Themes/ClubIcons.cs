@@ -13,6 +13,7 @@ public static class ClubIcons
         "modpack" => "package", "datapack" => Document, "resourcepack" => Layers,
         "shader" => Sparkles, "world" => Globe, "favorites" => Heart, "tasks" => Download,
         "installer-fabric" or "installer-legacyfabric" => Cloth,
+        "installer-quilt" => Layers,
         "installer-neoforge" or "installer-labymod" => Fox, "installer-optifine" => "gauge",
         "installer-forge" => "anvil", "installer-cleanroom" => "flask-conical",
         "installer-liteloader" => "egg", _ => Cube
