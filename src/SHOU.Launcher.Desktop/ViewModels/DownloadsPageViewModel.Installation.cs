@@ -25,7 +25,7 @@ public sealed partial class DownloadsPageViewModel
     private ContentTargetChoice? _installTarget;
     private bool _updatingTargets;
     private string _resourceInstallStatus = "选择明确的兼容实例后点击文件旁的“装入实例”；required依赖会预检并一同安装。";
-    private string _localPackPath = "", _packName = "", _packStatus = "将 .zip 或 .mrpack 拖入窗口，或选择本机整合包；确认清单后安装到独立新实例。";
+    private string _localPackPath = "", _packName = "", _packStatus = "";
     private ModrinthPackInspection? _packInspection;
     private LocalPackInspection? _localPackInspection;
     private IReadOnlyList<string> _packImportDetails = [];

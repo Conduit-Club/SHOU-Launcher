@@ -81,6 +81,49 @@ public sealed class SharedPresentationTests
     }
 
     [AvaloniaFact]
+    public void SettingsSlidersStayCompactAndSpinnerButtonsLeaveRoomForTheValue()
+    {
+        using var vm = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
+        var window = new MainWindow { DataContext = vm, Width = 880, Height = 560 }; window.Show();
+        try
+        {
+            vm.ShowSettingsCommand.Execute(null); Pump(window);
+            var memory = Find<NumericUpDown>(window, "MaximumMemorySetting");
+            Assert.Equal(28, memory.Bounds.Height);
+            Assert.Equal(38, window.GetVisualDescendants().OfType<Expander>().Single(e => Equals(e.Header, "高级启动设置")).Bounds.Height);
+            foreach (var slider in window.GetVisualDescendants().OfType<Slider>().Where(x => x.IsEffectivelyVisible))
+                Assert.Equal(28, slider.Bounds.Height);
+            vm.Settings.SelectedSection = "appearance"; Pump(window);
+            var opacity = Find<NumericUpDown>(window, "WindowOpacitySetting");
+            Assert.Equal(28, opacity.Bounds.Height);
+            var editor = opacity.GetVisualDescendants().OfType<TextBox>().Single(x => x.Name == "PART_TextBox");
+            Assert.True(editor.Bounds.Width >= 40);
+            Assert.Equal(Avalonia.Layout.VerticalAlignment.Center, opacity.VerticalContentAlignment);
+            foreach (var spinner in opacity.GetVisualDescendants().OfType<RepeatButton>())
+                Assert.Equal(16, spinner.Bounds.Width);
+            var text = editor.GetVisualDescendants().OfType<TextPresenter>().Single();
+            Assert.Equal(18, text.Bounds.Height);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
+    public void SourceEditorIsQuietUntilThereIsAnActualDraftError()
+    {
+        using var vm = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
+        var window = new MainWindow { DataContext = vm }; window.Show();
+        try
+        {
+            vm.ShowSettingsCommand.Execute(null); vm.Settings.SelectedSection = "manage"; Pump(window);
+            Assert.Empty(vm.Settings.SourceEditorSummary);
+            vm.Settings.DownloadSourcesJson = "invalid fixture JSON"; Pump(window);
+            Assert.Contains("来源草稿无效", vm.Settings.SourceEditorSummary);
+            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsEffectivelyVisible && t.Text == vm.Settings.SourceEditorSummary);
+        }
+        finally { window.Close(); }
+    }
+
+    [AvaloniaFact]
     public void DefaultPagesDoNotAddMigrationInstructionsOrHealthySuccessParagraphs()
     {
         using var vm = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());

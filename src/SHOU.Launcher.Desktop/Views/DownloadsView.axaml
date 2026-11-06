@@ -3,14 +3,13 @@
     <DataTemplate x:Key="ModrinthPackImportTemplate">
       <Border Classes="card"><StackPanel Spacing="8" IsEnabled="{Binding CanEdit}">
         <TextBlock Text="安装本机整合包" Classes="sectionTitle" />
-        <TextBlock Text="将 .zip 或 .mrpack 拖入窗口，也可选择文件。" Classes="muted" />
-        <WrapPanel><Button Name="ReadModrinthPackButton" Content="选择整合包…" Click="PickModrinthPack_Click" IsEnabled="{Binding PackServiceAvailable}" Margin="0,0,8,0" /><Button Content="读取已下载的整合包" Command="{Binding ReadCachedPackCommand}" IsVisible="{Binding HasDownloadedFile}" /></WrapPanel>
+        <WrapPanel><Button Name="ReadModrinthPackButton" Content="选择整合包…" ToolTip.Tip="也可将 .zip 或 .mrpack 拖入窗口；确认清单后安装到独立新实例。" Click="PickModrinthPack_Click" IsEnabled="{Binding PackServiceAvailable}" Margin="0,0,8,0" /><Button Content="读取已下载的整合包" Command="{Binding ReadCachedPackCommand}" IsVisible="{Binding HasDownloadedFile}" /></WrapPanel>
         <TextBlock Text="{Binding LocalPackPath}" Classes="muted" LineHeight="16" FontSize="11" TextTrimming="CharacterEllipsis" />
         <StackPanel IsVisible="{Binding HasPackInspection}" Spacing="6"><TextBlock Text="新实例名称" /><TextBox Name="ModrinthPackInstanceName" Text="{Binding PackInstanceName}" />
           <Expander Header="客户端可选文件（默认不安装）" IsVisible="{Binding HasOptionalPackFiles}"><ItemsControl ItemsSource="{Binding OptionalPackFiles}" Margin="12"><ItemsControl.ItemTemplate><DataTemplate><CheckBox Content="{Binding Path}" IsChecked="{Binding Selected}" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Expander>
           <Button Name="ImportModrinthPackButton" Content="导入到独立新实例" Classes="primary" Command="{Binding ImportLocalPackCommand}" HorizontalAlignment="Left" />
         </StackPanel>
-        <TextBlock Name="ModrinthPackImportStatus" Text="{Binding PackStatus}" Classes="muted" />
+        <TextBlock Name="ModrinthPackImportStatus" Text="{Binding PackStatus}" Classes="status muted" />
         <Expander Name="LocalPackDetails" Header="安装提示与未完成项" IsVisible="{Binding HasPackDetails}"><TextBlock Text="{Binding PackDetails}" Classes="muted" Margin="12" /></Expander>
       </StackPanel></Border>
     </DataTemplate>

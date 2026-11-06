@@ -163,7 +163,7 @@ public sealed partial class SettingsPageViewModel
             if (!Directory.Exists(LogsDirectory)) { LogFilesSummary = "尚无启动器日志文件。"; return; }
             foreach (var file in new DirectoryInfo(LogsDirectory).EnumerateFiles().Where(f => f.Extension is ".log" or ".txt").OrderByDescending(f => f.LastWriteTimeUtc).Take(200))
                 LogFiles.Add(new(UiPrivacy.Redact(file.Name), file.LastWriteTime.ToString("g", CultureInfo.CurrentCulture), $"{file.Length / 1024d:0.#} KiB", UiPrivacy.Redact(file.FullName)));
-            LogFilesSummary = LogFiles.Count == 0 ? "尚无启动器日志文件。" : $"显示最近 {LogFiles.Count} 个日志文件；导出前请在实时日志页检查脱敏内容。";
+            LogFilesSummary = LogFiles.Count == 0 ? "尚无启动器日志文件。" : "";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { LogFilesSummary = "无法读取日志目录：" + UiPrivacy.Redact(ex.Message); }
     }

@@ -51,7 +51,7 @@ public sealed partial class SettingsPageViewModel
     private SettingsSourceRow? _selectedSource;
     public SettingsSourceRow? SelectedSource { get => _selectedSource; set { if (SetProperty(ref _selectedSource, value)) { OnPropertyChanged(nameof(HasSelectedSource)); NotifyCommands(); } } }
     public bool HasSelectedSource => SelectedSource is not null;
-    private string _sourceEditorSummary = "留空沿用内置来源。";
+    private string _sourceEditorSummary = "";
     public string SourceEditorSummary { get => _sourceEditorSummary; private set => SetProperty(ref _sourceEditorSummary, value); }
     public RelayCommand<string> SelectSourceCategoryCommand { get; private set; } = null!;
     public RelayCommand MoveSourceUpCommand { get; private set; } = null!;
@@ -81,7 +81,7 @@ public sealed partial class SettingsPageViewModel
         {
             var parsed = DownloadSources.Parse(json);
             _allSources.Clear(); foreach (var source in parsed) _allSources.Add(NewRow(source));
-            UpdateSourceCategory(); SourceEditorSummary = string.IsNullOrWhiteSpace(json) ? "使用内置来源顺序。修改列表后点击保存设置生效。" : "已载入自定义来源。每类至少保留一个启用来源；保存设置后生效。";
+            UpdateSourceCategory(); SourceEditorSummary = "";
         }
         catch (Exception ex) when (ex is JsonException or InvalidDataException or ArgumentException) { SourceEditorSummary = "来源草稿无效：" + UiPrivacy.Redact(ex.Message); }
     }
