@@ -15,6 +15,10 @@ public partial class App : Application
     {
         Name = Bootstrap.Launcher?.Snapshot.Build.Name ?? new BuildConfiguration().GetIdentity().Name;
         AvaloniaXamlLoader.Load(this);
+        // Use a real platform CJK face as the primary family. A comma-separated request can
+        // select a Latin face and let the platform choose an unrelated Chinese fallback.
+        Resources["ClubFontFamily"] = new Avalonia.Media.FontFamily(OperatingSystem.IsWindows() ? "Microsoft YaHei UI"
+            : OperatingSystem.IsMacOS() ? "PingFang SC" : "Noto Sans CJK SC");
     }
     public override void OnFrameworkInitializationCompleted()
     {

@@ -18,20 +18,22 @@
           <StackPanel Name="WindowBrand" Orientation="Horizontal" Spacing="9" Margin="16,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" IsVisible="{Binding !IsContextPage}">
             <Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="26" Height="26" />
             <TextBlock Name="WindowBrandTitle" Text="{Binding WindowTitle}" Foreground="{DynamicResource ClubTitleForeground}" FontSize="13" FontWeight="Bold" VerticalAlignment="Center" MaxWidth="150" TextTrimming="CharacterEllipsis" />
-            <Border Background="{DynamicResource ClubTitleForeground}" CornerRadius="3" Padding="5,3"><TextBlock Text="SHOU" Foreground="{DynamicResource ClubAccent}" FontSize="12" FontWeight="SemiBold" /></Border>
+            <Border Name="ShouBadge" Background="{DynamicResource ClubTitleForeground}" CornerRadius="3" Width="40" Height="24" VerticalAlignment="Center">
+              <TextBlock Text="SHOU" Foreground="{DynamicResource ClubAccent}" FontFamily="Arial, Helvetica, sans-serif" FontSize="12" FontWeight="Bold" LineHeight="16" VerticalAlignment="Center" HorizontalAlignment="Center" />
+            </Border>
           </StackPanel>
           <StackPanel Name="PrimaryNavigation" Grid.Column="1" Orientation="Horizontal" Spacing="10" VerticalAlignment="Center" Margin="17,0,0,0" IsVisible="{Binding !IsContextPage}">
             <ToggleButton Name="LaunchNavigationButton" Classes="topNavigation" IsChecked="{Binding IsLaunchSelected, Mode=OneWay}" Command="{Binding ShowHomeCommand}" AutomationProperties.Name="启动">
-              <StackPanel Orientation="Horizontal" Spacing="8"><Path Classes="navigationIcon" Data="M 2,1 L 14,8 L 2,15 Z" /><TextBlock Text="启动" /></StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><views:ClubIcon Kind="play" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" /><TextBlock Text="启动" VerticalAlignment="Center" LineHeight="20" /></StackPanel>
             </ToggleButton>
             <ToggleButton Name="DownloadsNavigationButton" Classes="topNavigation" IsChecked="{Binding IsDownloadsSelected, Mode=OneWay}" Command="{Binding ShowDownloadsCommand}" AutomationProperties.Name="下载">
-              <StackPanel Orientation="Horizontal" Spacing="8"><Path Classes="navigationIcon" Data="M 8,0 L 8,11 M 3,6 L 8,11 L 13,6 M 1,10 L 1,15 L 15,15 L 15,10" /><TextBlock Text="下载" /></StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><views:ClubIcon Kind="download" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" /><TextBlock Text="下载" VerticalAlignment="Center" LineHeight="20" /></StackPanel>
             </ToggleButton>
             <ToggleButton Name="SettingsNavigationButton" Classes="topNavigation" IsChecked="{Binding IsSettingsSelected, Mode=OneWay}" Command="{Binding ShowSettingsCommand}" AutomationProperties.Name="设置">
-              <StackPanel Orientation="Horizontal" Spacing="8"><Path Classes="navigationIcon" Data="M 7,1 L 10,1 L 11,4 L 13,5 L 16,4 L 18,7 L 16,9 L 16,11 L 18,13 L 16,16 L 13,15 L 11,16 L 10,19 L 7,19 L 6,16 L 4,15 L 1,16 L -1,13 L 1,11 L 1,9 L -1,7 L 1,4 L 4,5 L 6,4 Z M 12,10 A 3.5,3.5 0 1 1 5,10 A 3.5,3.5 0 1 1 12,10" /><TextBlock Text="设置" /></StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><views:ClubIcon Kind="settings" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" /><TextBlock Text="设置" VerticalAlignment="Center" LineHeight="20" /></StackPanel>
             </ToggleButton>
             <ToggleButton Name="ToolsNavigationButton" Classes="topNavigation" IsChecked="{Binding IsToolsSelected, Mode=OneWay}" Command="{Binding ShowToolsCommand}" AutomationProperties.Name="工具">
-              <StackPanel Orientation="Horizontal" Spacing="8"><Path Classes="navigationIcon" Data="M 10,1 A 5,5 0 0 0 5,7 L 0,12 A 2,2 0 0 0 3,15 L 9,9 A 5,5 0 0 0 15,3 L 11,6 L 9,4 Z" /><TextBlock Text="工具" /></StackPanel>
+              <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center"><views:ClubIcon Kind="wrench" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" /><TextBlock Text="工具" VerticalAlignment="Center" LineHeight="20" /></StackPanel>
             </ToggleButton>
           </StackPanel>
           <Grid Name="ContextHeader" Grid.ColumnSpan="2" ColumnDefinitions="32,*" VerticalAlignment="Center" Margin="10,0" IsVisible="{Binding IsContextPage}">
@@ -52,7 +54,6 @@
       <Border Grid.Row="3" Name="OperationBar" IsVisible="{Binding ShowOperationStatus}" Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,1,0,0" Padding="12,5">
         <DockPanel>
           <Button Name="CancelOperationButton" DockPanel.Dock="Right" Content="取消当前操作" Command="{Binding CancelOperationCommand}" IsVisible="{Binding IsBusy}" Margin="10,0,0,0" />
-          <Button Name="StopGameButton" DockPanel.Dock="Right" Content="停止游戏" Command="{Binding StopGameCommand}" IsVisible="{Binding HasRunningGame}" Margin="10,0,0,0" />
           <ProgressBar DockPanel.Dock="Right" IsVisible="{Binding IsBusy}" IsIndeterminate="True" Width="100" Height="3" Margin="12,0" />
           <TextBlock Name="OperationStatus" Text="{Binding StateSummary}" VerticalAlignment="Center" />
         </DockPanel>

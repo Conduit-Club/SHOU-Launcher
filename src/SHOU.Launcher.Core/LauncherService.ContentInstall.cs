@@ -19,7 +19,7 @@ public sealed partial class LauncherService : IContentInstallationService, ICont
         var instance = FindInstance(instanceId); EnsureIsolatedGamePath(instance.GameDirectory);
         _ = ContentInstallFiles.Literal(instance.GameDirectory, ContentInstallFiles.ManifestName);
         if (!Directory.Exists(instance.GameDirectory)) throw new DirectoryNotFoundException("实例游戏目录不存在，请重新选择实例。");
-        if (mutate && (game is not null || Snapshot.GameProcessId is not null)) throw new InvalidOperationException("请先停止游戏再装入资源或导出整合包。");
+        if (mutate) EnsureInstanceNotRunning(instance);
         return instance;
     }
     public async Task<ContentInstallPlan> PlanContentInstallAsync(ContentInstallRequest request, CancellationToken cancellationToken = default)

@@ -1,7 +1,7 @@
 <Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
   <Style Selector="Window">
     <Setter Property="Background" Value="{DynamicResource ClubBackground}" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" />
-    <Setter Property="FontFamily" Value="Microsoft YaHei UI, PingFang SC, Noto Sans CJK SC, sans-serif" /><Setter Property="FontSize" Value="13" />
+    <Setter Property="FontFamily" Value="{DynamicResource ClubFontFamily}" /><Setter Property="FontSize" Value="13" />
   </Style>
   <Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
   <Style Selector="Border.card">

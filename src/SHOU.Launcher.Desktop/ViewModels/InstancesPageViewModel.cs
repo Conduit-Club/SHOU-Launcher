@@ -95,6 +95,7 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         {
             if (SelectedInstance is null) return "创建或选择一个实例。";
             if (!SelectedInstanceSupported) return $"当前候选不支持加载器 {SelectedInstance.Loader}，不会按原版安装或启动。";
+            if (IsSelectedInstanceRunning) return "此实例的游戏仍在运行；可以选择其它实例，或直接关闭启动器，游戏会继续运行。";
             if (Owner.Home.SelectedServerId != "none") return "自动入服暂不可用，请在首页选择“只启动游戏”。";
             var account = Owner.Snapshot.Accounts.FirstOrDefault(a => a.Id == Owner.Snapshot.SelectedAccountId);
             if (account is null) return "请在账户页添加并选择账户。";
@@ -148,12 +149,15 @@ public sealed partial class InstancesPageViewModel : PageViewModel
             }
         });
     }
-    private bool CanLaunch() => CanEdit && SelectedInstanceSupported && Owner.Home.SelectedServerId == "none" && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId);
+    public bool IsSelectedInstanceRunning => SelectedInstance is { } instance &&
+        (Owner.Snapshot.GameSessions.Any(s => s.InstanceId == instance.Id)
+         || Owner.Snapshot.GameSessions.Count == 0 && Owner.Snapshot.GameProcessId is not null && Owner.Snapshot.SelectedInstanceId == instance.Id);
+    private bool CanLaunch() => CanEdit && !IsSelectedInstanceRunning && SelectedInstanceSupported && Owner.Home.SelectedServerId == "none" && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId);
     private Task LaunchSelectedInstanceAsync()
     {
         if (!CanLaunch() || SelectedInstance is not { } instance) return Task.CompletedTask;
         var destination = Owner.Home.SelectedServerId;
-        return Owner.RunAsync(instance.Installed ? "启动游戏" : "准备并启动游戏", async ct =>
+        return Owner.RunLaunchAsync(instance, async ct =>
         {
             if (!instance.Installed) await Service.InstallInstanceAsync(instance.Id, ct);
             ct.ThrowIfCancellationRequested();

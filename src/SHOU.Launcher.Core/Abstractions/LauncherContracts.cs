@@ -32,12 +32,19 @@ public sealed record DownloadTaskSnapshot(string Id, string Name, string State, 
 public sealed record LauncherLog(DateTimeOffset Timestamp, string Level, string Message);
 public sealed record DeviceCodeChallenge(string UserCode, Uri VerificationUri, DateTimeOffset ExpiresAt, string Message);
 public sealed record AuthenticationProfileChoice(string Id, string Name);
+public sealed record GameSessionSnapshot(string InstanceId, int ProcessId, DateTimeOffset StartedAt);
+public sealed record LaunchActivity(string InstanceId, string InstanceName, string Stage, string Authentication,
+    long BytesReceived = 0, long? TotalBytes = null);
 public sealed record LauncherSnapshot(BuildIdentity Build, PlatformContext Platform, LauncherSettings Settings,
     IReadOnlyList<GameInstance> Instances, IReadOnlyList<AccountProfile> Accounts,
     IReadOnlyList<JavaInstallation> JavaInstallations, IReadOnlyList<ClubServer> Servers,
     IReadOnlyList<DownloadTaskSnapshot> Downloads, string? SelectedAccountId = null,
     string? SelectedInstanceId = null, string State = "Ready", string? Error = null,
-    int? GameProcessId = null, bool CanPersistAccounts = true);
+    int? GameProcessId = null, bool CanPersistAccounts = true)
+{
+    public IReadOnlyList<GameSessionSnapshot> GameSessions { get; init; } = [];
+    public LaunchActivity? LaunchActivity { get; init; }
+}
 public sealed record LaunchPlan(string JavaExecutable, RuntimeArchitecture JavaRuntimeArchitecture,
     string WorkingDirectory, [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<string> Arguments,
     [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyDictionary<string, string?> EnvironmentOverrides, IReadOnlyList<string> ClasspathEntries,

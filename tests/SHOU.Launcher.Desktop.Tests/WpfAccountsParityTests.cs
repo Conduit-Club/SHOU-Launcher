@@ -62,7 +62,11 @@ public sealed class WpfAccountsParityTests
             Assert.Equal(2, details.Length);
             Assert.Equal(root.Accounts.AccountDetail, details[0].Text);
             Assert.Equal(root.Accounts.PersistenceSummary, details[1].Text);
-            Assert.Same(root.Accounts.RefreshAccountCommand, Find<Button>(window, "RefreshAccountButton").Command);
+            var accountButton = Find<Button>(window, "RefreshAccountButton");
+            var accountMenu = Assert.IsType<MenuFlyout>(accountButton.Flyout);
+            accountMenu.ShowAt(accountButton); Pump(window);
+            Assert.Same(root.Accounts.RefreshAccountCommand, accountMenu.Items.OfType<MenuItem>().First().Command);
+            accountMenu.Hide();
             Assert.Same(root.Accounts.BeginAddAccountCommand, Find<Button>(window, "BeginAddAccountButton").Command);
             Assert.Same(root.Accounts.RequestRemovalCommand, Find<Button>(window, "RequestAccountRemovalButton").Command);
         }

@@ -1,5 +1,7 @@
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Core.IO;
+using System.Diagnostics;
 using SHOU.Launcher.Desktop.Platform;
 
 namespace SHOU.Launcher.Core.Tests.Platform;
@@ -7,6 +9,55 @@ namespace SHOU.Launcher.Core.Tests.Platform;
 [TestClass]
 public sealed class ProcessRunnerTests
 {
+    [TestMethod]
+    public async Task FailedSessionRegistrationStopsOnlyTheNewChildBeforePrivateHandoff()
+    {
+        var fixture = new PlatformFixture();
+        await using var runner = new ProcessRunner();
+        Process? registered = null;
+        using var input = SensitiveProcessInput.CopyFrom("synthetic-private-input"u8);
+        var spec = fixture.JavaProcess("sleep") with { SensitiveInput = input, OnStarted = pid => {
+            registered = Process.GetProcessById(pid); throw new IOException("Synthetic session registration failure."); } };
+        try
+        {
+            await Assert.ThrowsAsync<IOException>(async () => await runner.StartAsync(spec));
+            Assert.IsNotNull(registered); Assert.IsTrue(registered.HasExited);
+        }
+        finally { registered?.Dispose(); }
+    }
+    [TestMethod]
+    public async Task DetachedChildSurvivesRunnerDisposalAndReopenedRegistryProtectsOnlyItsInstance()
+    {
+        var fixture = new PlatformFixture();
+        var runner = new ProcessRunner();
+        var ready = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var child = await runner.StartAsync(fixture.JavaProcess("sleep"), new InlineProgress<ProcessOutput>(o => { if (o.Text.Contains("started")) ready.TrySetResult(); }));
+        using var native = Process.GetProcessById(child.ProcessId);
+        try
+        {
+            await ready.Task.WaitAsync(TimeSpan.FromSeconds(15));
+            var first = new GameInstance("first", "First", "fixture", fixture.Root);
+            var second = first with { Id = "second", GameDirectory = Path.Combine(fixture.Root, "second") };
+            var records = Path.Combine(fixture.Root, "registry");
+            var registry = new GameSessionRegistry(records);
+            registry.Register(first, child.ProcessId);
+            await ((IDetachableProcess)child).DetachAsync();
+            await runner.DisposeAsync();
+            Assert.IsFalse(native.HasExited, "Closing the process owner must leave its committed game alive.");
+            var reopened = new GameSessionRegistry(records);
+            Assert.AreEqual(child.ProcessId, reopened.Read(first)!.ProcessId);
+            Assert.ThrowsExactly<InvalidOperationException>(() => reopened.EnsureWritable(first));
+            reopened.EnsureWritable(second);
+            // A reused PID never makes an old record active. Disk identities never authorize Stop/Kill.
+            File.WriteAllText(Directory.GetFiles(records, "*.json").Single(), System.Text.Json.JsonSerializer.Serialize(new { Pid = child.ProcessId, StartTicks = 1L }));
+            Assert.IsNull(reopened.Read(first));
+        }
+        finally
+        {
+            if (!native.HasExited) { native.Kill(entireProcessTree: true); await native.WaitForExitAsync(); }
+            await child.DisposeAsync(); await runner.DisposeAsync();
+        }
+    }
     [TestMethod]
     public async Task ArgumentsKeepUnicodeQuotesSpacesAndShellMetacharacters()
     {

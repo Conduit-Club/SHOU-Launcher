@@ -33,6 +33,9 @@ public sealed class OneClickLaunchTests
             running = fixture.ClickLaunch();
             await entered.Task.WaitAsync(Deadline); Pump(fixture.Window);
             Assert.Equal(1, installs); Assert.True(fixture.Vm.IsBusy);
+            Assert.True(Find<Grid>(fixture.Window, "HomeLaunchProgressPanel").IsEffectivelyVisible);
+            Assert.False(Find<AccountsView>(fixture.Window, "HomeAccountsView").IsEffectivelyVisible);
+            Assert.False(Find<Border>(fixture.Window, "OperationBar").IsVisible);
             Assert.False(fixture.Launch.IsEffectivelyEnabled);
             Assert.Null(fixture.Service.LastLaunchServerId); Assert.Null(fixture.Service.Snapshot.GameProcessId);
             Assert.False(fixture.Service.Snapshot.Instances.Single().Installed);
@@ -45,6 +48,9 @@ public sealed class OneClickLaunchTests
         Assert.Equal("none", fixture.Service.LastLaunchServerId);
         Assert.Equal("Running", fixture.Service.Snapshot.State);
         Assert.NotNull(fixture.Service.Snapshot.GameProcessId); Assert.False(fixture.Vm.IsBusy);
+        Assert.False(Find<Grid>(fixture.Window, "HomeLaunchProgressPanel").IsEffectivelyVisible);
+        Assert.True(Find<AccountsView>(fixture.Window, "HomeAccountsView").IsEffectivelyVisible);
+        Assert.False(fixture.Vm.ShowOperationStatus); Assert.True(fixture.Vm.CanMutate);
     }
 
     [AvaloniaFact]

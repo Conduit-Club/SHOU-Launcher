@@ -11,6 +11,55 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class ProcessLifecycleRegressionTests
 {
     [TestMethod, TestCategory("DesktopPlatforms")]
+    public async Task DifferentInstancesRunTogetherWhileTheSameInstanceRemainsProtected()
+    {
+        using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Cached fixture must not use network.")));
+        var downloader = new PipelineDownloads();
+        var original = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        await using var nativeProcesses = (ProcessRunner)original.Processes;
+        var runner = new HoldingRunner();
+        var platform = original with { Processes = runner, JavaDiscovery = new FixtureJava(original.Info.Context.HardwareArchitecture) };
+        using var lease = platform.DataLock.Acquire(platform.Paths);
+        await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
+        await service.InitializeAsync();
+        var metadata = Path.Combine(platform.Paths.CacheDirectory, "versions", "fixture", "fixture.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(metadata)!);
+        await File.WriteAllTextAsync(metadata, $$$"""
+            {"id":"fixture","type":"release","mainClass":"fixture.Main","javaVersion":{"majorVersion":21},"libraries":[],
+             "downloads":{"client":{"url":"https://example.invalid/client","sha1":"{{{PipelineDownloads.Hash(PipelineDownloads.Client)}}}","size":{{{PipelineDownloads.Client.Length}}}}},
+             "assetIndex":{"id":"fixture-assets","url":"https://example.invalid/assets","sha1":"{{{PipelineDownloads.Hash(PipelineDownloads.Assets)}}}","size":{{{PipelineDownloads.Assets.Length}}}},
+             "arguments":{"jvm":["-cp","${classpath}"],"game":["--username","${auth_player_name}"]}}
+            """);
+        var account = await service.AddOfflineAccountAsync("FixtureOnly"); await service.SelectAccountAsync(account.Id);
+        var first = await service.CreateInstanceAsync("First", "fixture");
+        await service.LaunchAsync(first.Id);
+        Assert.AreEqual("Ready", service.Snapshot.State);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.LaunchAsync(first.Id));
+        var second = await service.CreateInstanceAsync("Second", "fixture");
+        await service.LaunchAsync(second.Id);
+        Assert.AreEqual(2, service.Snapshot.GameSessions.Count);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.InstallInstanceAsync(first.Id));
+        await service.StopGameAsync();
+        Assert.IsFalse(runner.Children[0].Completion.IsCompleted, "Stopping the selected second instance must leave the first alive.");
+        Assert.IsTrue(runner.Children[1].Completion.IsCompleted);
+    }
+
+    private sealed class HoldingRunner : IProcessRunner
+    {
+        public List<HoldingProcess> Children { get; } = [];
+        public Task<IManagedProcess> StartAsync(ProcessSpec spec, IProgress<ProcessOutput>? output = null, CancellationToken cancellationToken = default)
+        { var child = new HoldingProcess(18000 + Children.Count); Children.Add(child); return Task.FromResult<IManagedProcess>(child); }
+        public Task<ProcessResult> RunAsync(ProcessSpec spec, IProgress<ProcessOutput>? output = null, CancellationToken cancellationToken = default) => throw new AssertFailedException("Unexpected helper.");
+    }
+    private sealed class HoldingProcess(int pid) : IManagedProcess
+    {
+        private readonly TaskCompletionSource<ProcessResult> result = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int ProcessId => pid;
+        public Task<ProcessResult> Completion => result.Task;
+        public Task StopAsync(CancellationToken cancellationToken = default) { result.TrySetResult(new(0, "", "", Cancelled: true)); return Task.CompletedTask; }
+        public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    }
+    [TestMethod, TestCategory("DesktopPlatforms")]
     public async Task AlreadyExitedGameFailureSurvivesLaunchOperationCompletion()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Cached fixture must not perform network requests.")));

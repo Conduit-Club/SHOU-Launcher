@@ -7,7 +7,7 @@ using SHOU.Launcher.Core.Abstractions;
 namespace SHOU.Launcher.Desktop.Platform;
 
 /// <summary>Runs only explicit executables; shell scripts are a separate caller decision.</summary>
-public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
+public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable, IGameWindowObserver
 {
     private readonly ConcurrentDictionary<int, ManagedProcess> _owned = new();
     private int _disposed;
@@ -62,6 +62,9 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
             var started = managed;
             _ = managed.Completion.ContinueWith(_ => _owned.TryRemove(started.ProcessId, out var removed),
                 CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+            // Persist a nonsecret session identity before the bootstrap receives credentials and enters the game.
+            // A failed callback follows the same owned-child cleanup as a failed private transfer.
+            spec.OnStarted?.Invoke(managed.ProcessId);
             // ManagedProcess already drains both output streams while the child reads its private input.
             if (privateInput is not null)
                 await managed.SendPrivateInputAsync(privateInput, spec.SensitiveInput!.TransferTimeout, cancellationToken).ConfigureAwait(false);
@@ -97,7 +100,24 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
         await Task.WhenAll(_owned.Values.Select(async process => await process.DisposeAsync().ConfigureAwait(false))).ConfigureAwait(false);
     }
 
-    private sealed class ManagedProcess : IManagedProcess
+    public async Task<bool> WaitForGameWindowAsync(IManagedProcess process, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        // The Windows window probe belongs here, never in the shared page or Core orchestration.
+        // Other platforms retain their launch path; native window detection still needs Mac acceptance.
+        if (!OperatingSystem.IsWindows()) return false;
+        var timer = Stopwatch.StartNew();
+        using var native = Process.GetProcessById(process.ProcessId);
+        while (timer.Elapsed < timeout && !process.Completion.IsCompleted)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            native.Refresh();
+            if (native.MainWindowHandle != IntPtr.Zero) return true;
+            await Task.Delay(150, cancellationToken).ConfigureAwait(false);
+        }
+        return false;
+    }
+
+    private sealed class ManagedProcess : IDetachableProcess
     {
         private readonly Process _process;
         private readonly CancellationTokenSource _stop = new();
@@ -110,6 +130,8 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
         private bool _truncated;
         private int _disposed;
         private int _inputClosed;
+        private readonly TaskCompletionSource _detach = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private bool _detached;
         public int ProcessId { get; }
         public Task<ProcessResult> Completion { get; }
 
@@ -210,7 +232,17 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
             var cancelled = false;
             try
             {
-                await _process.WaitForExitAsync(linked.Token).ConfigureAwait(false);
+                var exit = _process.WaitForExitAsync(linked.Token);
+                if (await Task.WhenAny(exit, _detach.Task).ConfigureAwait(false) == _detach.Task)
+                {
+                    _detached = true;
+                    linked.Cancel();
+                    try { await exit.ConfigureAwait(false); } catch (OperationCanceledException) { }
+                    // The game's verified bootstrap owns its bounded log file; it no longer writes these pipes.
+                    _process.StandardOutput.Dispose(); _process.StandardError.Dispose();
+                    return new ProcessResult(0, "", "", Detached: true);
+                }
+                await exit.ConfigureAwait(false);
             }
             catch (OperationCanceledException) when (linked.IsCancellationRequested)
             {
@@ -223,7 +255,11 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
             finally
             {
                 // A descendant may retain a redirected pipe after the parent exits. Bound that drain too.
-                try { await reads.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false); }
+                try
+                {
+                    if (_detached) _ = reads.ContinueWith(task => _ = task.Exception, TaskContinuationOptions.OnlyOnFaulted);
+                    else await reads.WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                }
                 catch (TimeoutException)
                 {
                     _process.StandardOutput.Dispose();
@@ -244,8 +280,15 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable
         public async ValueTask DisposeAsync()
         {
             if (Interlocked.Exchange(ref _disposed, 1) != 0) return;
-            try { await StopAsync().ConfigureAwait(false); }
+            try { if (!_detached) await StopAsync().ConfigureAwait(false); }
             finally { CloseInput(); _process.Dispose(); _stop.Dispose(); }
+        }
+
+        public async ValueTask DetachAsync()
+        {
+            _detach.TrySetResult();
+            await Completion.ConfigureAwait(false);
+            await DisposeAsync().ConfigureAwait(false);
         }
     }
 }

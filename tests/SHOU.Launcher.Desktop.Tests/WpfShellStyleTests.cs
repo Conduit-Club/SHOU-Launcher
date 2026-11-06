@@ -189,7 +189,7 @@ public sealed class WpfShellStyleTests
             var refresh = Find<Button>(window, "RefreshServersButton");
             Assert.Same(vm.Home.RefreshServersCommand, refresh.Command);
             Assert.Equal("刷新服务器状态", Avalonia.Automation.AutomationProperties.GetName(refresh));
-            Assert.IsType<Avalonia.Controls.Shapes.Path>(refresh.Content);
+            Assert.Equal("refresh-cw", Assert.IsType<ClubIcon>(refresh.Content).Kind);
             Assert.Equal(18, refresh.Bounds.Height);
         }
         finally { window.Close(); Application.Current.RequestedThemeVariant = previousTheme; }

@@ -38,9 +38,9 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     private LauncherSnapshot snapshot;
     private bool initialized, disposed;
     private CancellationTokenSource? installCancellation;
-    private IManagedProcess? game;
-    private Task? gameObserver;
-    private long gameGeneration;
+    private readonly ConcurrentDictionary<string, (IManagedProcess Process, bool IndependentLog)> games = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, Task> gameObservers = new(StringComparer.Ordinal);
+    private readonly GameSessionRegistry gameSessions;
     private DateTimeOffset lastDownloadUpdate;
     private readonly DownloadTaskRegistry downloadOwners = new();
     private readonly string launcherLogPath;
@@ -57,6 +57,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         this.javaTrust = javaTrust ?? new DerivedJavaTrustService(platform.JavaDiscovery, platform.Processes);
         network.Credentials = platform.Credentials;
         launcherLogPath = Path.Combine(platform.Paths.LogsDirectory, "launcher.log");
+        gameSessions = new(Path.Combine(platform.Paths.LocalDataDirectory, "game-sessions"));
         snapshot = new(build.GetIdentity(), platform.Info.Context, new(), [], [], [],
             [new("none", "只启动游戏", ""), new("smp", "SMP · 多人生存", "smp.shoumc.com"),
              new("create", "Create · 创造建筑", "create.shoumc.com"), new("shou", "SHOU · 校园展示", "shou.shoumc.com")], []);
@@ -111,6 +112,8 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
                 }
             }
             initialized = true;
+            RefreshGameSessions();
+            sessionMonitor = MonitorGameSessionsAsync();
             Log("Info", $"{Snapshot.Build.Name} {Snapshot.Build.Version} · {Snapshot.Platform.RuntimeIdentifier} · configuration owner={build.OwnerAssembly}");
         }
         finally { initialize.Release(); }
@@ -154,6 +157,8 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     { _ = await PrepareInstanceAsync(FindInstance(instanceId), ct).ConfigureAwait(false); }, cancellationToken);
     private async Task<(InstalledGame Game, JavaInstallation Java)> PrepareInstanceAsync(GameInstance instance, CancellationToken ct)
     {
+        EnsureInstanceNotRunning(instance);
+        SetLaunchStage("检查游戏文件");
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var ownership = downloadOwners.Begin(instance.Id); installCancellation = cancellation;
         try { return await PrepareInstanceCoreAsync(instance, cancellation.Token).ConfigureAwait(false); }
@@ -184,6 +189,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     }
     private async Task<JavaInstallation> SelectInstanceJavaAsync(GameInstance instance, ResolvedVersion version, CancellationToken ct)
     {
+        SetLaunchStage("选择 Java");
         var preferred = instance.JavaExecutable ?? Snapshot.Settings.JavaExecutable;
         var candidates = await platform.JavaDiscovery.DiscoverAsync(new(preferred, Paths.RuntimesDirectory, version.RequiredJavaMajor,
             Snapshot.Platform.HardwareArchitecture), ct).ConfigureAwait(false);
@@ -224,6 +230,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     }
     private async Task<LaunchPlan> PlanAsync(GameInstance instance, InstalledGame installed, JavaInstallation java, CancellationToken ct)
     {
+        SetLaunchStage("验证账户");
         var account = Snapshot.Accounts.FirstOrDefault(a => a.Id == Snapshot.SelectedAccountId) ?? throw new InvalidOperationException("请先选择账户或添加本地离线测试档案。");
         if (account.Kind != AccountKind.Offline && javaBootstrap is null)
             throw new InvalidOperationException("此构建缺少受信Java引导，已拒绝将真实账户凭据放入命令行。请使用完整候选包。");
@@ -264,40 +271,74 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     }
     public Task LaunchAsync(string instanceId, string serverId = "none", CancellationToken cancellationToken = default) => ExecuteAsync("Launching", async ct =>
     {
-        if (game is not null && !game.Completion.IsCompleted) throw new InvalidOperationException("已有本启动器创建的游戏在运行。");
-        long generation; lock (sync) generation = ++gameGeneration;
-        if (serverId != "none") throw new PlatformNotSupportedException("当前候选先验证只启动游戏；真实账户/社团服联机门禁尚未通过。");
+        if (serverId != "none") throw new PlatformNotSupportedException("自动入服尚待连接验收，请先选择“只启动游戏”，进入游戏后使用多人游戏连接服务器。");
         var instance = FindInstance(instanceId);
+        EnsureInstanceNotRunning(instance);
+        var account = Snapshot.Accounts.FirstOrDefault(a => a.Id == Snapshot.SelectedAccountId);
+        Set(s => s with { LaunchActivity = new(instance.Id, instance.Name, "准备游戏", account?.Kind == AccountKind.Microsoft ? "微软正版验证" : account?.Kind == AccountKind.Yggdrasil ? "外置账户验证" : "离线角色") });
         var prepared = await PrepareInstanceAsync(instance, ct).ConfigureAwait(false);
         var original = await PlanAsync(instance, prepared.Game, prepared.Java, ct).ConfigureAwait(false);
+        // The verified Java bootstrap owns output after handoff, including when the launcher exits.
+        if (javaBootstrap is not null)
+        {
+            VerifiedDownloader.RejectLink(Paths.LogsDirectory);
+            var log = Path.Combine(Paths.LogsDirectory, "game-" + Guid.NewGuid().ToString("N") + ".log");
+            var arguments = original.Arguments.ToList();
+            arguments.Insert(original.MainClassIndex, "-Dshou.launcher.sessionLog=" + log);
+            original = original with { Arguments = arguments, MainClassIndex = original.MainClassIndex + 1 };
+        }
         using var protection = ProtectPlan(original);
         var plan = protection?.Plan ?? original;
         var reportPath = SafePath.Within(Paths.LogsDirectory, "launch-plan-redacted.json");
         await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(plan.ToRedactedReport(), ConfigurationStore.JsonOptions), ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
+        SetLaunchStage("启动游戏进程");
         var collector = new ProcessLogCollector((error, line) => Log(error ? "GameError" : "Game", line));
         var process = await platform.Processes.StartAsync(new(plan.JavaExecutable, plan.Arguments, plan.WorkingDirectory, plan.EnvironmentOverrides,
-            OutputLimitCharacters: 4 * 1024 * 1024, SensitiveInput: protection?.Input), new InlineProgress<ProcessOutput>(collector.Report), lifetime.Token).ConfigureAwait(false);
-        lock (sync) game = process;
-        Set(s => s with { State = "Running", GameProcessId = process.ProcessId });
+            OutputLimitCharacters: 4 * 1024 * 1024, SensitiveInput: protection?.Input,
+            OnStarted: protection is null ? null : pid => gameSessions.Register(instance, pid)), new InlineProgress<ProcessOutput>(collector.Report), CancellationToken.None).ConfigureAwait(false);
+        var independent = protection is not null && process is IDetachableProcess;
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            games[instanceId] = (process, independent);
+            RefreshGameSessions();
+            var observer = ObserveGameAsync(instanceId, process, collector);
+            gameObservers[instanceId] = observer;
+            SetLaunchStage("等待游戏窗口");
+            if (!process.Completion.IsCompleted && platform.Processes is IGameWindowObserver windowObserver)
+            {
+                var visible = await windowObserver.WaitForGameWindowAsync(process, TimeSpan.FromSeconds(90), ct).ConfigureAwait(false);
+                if (!visible && !process.Completion.IsCompleted) Log("Warning", "游戏进程已启动，暂未确认窗口；可继续操作启动器，游戏日志保存在本机。");
+            }
+            ct.ThrowIfCancellationRequested();
+            if (process.Completion.IsCompleted) await observer.ConfigureAwait(false);
+        }
+        catch { await process.StopAsync().ConfigureAwait(false); await process.DisposeAsync().ConfigureAwait(false); games.TryRemove(instanceId, out _); RefreshGameSessions(); throw; }
         Log("Info", "已启动本次Java游戏进程，PID=" + process.ProcessId + "；主菜单仍需独立真实观察。");
-        gameObserver = ObserveGameAsync(process, collector, generation);
         await RecordInstanceLaunchAsync(instanceId).ConfigureAwait(false);
     }, cancellationToken);
-    private async Task ObserveGameAsync(IManagedProcess process, ProcessLogCollector collector, long generation)
+    private async Task ObserveGameAsync(string instanceId, IManagedProcess process, ProcessLogCollector collector)
     {
         try
         {
-            var result = await process.Completion.ConfigureAwait(false); collector.Flush(result.OutputTruncated);
+            var result = await process.Completion.ConfigureAwait(false);
+            if (result.Detached) return;
+            collector.Flush(result.OutputTruncated);
             Log(result.ExitCode == 0 ? "Info" : "Error", $"本次游戏进程退出：code={result.ExitCode}, cancelled={result.Cancelled}, timeout={result.TimedOut}。");
-            Set(s => generation != gameGeneration ? s : s with { State = result.ExitCode == 0 || result.Cancelled ? "Ready" : "Error", GameProcessId = null,
-                Error = result.ExitCode == 0 || result.Cancelled ? null : "游戏异常退出，请查看日志。" });
+            if (result.ExitCode != 0 && !result.Cancelled && !disposed)
+                Set(s => s with { State = s.State == "Ready" ? "Error" : s.State, Error = "游戏异常退出，请查看日志。" });
         }
-        catch (Exception ex) { Log("Error", "游戏进程观察失败：" + ex.GetType().Name); Set(s => generation != gameGeneration ? s : s with { State = "Error", GameProcessId = null, Error = "无法完整读取游戏退出状态。" }); }
-        finally { await process.DisposeAsync().ConfigureAwait(false); lock (sync) { if (ReferenceEquals(game, process)) game = null; } }
+        catch (Exception ex) { if (!disposed) { Log("Error", "游戏进程观察失败：" + ex.GetType().Name); Set(s => s with { Error = "无法完整读取游戏退出状态。" }); } }
+        finally
+        {
+            await process.DisposeAsync().ConfigureAwait(false);
+            if (games.TryGetValue(instanceId, out var current) && ReferenceEquals(current.Process, process)) games.TryRemove(instanceId, out _);
+            if (!disposed) RefreshGameSessions();
+        }
     }
     public async Task StopGameAsync(CancellationToken cancellationToken = default)
-    { var current = game; if (current is not null) await current.StopAsync(cancellationToken).ConfigureAwait(false); }
+    { if (Snapshot.SelectedInstanceId is { } id && games.TryGetValue(id, out var current)) await current.Process.StopAsync(cancellationToken).ConfigureAwait(false); }
     public Task CancelDownloadAsync(string taskId, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -456,11 +497,11 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
             await action(linked.Token).ConfigureAwait(false);
             // A process observer can already have reported failure before StartAsync returns.
             // Only complete our own transitional state; never overwrite a newer Error/Running.
-            Set(s => s.State == state ? s with { State = game is null ? "Ready" : "Running" } : s);
+            Set(s => s.State == state ? s with { State = s.Error is null ? "Ready" : "Error" } : s);
         }
-        catch (OperationCanceledException) { MarkDownloads("Cancelled", null); Set(s => s with { State = game is null ? "Ready" : "Running", Error = "操作已取消，可稍后重试。" }); throw; }
+        catch (OperationCanceledException) { MarkDownloads("Cancelled", null); Set(s => s with { State = "Ready", Error = null }); throw; }
         catch (Exception ex) { var message = SafeError(ex); MarkDownloads("Failed", message); Set(s => s with { State = "Error", Error = message }); Log("Error", message); throw; }
-        finally { operation.Release(); }
+        finally { if (state == "Launching") Set(s => s with { LaunchActivity = null }); operation.Release(); }
     }
     private Task PersistAsync(CancellationToken ct)
     {
@@ -477,6 +518,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     { Accounts = state.Accounts.Where(a => a.Id != account.Id).Append(account).ToArray(), SelectedAccountId = account.Id };
     private void OnTransfer(TransferProgress progress)
     {
+        SetLaunchTransfer(progress);
         var id = downloadOwners.Register(progress.Id);
         downloads[id] = new(id, Path.GetFileName(progress.Id), progress.Stage, progress.BytesReceived, progress.TotalBytes, progress.Source);
         lock (sync)
@@ -541,7 +583,17 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     {
         if (disposed) return; disposed = true; lifetime.Cancel(); installCancellation?.Cancel();
         await operation.WaitAsync().ConfigureAwait(false);
-        try { if (game is { } current) await current.StopAsync().ConfigureAwait(false); if (gameObserver is { } observer) await observer.ConfigureAwait(false); await config.DisposeAsync().ConfigureAwait(false); }
+        try
+        {
+            foreach (var current in games.Values)
+            {
+                if (current.IndependentLog && current.Process is IDetachableProcess detachable) await detachable.DetachAsync().ConfigureAwait(false);
+                else await current.Process.StopAsync().ConfigureAwait(false);
+            }
+            await Task.WhenAll(gameObservers.Values).ConfigureAwait(false);
+            if (sessionMonitor is not null) await sessionMonitor.ConfigureAwait(false);
+            await config.DisposeAsync().ConfigureAwait(false);
+        }
         finally { operation.Release(); lifetime.Dispose(); }
     }
     private sealed class InlineProgress<T>(Action<T> callback) : IProgress<T> { public void Report(T value) => callback(value); }

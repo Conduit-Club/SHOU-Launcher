@@ -48,7 +48,6 @@ public sealed partial class LauncherService
         var capturedPlan = plan; LocalPackImportResult? imported = null;
         await ExecuteAsync("Installing", async ct =>
         {
-            if (game is not null || Snapshot.GameProcessId is not null) throw new InvalidOperationException("请先停止游戏，再创建整合包实例。");
             var root = Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory; EnsureIsolatedGamePath(root); VerifiedDownloader.RejectLink(root); Directory.CreateDirectory(root);
             var stage = ContentInstallFiles.Literal(root, ".shou-local-stage-" + Guid.NewGuid().ToString("N")); var destination = ContentInstallFiles.Literal(root, Guid.NewGuid().ToString("N")); var moved = false; var registered = false;
             using var dedicated = localPackResolver is null ? new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false)) : null;

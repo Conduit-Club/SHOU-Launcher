@@ -36,6 +36,7 @@ public sealed partial class LauncherService : IInstanceWorkspaceService
         if (edit.MemoryMiB is < 512 or > 32768 || edit.MemoryMiB is { } memory && Snapshot.Settings.MinimumMemoryMiB > memory)
             throw new ArgumentException("实例最大内存须为512–32768 MiB且不小于初始内存。");
         var instance = FindInstance(instanceId);
+        EnsureInstanceNotRunning(instance);
         var next = instance with { Name = edit.Name.Trim(), JavaExecutable = string.IsNullOrWhiteSpace(edit.JavaExecutable) ? null : edit.JavaExecutable, MemoryMiB = edit.MemoryMiB };
         var candidate = Snapshot with { Instances = Snapshot.Instances.Select(i => i.Id == instanceId ? next : i).ToArray() };
         await PersistCandidateAsync(candidate, ct).ConfigureAwait(false); Set(_ => candidate);
@@ -49,11 +50,13 @@ public sealed partial class LauncherService : IInstanceWorkspaceService
     public Task ImportInstanceContentAsync(string instanceId, string kind, string sourcePath, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     {
         var instance = FindInstance(instanceId); EnsureIsolatedGamePath(instance.GameDirectory);
+        EnsureInstanceNotRunning(instance);
         await InstanceWorkspace.ImportAsync(instance, kind, sourcePath, ct).ConfigureAwait(false);
     }, cancellationToken);
     public Task SetInstanceModEnabledAsync(string instanceId, string relativePath, bool enabled, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", ct =>
     {
         ct.ThrowIfCancellationRequested(); var instance = FindInstance(instanceId); EnsureIsolatedGamePath(instance.GameDirectory);
+        EnsureInstanceNotRunning(instance);
         InstanceWorkspace.ToggleMod(instance, relativePath, enabled); return Task.CompletedTask;
     }, cancellationToken);
     public async Task<string> ExportInstanceAsync(string instanceId, bool includeWorlds, CancellationToken cancellationToken = default)
@@ -62,6 +65,7 @@ public sealed partial class LauncherService : IInstanceWorkspaceService
         await ExecuteAsync("Ready", async ct =>
         {
             var instance = FindInstance(instanceId); EnsureIsolatedGamePath(instance.GameDirectory);
+            EnsureInstanceNotRunning(instance);
             output = await InstanceWorkspace.ExportAsync(instance, SafePath.Within(Paths.CacheDirectory, "exports"), includeWorlds, ct).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
         return output!;

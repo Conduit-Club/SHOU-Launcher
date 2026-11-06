@@ -9,8 +9,8 @@ public sealed partial class LauncherService : IInstanceWorldService
     {
         if (!Paths.IsIsolated) throw new InvalidOperationException("World and server file actions currently require an explicitly isolated data root.");
         if (!string.Equals(Snapshot.SelectedInstanceId, instanceId, StringComparison.Ordinal)) throw new InvalidOperationException("Select this isolated instance before accessing its world files.");
-        if (mutate && (game is not null || Snapshot.GameProcessId is not null)) throw new InvalidOperationException("Stop the game before changing world or server files.");
         var instance = FindInstance(instanceId); EnsureIsolatedGamePath(instance.GameDirectory);
+        if (mutate) EnsureInstanceNotRunning(instance);
         return new(Paths.DataDirectory, instance.GameDirectory);
     }
     public async Task<InstanceServerList> GetInstanceServersAsync(string instanceId, CancellationToken cancellationToken = default)

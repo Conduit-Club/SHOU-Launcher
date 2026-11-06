@@ -19,7 +19,6 @@ public sealed partial class LauncherService : IModrinthPackService
         ModrinthPackImportResult? result = null;
         await ExecuteAsync("Installing", async ct =>
         {
-            if (game is not null || Snapshot.GameProcessId is not null) throw new InvalidOperationException("请先停止游戏再导入整合包。");
             var root = Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory; EnsureIsolatedGamePath(root); VerifiedDownloader.RejectLink(root); Directory.CreateDirectory(root);
             var stage = ContentInstallFiles.Literal(root, ".shou-pack-stage-" + Guid.NewGuid().ToString("N"));
             var destination = ContentInstallFiles.Literal(root, Guid.NewGuid().ToString("N")); var registered = false; var moved = false;

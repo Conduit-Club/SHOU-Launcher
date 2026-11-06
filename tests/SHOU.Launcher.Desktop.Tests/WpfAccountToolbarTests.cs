@@ -32,10 +32,17 @@ public sealed class WpfAccountToolbarTests
         Assert.Equal(1, host.Opacity); Assert.True(host.IsHitTestVisible); Assert.Equal(height, panel.Bounds.Height);
         var skin = Find<Button>(fixture.Window, "AccountSkinMenuButton"); var refresh = Find<Button>(fixture.Window, "RefreshAccountButton");
         Assert.Equal(skin.Bounds.Size, refresh.Bounds.Size);
-        Assert.IsType<Avalonia.Controls.Shapes.Path>(skin.Content); Assert.IsType<Avalonia.Controls.Shapes.Path>(refresh.Content);
+        Assert.IsType<ClubIcon>(skin.Content); Assert.IsType<ClubIcon>(refresh.Content);
         Assert.Equal("皮肤与披风", Avalonia.Automation.AutomationProperties.GetName(skin));
-        Assert.Equal("刷新授权", Avalonia.Automation.AutomationProperties.GetName(refresh));
-        Assert.Same(fixture.Vm.RefreshAccountCommand, refresh.Command);
+        Assert.Equal("账户操作", Avalonia.Automation.AutomationProperties.GetName(refresh));
+        var accountMenu = Assert.IsType<MenuFlyout>(refresh.Flyout);
+        accountMenu.ShowAt(refresh); Pump(fixture.Window);
+        Assert.Same(fixture.Vm.RefreshAccountCommand, accountMenu.Items.OfType<MenuItem>().First().Command);
+        accountMenu.Hide();
+        var select = Find<Button>(fixture.Window, "SelectAccountProfileButton");
+        Assert.Equal(skin.Bounds.Size, select.Bounds.Size);
+        Assert.Equal("选择档案", Avalonia.Automation.AutomationProperties.GetName(select));
+        Assert.Same(fixture.Vm.ToggleAllAccountsCommand, select.Command);
         fixture.MoveOutside();
         Assert.Equal(0, host.Opacity); Assert.False(host.IsHitTestVisible); Assert.Equal(height, panel.Bounds.Height);
         fixture.Window.MouseMove(Center(host, fixture.Window)); Pump(fixture.Window);
@@ -53,6 +60,8 @@ public sealed class WpfAccountToolbarTests
         Assert.True(skin.IsFocused); Assert.Equal(1, fixture.Toolbar.Opacity); Assert.True(fixture.Toolbar.IsHitTestVisible);
         fixture.Window.KeyPress(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, null); Pump(fixture.Window);
         Assert.True(Find<Button>(fixture.Window, "RefreshAccountButton").IsFocused);
+        fixture.Window.KeyPress(Key.Tab, RawInputModifiers.None, PhysicalKey.Tab, null); Pump(fixture.Window);
+        Assert.True(Find<Button>(fixture.Window, "SelectAccountProfileButton").IsFocused);
         fixture.Outside.Focus(); Pump(fixture.Window);
         Assert.Equal(0, fixture.Toolbar.Opacity); Assert.False(fixture.Toolbar.IsHitTestVisible);
     }

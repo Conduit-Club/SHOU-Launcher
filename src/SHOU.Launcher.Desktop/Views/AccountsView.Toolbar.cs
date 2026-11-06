@@ -14,7 +14,7 @@ public partial class AccountsView
     private StackPanel? toolbarAccountPanel;
     private Border? accountToolbarHost;
     private TextBlock? accountAppearanceFeedback;
-    private FlyoutBase? accountToolbarFlyout;
+    private FlyoutBase[] accountToolbarFlyouts = [];
     private TopLevel? accountToolbarTopLevel;
     private AccountsPageViewModel? accountToolbarOwner;
     private string? accountToolbarAccountId;
@@ -28,14 +28,14 @@ public partial class AccountsView
         toolbarAccountPanel = this.FindControl<StackPanel>("SelectedAccountPanel")!;
         accountToolbarHost = this.FindControl<Border>("AccountToolbarHost")!;
         accountAppearanceFeedback = this.FindControl<TextBlock>("AccountAppearanceFeedback")!;
-        accountToolbarFlyout = this.FindControl<Button>("AccountSkinMenuButton")!.Flyout;
+        accountToolbarFlyouts = new[] { this.FindControl<Button>("AccountSkinMenuButton")!.Flyout, this.FindControl<Button>("RefreshAccountButton")!.Flyout }.OfType<FlyoutBase>().ToArray();
         accountToolbarTopLevel = TopLevel.GetTopLevel(this);
         toolbarAccountPanel.PointerEntered += AccountToolbarPointerChanged;
         toolbarAccountPanel.PointerExited += AccountToolbarPointerChanged;
         toolbarAccountPanel.AddHandler(InputElement.GotFocusEvent, AccountToolbarFocusChanged, RoutingStrategies.Bubble, true);
         toolbarAccountPanel.AddHandler(InputElement.LostFocusEvent, AccountToolbarFocusChanged, RoutingStrategies.Bubble, true);
         accountToolbarTopLevel?.AddHandler(InputElement.PointerPressedEvent, AccountToolbarPointerPressed, RoutingStrategies.Tunnel, true);
-        if (accountToolbarFlyout is { } flyout) { flyout.Opened += AccountToolbarFlyoutChanged; flyout.Closed += AccountToolbarFlyoutChanged; }
+        foreach (var flyout in accountToolbarFlyouts) { flyout.Opened += AccountToolbarFlyoutChanged; flyout.Closed += AccountToolbarFlyoutChanged; }
         SubscribeAccountToolbarOwner(); RefreshAccountToolbar();
     }
 
@@ -49,11 +49,11 @@ public partial class AccountsView
             panel.RemoveHandler(InputElement.LostFocusEvent, AccountToolbarFocusChanged);
         }
         accountToolbarTopLevel?.RemoveHandler(InputElement.PointerPressedEvent, AccountToolbarPointerPressed);
-        if (accountToolbarFlyout is { } flyout) { flyout.Opened -= AccountToolbarFlyoutChanged; flyout.Closed -= AccountToolbarFlyoutChanged; flyout.Hide(); }
+        foreach (var flyout in accountToolbarFlyouts) { flyout.Opened -= AccountToolbarFlyoutChanged; flyout.Closed -= AccountToolbarFlyoutChanged; flyout.Hide(); }
         if (accountToolbarOwner is { } owner) owner.PropertyChanged -= AccountToolbarOwnerChanged;
         if (accountToolbarHost is { } host) { host.Opacity = 0; host.IsHitTestVisible = false; }
         toolbarAccountPanel = null; accountToolbarHost = null; accountAppearanceFeedback = null;
-        accountToolbarFlyout = null; accountToolbarTopLevel = null; accountToolbarOwner = null; accountToolbarAccountId = null;
+        accountToolbarFlyouts = []; accountToolbarTopLevel = null; accountToolbarOwner = null; accountToolbarAccountId = null;
         accountToolbarTouchRevealed = false; accountToolbarUpdateQueued = false;
     }
 
@@ -61,7 +61,7 @@ public partial class AccountsView
     {
         if (!accountToolbarAttached) return;
         ++accountToolbarEpoch; accountToolbarUpdateQueued = false; accountToolbarTouchRevealed = false;
-        accountToolbarFlyout?.Hide(); SubscribeAccountToolbarOwner(); RefreshAccountToolbar();
+        HideAccountToolbarFlyouts(); SubscribeAccountToolbarOwner(); RefreshAccountToolbar();
     }
 
     private void SubscribeAccountToolbarOwner()
@@ -111,10 +111,10 @@ public partial class AccountsView
     {
         if (!accountToolbarAttached || toolbarAccountPanel is not { } panel || accountToolbarHost is not { } host) return;
         var accountId = accountToolbarOwner?.SelectedChannelAccount?.Id;
-        if (accountId != accountToolbarAccountId) { accountToolbarAccountId = accountId; accountToolbarTouchRevealed = false; accountToolbarFlyout?.Hide(); }
+        if (accountId != accountToolbarAccountId) { accountToolbarAccountId = accountId; accountToolbarTouchRevealed = false; HideAccountToolbarFlyouts(); }
         var selected = accountToolbarOwner?.ShowSelectedAccount == true;
-        if (!selected) { accountToolbarTouchRevealed = false; accountToolbarFlyout?.Hide(); }
-        var reveal = selected && (panel.IsPointerOver || panel.IsKeyboardFocusWithin || accountToolbarFlyout?.IsOpen == true || accountToolbarTouchRevealed);
+        if (!selected) { accountToolbarTouchRevealed = false; HideAccountToolbarFlyouts(); }
+        var reveal = selected && (panel.IsPointerOver || panel.IsKeyboardFocusWithin || accountToolbarFlyouts.Any(f => f.IsOpen) || accountToolbarTouchRevealed);
         // Keep layout and tab navigation intact; the parent card reveals the hidden hit area.
         host.Opacity = reveal ? 1 : 0; host.IsHitTestVisible = reveal;
         if (accountAppearanceFeedback is { } feedback)
@@ -124,4 +124,5 @@ public partial class AccountsView
             feedback.IsVisible = selected && (accountToolbarOwner?.IsAccountAppearanceBusy == true || status.Length > 0 && status is not "尚未选择本地皮肤。" and not "点击“刷新头像”读取在线外观。");
         }
     }
+    private void HideAccountToolbarFlyouts() { foreach (var flyout in accountToolbarFlyouts) if (flyout.IsOpen) flyout.Hide(); }
 }

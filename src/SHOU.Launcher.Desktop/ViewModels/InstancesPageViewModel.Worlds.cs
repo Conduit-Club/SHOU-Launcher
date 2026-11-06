@@ -81,11 +81,11 @@ public sealed partial class InstancesPageViewModel
     public bool IsInstanceServersPage => IsWorldWorkspaceSection && _worldSectionKey == "servers";
     public bool WorldWorkspaceCanRead => _worldWorkspaceReady && SelectedInstance is not null && Service is IInstanceWorldService
         && Service.Paths.IsIsolated && SelectedInstance.Id == Owner.Snapshot.SelectedInstanceId && Owner.CanReadRemote;
-    public bool WorldWorkspaceCanWrite => WorldWorkspaceCanRead && CanEdit && !Owner.HasRunningGame;
+    public bool WorldWorkspaceCanWrite => WorldWorkspaceCanRead && CanEdit && !IsSelectedInstanceRunning;
     public string WorldWorkspaceCapability => Service is not IInstanceWorldService ? "此服务尚未接入存档与服务器读写。"
         : !Service.Paths.IsIsolated ? "当前并非隔离数据目录，存档和服务器文件的读取与写入已禁用。"
         : SelectedInstance is null || SelectedInstance.Id != Owner.Snapshot.SelectedInstanceId ? "请先选定当前隔离实例。"
-        : Owner.HasRunningGame ? "仅当前隔离实例可读取；写入前请先停止游戏。"
+        : IsSelectedInstanceRunning ? "仅当前隔离实例可读取；写入前请先退出此实例的游戏。"
         : Service is IInstanceWorldEditService ? "仅当前选中的隔离实例可读取和保存；世界设置与数据包启停需要显式保存。"
         : "仅当前选中的隔离实例可读取和保存；level.dat 保持只读。";
     public string WorldContextTitle => IsWorldDetails ? "存档管理 · " + SelectedWorldRow?.Name : "实例设置 · " + SelectedInstance?.Name;

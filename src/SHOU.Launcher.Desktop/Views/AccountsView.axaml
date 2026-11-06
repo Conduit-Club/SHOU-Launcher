@@ -2,7 +2,7 @@
              xmlns:local="using:SHOU.Launcher.Desktop.Views" x:Class="SHOU.Launcher.Desktop.Views.AccountsView" FontSize="13" AttachedToVisualTree="AccountToolbarAttached" DetachedFromVisualTree="AccountToolbarDetached" DataContextChanged="AccountToolbarDataContextChanged">
   <UserControl.Resources><local:AccountsSourceLabelConverter x:Key="AccountSourceLabel" /></UserControl.Resources>
   <UserControl.Styles>
-    <Style Selector="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
+    <Style Selector="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /><Setter Property="LineHeight" Value="18" /></Style>
     <Style Selector="Button"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="8,4" /></Style>
     <Style Selector="Button.accountChannel"><Setter Property="Height" Value="34" /><Setter Property="Padding" Value="4,3" /><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="BorderBrush" Value="{DynamicResource ClubInputBorder}" /><Setter Property="BorderThickness" Value="1" /></Style>
     <Style Selector="Button.accountChannel.selected"><Setter Property="BorderThickness" Value="2" /><Setter Property="BorderBrush" Value="{DynamicResource ClubAccent}" /><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
@@ -23,13 +23,13 @@
       <ComboBox Name="LoginProviderSelector" IsVisible="False" ItemsSource="{Binding Providers}" SelectedItem="{Binding SelectedProvider}" IsEnabled="{Binding CanEdit}" />
       <Grid ColumnDefinitions="*,40" Margin="0,6,0,0"><TextBlock Name="AccountChannelTitle" Text="{Binding ChannelTitle}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /><Button Grid.Column="1" Content="{Binding AllAccountsButtonLabel}" Command="{Binding ToggleAllAccountsCommand}" Padding="4,1" MinHeight="23" /></Grid>
       <StackPanel Name="ChannelAccountPanel" IsVisible="{Binding ShowChannelAccount}" Spacing="5">
-        <Grid ColumnDefinitions="*,24,24">
+        <Grid ColumnDefinitions="*,28,28">
           <ComboBox Name="AccountSelector" ItemsSource="{Binding ChannelAccounts}" SelectedItem="{Binding SelectedChannelAccount}" IsEnabled="{Binding CanEdit}" HorizontalAlignment="Stretch" MinWidth="0" MinHeight="31" Padding="6,2">
             <ComboBox.ItemTemplate><DataTemplate><StackPanel Spacing="0"><TextBlock Text="{Binding DisplayName}" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding ., Converter={StaticResource AccountSourceLabel}}" Classes="accountHint" TextWrapping="NoWrap" /></StackPanel></DataTemplate></ComboBox.ItemTemplate>
             <ToolTip.Tip><StackPanel Name="AccountStorageTooltip" MaxWidth="320" Spacing="5"><TextBlock Text="{Binding AccountDetail}" TextWrapping="Wrap" /><TextBlock Text="{Binding PersistenceSummary}" TextWrapping="Wrap" /></StackPanel></ToolTip.Tip>
           </ComboBox>
-          <Button Name="BeginAddAccountButton" Grid.Column="1" Content="+" Command="{Binding BeginAddAccountCommand}" Margin="4,0,0,0" Padding="2" MinWidth="0" ToolTip.Tip="添加当前渠道账户" />
-          <Button Name="RequestAccountRemovalButton" Grid.Column="2" Content="×" Command="{Binding RequestRemovalCommand}" Margin="4,0,0,0" Padding="2" MinWidth="0" ToolTip.Tip="移除所选本机账户" />
+          <Button Name="BeginAddAccountButton" Grid.Column="1" Content="+" Command="{Binding BeginAddAccountCommand}" Margin="4,0,0,0" Padding="2" MinWidth="0" AutomationProperties.Name="添加当前渠道账户" ToolTip.Tip="添加当前渠道账户" />
+          <Button Name="RequestAccountRemovalButton" Grid.Column="2" Content="×" Command="{Binding RequestRemovalCommand}" Margin="4,0,0,0" Padding="2" MinWidth="0" AutomationProperties.Name="移除所选本机账户" ToolTip.Tip="移除所选本机账户" />
         </Grid>
         <TextBlock Text="此渠道尚无已选角色，可添加账户或在下拉列表中选择。" Classes="accountHint" IsVisible="{Binding ShowEmptyChannel}" />
       </StackPanel>
@@ -44,10 +44,10 @@
           <ToolTip.Tip><StackPanel Name="AccountAvatarTooltip" MaxWidth="320" Spacing="5"><TextBlock Text="{Binding SelectedPlayerStatus}" TextWrapping="Wrap" /><TextBlock Text="{Binding AccountAppearanceSummary}" TextWrapping="Wrap" /><TextBlock Text="{Binding AccountAppearanceCapability}" TextWrapping="Wrap" /></StackPanel></ToolTip.Tip>
           <local:AccountSkinAvatarControl Name="SelectedAccountAvatar" Skin="{Binding AccountSkin}" Width="64" Height="64" />
         </Button>
-        <TextBlock Text="{Binding SelectedPlayerName}" FontSize="14" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
+        <TextBlock Text="{Binding SelectedPlayerName}" FontSize="16" LineHeight="22" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" />
         <TextBlock Text="{Binding SelectedPlayerSource}" Classes="accountHint" HorizontalAlignment="Center" />
-        <Border Name="AccountToolbarHost" Height="32" Width="88" Margin="0,6,0,0" HorizontalAlignment="Center" CornerRadius="6" Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" Opacity="0" IsHitTestVisible="False">
-          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+        <Border Name="AccountToolbarHost" Height="32" Width="112" Margin="0,8,0,0" HorizontalAlignment="Center" CornerRadius="6" Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" BoxShadow="0 1 4 0 #16000000" Opacity="0" IsHitTestVisible="False">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
           <Button Name="AccountSkinMenuButton" Classes="flat" Padding="7" MinWidth="32" Width="32" MinHeight="30" Height="30" AutomationProperties.Name="皮肤与披风" ToolTip.Tip="皮肤与披风"><Button.Flyout><MenuFlyout>
             <MenuItem Name="ChangeAccountSkinMenuItem" Header="修改皮肤" Click="ChangeAccountSkin_Click" ToolTip.Tip="{Binding AccountAppearanceCapability}" />
             <MenuItem Name="SaveAccountSkinMenuItem" Header="保存皮肤" IsEnabled="{Binding CanSaveSkinPng}" Click="SaveAccountSkin_Click" />
@@ -55,8 +55,12 @@
             <MenuItem Name="ChangeAccountCapeMenuItem" Header="修改披风" Click="ViewAccountCapes_Click" />
             <Separator /><MenuItem Header="允许 3D 皮肤展示" ToggleType="CheckBox" IsChecked="{Binding Allow3DPreview}" />
             <MenuItem Name="PreviewAccountSkinMenuItem" Header="3D 预览皮肤与披风" IsEnabled="{Binding CanPreviewAccountSkin}" Click="PreviewAccountSkin_Click" />
-          </MenuFlyout></Button.Flyout><Path Data="M 5,1 L 1,3 L 0,7 L 4,8 L 4,15 L 12,15 L 12,8 L 16,7 L 15,3 L 11,1 Q 8,6 5,1 Z" Width="16" Height="16" Stretch="Uniform" Stroke="{DynamicResource ClubAccent}" StrokeThickness="1.5" /></Button>
-          <Button Name="RefreshAccountButton" Classes="flat" Command="{Binding RefreshAccountCommand}" Padding="7" MinWidth="32" Width="32" MinHeight="30" Height="30" AutomationProperties.Name="刷新授权" ToolTip.Tip="刷新当前角色授权"><Path Data="M 13,6 A 5.5,5.5 0 1 0 12,12 M 13,1 L 13,6 L 8,6" Width="16" Height="16" Stretch="Uniform" Stroke="{DynamicResource ClubAccent}" StrokeThickness="1.5" /></Button>
+          </MenuFlyout></Button.Flyout><local:ClubIcon Kind="shirt" Width="16" Height="16" Foreground="{DynamicResource ClubAccent}" /></Button>
+          <Button Name="RefreshAccountButton" Classes="flat" Padding="7" MinWidth="32" Width="32" MinHeight="30" Height="30" AutomationProperties.Name="账户操作" ToolTip.Tip="账户操作"><Button.Flyout><MenuFlyout>
+            <MenuItem Header="刷新授权" Command="{Binding RefreshAccountCommand}" />
+            <MenuItem Header="账户官网" Command="{Binding OpenProviderWebsiteCommand}" IsVisible="{Binding !IsOfflineChannel}" />
+          </MenuFlyout></Button.Flyout><local:ClubIcon Kind="pencil" Width="16" Height="16" Foreground="{DynamicResource ClubAccent}" /></Button>
+          <Button Name="SelectAccountProfileButton" Classes="flat" Command="{Binding ToggleAllAccountsCommand}" Padding="7" MinWidth="32" Width="32" MinHeight="30" Height="30" AutomationProperties.Name="选择档案" ToolTip.Tip="选择档案"><local:ClubIcon Kind="arrow-right-left" Width="16" Height="16" Foreground="{DynamicResource ClubAccent}" /></Button>
           </StackPanel>
         </Border>
         <TextBlock Name="AccountAppearanceFeedback" Text="{Binding AccountAppearanceStatus}" Classes="accountHint" TextAlignment="Center" IsVisible="False" />

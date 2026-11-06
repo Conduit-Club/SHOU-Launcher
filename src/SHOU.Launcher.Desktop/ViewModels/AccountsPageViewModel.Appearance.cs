@@ -125,6 +125,11 @@ public sealed partial class AccountsPageViewModel
         try
         {
             var result = await appearanceService.GetAccountAppearanceAsync(account.Id, refreshRemote, cancellation.Token);
+            // A first visit should show the selected online character, without requiring a manual refresh.
+            // Read cache first; preserve cancellation and identity checks before issuing the remote request.
+            if (!refreshRemote && result.Skin is null && account.Kind != AccountKind.Offline
+                && !cancellation.IsCancellationRequested && IsCurrentAppearance(identity, generation))
+                result = await appearanceService.GetAccountAppearanceAsync(account.Id, true, cancellation.Token);
             if (cancellation.IsCancellationRequested || !IsCurrentAppearance(identity, generation) || result.AccountId != account.Id) return;
             CacheAppearance(identity, result); appearanceRead = true; appearanceMessage = result.Skin is null ? account.Kind == AccountKind.Offline ? "尚未选择本地皮肤。" : result.IsRemote ? "服务未返回当前皮肤。" : "点击“刷新头像”读取在线外观。" : refreshRemote ? "外观已刷新" : "";
             UpdateAccountAppearance(result);

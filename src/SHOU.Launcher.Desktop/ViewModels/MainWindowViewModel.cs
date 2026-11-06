@@ -38,7 +38,7 @@ public abstract class PageViewModel(MainWindowViewModel owner, string title, str
     public bool CanEdit => Owner.CanMutate;
 }
 
-public sealed class MainWindowViewModel : ObservableObject, IDisposable
+public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
 {
     internal ILauncherService Service { get; }
     public IExternalLauncher ExternalLauncher { get; }
@@ -131,6 +131,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(IsDownloadsSelected));
         OnPropertyChanged(nameof(IsSettingsSelected));
         OnPropertyChanged(nameof(IsToolsSelected));
+        OnPropertyChanged(nameof(ShowOperationStatus));
         BackCommand.NotifyCanExecuteChanged();
     }
     public string CurrentSection => ReferenceEquals(SelectedPage, Downloads) ? "download"
@@ -150,14 +151,14 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public string PlatformSummary => $"{Snapshot.Platform.OS} · 硬件 {Snapshot.Platform.HardwareArchitecture} / 进程 {Snapshot.Platform.ProcessArchitecture}";
     public string StateSummary => _executing ? _operationLabel : Snapshot.State switch
     {
-        "Installing" => "正在安装", "Launching" => "正在启动", "Running" => $"游戏运行中 · PID {Snapshot.GameProcessId}",
+        "Installing" => "正在安装", "Launching" => "正在启动", "Running" => "就绪",
         "Authenticating" => "正在验证账户", "Error" => "操作失败，可修正后重试", _ => _operationLabel
     };
     public bool IsBusy => _executing || Snapshot.State is "Installing" or "Launching" or "Authenticating";
-    public bool CanMutate => !_disposed && !_executing && Snapshot.State is "Ready" or "Error";
+    public bool CanMutate => !_disposed && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
     public bool CanReadRemote => !_disposed && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
     public bool HasRunningGame => !_disposed && (Snapshot.State == "Running" || Snapshot.GameProcessId is not null);
-    public bool ShowOperationStatus => IsBusy || HasRunningGame;
+    public bool ShowOperationStatus => IsBusy && (!IsHomeLaunching || !ReferenceEquals(SelectedPage, Home));
     public string? ErrorMessage => _errorMessage;
     public bool HasError => !string.IsNullOrWhiteSpace(_errorMessage);
 
@@ -269,6 +270,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasRunningGame));
         OnPropertyChanged(nameof(ShowOperationStatus));
         OnPropertyChanged(nameof(StateSummary));
+        NotifyLaunchPresentation();
         CancelOperationCommand.NotifyCanExecuteChanged();
         StopGameCommand.NotifyCanExecuteChanged();
         foreach (var page in Pages) page.NotifyCommands();

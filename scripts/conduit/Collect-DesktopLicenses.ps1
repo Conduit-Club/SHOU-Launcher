@@ -4,6 +4,10 @@ $ErrorActionPreference='Stop'
 $deps=Get-Content -Raw -LiteralPath (Join-Path $PublishDirectory 'SHOU.Launcher.Desktop.deps.json') | ConvertFrom-Json -AsHashtable
 $destination=Join-Path $PublishDirectory 'licenses'
 $null=New-Item -ItemType Directory -Path $destination -Force
+$lucide=Join-Path $PSScriptRoot '../../src/SHOU.Launcher.Desktop/Assets/Icons/Lucide'
+$lucideDestination=Join-Path $destination 'lucide-static-1.17.0'
+$null=New-Item -ItemType Directory -Path $lucideDestination -Force
+Copy-Item -LiteralPath (Join-Path $lucide 'LICENSE.txt'),(Join-Path $lucide 'SOURCE.txt') -Destination $lucideDestination
 $packages=@()
 foreach ($library in $deps.libraries.GetEnumerator() | Where-Object { $_.Value.type -in @('package','runtimepack') }) {
     $parts=$library.Key.Split('/',2);$name=$parts[0] -replace '^runtimepack\.','';$version=$parts[1]

@@ -51,13 +51,14 @@ public interface ICredentialStore
 public sealed record ProcessSpec(string FileName, IReadOnlyList<string> Arguments, string WorkingDirectory,
     IReadOnlyDictionary<string, string?>? EnvironmentOverrides = null, TimeSpan? Timeout = null,
     int OutputLimitCharacters = 1048576,
-    [property: System.Text.Json.Serialization.JsonIgnore] SensitiveProcessInput? SensitiveInput = null)
+    [property: System.Text.Json.Serialization.JsonIgnore] SensitiveProcessInput? SensitiveInput = null,
+    [property: System.Text.Json.Serialization.JsonIgnore] Action<int>? OnStarted = null)
 {
     public override string ToString() => "ProcessSpec [arguments/environment redacted; sensitive stdin=" + (SensitiveInput is not null) + "]";
 }
 public sealed record ProcessOutput(DateTimeOffset Timestamp, bool IsStandardError, string Text);
 public sealed record ProcessResult(int ExitCode, string StandardOutput, string StandardError,
-    bool TimedOut = false, bool Cancelled = false, bool OutputTruncated = false);
+    bool TimedOut = false, bool Cancelled = false, bool OutputTruncated = false, bool Detached = false);
 public interface IManagedProcess : IAsyncDisposable
 {
     int ProcessId { get; }
@@ -68,6 +69,15 @@ public interface IProcessRunner
 {
     Task<IManagedProcess> StartAsync(ProcessSpec spec, IProgress<ProcessOutput>? output = null, CancellationToken cancellationToken = default);
     Task<ProcessResult> RunAsync(ProcessSpec spec, IProgress<ProcessOutput>? output = null, CancellationToken cancellationToken = default);
+}
+/// <summary>Only committed games with an independent log sink may be detached from their UI owner.</summary>
+public interface IDetachableProcess : IManagedProcess
+{
+    ValueTask DetachAsync();
+}
+public interface IGameWindowObserver
+{
+    Task<bool> WaitForGameWindowAsync(IManagedProcess process, TimeSpan timeout, CancellationToken cancellationToken);
 }
 public interface IDataDirectoryLease : IDisposable { string LockPath { get; } }
 public interface IDataDirectoryLock { IDataDirectoryLease Acquire(IAppPaths paths); }

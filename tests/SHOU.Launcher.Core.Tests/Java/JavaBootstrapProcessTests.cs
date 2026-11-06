@@ -16,6 +16,48 @@ public sealed class JavaBootstrapProcessTests
 {
     private static readonly Lazy<Task<NativeFixture>> Fixture = new(NativeFixture.CreateAsync);
 
+    [TestMethod, TestCategory("JavaArgumentProtection")]
+    public async Task SessionOutputIsRedactedAndContinuesAfterLauncherOwnerCloses()
+    {
+        var fixture = await Fixture.Value;
+        var runner = new ProcessRunner();
+        var secret = "synthetic-session-" + Guid.NewGuid().ToString("N");
+        var log = Path.Combine(fixture.Root, "session-" + Guid.NewGuid().ToString("N") + ".log");
+        var release = log + ".release";
+        using var payload = JavaBootstrapPayload.Create("SecureEcho", ["session-log", "--accessToken", secret, "--username", "SyntheticPlayer", release]);
+        using var input = SensitiveProcessInput.CopyFrom(payload.Bytes.Span);
+        var spec = fixture.Bootstrap(input);
+        var arguments = spec.Arguments.ToList(); arguments.Insert(0, "-Dshou.launcher.sessionLog=" + log);
+        var child = await runner.StartAsync(spec with { Arguments = arguments });
+        using var native = Process.GetProcessById(child.ProcessId);
+        try
+        {
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            while (!File.Exists(log) || !ReadLive(log).Contains("READY", StringComparison.Ordinal))
+                await Task.Delay(50, deadline.Token);
+            await ((IDetachableProcess)child).DetachAsync(); await runner.DisposeAsync();
+            Assert.IsFalse(native.HasExited);
+            await File.WriteAllTextAsync(release, "release", deadline.Token);
+            await native.WaitForExitAsync(deadline.Token);
+            var text = await File.ReadAllTextAsync(log, deadline.Token);
+            Assert.IsFalse(text.Contains(secret, StringComparison.Ordinal));
+            Assert.IsFalse(text.Contains("SyntheticPlayer", StringComparison.Ordinal));
+            Assert.IsTrue(text.Contains("<redacted>", StringComparison.Ordinal));
+            Assert.IsTrue(text.Contains("AFTER_LAUNCHER_CLOSE", StringComparison.Ordinal));
+            Assert.AreEqual(0, native.ExitCode);
+        }
+        finally
+        {
+            if (!native.HasExited) { native.Kill(entireProcessTree: true); await native.WaitForExitAsync(); }
+            await child.DisposeAsync(); await runner.DisposeAsync();
+        }
+    }
+    private static string ReadLive(string path)
+    {
+        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
+        using var reader = new StreamReader(stream); return reader.ReadToEnd();
+    }
+
     [TestMethod]
     [TestCategory("JavaArgumentProtection")]
     public async Task RealJava8BytecodeEchoKeepsSecretsOutOfHotSpotCommandLineAndClearsInput()
@@ -211,6 +253,14 @@ public sealed class JavaBootstrapProcessTests
                 import java.security.MessageDigest;
                 public class SecureEcho {
                     public static void main(String[] args) throws Exception {
+                        if (args[0].equals("session-log")) {
+                            System.out.print(args[2].substring(0, 8)); System.out.flush();
+                            Thread.sleep(50); System.out.println(args[2].substring(8));
+                            System.err.println("accessToken=" + args[2]); System.out.println(args[4]);
+                            System.out.println("READY");
+                            while (!new File(args[5]).exists()) Thread.sleep(50);
+                            System.out.println("AFTER_LAUNCHER_CLOSE"); return;
+                        }
                         if (args[0].equals("floodread")) {
                             String line = new String(new char[128]).replace('\0', 'X');
                             for (int i=0;i<4096;i++) { System.out.print(line); System.err.print(line); }
@@ -240,7 +290,7 @@ public sealed class JavaBootstrapProcessTests
             var environment = new Dictionary<string, string?> { ["TMPDIR"] = root, ["TMP"] = root, ["TEMP"] = root,
                 ["JAVA_TOOL_OPTIONS"] = null, ["JDK_JAVA_OPTIONS"] = null, ["_JAVA_OPTIONS"] = null, ["_JAVA_LAUNCHER_DEBUG"] = null };
             await using var runner = new ProcessRunner();
-            string[] compile = ["-J-XX:-UsePerfData", "-J-Djava.io.tmpdir=" + root, "--release", "8", "-d", classes, Source(), source];
+            string[] compile = ["-J-XX:-UsePerfData", "-J-Djava.io.tmpdir=" + root, "--release", "8", "-d", classes, Source(), Path.Combine(Path.GetDirectoryName(Source())!, "SessionLog.java"), source];
             var compiled = await runner.RunAsync(new(javac, compile, root, environment, Timeout: TimeSpan.FromSeconds(30)));
             Assert.AreEqual(0, compiled.ExitCode, "Controlled javac --release 8 failed.");
             var classFile = Path.Combine(classes, "org", "shou", "launcher", "bootstrap", "BootstrapMain.class");

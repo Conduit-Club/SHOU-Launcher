@@ -65,7 +65,7 @@ public sealed partial class InstancesPageViewModel
     public bool IsOtherSection => !IsSelection && !IsOverview && !IsInstanceSettings && !IsModify && !IsExport && !IsFileSection && SelectedSection?.Key is not ("worlds" or "servers");
     public bool ModsUnsupported => SelectedSection?.Key == "mods" && SelectedInstance?.Loader == "vanilla";
     public bool IsContentEmpty => ContentEntries.Count == 0;
-    public bool CanImportContent => IsFileSection && SelectedSection.Key != "worlds" && !ModsUnsupported && CanEdit && Service is IInstanceWorkspaceService;
+    public bool CanImportContent => IsFileSection && SelectedSection.Key != "worlds" && !ModsUnsupported && CanEdit && !IsSelectedInstanceRunning && Service is IInstanceWorkspaceService;
     public string SectionTitle => SelectedSection?.Title ?? "实例";
     public string ContentEmptyTitle => ModsUnsupported ? "该实例不可使用模组" : "尚未发现" + SectionTitle;
     public string CapabilityReason => SelectedSection?.Key switch
@@ -105,7 +105,7 @@ public sealed partial class InstancesPageViewModel
             if (instance is not null && FilteredInstances.Contains(instance) && SelectedInstance?.Id == instance.Id) ShowInstanceSettingsCommand.Execute(null);
         }, instance => instance is not null && FilteredInstances.Contains(instance) && SelectedInstance?.Id == instance.Id);
         OpenSelectedVisibleInstanceCommand = Command(() => OpenVisibleInstanceCommand.Execute(SelectedInstance), () => OpenVisibleInstanceCommand.CanExecute(SelectedInstance));
-        BeginRenameCommand = Command(() => { _renamingInstance = SelectedInstance!.Id; RenameDraft = SelectedInstance.Name; IsRenameEditorOpen = true; }, () => CanEdit && SelectedInstance is not null && Service is IInstanceWorkspaceService);
+        BeginRenameCommand = Command(() => { _renamingInstance = SelectedInstance!.Id; RenameDraft = SelectedInstance.Name; IsRenameEditorOpen = true; }, () => CanEdit && !IsSelectedInstanceRunning && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         CancelRenameCommand = Command(() => IsRenameEditorOpen = false);
         SaveRenameCommand = AsyncCommand(async () =>
         {
@@ -115,13 +115,13 @@ public sealed partial class InstancesPageViewModel
         }, () => IsRenameEditorOpen && CanEdit && SelectedInstance?.Id == _renamingInstance && Service is IInstanceWorkspaceService);
         ShowSelectionCommand = Command(() => { IsSelection = true; Owner.SelectedPage = this; });
         NavigateBackCommand = Command(() => { if (IsWorldDetails) BackFromWorldCommand.Execute(null); else if (IsSelection) Owner.SelectedPage = Owner.Home; else IsSelection = true; });
-        SaveInstanceSettingsCommand = AsyncCommand(SaveInstanceEditAsync, () => CanEdit && SelectedInstance is not null && Service is IInstanceWorkspaceService);
+        SaveInstanceSettingsCommand = AsyncCommand(SaveInstanceEditAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         RefreshContentCommand = AsyncCommand(RefreshContentAsync, () => SelectedInstance is not null && IsFileSection && Owner.CanReadRemote && Service is IInstanceWorkspaceService);
         RefreshContentCommand.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(RefreshContentCommand.IsRunning)) ScheduleContentRefresh(); };
         OpenInstanceDirectoryCommand = AsyncCommand(() => Owner.RunControlAsync("打开实例目录", ct => Owner.ExternalLauncher.OpenDirectoryAsync(SelectedInstance!.GameDirectory, ct)), () => SelectedInstance is not null);
         OpenContentDirectoryCommand = AsyncCommand(OpenContentDirectoryAsync, () => SelectedInstance is not null && IsFileSection);
-        ToggleModCommand = AsyncCommand(ToggleModAsync, () => CanEdit && SelectedSection.Key == "mods" && SelectedContent is not null && Service is IInstanceWorkspaceService);
-        ExportInstanceCommand = AsyncCommand(ExportAsync, () => CanEdit && SelectedInstance is not null && Service is IInstanceWorkspaceService);
+        ToggleModCommand = AsyncCommand(ToggleModAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedSection.Key == "mods" && SelectedContent is not null && Service is IInstanceWorkspaceService);
+        ExportInstanceCommand = AsyncCommand(ExportAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         _workspaceReady = true;
     }
     private void ScheduleContentRefresh()

@@ -44,6 +44,7 @@ public final class BootstrapMain {
         }
 
         try {
+            SessionLog.install(launch.arguments);
             ClassLoader loader = Thread.currentThread().getContextClassLoader();
             Class<?> target = Class.forName(launch.mainClass, true, loader);
             Method entry = target.getMethod("main", String[].class);
