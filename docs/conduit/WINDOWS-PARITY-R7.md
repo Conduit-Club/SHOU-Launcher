@@ -20,7 +20,7 @@
 | 页面 | 视觉差异 | 交互缺失/待验 | 业务未完成/交接线索 | 本轮计划移除 |
 |---|---|---|---|---|
 | 01-启动-首页 | 新配置两卡/四服务器已实测；最大化、还原、原生菜单及窗口行为已通过 200% DPI 实窗 | 显式隐藏保存已验证，重启保持已截图 | R2实窗已校对：134/239DIP卡片、四导航与真实动态数据 | 无 |
-| 02-启动-账户管理 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | 紧凑渠道/账户结构已实窗；Windows 当前用户旧缓存只读解密通过，刷新/所有权/正版游戏尚未通过 | 无 |
+| 02-启动-账户管理 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | 2 个微软账户真实导入/切换/刷新/系统存储重启重读及所有权/profile 已通过；Windows MRpack 正版主菜单/Mod Menu/Quit exit0 已通过 | 无 |
 | 03-启动-皮肤与披风 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | R5 已实现离线 PNG/Classic/Slim、头像/UV 3D 拖动缩放和导出；在线外观读取及官网入口已有，Windows 原生待验 | 无 |
 | 04-启动-添加账户 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | 首批实现，待实窗逐页校正 | 无 |
 | 05-首页-社团更新历史 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | 外部更新入口可用，内嵌历史未移植 | 无 |
@@ -42,7 +42,7 @@
 | 31-下载-安装配置 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | 原版与Fabric可实际创建安装，目录切换滚动已修正 | 无 |
 | 32-下载-模组 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | R5 已实现兼容实例选择、required 依赖/冲突预检、双哈希清单安装；Windows 原生资源安装待验 | 无 |
 | 33-下载-资源详情 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | 首批实现，待实窗逐页校正 | 无 |
-| 34-下载-整合包 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | R6 ZIP/MRpack 全内容导入/首次准备已实现；本轮 Windows 真实拖入两格式、各 113 文件精确核验及取消回滚通过；正版游戏待验 | 无 |
+| 34-下载-整合包 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | Windows ZIP/MRpack 真实拖入、各 113 文件及取消回滚通过；MRpack 首次一键准备、正版主菜单/Mod Menu/Quit exit0 通过；CF 游戏运行仍待验 | 无 |
 | 35-下载-数据包 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | 首批实现，待实窗逐页校正 | 无 |
 | 36-下载-资源包 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | 首批实现，待实窗逐页校正 | 无 |
 | 37-下载-光影包 | 待 Windows 逐页复核 | 空态/焦点/弹层/重启持久化待验 | 首批实现，待实窗逐页校正 | 无 |
@@ -141,3 +141,24 @@
 - 系统字体只读核对 Segoe UI、Microsoft YaHei UI、Microsoft YaHei、Consolas 均已安装。尚未完成字体/图标视觉统一与全部 DPI/主题原生验收，未以字体存在冒充排版通过。
 
 阶段摘要：任务 `reports/r7-stage2-summary.json`、`r7-published-legacy-read.json`、`r7-account-rc1-native-package.json`、`core-skips-stage2.json`。旧 WPF、Windows 默认入口、源 Java 和旧账户文件继续保留；无推送、PR、合并或发布。
+
+## 阶段三：Windows 真实正版与游戏验收（2026-11-06）
+
+锁屏解除后，以正式 win-x64 自包含候选 `6d3c3eb1` 运行受支持的账户界面，不读浏览器或其它账户存储。真实旧缓存识别的 3 个微软候选中，明确选择并验证导入 2 个；各自完成 OAuth refresh、Xbox、Minecraft Java 所有权及 profile，核对 UUID 后保存。实际 0→1→0 切换已写盘，首次导入前后原 config 与 UserKey 哈希相同。未走离线角色或把读取成功替代授权成功。
+
+随后从资源管理器真实拖入 FO 6.5 MRpack，在私有隔离数据根导入 113 文件/48 Mod JAR/3 资源 ZIP，逐文件核验通过。首页一次点击完成游戏本体、库、资产和本机 natives 准备，并使用本机已有 Mojang Java 21 启动到 Minecraft 1.21.1/Fabric 主菜单。Mod Menu 已打开；主菜单报告 44 Mods，Mod Menu 的当前过滤列表显示 41 项，与归档内 48 个 JAR 是不同计数口径，不冒充一一相等。
+
+游戏 PID 明确属于本次启动器进程；实际 OS 命令行仅记录“使用受信任 Bootstrap”“无可见游戏身份参数”等布尔值，没有保存或输出原命令行。游戏内点击 Quit Game，实际退出码 **0**；启动器恢复可启动状态，没有残留自有 Java 游戏进程。主菜单、Mod Menu 和退出前主菜单截图仅含游戏窗口，不含账户界面。
+
+最终产品提交 `268f652667fe6e2a5abccbc3b7771b3551b69d66` 仅进一步精简整合包成功摘要，把完整提示及跳过项保留在可展开详情中；相对游戏实测的 `6d3c3eb1`，Core 业务源码没有变化。新候选实际重启同一私有数据根：2 账户、选中账户、1 个已安装实例及选择保持，sidecar 原字节不变；两个不同账户均在新进程中从系统凭据存储重读并再次刷新，有效期前进且没有错误。两次启动器均正常关闭 exit0，无超时。
+
+新候选另以无真实账户的公共验收数据根真实拖入并导入 MRpack，113 文件核验通过。成功摘要只保留创建与首次启动说明，详情可实际展开且文本仍在；原先完整诊断未丢失。完整 Desktop **120/120**，Core 仍沿用最近完整 **342 通过/16 显式跳过**（本次未改 Core）。未为文案逐字编写镜像测试。
+
+- 包：`SHOU-Launcher-win-x64-v1.5.0-dev.g268f6526.zip`，win-x64 / Release / 自包含，80,756,546 字节，source_dirty=false，无 .env。
+- SHA-256：`4bd5322d8a6a1abe1bcae34cc34e8df745f19fc788e8d4ce721b416c101d7984`。
+- 登录/重启：`reports/r7-account2-import-visible-0.json`、`r7-account2-import-second.json`、`r7-account2-switching.json`、`r7-account3-restart-state.json`、`r7-account3-restart-refresh.json`。
+- 游戏：`evidence-r7-account2/03-game-first-frame.png`、`04-game-mod-menu.png`、`05-main-menu-before-quit.png`，以及 `reports/r7-account2-game-launch.json`、`r7-account2-41-normal-quit-game-input.json`、`r7-private-session-final.json`。
+- 摘要改动：`evidence-r7-ui-summary/03-compact-success.png`、`04-details-retained.png`、`reports/r7-compact-summary-native.json`、`r7-ui-summary-mr-verification.json`。
+- 首次采集偏差保留：被固定底栏遮住的控件仍被 UIA 标为可见；采集脚本现先滚入视区并核对实际命中 ID/PID。旧原生按键脚本的导航键结果错误，Computer Use 标准 Home/Down/Return 已正确选中第二项；不据此修改产品键盘逻辑。脚本复制时的进程路径守卫拒绝也已保留，未对不匹配窗口输入。资产统计脚本曾把 resume JSON 当索引解析，属于统计脚本错误，实际安装及资产校验完成。
+
+当前已解除“Windows 真实正版与一次游戏主菜单/Quit”的阻塞，**整体替代门禁仍未通过**。仍需字体/图标、100/125/150% DPI 与跨屏、54 页视觉/交互/业务、旧新数据往返及双入口原生互斥、其它加载器/CF 游戏、剩余文件链接竞态与下载/网络/SMB 恢复。Mac 不可用，改动后的原生回归仍待交回。旧 WPF 与默认入口保持，无推送、PR、合并或正式发布。
