@@ -2,20 +2,29 @@
   <StackPanel Spacing="15">
     <Border Classes="card"><StackPanel Spacing="10">
       <TextBlock Text="选择要检查的 Java" Classes="sectionTitle" />
-      <Grid ColumnDefinitions="*,10,Auto"><TextBox Name="GlobalJavaExecutableSetting" Text="{Binding JavaExecutable}" IsEnabled="{Binding CanEdit}" PlaceholderText="Java 可执行文件的完整路径" /><Button Name="BrowseTrustJavaButton" Grid.Column="2" Content="选择 Java…" Click="BrowseJava_Click" IsEnabled="{Binding CanEdit}" /></Grid>
-      <TextBlock Text="只读扫描不会修改 Java 或保存设置。创建副本会在核验成功后选用并保存新路径；实例的独立 Java 设置不受影响。" Classes="muted" />
-      <CheckBox Name="JavaTrustAutoRepairSetting" Content="自动修复新下载 Java 的已知证书问题（推荐）" IsChecked="{Binding ConduitJavaTrustAutoRepair}" IsEnabled="{Binding CanEdit}" />
-      <DockPanel><Button Name="SaveSettingsButton" DockPanel.Dock="Right" Content="保存设置" Command="{Binding SaveCommand}" Margin="10,0,0,0" /><TextBlock Text="{Binding SaveSummary}" TextWrapping="Wrap" VerticalAlignment="Center" /></DockPanel>
+      <Grid ColumnDefinitions="*,10,Auto"><TextBox Name="JavaTrustTargetPath" Text="{Binding TargetJava}" IsEnabled="{Binding CanEdit}" PlaceholderText="Java 可执行文件的完整路径" /><Button Name="BrowseTrustJavaButton" Grid.Column="2" Content="选择 Java…" Click="BrowseJava_Click" IsEnabled="{Binding CanEdit}" /></Grid>
+      <TextBlock Text="此处只选择检查目标，不更改默认 Java。只读检查不会修改证书或保存设置。" Classes="muted" />
+      <Button Content="填入当前默认 Java" Command="{Binding UseDefaultTargetCommand}" HorizontalAlignment="Left" />
     </StackPanel></Border>
     <Border Classes="card"><StackPanel Spacing="10">
       <TextBlock Text="诊断结果" Classes="sectionTitle" />
-      <TextBlock Name="JavaTrustStatusText" Text="{Binding JavaTrustStatus}" TextWrapping="Wrap" />
-      <WrapPanel><Button Name="InspectJavaTrustButton" Content="只读扫描" Command="{Binding InspectJavaTrustCommand}" Margin="0,0,10,8" /><Button Name="CreateRepairedJavaCopyButton" Content="创建修复副本并选用" Command="{Binding CreateRepairedJavaCopyCommand}" Margin="0,0,10,8" /><Button Name="RestoreSourceJavaButton" Content="选回源 Java" Command="{Binding RestoreSourceJavaCommand}" IsVisible="{Binding HasJavaTrustRollback}" Margin="0,0,0,8" /></WrapPanel>
-      <TextBlock Text="修复仅处理已识别的问题。健康、无法读取或策略不支持的结果会分别说明；不会关闭 TLS 验证或覆盖原始信任库。" Classes="muted" />
-      <Expander Header="检查详情与来源记录" IsExpanded="{Binding JavaTrustDetailsExpanded}"><StackPanel Spacing="8" Margin="0,10,0,0">
-        <ItemsControl Name="JavaTrustFindings" ItemsSource="{Binding JavaTrustFindings}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="3" Margin="0,6"><TextBlock Text="{Binding Summary}" FontWeight="SemiBold" /><TextBlock Text="{Binding Details}" Classes="muted" /><TextBlock Text="{Binding Path}" Classes="muted" FontSize="12" /><TextBlock Text="{Binding Hash}" Classes="muted" FontSize="11" /></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-        <TextBox Name="JavaTrustProvenanceText" Text="{Binding JavaTrustProvenance}" IsVisible="{Binding HasJavaTrustProvenance}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120" />
+      <TextBlock Name="JavaTrustStatusText" Text="{Binding Status}" TextWrapping="Wrap" />
+      <TextBlock Text="当前默认 Java" FontWeight="SemiBold" /><SelectableTextBlock Name="JavaTrustCurrentDefault" Text="{Binding CurrentDefaultJava}" TextWrapping="Wrap" />
+      <WrapPanel><Button Name="InspectJavaTrustButton" Content="只读检查" Command="{Binding InspectCommand}" Margin="0,0,10,8" /><Button Name="CreateRepairedJavaCopyButton" Content="创建并核验独立副本" Command="{Binding PrepareCopyCommand}" Margin="0,0,10,8" /><Button Name="RestoreSourceJavaButton" Content="{Binding RollbackLabel}" Command="{Binding RestoreSelectionCommand}" IsVisible="{Binding HasRollback}" Margin="0,0,0,8" /></WrapPanel>
+      <Border Name="PreparedJavaCopyPanel" IsVisible="{Binding HasPrepared}" BorderBrush="{DynamicResource ClubAccent}" BorderThickness="1" CornerRadius="6" Padding="12"><StackPanel Spacing="8">
+        <TextBlock Text="已核验的修复副本" FontWeight="SemiBold" /><SelectableTextBlock Name="PreparedJavaPath" Text="{Binding PreparedJava}" TextWrapping="Wrap" />
+        <TextBlock Text="选用会更新默认 Java，实例独立设置保持；选用前会再次核验副本。" Classes="muted" />
+        <Button Name="SelectRepairedJavaCopyButton" Content="设为默认 Java" Command="{Binding SelectCopyCommand}" HorizontalAlignment="Left" />
+      </StackPanel></Border>
+      <TextBlock Text="源 Java、其它证书和修复记录保留。修复不会关闭 TLS 验证或改写系统证书库。" Classes="muted" />
+      <Expander HorizontalAlignment="Stretch" Header="检查详情与来源记录" IsExpanded="{Binding DetailsExpanded}"><StackPanel Spacing="8" Margin="0,10,0,0">
+        <ItemsControl Name="JavaTrustFindings" ItemsSource="{Binding Findings}"><ItemsControl.ItemTemplate><DataTemplate><StackPanel Spacing="3" Margin="0,6"><TextBlock Text="{Binding Summary}" FontWeight="SemiBold" /><TextBlock Text="{Binding Details}" Classes="muted" /><TextBlock Text="{Binding Path}" Classes="muted" FontSize="12" /><TextBlock Text="{Binding Hash}" Classes="muted" FontSize="11" /></StackPanel></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+        <TextBox Name="JavaTrustProvenanceText" Text="{Binding Provenance}" IsVisible="{Binding HasProvenance}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" MinHeight="120" />
       </StackPanel></Expander>
+    </StackPanel></Border>
+    <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="新下载 Java 的自动修复" Classes="sectionTitle" />
+      <CheckBox Name="JavaTrustAutoRepairSetting" Content="自动修复已知证书问题（推荐）" IsChecked="{Binding AutoRepair}" IsEnabled="{Binding CanEdit}" />
+      <DockPanel><Button Name="SaveJavaTrustPreferenceButton" DockPanel.Dock="Right" Content="保存自动修复偏好" Command="{Binding SavePreferenceCommand}" Margin="10,0,0,0" /><TextBlock Text="{Binding PreferenceSummary}" TextWrapping="Wrap" VerticalAlignment="Center" /></DockPanel>
       <TextBlock Text="{Binding Feedback}" Classes="muted" />
     </StackPanel></Border>
   </StackPanel>

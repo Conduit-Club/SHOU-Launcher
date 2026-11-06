@@ -3,7 +3,7 @@ using SHOU.Launcher.Core.Abstractions;
 namespace SHOU.Launcher.Desktop.Tests;
 
 // Explicit test fake. No production composition root references this implementation.
-internal class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMigrationService
+internal class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMigrationService, IJavaTrustWorkflowService
 {
     public bool SupportsLegacyMicrosoftImport { get; set; }
     public IReadOnlyList<LegacyMicrosoftAccountChoice> LegacyChoices { get; set; } = [];
@@ -50,6 +50,7 @@ internal class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMi
     public bool FabricCreationCancelled { get; private set; }
     public Func<string, CancellationToken, Task<IReadOnlyList<JavaTrustFinding>>>? JavaTrustInspectBehavior { get; set; }
     public Func<string, CancellationToken, Task<JavaTrustDerivation>>? JavaTrustCopyBehavior { get; set; }
+    public Func<JavaTrustDerivation, CancellationToken, Task>? JavaTrustSelectBehavior { get; set; }
     public int JavaTrustInspectCalls { get; private set; }
     public int JavaTrustCopyCalls { get; private set; }
     public string? LastJavaTrustInspectPath { get; private set; }
@@ -95,12 +96,29 @@ internal class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMi
     }
     public async Task<JavaTrustDerivation> CreateRepairedJavaCopyAsync(string javaExecutable, CancellationToken cancellationToken = default)
     {
+        var result = await PrepareJavaTrustCopyAsync(javaExecutable, cancellationToken);
+        await SelectJavaTrustCopyAsync(result, cancellationToken); return result;
+    }
+    public async Task<JavaTrustDerivation> PrepareJavaTrustCopyAsync(string javaExecutable, CancellationToken cancellationToken = default)
+    {
         JavaTrustCopyCalls++; LastJavaTrustCopyPath = javaExecutable;
         var result = await (JavaTrustCopyBehavior ?? throw new InvalidOperationException("Test must supply an explicit Java trust copy protocol fixture."))(javaExecutable, cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
-        Publish(Snapshot with { Settings = Snapshot.Settings with { JavaExecutable = result.Java.ExecutablePath },
-            JavaInstallations = Snapshot.JavaInstallations.Where(j => j.ExecutablePath != result.Java.ExecutablePath).Append(result.Java).ToArray() });
+        Publish(Snapshot with { JavaInstallations = Snapshot.JavaInstallations.Where(j => j.ExecutablePath != result.Java.ExecutablePath).Append(result.Java).ToArray() });
         return result;
+    }
+    public async Task<JavaTrustSelectionChange> SelectJavaTrustCopyAsync(JavaTrustDerivation prepared, CancellationToken cancellationToken = default)
+    {
+        if (JavaTrustSelectBehavior is not null) await JavaTrustSelectBehavior(prepared, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        var change = new JavaTrustSelectionChange(Snapshot.Settings.JavaExecutable, prepared.Java.ExecutablePath);
+        Publish(Snapshot with { Settings = Snapshot.Settings with { JavaExecutable = prepared.Java.ExecutablePath, JavaTrustSelection = change } }); return change;
+    }
+    public async Task RestoreJavaTrustSelectionAsync(JavaTrustSelectionChange change, CancellationToken cancellationToken = default)
+    {
+        if (Snapshot.Settings.JavaExecutable != change.SelectedJavaExecutable) throw new InvalidOperationException("Changed selection");
+        if (change.PreviousJavaExecutable is { } previous) await InspectJavaTrustAsync(previous, cancellationToken);
+        await SaveSettingsAsync(Snapshot.Settings with { JavaExecutable = change.PreviousJavaExecutable, JavaTrustSelection = null }, cancellationToken);
     }
     public async Task InstallInstanceAsync(string instanceId, CancellationToken cancellationToken = default)
     {

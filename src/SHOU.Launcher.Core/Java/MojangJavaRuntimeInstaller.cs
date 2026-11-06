@@ -132,7 +132,7 @@ public sealed class MojangJavaRuntimeInstaller(IVerifiedDownloader downloader, I
         progress?.Report(new TransferProgress(component, "Probing", total, total, platform));
         await ProbeRequiredAsync(Contained(staging, javaEntry), request, cancellationToken);
         Directory.CreateDirectory(Path.GetDirectoryName(final)!);
-        Directory.Move(staging, final);
+        await IO.DirectoryPublication.PublishAsync(staging, final, cancellationToken);
         var installed = await ProbeRequiredAsync(Contained(final, javaEntry), request, cancellationToken);
         await WriteStateAsync(final, true, manifestSha1, javaEntry, cancellationToken);
         progress?.Report(new TransferProgress(component, "Completed", total, total, platform));

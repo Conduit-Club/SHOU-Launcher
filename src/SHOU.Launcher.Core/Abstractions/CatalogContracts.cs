@@ -1,7 +1,12 @@
 namespace SHOU.Launcher.Core.Abstractions;
 
 public sealed record GameCatalogVersion(string Id, string Kind, DateTimeOffset ReleaseTime, bool Latest = false, bool CanInstall = true);
-public sealed record GameCatalog(IReadOnlyList<GameCatalogVersion> Versions, string Source, bool Partial = false);
+public sealed record GameCatalog(IReadOnlyList<GameCatalogVersion> Versions, string Source, bool Partial = false,
+    DateTimeOffset? FetchedAt = null, bool FromCache = false, string? Notice = null);
+public interface IMinecraftCatalogCacheService
+{
+    Task<GameCatalog> RefreshGameCatalogAsync(CancellationToken cancellationToken = default);
+}
 public sealed record LoaderCatalogVersion(string Version, bool Stable);
 public sealed record ContentQuery(string Kind, string Search = "", string? GameVersion = null, string? Loader = null,
     string Sort = "relevance", int Offset = 0);

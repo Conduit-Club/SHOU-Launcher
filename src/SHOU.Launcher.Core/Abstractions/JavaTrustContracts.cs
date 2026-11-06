@@ -19,3 +19,13 @@ public interface IJavaTrustService
     Task<JavaTrustDerivation> CreateRepairedCopyAsync(JavaTrustCopyRequest request,
         CancellationToken cancellationToken = default);
 }
+
+public sealed record JavaTrustSelectionChange(string? PreviousJavaExecutable, string SelectedJavaExecutable);
+
+/// <summary>Separate read/prepare from the user's explicit default-runtime selection.</summary>
+public interface IJavaTrustWorkflowService
+{
+    Task<JavaTrustDerivation> PrepareJavaTrustCopyAsync(string javaExecutable, CancellationToken cancellationToken = default);
+    Task<JavaTrustSelectionChange> SelectJavaTrustCopyAsync(JavaTrustDerivation prepared, CancellationToken cancellationToken = default);
+    Task RestoreJavaTrustSelectionAsync(JavaTrustSelectionChange change, CancellationToken cancellationToken = default);
+}

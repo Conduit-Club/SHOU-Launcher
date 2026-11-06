@@ -47,7 +47,8 @@ public sealed class CommunityShellUiTests
     {
         var service = new CommunityFixture { InstallBehavior = _ => throw new Xunit.Sdk.XunitException("Standalone files must not install an instance.") }; using var root = new MainWindowViewModel(service, new FakeExternalLauncher());
         Assert.Equal(0, service.CatalogCalls); root.ShowDownloadsCommand.Execute(null);
-        await root.Downloads.RefreshCatalogCommand.ExecutionTask!;
+        for (var i = 0; i < 100 && root.IsBusy; i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(10); }
+        Assert.False(root.IsBusy);
         Assert.Equal(1, service.CatalogCalls); Assert.NotEmpty(root.Downloads.LatestVersions);
         root.SelectedPage = root.Home; root.ShowDownloadsCommand.Execute(null); Assert.Equal(1, service.CatalogCalls);
         root.Downloads.SelectCategory("installer-minecraft"); Assert.True(root.Downloads.IsCatalogPage); Assert.False(root.Downloads.IsInstallerPage);

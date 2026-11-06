@@ -105,6 +105,10 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
         if (settings.CustomInfo is { } info && (info.Length > 256 || info.Any(char.IsControl)))
             throw new ArgumentException("自定义信息须为不超过256字的单行文字。");
         if (settings.JavaExecutable is { Length: > 0 } java && !Path.IsPathFullyQualified(java)) throw new ArgumentException("Java路径必须为绝对路径。");
+        if (settings.JavaTrustSelection is { } selection &&
+            (!Path.IsPathFullyQualified(selection.SelectedJavaExecutable)
+            || selection.PreviousJavaExecutable is { } previous && !Path.IsPathFullyQualified(previous)))
+            throw new ArgumentException("Java回退记录必须包含绝对路径或自动选择。");
         if (settings.GameRoot is { Length: > 0 } root && !Path.IsPathFullyQualified(root)) throw new ArgumentException("游戏目录必须为绝对路径。");
         if (settings.Theme is not ("System" or "Light" or "Dark")) throw new ArgumentException("未知主题。");
         _ = PCL.Core.Conduit.DownloadSources.Parse(settings.DownloadSourcesJson);

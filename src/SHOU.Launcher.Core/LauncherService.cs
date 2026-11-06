@@ -50,6 +50,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         JavaBootstrapArtifact? javaBootstrap = null, IJavaTrustService? javaTrust = null, Content.CurseForgePackResolver? localPackResolver = null)
     {
         this.platform = platform; this.http = http; this.downloader = downloader; this.network = network;
+        gameCatalogCache = new(platform.Paths.CacheDirectory);
         build = buildConfiguration ?? new(); config = new(platform.Paths);
         authentication = authenticationClient ?? new(http);
         this.localPackResolver = localPackResolver;

@@ -3,7 +3,7 @@ using SHOU.Launcher.Core.IO;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService
+public sealed partial class LauncherService : IJavaTrustWorkflowService
 {
     private string DerivedJavaRoot => SafePath.Within(Paths.RuntimesDirectory, "derived-trust");
     public async Task<IReadOnlyList<JavaTrustFinding>> InspectJavaTrustAsync(string javaExecutable, CancellationToken cancellationToken = default)
@@ -23,15 +23,59 @@ public sealed partial class LauncherService
         {
             var java = await RequireJavaForTrustAsync(javaExecutable, ct).ConfigureAwait(false);
             result = await DeriveJavaAsync(java, ct).ConfigureAwait(false);
-            var settings = Snapshot.Settings with { JavaExecutable = result.Java.ExecutablePath };
-            var candidate = Snapshot with { Settings = settings,
-                JavaInstallations = Snapshot.JavaInstallations.Where(j => !SameJavaPath(j.ExecutablePath, result.Java.ExecutablePath)).Append(result.Java).ToArray() };
-            await PersistCandidateAsync(candidate, ct).ConfigureAwait(false);
-            network.Update(settings); Set(s => s with { Settings = settings,
-                JavaInstallations = s.JavaInstallations.Where(j => !SameJavaPath(j.ExecutablePath, result.Java.ExecutablePath)).Append(result.Java).ToArray() });
+            await SaveTrustJavaSelectionAsync(result.Java, ct, new(Snapshot.Settings.JavaExecutable, result.Java.ExecutablePath)).ConfigureAwait(false);
             Log("Info", "全局默认Java已选择验证后的独立修复副本；实例显式覆盖保持。源Java未修改，可在Java路径设置中选回。策略=" + result.PolicyId);
         }, cancellationToken).ConfigureAwait(false);
         return result!;
+    }
+    public async Task<JavaTrustDerivation> PrepareJavaTrustCopyAsync(string javaExecutable, CancellationToken cancellationToken = default)
+    {
+        JavaTrustDerivation? result = null;
+        await ExecuteAsync("RepairingJavaTrust", async ct =>
+        {
+            var java = await RequireJavaForTrustAsync(javaExecutable, ct).ConfigureAwait(false);
+            result = await DeriveJavaAsync(java, ct).ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
+            Set(s => s with { JavaInstallations = s.JavaInstallations.Where(j => !SameJavaPath(j.ExecutablePath, result.Java.ExecutablePath)).Append(result.Java).ToArray() });
+        }, cancellationToken).ConfigureAwait(false);
+        return result!;
+    }
+    public async Task<JavaTrustSelectionChange> SelectJavaTrustCopyAsync(JavaTrustDerivation prepared, CancellationToken cancellationToken = default)
+    {
+        JavaTrustSelectionChange? change = null;
+        await ExecuteAsync("CheckingJavaTrust", async ct =>
+        {
+            var java = await platform.JavaDiscovery.ProbeAsync(prepared.Java.ExecutablePath, ct).ConfigureAwait(false);
+            if (!java.IsUsable || !IsDerivedJava(java, prepared.Java.ExecutablePath)) throw new InvalidDataException("副本不再是可用的受控 Java，请重新扫描并创建。");
+            // Revalidate the completed receipt and both trees at selection time, not only when the copy was prepared.
+            var verified = await DeriveJavaAsync(java, ct).ConfigureAwait(false);
+            if (!SameJavaPath(verified.Java.ExecutablePath, prepared.Java.ExecutablePath)
+                || !SameJavaPath(verified.SourceJavaExecutable, prepared.SourceJavaExecutable)
+                || !SameJavaPath(verified.ProvenancePath, prepared.ProvenancePath)
+                || verified.PolicyId != prepared.PolicyId || verified.SourceTreeSha256 != prepared.SourceTreeSha256 || verified.OutputTreeSha256 != prepared.OutputTreeSha256)
+                throw new InvalidDataException("副本、源 Java 或来源记录已变化，请重新创建并核验。");
+            change = new(Snapshot.Settings.JavaExecutable, verified.Java.ExecutablePath);
+            await SaveTrustJavaSelectionAsync(verified.Java, ct, change).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
+        return change!;
+    }
+    public Task RestoreJavaTrustSelectionAsync(JavaTrustSelectionChange change, CancellationToken cancellationToken = default)
+        => ExecuteAsync("CheckingJavaTrust", async ct =>
+        {
+            if (!SameJavaPath(Snapshot.Settings.JavaExecutable ?? "", change.SelectedJavaExecutable))
+                throw new InvalidOperationException("默认 Java 已在其它位置更改，本次回退未覆盖新的选择。");
+            JavaInstallation? previous = null;
+            if (!string.IsNullOrWhiteSpace(change.PreviousJavaExecutable)) previous = await RequireJavaForTrustAsync(change.PreviousJavaExecutable, ct).ConfigureAwait(false);
+            await SaveTrustJavaSelectionAsync(previous, ct).ConfigureAwait(false);
+        }, cancellationToken);
+    private async Task SaveTrustJavaSelectionAsync(JavaInstallation? java, CancellationToken ct, JavaTrustSelectionChange? selection = null)
+    {
+        ct.ThrowIfCancellationRequested();
+        var settings = Snapshot.Settings with { JavaExecutable = java?.ExecutablePath, JavaTrustSelection = selection };
+        var candidate = Snapshot with { Settings = settings, JavaInstallations = java is null ? Snapshot.JavaInstallations
+            : Snapshot.JavaInstallations.Where(j => !SameJavaPath(j.ExecutablePath, java.ExecutablePath)).Append(java).ToArray() };
+        await PersistCandidateAsync(candidate, ct).ConfigureAwait(false);
+        network.Update(settings); Set(s => s with { Settings = settings, JavaInstallations = candidate.JavaInstallations });
     }
     private async Task<JavaInstallation> RequireJavaForTrustAsync(string executable, CancellationToken ct)
     {

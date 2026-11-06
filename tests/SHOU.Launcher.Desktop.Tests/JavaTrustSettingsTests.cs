@@ -9,174 +9,130 @@ using Xunit;
 
 namespace SHOU.Launcher.Desktop.Tests;
 
-// Protocol fixtures only: these tests never run keytool or modify a Java installation.
+// Protocol fixtures only. No Java process, keytool or Minecraft is executed.
 public sealed class JavaTrustSettingsTests
 {
-    private static string FixturePath(string kind, string leaf) => Path.Combine(Path.GetPathRoot(Environment.CurrentDirectory)!, "shou-ui-protocol-fixture", kind, leaf);
-    private static string SourceJava => FixturePath("source", OperatingSystem.IsWindows() ? "bin/java.exe" : "bin/java");
-    private static void Pump(Window window) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
-    private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
-    private static MainWindow Open(MainWindowViewModel vm)
-    {
-        var window = new MainWindow { DataContext = vm }; window.Show(); vm.Settings.OpenJavaTrustToolsCommand.Execute(null); Pump(window); return window;
-    }
-    private static FakeLauncherService WithSelectedSource()
+    private static string PathFor(string name) => Path.Combine(Path.GetPathRoot(Environment.CurrentDirectory)!, "shou-ui-protocol-fixture", name, "bin", OperatingSystem.IsWindows() ? "java.exe" : "java");
+    private static string Source => PathFor("source");
+    private static JavaTrustFinding Finding(bool repair = true, bool supported = true) => new("fixture/cacerts", true, new string('a', 64), repair, supported, "Explicit protocol fixture");
+    private static JavaTrustDerivation Copy() => new(new(PathFor("derived"), Path.GetDirectoryName(Path.GetDirectoryName(PathFor("derived")))!, "21.0.13", 21, "fixture", RuntimeArchitecture.X64, "fixture:trust"), Source, "fixture-policy", new string('a', 64), new string('b', 64), Path.Combine(Path.GetDirectoryName(Source)!, "receipt.json"), [Finding(false)]);
+    private static FakeLauncherService Fixture(string? selected = null, bool auto = false)
     {
         var fake = new FakeLauncherService();
-        var source = fake.Snapshot.JavaInstallations[0] with { ExecutablePath = SourceJava, JavaHome = FixturePath("source", ""), ValidatedManifestSha1 = new string('1', 40) };
-        fake.Publish(fake.Snapshot with { Settings = fake.Snapshot.Settings with { JavaExecutable = SourceJava }, JavaInstallations = [source] });
-        return fake;
+        fake.Publish(fake.Snapshot with { Settings = fake.Snapshot.Settings with { JavaExecutable = auto ? null : selected ?? Source } });
+        fake.JavaTrustInspectBehavior = (_, _) => Task.FromResult<IReadOnlyList<JavaTrustFinding>>([Finding()]);
+        fake.JavaTrustCopyBehavior = (_, _) => Task.FromResult(Copy()); return fake;
     }
-    private static JavaTrustDerivation Derivation()
-    {
-        var home = FixturePath("derived", "");
-        var java = new JavaInstallation(FixturePath("derived", OperatingSystem.IsWindows() ? "bin/java.exe" : "bin/java"), home,
-            "21.0.13", 21, "Explicit protocol fixture", RuntimeArchitecture.Arm64, "derived-fixture");
-        return new(java, SourceJava, "fixture-policy-v1", new string('a', 64), new string('b', 64),
-            FixturePath("derived", "provenance.json"), [new(Path.Combine(home, "lib/security/cacerts"), true, new string('c', 64), false, true, "explicit fixture processing record")]);
-    }
+    private static void Pump(Window w) { Dispatcher.UIThread.RunJobs(); w.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
+    private static T Find<T>(Window w, string name) where T : Control => w.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
+    private static async Task Prepare(MainWindowViewModel root)
+    { root.Tools.JavaTrust.TargetJava = Source; await root.Tools.JavaTrust.InspectCommand.ExecuteAsync(null); await root.Tools.JavaTrust.PrepareCopyCommand.ExecuteAsync(null); }
 
     [AvaloniaFact]
-    public async Task ToolsReuseSettingsAndRollbackOnlyAfterSuccessfulSourceProbe()
+    public async Task ToolsOwnTheirTargetAndPreferenceWithoutSavingUnrelatedSettingsDrafts()
     {
-        var fake = WithSelectedSource(); fake.JavaTrustCopyBehavior = (_, _) => Task.FromResult(Derivation());
-        using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
-        var window = Open(vm);
+        var fake = Fixture(); using var root = new MainWindowViewModel(fake, new FakeExternalLauncher());
+        var w = new MainWindow { DataContext = root }; w.Show(); root.Settings.OpenJavaTrustToolsCommand.Execute(null); Pump(w);
         try
         {
-            Assert.Same(vm.Settings, window.GetVisualDescendants().OfType<JavaTrustToolsView>().Single().DataContext);
+            var tools = root.Tools.JavaTrust;
+            Assert.Same(tools, w.GetVisualDescendants().OfType<JavaTrustToolsView>().Single().DataContext);
+            root.Settings.Theme = "Dark"; tools.TargetJava = PathFor("other");
+            Assert.Equal(Source, root.Settings.JavaExecutable); Assert.Equal(Source, fake.Snapshot.Settings.JavaExecutable);
+            tools.AutoRepair = false; await tools.SavePreferenceCommand.ExecuteAsync(null);
+            Assert.False(fake.Snapshot.Settings.ConduitJavaTrustAutoRepair); Assert.Equal("System", fake.Snapshot.Settings.Theme);
+            Assert.Equal("Dark", root.Settings.Theme); Assert.True(root.Settings.IsDirty);
+            root.Tools.ShowJavaSettingsCommand.Execute(null); Pump(w);
+            Assert.DoesNotContain(w.GetVisualDescendants(), c => c is CheckBox { Name: "JavaTrustAutoRepairSetting" });
+            Assert.True(Find<Button>(w, "OpenJavaTrustToolsButton").IsEffectivelyVisible);
             Assert.DoesNotContain("network", SettingsPageViewModel.SectionIds);
-            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name is "LobbyPage" or "LobbyNavigationButton");
-            await vm.Settings.CreateRepairedJavaCopyCommand.ExecuteAsync(null); Pump(window);
-            Assert.True(vm.Settings.HasJavaTrustRollback); var selected = fake.Snapshot.Settings.JavaExecutable;
-            fake.JavaTrustInspectBehavior = (_, _) => throw new IOException("Source no longer probes");
-            await vm.Settings.RestoreSourceJavaCommand.ExecuteAsync(null); Pump(window);
-            Assert.Equal(selected, fake.Snapshot.Settings.JavaExecutable); Assert.Equal(0, fake.SaveCalls);
-            fake.JavaTrustInspectBehavior = (_, _) => Task.FromResult<IReadOnlyList<JavaTrustFinding>>([]);
-            await vm.Settings.RestoreSourceJavaCommand.ExecuteAsync(null); Pump(window);
-            Assert.Equal(SourceJava, fake.Snapshot.Settings.JavaExecutable); Assert.Equal(1, fake.SaveCalls);
-            Assert.False(vm.Settings.HasJavaTrustRollback);
-            vm.Tools.ShowJavaSettingsCommand.Execute(null); Pump(window);
-            Assert.Same(vm.Settings, vm.SelectedPage); Assert.True(vm.Settings.IsJavaSection);
-            Find<Button>(window, "OpenJavaTrustToolsButton").Command!.Execute(null); Pump(window);
-            Assert.Same(vm.Tools, vm.SelectedPage); Assert.True(vm.Tools.IsJavaTrust);
         }
-        finally { window.Close(); }
+        finally { w.Close(); }
     }
-
     [AvaloniaFact]
-    public async Task AutoRepairPreferencePersistsAndTrustActionsRequireAnExplicitAbsoluteJava()
+    public async Task PrepareDoesNotSelectAndExplicitSelectionRebasesOnlyTheUnchangedJavaDraft()
     {
-        var fake = new FakeLauncherService();
-        using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
-        var window = Open(vm);
-        try
-        {
-            Assert.True(Find<CheckBox>(window, "JavaTrustAutoRepairSetting").IsChecked);
-            Assert.False(Find<Button>(window, "InspectJavaTrustButton").IsEffectivelyEnabled);
-            Assert.False(Find<Button>(window, "CreateRepairedJavaCopyButton").IsEffectivelyEnabled);
-            Find<CheckBox>(window, "JavaTrustAutoRepairSetting").IsChecked = false; Pump(window);
-            await vm.Settings.SaveCommand.ExecuteAsync(null); Pump(window);
-            Assert.False(fake.Snapshot.Settings.ConduitJavaTrustAutoRepair); Assert.Equal(1, fake.SaveCalls);
-            Find<TextBox>(window, "GlobalJavaExecutableSetting").Text = "bin/java"; Pump(window);
-            Assert.False(vm.Settings.InspectJavaTrustCommand.CanExecute(null));
-            await vm.Settings.InspectJavaTrustCommand.ExecuteAsync(null);
-            await vm.Settings.CreateRepairedJavaCopyCommand.ExecuteAsync(null);
-            Assert.Equal(0, fake.JavaTrustInspectCalls); Assert.Equal(0, fake.JavaTrustCopyCalls);
-            Assert.True(vm.HasError);
-            Find<TextBox>(window, "GlobalJavaExecutableSetting").Text = SourceJava; Pump(window);
-            Assert.True(vm.Settings.InspectJavaTrustCommand.CanExecute(null));
-            Assert.True(Find<Button>(window, "CreateRepairedJavaCopyButton").IsEffectivelyEnabled);
-        }
-        finally { window.Close(); }
+        var fake = Fixture(); using var root = new MainWindowViewModel(fake, new FakeExternalLauncher()); var tools = root.Tools.JavaTrust;
+        root.Settings.Theme = "Dark"; root.Settings.MemoryMiB = 3072;
+        await Prepare(root); Assert.True(tools.HasPrepared); Assert.Equal(Source, fake.Snapshot.Settings.JavaExecutable); Assert.Equal(0, fake.SaveCalls);
+        await tools.SelectCopyCommand.ExecuteAsync(null);
+        Assert.Equal(Copy().Java.ExecutablePath, fake.Snapshot.Settings.JavaExecutable);
+        Assert.Equal(Copy().Java.ExecutablePath, root.Settings.JavaExecutable); Assert.Equal("Dark", root.Settings.Theme);
+        Assert.True(root.Settings.IsDirty); Assert.False(root.Settings.HasJavaSelectionConflict);
+        await root.Settings.SaveCommand.ExecuteAsync(null);
+        Assert.Equal(Copy().Java.ExecutablePath, fake.Snapshot.Settings.JavaExecutable); Assert.Equal("Dark", fake.Snapshot.Settings.Theme);
+        Assert.Equal(3072, fake.Snapshot.Settings.MemoryMiB); Assert.True(tools.HasRollback);
     }
-
     [AvaloniaFact]
-    public async Task ReadOnlyScanBindsFindingsAndFailureOrSelectionChangeClearsTheResult()
+    public async Task ExplicitConflictingJavaDraftNeedsAChoiceBeforeItCanOverwriteTheSavedSelection()
     {
-        var fake = WithSelectedSource();
-        fake.JavaTrustInspectBehavior = (_, _) => Task.FromResult<IReadOnlyList<JavaTrustFinding>>(
-            [new(FixturePath("source", "lib/security/cacerts"), true, "fixture-hash", true, true, "explicit fixture finding")]);
-        using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
-        var window = Open(vm);
-        try
-        {
-            Find<Button>(window, "InspectJavaTrustButton").Command!.Execute(null);
-            await vm.Settings.InspectJavaTrustCommand.ExecutionTask!; Pump(window);
-            Assert.Equal(SourceJava, fake.LastJavaTrustInspectPath); Assert.Single(vm.Settings.JavaTrustFindings);
-            Assert.Equal(1, Find<ItemsControl>(window, "JavaTrustFindings").ItemCount);
-            Assert.Contains("独立副本", vm.Settings.JavaTrustFindings[0].Summary);
-            Assert.Equal(0, fake.SaveCalls); Assert.Equal(SourceJava, fake.Snapshot.Settings.JavaExecutable);
-            fake.JavaTrustInspectBehavior = (_, _) => Task.FromResult<IReadOnlyList<JavaTrustFinding>>(
-                [new(FixturePath("source", "missing-cacerts"), true, "", false, false, "未找到默认证书库，未能检查")]);
-            await vm.Settings.InspectJavaTrustCommand.ExecuteAsync(null); Pump(window);
-            Assert.Contains("无法确认", Find<TextBlock>(window, "JavaTrustStatusText").Text);
-            Assert.Contains("结果未知", vm.Settings.JavaTrustFindings.Single().Summary);
-            Assert.DoesNotContain("未报告需修复项", vm.Settings.JavaTrustStatus);
-            Assert.Equal(0, fake.SaveCalls); Assert.Equal(SourceJava, fake.Snapshot.Settings.JavaExecutable);
-            fake.JavaTrustInspectBehavior = (_, _) => throw new InvalidDataException("扫描失败 password=fixture-scan-password");
-            await vm.Settings.InspectJavaTrustCommand.ExecuteAsync(null); Pump(window);
-            Assert.Empty(vm.Settings.JavaTrustFindings); Assert.Contains("扫描失败或已取消", vm.Settings.JavaTrustStatus);
-            Assert.DoesNotContain("fixture-scan-password", vm.ErrorMessage);
-            vm.Settings.JavaExecutable = SourceJava + "-other";
-            Assert.Contains("尚未扫描", vm.Settings.JavaTrustStatus); Assert.False(vm.Settings.HasJavaTrustProvenance);
-            fake.JavaTrustInspectBehavior = (_, _) => Task.FromResult<IReadOnlyList<JavaTrustFinding>>([]);
-            await vm.Settings.InspectJavaTrustCommand.ExecuteAsync(null); Pump(window);
-            Assert.Contains("无法据此确认", vm.Settings.JavaTrustStatus); Assert.Empty(vm.Settings.JavaTrustFindings);
-        }
-        finally { window.Close(); }
+        var fake = Fixture(); using var root = new MainWindowViewModel(fake, new FakeExternalLauncher());
+        root.Settings.JavaExecutable = PathFor("draft"); await Prepare(root); await root.Tools.JavaTrust.SelectCopyCommand.ExecuteAsync(null);
+        Assert.Equal(PathFor("draft"), root.Settings.JavaExecutable); Assert.True(root.Settings.HasJavaSelectionConflict); Assert.False(root.Settings.SaveCommand.CanExecute(null));
+        root.Settings.KeepJavaDraftCommand.Execute(null); Assert.True(root.Settings.SaveCommand.CanExecute(null)); await root.Settings.SaveCommand.ExecuteAsync(null);
+        Assert.Equal(PathFor("draft"), fake.Snapshot.Settings.JavaExecutable); Assert.False(root.Tools.JavaTrust.HasRollback);
     }
-
     [AvaloniaFact]
-    public async Task SuccessfulCopySelectsReturnedJavaAndPreservesOtherUnsavedSettings()
+    public async Task UseSavedJavaChoiceRetainsOtherDraftsAndDoesNotWriteOnItsOwn()
     {
-        var fake = WithSelectedSource();
-        var completion = new TaskCompletionSource<JavaTrustDerivation>(TaskCreationOptions.RunContinuationsAsynchronously);
-        fake.JavaTrustCopyBehavior = (_, ct) => completion.Task.WaitAsync(ct);
-        using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
-        var window = Open(vm);
-        try
-        {
-            vm.Settings.Theme = "Dark";
-            Find<Button>(window, "CreateRepairedJavaCopyButton").Command!.Execute(null); Pump(window);
-            Assert.True(vm.IsBusy); Assert.False(Find<Button>(window, "InspectJavaTrustButton").IsEffectivelyEnabled);
-            Assert.False(Find<CheckBox>(window, "JavaTrustAutoRepairSetting").IsEffectivelyEnabled);
-            Assert.Equal(SourceJava, fake.Snapshot.Settings.JavaExecutable);
-            var result = Derivation(); completion.SetResult(result);
-            await vm.Settings.CreateRepairedJavaCopyCommand.ExecutionTask!; Pump(window);
-            Assert.Equal(SourceJava, fake.LastJavaTrustCopyPath);
-            Assert.Equal(result.Java.ExecutablePath, vm.Settings.JavaExecutable);
-            Assert.Equal(result.Java.ExecutablePath, fake.Snapshot.Settings.JavaExecutable);
-            Assert.Contains(fake.Snapshot.JavaInstallations, j => j.ExecutablePath == SourceJava);
-            Assert.Equal("Dark", vm.Settings.Theme); Assert.Equal("System", fake.Snapshot.Settings.Theme); Assert.True(vm.Settings.IsDirty);
-            Assert.Equal(0, fake.SaveCalls);
-            Assert.True(Find<TextBox>(window, "JavaTrustProvenanceText").IsVisible);
-            Assert.Contains(result.PolicyId, vm.Settings.JavaTrustProvenance); Assert.Contains(result.ProvenancePath, vm.Settings.JavaTrustProvenance);
-            Assert.Contains("原始 Java 未修改", vm.Settings.JavaTrustStatus);
-        }
-        finally { window.Close(); }
+        var fake = Fixture(); using var root = new MainWindowViewModel(fake, new FakeExternalLauncher());
+        root.Settings.Theme = "Dark"; root.Settings.JavaExecutable = PathFor("draft"); await Prepare(root); await root.Tools.JavaTrust.SelectCopyCommand.ExecuteAsync(null);
+        root.Settings.UseSavedJavaSelectionCommand.Execute(null);
+        Assert.Equal(Copy().Java.ExecutablePath, root.Settings.JavaExecutable); Assert.Equal("Dark", root.Settings.Theme);
+        Assert.False(root.Settings.HasJavaSelectionConflict); Assert.True(root.Settings.IsDirty); Assert.Equal(0, fake.SaveCalls);
     }
-
     [AvaloniaFact]
-    public async Task CancelledOrFailedCopyNeverChangesSelectionOrShowsSuccess()
+    public async Task HealthyUnknownAndLateScanResultsCannotEnableAnUnjustifiedRepair()
     {
-        var fake = WithSelectedSource();
-        fake.JavaTrustCopyBehavior = async (_, ct) => { await Task.Delay(Timeout.Infinite, ct); return Derivation(); };
-        using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
-        var window = Open(vm);
-        try
+        var fake = Fixture(); using var root = new MainWindowViewModel(fake, new FakeExternalLauncher()); var tools = root.Tools.JavaTrust;
+        tools.TargetJava = Source; Assert.False(tools.PrepareCopyCommand.CanExecute(null));
+        fake.JavaTrustInspectBehavior = (_, _) => Task.FromResult<IReadOnlyList<JavaTrustFinding>>([Finding(false)]);
+        await tools.InspectCommand.ExecuteAsync(null); Assert.Contains("健康", tools.Status); Assert.False(tools.CanPrepare);
+        fake.JavaTrustInspectBehavior = (_, _) => Task.FromResult<IReadOnlyList<JavaTrustFinding>>([Finding(false, false)]);
+        await tools.InspectCommand.ExecuteAsync(null); Assert.Contains("未知", tools.Status); Assert.False(tools.CanPrepare);
+        var response = new TaskCompletionSource<IReadOnlyList<JavaTrustFinding>>(); fake.JavaTrustInspectBehavior = (_, _) => response.Task;
+        var pending = tools.InspectCommand.ExecuteAsync(null); tools.TargetJava = PathFor("changed"); response.SetResult([Finding()]); await pending;
+        Assert.Empty(tools.Findings); Assert.False(tools.CanPrepare); Assert.Equal(Source, fake.Snapshot.Settings.JavaExecutable);
+    }
+    [AvaloniaFact]
+    public async Task CancelledPreparationAndFailedSelectionNeverChooseAnIncompleteCopy()
+    {
+        var fake = Fixture(); using var root = new MainWindowViewModel(fake, new FakeExternalLauncher()); var tools = root.Tools.JavaTrust;
+        tools.TargetJava = Source; await tools.InspectCommand.ExecuteAsync(null);
+        fake.JavaTrustCopyBehavior = async (_, ct) => { await Task.Delay(Timeout.Infinite, ct); return Copy(); };
+        var pending = tools.PrepareCopyCommand.ExecuteAsync(null); root.CancelOperationCommand.Execute(null); await pending.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.False(tools.HasPrepared); Assert.Equal(Source, fake.Snapshot.Settings.JavaExecutable); Assert.Contains("已取消", tools.Status);
+        fake.JavaTrustCopyBehavior = (_, _) => Task.FromResult(Copy()); await tools.PrepareCopyCommand.ExecuteAsync(null);
+        fake.JavaTrustSelectBehavior = (_, _) => throw new IOException("Changed copy password=fixture-private-marker");
+        await tools.SelectCopyCommand.ExecuteAsync(null); Assert.Equal(Source, fake.Snapshot.Settings.JavaExecutable);
+        Assert.False(tools.HasPrepared); Assert.DoesNotContain("fixture-private-marker", root.ErrorMessage); Assert.False(tools.HasRollback);
+    }
+    [AvaloniaFact]
+    public async Task PreviousSelectionRemainsAvailableAfterReopeningTheLauncher()
+    {
+        var fake = Fixture(auto: true);
+        using (var root = new MainWindowViewModel(fake, new FakeExternalLauncher()))
+        { await Prepare(root); await root.Tools.JavaTrust.SelectCopyCommand.ExecuteAsync(null); }
+        using var reopened = new MainWindowViewModel(fake, new FakeExternalLauncher());
+        Assert.True(reopened.Tools.JavaTrust.HasRollback); Assert.Contains("自动", reopened.Tools.JavaTrust.RollbackLabel);
+        await reopened.Tools.JavaTrust.RestoreSelectionCommand.ExecuteAsync(null);
+        Assert.Null(fake.Snapshot.Settings.JavaExecutable); Assert.Null(fake.Snapshot.Settings.JavaTrustSelection);
+    }
+    [AvaloniaFact]
+    public async Task RollbackRestoresPreviousExplicitChoiceOnlyAfterProbeOrRestoresAutomaticSelection()
+    {
+        foreach (var automatic in new[] { false, true })
         {
-            Find<Button>(window, "CreateRepairedJavaCopyButton").Command!.Execute(null); Pump(window);
-            Assert.True(vm.CancelOperationCommand.CanExecute(null)); vm.CancelOperationCommand.Execute(null);
-            await vm.Settings.CreateRepairedJavaCopyCommand.ExecutionTask!.WaitAsync(TimeSpan.FromSeconds(5)); Pump(window);
-            Assert.Equal(SourceJava, vm.Settings.JavaExecutable); Assert.Equal(SourceJava, fake.Snapshot.Settings.JavaExecutable);
-            Assert.Contains("创建失败或已取消", vm.Settings.JavaTrustStatus); Assert.False(vm.Settings.HasJavaTrustProvenance);
-            fake.JavaTrustCopyBehavior = (_, _) => throw new IOException("复制失败 password=fixture-copy-password");
-            await vm.Settings.CreateRepairedJavaCopyCommand.ExecuteAsync(null); Pump(window);
-            Assert.True(vm.HasError); Assert.DoesNotContain("fixture-copy-password", vm.ErrorMessage);
-            Assert.Equal(SourceJava, fake.Snapshot.Settings.JavaExecutable); Assert.Equal(SourceJava, vm.Settings.JavaExecutable);
-            Assert.False(vm.Settings.HasJavaTrustProvenance); Assert.Empty(vm.Settings.JavaTrustFindings); Assert.Equal(0, fake.SaveCalls);
+            var fake = Fixture(auto: automatic); using var root = new MainWindowViewModel(fake, new FakeExternalLauncher()); var tools = root.Tools.JavaTrust;
+            await Prepare(root); await tools.SelectCopyCommand.ExecuteAsync(null); Assert.True(tools.HasRollback);
+            if (!automatic)
+            {
+                fake.JavaTrustInspectBehavior = (_, _) => throw new IOException("Missing source"); await tools.RestoreSelectionCommand.ExecuteAsync(null);
+                Assert.Equal(Copy().Java.ExecutablePath, fake.Snapshot.Settings.JavaExecutable); Assert.True(tools.HasRollback);
+                fake.JavaTrustInspectBehavior = (_, _) => Task.FromResult<IReadOnlyList<JavaTrustFinding>>([Finding()]);
+            }
+            await tools.RestoreSelectionCommand.ExecuteAsync(null);
+            Assert.Equal(automatic ? null : Source, fake.Snapshot.Settings.JavaExecutable); Assert.False(tools.HasRollback);
         }
-        finally { window.Close(); }
     }
 }

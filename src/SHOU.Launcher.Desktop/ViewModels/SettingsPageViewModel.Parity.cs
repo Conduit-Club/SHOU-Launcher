@@ -52,8 +52,6 @@ public sealed partial class SettingsPageViewModel
     public string JavaSelectionSummary => string.IsNullOrWhiteSpace(JavaExecutable) ? "自动选择 Java（推荐）" : "已指定全局 Java";
     public ObservableCollection<JavaInstallation> JavaInstallations { get; } = [];
     private JavaInstallation? _selectedJava;
-    private bool _javaTrustDetailsExpanded;
-    public bool JavaTrustDetailsExpanded { get => _javaTrustDetailsExpanded; set => SetProperty(ref _javaTrustDetailsExpanded, value); }
     private bool _aria2DetailsExpanded;
     public bool Aria2DetailsExpanded { get => _aria2DetailsExpanded; set => SetProperty(ref _aria2DetailsExpanded, value); }
     public JavaInstallation? SelectedJava { get => _selectedJava; set { if (SetProperty(ref _selectedJava, value)) UseSelectedJavaCommand.NotifyCanExecuteChanged(); } }

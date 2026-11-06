@@ -105,7 +105,7 @@ public sealed class DerivedJavaTrustService(IJavaDiscovery discovery, IProcessRu
             before.Sha256, after.Sha256, executableRelative, changes);
         await WriteJsonNewAsync(Path.Combine(stage, ProvenanceName), record, ct);
         // The moved directory remains undiscoverable until its final-path JVM also probes successfully.
-        Directory.Move(stage, final);
+        await IO.DirectoryPublication.PublishAsync(stage, final, ct);
         var finalHome = Path.Combine(final, "home");
         var java = await ProbeAsync(finalHome, executableRelative, source, ct);
         if ((await JavaTrustTree.ReadAsync(finalHome, ct)).Sha256 != after.Sha256

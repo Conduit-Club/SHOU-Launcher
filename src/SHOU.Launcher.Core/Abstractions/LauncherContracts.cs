@@ -16,7 +16,8 @@ public sealed record LauncherSettings(string? GameRoot = null, string? JavaExecu
     string Language = "zh-CN", string Theme = "System", string DownloadSourcesJson = "",
     ProxySettings? Proxy = null, Aria2Settings? Aria2 = null, string? MicrosoftClientId = null,
     bool ConduitJavaTrustAutoRepair = true, int? GameWindowWidth = null, int? GameWindowHeight = null,
-    bool GameFullscreen = false, int? MinimumMemoryMiB = null, string? CustomInfo = null);
+    bool GameFullscreen = false, int? MinimumMemoryMiB = null, string? CustomInfo = null,
+    JavaTrustSelectionChange? JavaTrustSelection = null);
 public sealed record GameInstance(string Id, string Name, string VersionId, string GameDirectory,
     string? JavaExecutable = null, int? MemoryMiB = null, string Loader = "vanilla", string? LoaderVersion = null,
     bool Installed = false, string? GameVersionId = null, InstancePresentation? Presentation = null);

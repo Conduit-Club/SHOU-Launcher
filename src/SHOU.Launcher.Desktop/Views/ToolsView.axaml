@@ -21,8 +21,8 @@
     </Border>
     <ScrollViewer Grid.Column="1" Name="JavaTrustPage" IsVisible="{Binding IsJavaTrust}" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="25" Spacing="15">
-        <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="Java 证书诊断与修复" Classes="sectionTitle" /><TextBlock Text="先检查选定的 Java。需要修复时创建独立副本，通过核验后再选用；保留源 Java 和其它证书。" TextWrapping="Wrap" /><Button Content="Java 设置与自动修复偏好" Command="{Binding ShowJavaSettingsCommand}" HorizontalAlignment="Left" /></StackPanel></Border>
-        <views:JavaTrustToolsView DataContext="{Binding Root.Settings}" />
+        <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="Java 证书诊断与修复" Classes="sectionTitle" /><TextBlock Text="检查所选 Java；需要修复时创建独立副本，核验后由你决定是否选用。" TextWrapping="Wrap" /><Button Content="管理默认 Java" Command="{Binding ShowJavaSettingsCommand}" HorizontalAlignment="Left" /></StackPanel></Border>
+        <views:JavaTrustToolsView DataContext="{Binding JavaTrust}" />
       </StackPanel>
     </ScrollViewer>
     <ScrollViewer Grid.Column="1" Name="ToolboxPage" IsVisible="{Binding IsToolbox}" HorizontalScrollBarVisibility="Disabled">

@@ -62,7 +62,7 @@ public sealed partial class LauncherService
                     var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination, Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);
                     var manifestPath = ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName); var manifest = JsonSerializer.Deserialize<ContentInstallManifest>(await File.ReadAllBytesAsync(manifestPath, token).ConfigureAwait(false)) ?? throw new InvalidDataException("整合包安装清单缺失。");
                     await File.WriteAllBytesAsync(manifestPath, JsonSerializer.SerializeToUtf8Bytes(manifest with { InstanceId = instance.Id }), token).ConfigureAwait(false);
-                    token.ThrowIfCancellationRequested(); _ = ContentInstallFiles.Literal(root, Path.GetFileName(stage)); _ = ContentInstallFiles.Literal(root, Path.GetFileName(destination)); Directory.Move(stage, destination); moved = true;
+                    token.ThrowIfCancellationRequested(); _ = ContentInstallFiles.Literal(root, Path.GetFileName(stage)); _ = ContentInstallFiles.Literal(root, Path.GetFileName(destination)); await IO.DirectoryPublication.PublishAsync(stage, destination, token).ConfigureAwait(false); moved = true;
                     var candidate = Snapshot with { Instances = Snapshot.Instances.Append(instance).ToArray(), SelectedInstanceId = instance.Id }; await PersistCandidateAsync(candidate, token).ConfigureAwait(false); registered = true;
                     Set(s => s with { Instances = candidate.Instances, SelectedInstanceId = instance.Id }); imported = new(instance, manifest.Files.Count, capturedPlan.Warnings);
                 }, ct).ConfigureAwait(false);

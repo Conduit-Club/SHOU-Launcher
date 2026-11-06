@@ -6,12 +6,20 @@ using SHOU.Launcher.Core.IO;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService : ILauncherCatalogService
+public sealed partial class LauncherService : ILauncherCatalogService, IMinecraftCatalogCacheService
 {
+    private readonly CachedGameCatalog gameCatalogCache;
     private readonly ConcurrentDictionary<string, ContentFile> contentTransfers = new(StringComparer.Ordinal);
     private LauncherCatalog Catalog => new(http, Sources);
-    public async Task<GameCatalog> GetGameCatalogAsync(CancellationToken cancellationToken = default)
-    { await InitializeAsync(cancellationToken).ConfigureAwait(false); return await Catalog.GamesAsync(cancellationToken).ConfigureAwait(false); }
+    public Task<GameCatalog> GetGameCatalogAsync(CancellationToken cancellationToken = default) => ReadGameCatalogAsync(false, cancellationToken);
+    public Task<GameCatalog> RefreshGameCatalogAsync(CancellationToken cancellationToken = default) => ReadGameCatalogAsync(true, cancellationToken);
+    private async Task<GameCatalog> ReadGameCatalogAsync(bool refresh, CancellationToken ct)
+    {
+        await InitializeAsync(ct).ConfigureAwait(false);
+        var configuration = Snapshot.Settings.DownloadSourcesJson;
+        var sources = DownloadSources.Parse(configuration);
+        return await gameCatalogCache.GetAsync(configuration ?? "", refresh, new LauncherCatalog(http, () => sources).GamesAsync, ct).ConfigureAwait(false);
+    }
     public async Task<IReadOnlyList<LoaderCatalogVersion>> GetFabricCatalogAsync(string gameVersion, CancellationToken cancellationToken = default)
     { await InitializeAsync(cancellationToken).ConfigureAwait(false); return await Catalog.FabricAsync(gameVersion, cancellationToken).ConfigureAwait(false); }
     public async Task<IReadOnlyList<ContentProject>> SearchContentAsync(ContentQuery query, CancellationToken cancellationToken = default)

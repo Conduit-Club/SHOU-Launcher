@@ -145,6 +145,10 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private bool _isResourceDetail;
     private bool _loading;
     private bool _catalogLoaded;
+    private bool _catalogRequestActive, _catalogRequested;
+    private string _catalogStatus = "正在准备 Minecraft 版本目录…";
+    private string? _catalogSourceConfiguration;
+    private int _catalogSourceRevision;
     private bool _searchCompleted;
     private int _requestRevision;
     private int _searchOffset;
@@ -288,6 +292,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         ILocalPackService? localPacks = null)
         : base(owner, "下载", "Minecraft 自动安装与社区资源")
     {
+        _catalogSourceConfiguration = owner.Snapshot.Settings.DownloadSourcesJson;
         _catalog = catalog ?? Service as ILauncherCatalogService;
         _imageToken = _imageLifetime.Token;
         _favoritesPathOverride = favoritesPath;
@@ -300,7 +305,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         TasksCategory = Category("tasks", "下载任务");
         _selectedCategory = MinecraftCategory;
         _selectedSort = SortChoices[0];
-        RefreshCatalogCommand = AsyncCommand(RefreshCatalogAsync, () => CanQuery);
+        RefreshCatalogCommand = AsyncCommand(() => RefreshCatalogAsync(true), () => CanQuery && !_catalogRequestActive);
         SearchCommand = AsyncCommand(() => SearchAsync(0), () => CanQuery && IsSearchPage && SearchSupported);
         NextPageCommand = AsyncCommand(() => SearchAsync(_searchOffset + 30), () => CanQuery && _searchCompleted && Projects.Count == 30);
         PreviousPageCommand = AsyncCommand(() => SearchAsync(Math.Max(0, _searchOffset - 30)), () => CanQuery && _searchCompleted && _searchOffset > 0);
@@ -333,7 +338,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             _selectedCategory = selected;
             _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
             _searchOffset = 0; _searchCompleted = false; ClearProjectRows(Projects);
-            RequestStatus = id is "minecraft" or "installer-minecraft" ? (_catalogLoaded ? "已读取版本目录。" : "正在准备 Minecraft 版本目录…")
+            RequestStatus = id is "minecraft" or "installer-minecraft" ? _catalogStatus
                 : id == "world" ? SearchCapabilityReason : "输入条件后点击搜索。";
         }
         NotifyPage();
@@ -364,32 +369,44 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         }
         finally { _loading = false; OnPropertyChanged(nameof(IsLoading)); NotifyCommands(); }
     }
-    private async Task RefreshCatalogAsync()
+    private async Task RefreshCatalogAsync(bool forceRefresh)
     {
+        if (_catalogRequestActive || !CanQuery) return;
+        _catalogRequestActive = true;
         var revision = _requestRevision;
-        await QueryAsync("读取 Minecraft 目录", revision, async ct =>
+        var sourceRevision = _catalogSourceRevision;
+        try { await QueryAsync("读取 Minecraft 目录", revision, async ct =>
         {
-            var catalog = await _catalog!.GetGameCatalogAsync(ct); ct.ThrowIfCancellationRequested();
-            if (revision != _requestRevision) return;
+            var catalog = forceRefresh && _catalog is IMinecraftCatalogCacheService cache
+                ? await cache.RefreshGameCatalogAsync(ct) : await _catalog!.GetGameCatalogAsync(ct);
+            ct.ThrowIfCancellationRequested();
+            if (sourceRevision != _catalogSourceRevision) return;
+            // Both Minecraft routes share immutable catalog rows, even if navigation changed during the request.
             LatestVersions.Clear(); VersionGroups.Clear();
             var rows = catalog.Versions.OrderByDescending(v => v.ReleaseTime).Select(v => new GameCatalogRowViewModel(this, v)).ToArray();
             foreach (var row in rows.Where(v => v.Version.Latest).OrderBy(v => v.Version.Kind == "release" ? 0 : 1)) LatestVersions.Add(row);
             foreach (var group in rows.GroupBy(v => v.Version.Kind switch { "release" => "正式版", "snapshot" => "预览版", "old_beta" or "old_alpha" => "远古版", _ => "其他版本" }).OrderBy(g => g.Key switch { "正式版" => 0, "预览版" => 1, "远古版" => 2, _ => 3 }))
                 VersionGroups.Add(new(group.Key, group.ToArray()));
             _catalogLoaded = true;
-            CatalogSource = "来源：" + catalog.Source + (catalog.Partial ? " · 精简目录，可能缺少历史版本" : "");
-            RequestStatus = rows.Length == 0 ? "目录没有返回版本。" : $"已读取 {rows.Length} 个版本。";
+            CatalogSource = "来源：" + catalog.Source + (catalog.Partial ? " · 精简目录，可能缺少历史版本" : "")
+                + (catalog.FromCache ? " · 本地缓存" : "") + (catalog.FetchedAt is { } date ? $" · 更新于 {date.LocalDateTime:yyyy/M/d HH:mm}" : "");
+            _catalogStatus = (rows.Length == 0 ? "目录没有返回版本。" : $"已读取 {rows.Length} 个版本。")
+                + (catalog.Notice is { Length: > 0 } notice ? " " + notice : "");
+            if (IsCatalogPage) RequestStatus = _catalogStatus;
             OnPropertyChanged(nameof(HasCatalog)); NotifyCommands();
-        });
+        }); }
+        finally { _catalogRequestActive = false; NotifyCommands(); }
     }
     public void SelectVersion(GameCatalogVersion version)
     {
         if (!CanEdit || !version.CanInstall) return;
         if (SelectedCategory.Id == "installer-minecraft") { _ = OpenPackageVersionAsync(version); return; }
         ++_requestRevision;
+        if (_selectedVersion?.Id == version.Id && _createdInstanceId is null)
+        { _isConfiguration = true; _isResourceDetail = false; _isPackageDetail = false; NotifyPage(); return; }
         _selectedVersion = version; _selectedFabric = null; _createdInstanceId = null;
         ResetAdditionalLoaders();
-        _isConfiguration = true; _isResourceDetail = false; FabricVersions.Clear();
+        _isConfiguration = true; _isResourceDetail = false; _isPackageDetail = false; FabricVersions.Clear();
         _installationName = DefaultInstallationName; InstallStatus = "";
         FabricStatus = "点击读取，查询当前 Minecraft 版本的 Fabric Loader。";
         OnPropertyChanged(nameof(InstallationName)); OnPropertyChanged(nameof(SelectedVersionId)); OnPropertyChanged(nameof(SelectedFabric)); OnPropertyChanged(nameof(HasCreatedInstance));
@@ -398,7 +415,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private void BackToList()
     {
         ++_requestRevision; _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
-        RequestStatus = IsCatalogPage ? "已读取版本目录。" : _searchCompleted ? $"已返回 {Projects.Count} 项资源。" : "输入条件后点击搜索。";
+        RequestStatus = IsCatalogPage ? _catalogStatus : _searchCompleted ? $"已返回 {Projects.Count} 项资源。" : "输入条件后点击搜索。";
         NotifyPage();
     }
     private async Task RefreshFabricAsync()
@@ -543,6 +560,13 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     }
     public override void Refresh(LauncherSnapshot snapshot)
     {
+        if (_catalogSourceConfiguration != snapshot.Settings.DownloadSourcesJson)
+        {
+            _catalogSourceConfiguration = snapshot.Settings.DownloadSourcesJson; ++_catalogSourceRevision;
+            _catalogLoaded = false; _catalogRequested = true; _catalogStatus = "下载来源已更改，正在重新读取版本目录…";
+            LatestVersions.Clear(); VersionGroups.Clear(); OnPropertyChanged(nameof(HasCatalog));
+            if (IsCatalogPage) RequestStatus = _catalogStatus;
+        }
         var ids = snapshot.Downloads.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
         for (var i = Tasks.Count - 1; i >= 0; i--) if (!ids.Contains(Tasks[i].Task.Id)) Tasks.RemoveAt(i);
         for (var i = 0; i < snapshot.Downloads.Count; i++)
@@ -564,5 +588,6 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         ImportLocalPackCommand?.NotifyCanExecuteChanged(); ReadCachedPackCommand?.NotifyCanExecuteChanged();
         foreach (var loader in AdditionalLoaders) loader.NotifyState();
         base.NotifyCommands(); OnPropertyChanged(nameof(CanQuery));
+        TryStartCatalogRequest();
     }
 }
