@@ -1,21 +1,32 @@
-<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+<Styles xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:views="using:SHOU.Launcher.Desktop.Views" xmlns:conv="using:Avalonia.Data.Converters">
+  <Styles.Resources>
+    <x:Double x:Key="ClubBodySize">13</x:Double><x:Double x:Key="ClubBodyLineHeight">18</x:Double>
+    <x:Double x:Key="ClubControlHeight">28</x:Double><x:Double x:Key="ClubNavigationSize">14</x:Double>
+    <Thickness x:Key="ClubButtonPadding">10,3</Thickness><Thickness x:Key="ClubInputPadding">7,3</Thickness>
+  </Styles.Resources>
   <Style Selector="Window">
     <Setter Property="Background" Value="{DynamicResource ClubBackground}" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" />
     <Setter Property="FontFamily" Value="{DynamicResource ClubFontFamily}" /><Setter Property="FontSize" Value="13" />
   </Style>
-  <Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
+  <Style Selector="TextBlock"><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /><Setter Property="LineHeight" Value="{StaticResource ClubBodyLineHeight}" /></Style>
+  <Style Selector="AccessText"><Setter Property="LineHeight" Value="{StaticResource ClubBodyLineHeight}" /></Style>
+  <Style Selector="UserControl, MenuItem, ToolTip, ComboBoxItem"><Setter Property="FontFamily" Value="{DynamicResource ClubFontFamily}" /><Setter Property="FontSize" Value="{StaticResource ClubBodySize}" /></Style>
   <Style Selector="Border.card">
     <Setter Property="Background" Value="{DynamicResource ClubSurface}" /><Setter Property="BorderBrush" Value="{DynamicResource ClubBorder}" />
     <Setter Property="BorderThickness" Value="1" /><Setter Property="CornerRadius" Value="6" /><Setter Property="Padding" Value="15" /><Setter Property="BoxShadow" Value="0 0 3 0 #15000000" />
   </Style>
-  <Style Selector="TextBlock.pageTitle"><Setter Property="FontSize" Value="20" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
-  <Style Selector="TextBlock.sectionTitle"><Setter Property="FontSize" Value="14" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="TextBlock.pageTitle"><Setter Property="FontSize" Value="20" /><Setter Property="LineHeight" Value="28" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="TextBlock.sectionTitle"><Setter Property="FontSize" Value="14" /><Setter Property="LineHeight" Value="20" /><Setter Property="FontWeight" Value="SemiBold" /></Style>
+  <Style Selector="TextBlock.caption"><Setter Property="FontSize" Value="11" /><Setter Property="LineHeight" Value="16" /></Style>
+  <Style Selector="TextBlock.secondary"><Setter Property="FontSize" Value="12" /><Setter Property="LineHeight" Value="18" /></Style>
+  <Style Selector="TextBlock.navigationLabel"><Setter Property="FontSize" Value="{StaticResource ClubNavigationSize}" /><Setter Property="LineHeight" Value="20" /><Setter Property="VerticalAlignment" Value="Center" /></Style>
+  <Style Selector="TextBlock.status"><Setter Property="IsVisible" Value="{Binding Text, RelativeSource={RelativeSource Self}, Converter={x:Static conv:StringConverters.IsNotNullOrEmpty}}" /></Style>
   <Style Selector="TextBlock.muted"><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
   <Style Selector="TextBlock.label"><Setter Property="FontWeight" Value="Normal" /><Setter Property="Margin" Value="0,4,0,3" /></Style>
   <Style Selector="TextBlock.contextHeading"><Setter Property="FontSize" Value="12" /><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /><Setter Property="Margin" Value="13,15,8,5" /></Style>
   <Style Selector="TextBlock.capability"><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /><Setter Property="FontSize" Value="12" /><Setter Property="TextWrapping" Value="Wrap" /></Style>
   <Style Selector="Button">
-    <Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="11,5" /><Setter Property="CornerRadius" Value="3" />
+    <Setter Property="MinHeight" Value="{StaticResource ClubControlHeight}" /><Setter Property="Padding" Value="{StaticResource ClubButtonPadding}" /><Setter Property="CornerRadius" Value="3" />
     <Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /><Setter Property="BorderBrush" Value="{DynamicResource ClubForeground}" /><Setter Property="BorderThickness" Value="1" />
     <Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="VerticalContentAlignment" Value="Center" />
     <Setter Property="Template"><ControlTemplate><ContentPresenter Name="PART_ContentPresenter" Foreground="{TemplateBinding Foreground}" FontFamily="{TemplateBinding FontFamily}" FontSize="{TemplateBinding FontSize}" FontWeight="{TemplateBinding FontWeight}" Content="{TemplateBinding Content}" ContentTemplate="{TemplateBinding ContentTemplate}" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="{TemplateBinding CornerRadius}" Padding="{TemplateBinding Padding}" HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}" /></ControlTemplate></Setter>
@@ -25,18 +36,26 @@
   <Style Selector="Button:disabled"><Setter Property="Opacity" Value="0.5" /></Style>
   <Style Selector="Button.primary"><Setter Property="Foreground" Value="{DynamicResource ClubAccent}" /><Setter Property="BorderBrush" Value="{DynamicResource ClubAccent}" /></Style>
   <Style Selector="Button.flat"><Setter Property="BorderThickness" Value="0" /></Style>
+  <Style Selector="Button.icon"><Setter Property="Width" Value="28" /><Setter Property="Height" Value="28" /><Setter Property="Padding" Value="0" /></Style>
+  <Style Selector="Button:focus-visible /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="BorderBrush" Value="{DynamicResource ClubSelectionForeground}" /></Style>
+  <Style Selector="MenuItem"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="10,4" /></Style>
+  <Style Selector="Button, ComboBox, CheckBox, RadioButton"><Setter Property="ToolTip.ShowOnDisabled" Value="True" /></Style>
+  <Style Selector="MenuFlyoutPresenter, ContextMenu"><Setter Property="FontFamily" Value="{DynamicResource ClubFontFamily}" /><Setter Property="FontSize" Value="13" /><Setter Property="Background" Value="{DynamicResource ClubSurface}" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /><Setter Property="BorderBrush" Value="{DynamicResource ClubBorder}" /></Style>
   <Style Selector="TextBox">
-    <Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="7,3" /><Setter Property="CornerRadius" Value="3" /><Setter Property="BorderThickness" Value="1" />
+    <Setter Property="MinHeight" Value="{StaticResource ClubControlHeight}" /><Setter Property="Padding" Value="{StaticResource ClubInputPadding}" /><Setter Property="VerticalContentAlignment" Value="Center" /><Setter Property="CornerRadius" Value="3" /><Setter Property="BorderThickness" Value="1" />
     <Setter Property="BorderBrush" Value="{DynamicResource ClubInputBorder}" /><Setter Property="Background" Value="{DynamicResource ClubSidebar}" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" />
     <Setter Property="CaretBrush" Value="{DynamicResource ClubForeground}" /><Setter Property="PlaceholderForeground" Value="{DynamicResource ClubMuted}" /><Setter Property="SelectionBrush" Value="{DynamicResource ClubSelection}" /><Setter Property="SelectionForegroundBrush" Value="{DynamicResource ClubSelectionForeground}" />
   </Style>
   <Style Selector="ComboBox">
-    <Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="7,3" /><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="CornerRadius" Value="3" />
+    <Setter Property="MinHeight" Value="{StaticResource ClubControlHeight}" /><Setter Property="Padding" Value="{StaticResource ClubInputPadding}" /><Setter Property="VerticalContentAlignment" Value="Center" /><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="CornerRadius" Value="3" />
     <Setter Property="BorderBrush" Value="{DynamicResource ClubInputBorder}" /><Setter Property="Background" Value="{DynamicResource ClubSidebar}" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /><Setter Property="PlaceholderForeground" Value="{DynamicResource ClubMuted}" />
   </Style>
+  <Style Selector="TextBox[AcceptsReturn=False] /template/ TextPresenter#PART_TextPresenter"><Setter Property="LineHeight" Value="18" /></Style>
+  <Style Selector="TextBox[AcceptsReturn=True]"><Setter Property="VerticalContentAlignment" Value="Top" /><Setter Property="Padding" Value="7,6" /></Style>
   <Style Selector="NumericUpDown"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="7,3" /><Setter Property="CornerRadius" Value="3" /><Setter Property="BorderBrush" Value="{DynamicResource ClubInputBorder}" /><Setter Property="Background" Value="{DynamicResource ClubSidebar}" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /><Setter Property="PlaceholderForeground" Value="{DynamicResource ClubMuted}" /></Style>
   <Style Selector="CheckBox"><Setter Property="MinHeight" Value="24" /><Setter Property="Padding" Value="0" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
   <Style Selector="RadioButton"><Setter Property="MinHeight" Value="24" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
+  <Style Selector="CheckBox:not(:disabled) /template/ ContentPresenter#PART_ContentPresenter, CheckBox:disabled /template/ ContentPresenter#PART_ContentPresenter, RadioButton:not(:disabled) /template/ ContentPresenter#PART_ContentPresenter, RadioButton:disabled /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Margin" Value="8,0,0,0" /><Setter Property="VerticalAlignment" Value="Center" /></Style>
   <!-- Fluent 12.1.5 templates, NuGet repository commit 5825bf8c66fba0c11e67c980d8ece6444576bffa.
        Keep the framework templates and interaction states; replace their part-level color setters.
        The enabled-state activators also cover rest: ordinary styles rank below template values. -->
@@ -121,8 +140,8 @@
   <Style Selector="ToggleButton.topNavigation:checked TextBlock"><Setter Property="Foreground" Value="{DynamicResource ClubTitleSelectionForeground}" /></Style>
   <Style Selector="Path.navigationIcon"><Setter Property="Width" Value="16" /><Setter Property="Height" Value="16" /><Setter Property="Stretch" Value="Uniform" /><Setter Property="StrokeThickness" Value="1.5" /><Setter Property="Stroke" Value="{DynamicResource ClubTitleForeground}" /></Style>
   <Style Selector="ToggleButton.topNavigation:checked Path.navigationIcon"><Setter Property="Stroke" Value="{DynamicResource ClubTitleSelectionForeground}" /></Style>
-  <Style Selector="ToggleButton.contextNavigation"><Setter Property="MinHeight" Value="32" /><Setter Property="Padding" Value="15,5" /><Setter Property="CornerRadius" Value="0" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
-  <Style Selector="ToggleButton.contextNavigation:checked"><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}" /><Setter Property="BorderThickness" Value="4,0,0,0" /><Setter Property="BorderBrush" Value="{DynamicResource ClubSelectionForeground}" /><Setter Property="Padding" Value="11,5,15,5" /></Style>
+  <Style Selector="ToggleButton.contextNavigation"><Setter Property="MinHeight" Value="36" /><Setter Property="Padding" Value="14,0" /><Setter Property="FontSize" Value="14" /><Setter Property="CornerRadius" Value="0" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
+  <Style Selector="ToggleButton.contextNavigation:checked"><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}" /><Setter Property="BorderThickness" Value="3,0,0,0" /><Setter Property="BorderBrush" Value="{DynamicResource ClubSelectionForeground}" /><Setter Property="Padding" Value="11,0,14,0" /></Style>
   <Style Selector="ToggleButton.contextNavigation:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource ClubHover}" /></Style>
   <Style Selector="ToggleButton.contextNavigation /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.contextNavigation:checked /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /><Setter Property="BorderBrush" Value="{DynamicResource ClubSelectionForeground}" /></Style>
   <Style Selector="ToggleButton.contextNavigation:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.contextNavigation:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.contextNavigation:pressed /template/ ContentPresenter#PART_ContentPresenter, ToggleButton.contextNavigation:checked:pressed /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="{DynamicResource ClubHover}" /><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}" /><Setter Property="BorderBrush" Value="{DynamicResource ClubSelectionForeground}" /></Style>
@@ -130,6 +149,9 @@
   <Style Selector="ToggleButton.contextNavigation:checked TextBlock"><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}" /></Style>
   <Style Selector="Button.primary TextBlock:not(.muted)"><Setter Property="Foreground" Value="{DynamicResource ClubAccent}" /></Style>
   <Style Selector="Path.contextIcon"><Setter Property="Width" Value="18" /><Setter Property="Height" Value="18" /><Setter Property="Stretch" Value="Uniform" /><Setter Property="StrokeThickness" Value="1.5" /><Setter Property="Stroke" Value="{DynamicResource ClubForeground}" /></Style>
+  <Style Selector="views|ClubIcon"><Setter Property="VerticalAlignment" Value="Center" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
+  <Style Selector="views|ClubIcon.contextIcon"><Setter Property="Width" Value="20" /><Setter Property="Height" Value="20" /><Setter Property="HorizontalAlignment" Value="Left" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
+  <Style Selector="Button.contextNavigation.selected views|ClubIcon.contextIcon, Button.worldNavigation.selected views|ClubIcon.contextIcon, ListBoxItem:selected views|ClubIcon.contextIcon"><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}" /></Style>
   <Style Selector="ToggleButton.contextNavigation:checked Path.contextIcon"><Setter Property="Stroke" Value="{DynamicResource ClubSelectionForeground}" /></Style>
   <Style Selector="Button.windowControl"><Setter Property="MinWidth" Value="32" /><Setter Property="Width" Value="32" /><Setter Property="Height" Value="40" /><Setter Property="Padding" Value="8" /><Setter Property="BorderThickness" Value="0" /><Setter Property="Foreground" Value="{DynamicResource ClubTitleForeground}" /></Style>
   <Style Selector="Button.windowControl:pointerover /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="#25FFFFFF" /></Style>

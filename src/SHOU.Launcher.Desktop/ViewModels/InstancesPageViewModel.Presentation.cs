@@ -22,7 +22,7 @@ public sealed partial class InstancesPageViewModel
     public string PresentationSummary => _presentationDirty ? "个性化有未保存的修改。" : SelectedInstance?.Presentation?.Description ?? "";
     public string FavoriteCaption => _presentationFavorite ? "移出收藏夹" : "加入收藏夹";
     public string LaunchCountLabel => (SelectedInstance?.Presentation?.LaunchCount ?? 0).ToString("N0", System.Globalization.CultureInfo.CurrentCulture) + " 次";
-    public string InstanceIconPath => Themes.ClubIcons.ForInstanceIcon(PresentationIcon?.Id == "auto" ? SelectedInstance?.Loader : PresentationIcon?.Id);
+    public string InstanceIconKind => Themes.ClubIcons.ForInstanceIcon(PresentationIcon?.Id == "auto" ? SelectedInstance?.Loader : PresentationIcon?.Id);
     public bool FavoritesOnly { get => _favoritesOnly; set { if (SetProperty(ref _favoritesOnly, value)) FilterInstances(); } }
     private bool _favoritesOnly;
     public AsyncRelayCommand SavePresentationCommand { get; private set; } = null!;
@@ -41,7 +41,7 @@ public sealed partial class InstancesPageViewModel
     private void PresentationChanged()
     {
         _presentationDirty = true;
-        OnPropertyChanged(nameof(PresentationSummary)); OnPropertyChanged(nameof(FavoriteCaption)); OnPropertyChanged(nameof(InstanceIconPath));
+        OnPropertyChanged(nameof(PresentationSummary)); OnPropertyChanged(nameof(FavoriteCaption)); OnPropertyChanged(nameof(InstanceIconKind));
     }
     private void RefreshPresentation()
     {
@@ -60,7 +60,7 @@ public sealed partial class InstancesPageViewModel
             }
             finally { _presentationRefreshing = false; }
         }
-        foreach (var name in new[] { nameof(PresentationSummary), nameof(FavoriteCaption), nameof(LaunchCountLabel), nameof(InstanceIconPath) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(PresentationSummary), nameof(FavoriteCaption), nameof(LaunchCountLabel), nameof(InstanceIconKind) }) OnPropertyChanged(name);
     }
     private async Task SavePresentationAsync()
     {

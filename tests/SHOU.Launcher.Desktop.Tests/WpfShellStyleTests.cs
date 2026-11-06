@@ -175,7 +175,7 @@ public sealed class WpfShellStyleTests
     {
         foreach (var key in new[] { "overview", "settings", "modify", "export", "worlds", "screenshots", "mods", "resourcepacks", "shaders", "schematics", "servers", "relations" })
         {
-            var bounds = Geometry.Parse(ClubIcons.ForInstanceSection(key)).Bounds;
+            var bounds = ClubIcon.GetShapes(ClubIcons.ForInstanceSection(key)).Select(g => g.Bounds).Aggregate((a, b) => a.Union(b));
             Assert.True(double.IsFinite(bounds.Width) && double.IsFinite(bounds.Height) && bounds.Width > 0 && bounds.Height > 0);
         }
         var previousTheme = Application.Current!.RequestedThemeVariant;

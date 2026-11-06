@@ -8,7 +8,7 @@ namespace SHOU.Launcher.Desktop.ViewModels;
 
 public sealed record InstanceSectionChoice(string Key, string Title, string Icon)
 {
-    public string IconPath => Themes.ClubIcons.ForInstanceSection(Key);
+    public string IconKind => Themes.ClubIcons.ForInstanceSection(Key);
     public bool StartsResources => Key == "worlds";
 }
 public sealed partial class InstancesPageViewModel

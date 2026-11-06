@@ -17,7 +17,7 @@
         <Grid Name="TitleBarLayout" ColumnDefinitions="300,*,112">
           <StackPanel Name="WindowBrand" Orientation="Horizontal" Spacing="9" Margin="16,0,0,0" HorizontalAlignment="Left" VerticalAlignment="Center" IsVisible="{Binding !IsContextPage}">
             <Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="26" Height="26" />
-            <TextBlock Name="WindowBrandTitle" Text="{Binding WindowTitle}" Foreground="{DynamicResource ClubTitleForeground}" FontSize="13" FontWeight="Bold" VerticalAlignment="Center" MaxWidth="150" TextTrimming="CharacterEllipsis" />
+            <TextBlock Name="WindowBrandTitle" Text="{Binding WindowTitle}" Foreground="{DynamicResource ClubTitleForeground}" LineHeight="18" FontSize="13" FontWeight="Bold" VerticalAlignment="Center" MaxWidth="150" TextTrimming="CharacterEllipsis" />
             <Border Name="ShouBadge" Background="{DynamicResource ClubTitleForeground}" CornerRadius="3" Width="40" Height="24" VerticalAlignment="Center">
               <TextBlock Text="SHOU" Foreground="{DynamicResource ClubAccent}" FontFamily="Arial, Helvetica, sans-serif" FontSize="12" FontWeight="Bold" LineHeight="16" VerticalAlignment="Center" HorizontalAlignment="Center" />
             </Border>
@@ -37,8 +37,8 @@
             </ToggleButton>
           </StackPanel>
           <Grid Name="ContextHeader" Grid.ColumnSpan="2" ColumnDefinitions="32,*" VerticalAlignment="Center" Margin="10,0" IsVisible="{Binding IsContextPage}">
-            <Button Name="BackNavigationButton" Classes="windowControl" Command="{Binding BackCommand}" AutomationProperties.Name="返回"><Path Data="M 10,1 L 3,8 L 10,15 M 3,8 L 17,8" Width="16" Height="16" Stretch="Uniform" Stroke="{DynamicResource ClubTitleForeground}" StrokeThickness="1.5" /></Button>
-            <TextBlock Name="ContextTitle" Grid.Column="1" Margin="6,0,0,0" Text="{Binding NavigationTitle}" Foreground="{DynamicResource ClubTitleForeground}" FontSize="14" VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
+            <Button Name="BackNavigationButton" Classes="windowControl" Command="{Binding BackCommand}" AutomationProperties.Name="返回"><views:ClubIcon Kind="arrow-left" Width="16" Height="16" Foreground="{DynamicResource ClubTitleForeground}" /></Button>
+            <TextBlock Name="ContextTitle" Grid.Column="1" Margin="6,0,0,0" Text="{Binding NavigationTitle}" Foreground="{DynamicResource ClubTitleForeground}" LineHeight="20" FontSize="14" VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
           </Grid>
           <StackPanel Name="CustomWindowControls" Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,10,0">
             <Button Name="MinimizeWindowButton" Classes="windowControl" Click="MinimizeWindow_Click" AutomationProperties.Name="最小化"><Path Data="M 0,0 L 12,0" Width="12" Height="1" Stroke="{DynamicResource ClubTitleForeground}" StrokeThickness="1.5" /></Button>

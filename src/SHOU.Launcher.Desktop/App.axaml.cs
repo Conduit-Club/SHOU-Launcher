@@ -19,6 +19,8 @@ public partial class App : Application
         // select a Latin face and let the platform choose an unrelated Chinese fallback.
         Resources["ClubFontFamily"] = new Avalonia.Media.FontFamily(OperatingSystem.IsWindows() ? "Microsoft YaHei UI"
             : OperatingSystem.IsMacOS() ? "PingFang SC" : "Noto Sans CJK SC");
+        Resources["ClubMonospaceFontFamily"] = new Avalonia.Media.FontFamily(OperatingSystem.IsWindows() ? "Consolas"
+            : OperatingSystem.IsMacOS() ? "Menlo" : "monospace");
     }
     public override void OnFrameworkInitializationCompleted()
     {

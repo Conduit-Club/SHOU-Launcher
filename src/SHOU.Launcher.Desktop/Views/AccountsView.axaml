@@ -1,14 +1,11 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:local="using:SHOU.Launcher.Desktop.Views" x:Class="SHOU.Launcher.Desktop.Views.AccountsView" FontSize="13" AttachedToVisualTree="AccountToolbarAttached" DetachedFromVisualTree="AccountToolbarDetached" DataContextChanged="AccountToolbarDataContextChanged">
+             xmlns:local="using:SHOU.Launcher.Desktop.Views" xmlns:views="using:SHOU.Launcher.Desktop.Views" x:Class="SHOU.Launcher.Desktop.Views.AccountsView" FontSize="13" AttachedToVisualTree="AccountToolbarAttached" DetachedFromVisualTree="AccountToolbarDetached" DataContextChanged="AccountToolbarDataContextChanged">
   <UserControl.Resources><local:AccountsSourceLabelConverter x:Key="AccountSourceLabel" /></UserControl.Resources>
   <UserControl.Styles>
     <Style Selector="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /><Setter Property="LineHeight" Value="18" /></Style>
-    <Style Selector="Button"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="8,4" /></Style>
     <Style Selector="Button.accountChannel"><Setter Property="Height" Value="34" /><Setter Property="Padding" Value="4,3" /><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="BorderBrush" Value="{DynamicResource ClubInputBorder}" /><Setter Property="BorderThickness" Value="1" /></Style>
     <Style Selector="Button.accountChannel.selected"><Setter Property="BorderThickness" Value="2" /><Setter Property="BorderBrush" Value="{DynamicResource ClubAccent}" /><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
     <Style Selector="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
-    <Style Selector="TextBox"><Setter Property="MinHeight" Value="28" /><Setter Property="Padding" Value="6,4" /><Setter Property="MinWidth" Value="0" /></Style>
-    <Style Selector="CheckBox"><Setter Property="MinHeight" Value="24" /></Style>
     <Style Selector="TextBlock.accountHint"><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /><Setter Property="FontSize" Value="11" /></Style>
     <Style Selector="Path.accountAvatar"><Setter Property="Stroke" Value="{DynamicResource ClubForeground}" /><Setter Property="StrokeThickness" Value="1.5" /><Setter Property="Stretch" Value="Uniform" /></Style>
   </UserControl.Styles>
@@ -72,14 +69,14 @@
       <StackPanel Name="AddAccountPanel" IsVisible="{Binding IsAddingAccount}" Spacing="8">
         <TextBlock Text="{Binding AddingAccountSummary}" Classes="accountHint" />
         <StackPanel Name="OfflineAccountForm" IsVisible="{Binding IsOffline}" Spacing="11" Margin="0,10,0,0">
-          <Grid ColumnDefinitions="50,*"><TextBlock Text="玩家 ID" VerticalAlignment="Center" /><TextBox Name="OfflinePlayerName" Grid.Column="1" Text="{Binding PlayerName}" IsEnabled="{Binding CanEdit}" /></Grid>
+          <Grid ColumnDefinitions="50,*"><TextBlock Text="玩家 ID" VerticalAlignment="Center"  ToolTip.Tip="采用名称生成的离线 UUID；旧版与自定义 UUID 尚未接入。离线角色不能进入需要认证的服务器。"/><TextBox Name="OfflinePlayerName" Grid.Column="1" Text="{Binding PlayerName}" IsEnabled="{Binding CanEdit}" /></Grid>
           <TextBlock Text="UUID 标准" FontWeight="SemiBold" HorizontalAlignment="Center" />
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12"><RadioButton Content="行业规范" IsChecked="True" IsEnabled="False" /><RadioButton Content="旧版" IsEnabled="False" /><RadioButton Content="自定义" IsEnabled="False" /></StackPanel>
-          <TextBlock Text="采用名称生成的离线 UUID；旧版与自定义 UUID 尚未接入。离线角色不能进入需要认证的服务器。" Classes="accountHint" />
+
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="返回" Command="{Binding EndAddAccountCommand}" /><Button Name="AddOfflineButton" Content="创建" Command="{Binding AddOfflineCommand}" Classes="primary" /></StackPanel>
         </StackPanel>
         <StackPanel Name="MicrosoftAccountForm" IsVisible="{Binding IsMicrosoft}" Spacing="15" Margin="0,14,0,0">
-          <Path Classes="accountAvatar" Width="42" Height="46" HorizontalAlignment="Center" Data="M10,1 A4,4 0 1 1 9.9,1 M3,19 C3,10 17,10 17,19" />
+          <views:ClubIcon Classes="accountAvatar" Width="42" Height="46" HorizontalAlignment="Center" Kind="user" />
           <Button Name="LoginMicrosoftButton" Classes="primary" Content="开始正版验证" Command="{Binding LoginMicrosoftCommand}" HorizontalAlignment="Center" />
           <TextBlock Text="在微软官网输入设备代码完成授权。" Classes="accountHint" TextAlignment="Center" />
           <StackPanel Name="LegacyMicrosoftImportPanel" IsVisible="{Binding SupportsLegacyMicrosoftImport}" Spacing="8">
@@ -114,7 +111,7 @@
         </DataTemplate></ContentControl.ContentTemplate>
       </ContentControl>
       <Border Name="DeviceCodePanel" IsVisible="{Binding HasDeviceChallenge}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8">
-        <StackPanel Spacing="8"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" FontSize="24" FontWeight="SemiBold" LetterSpacing="2" HorizontalAlignment="Center" /><TextBlock Text="{Binding DeviceInstructions}" Classes="accountHint" /><WrapPanel><Button Content="打开微软授权页" Command="{Binding OpenVerificationCommand}" Margin="0,0,5,4" /><Button Content="复制代码" Click="CopyDeviceCode_Click" Margin="0,0,5,4" /></WrapPanel><TextBlock Text="可在底部取消当前授权。离开启动或账户页会结束等待。" Classes="accountHint" /></StackPanel>
+        <StackPanel Spacing="8"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" LineHeight="34" FontSize="24" FontWeight="SemiBold" LetterSpacing="2" HorizontalAlignment="Center" /><TextBlock Text="{Binding DeviceInstructions}" Classes="accountHint" /><WrapPanel><Button Content="打开微软授权页" Command="{Binding OpenVerificationCommand}" Margin="0,0,5,4" /><Button Content="复制代码" Click="CopyDeviceCode_Click" Margin="0,0,5,4" /></WrapPanel><TextBlock Text="可在底部取消当前授权。离开启动或账户页会结束等待。" Classes="accountHint" /></StackPanel>
       </Border>
     </StackPanel>
   </ScrollViewer>

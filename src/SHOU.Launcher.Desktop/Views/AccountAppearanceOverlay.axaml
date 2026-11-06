@@ -9,8 +9,8 @@
   <Grid Background="#66000000" KeyboardNavigation.TabNavigation="Cycle">
     <Border Name="AccountAppearanceCard" Background="{DynamicResource ClubSurface}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="9" BoxShadow="0 8 26 0 #55000000" Padding="22,18" Margin="28,22" MaxWidth="620" MaxHeight="650" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
       <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="9">
-        <Grid ColumnDefinitions="*,Auto"><TextBlock Name="AccountAppearanceTitle" Text="{Binding AccountAppearanceDialogTitle}" FontSize="23" FontWeight="Bold" Foreground="{DynamicResource ClubAccent}" /><Button Name="CloseAccountAppearanceButton" Grid.Column="1" Content="关闭" Command="{Binding CloseAppearanceCommand}" Padding="10,2" MinHeight="27" /></Grid>
-        <StackPanel Grid.Row="1" Spacing="2"><TextBlock Text="{Binding AccountAppearancePlayer}" FontSize="14" /><TextBlock Text="{Binding AccountAppearanceSummary}" Classes="appearanceHint" /><TextBlock Text="{Binding AccountAppearanceStatus}" Classes="appearanceHint" IsVisible="{Binding HasAccountAppearanceMessage}" /></StackPanel>
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Name="AccountAppearanceTitle" Text="{Binding AccountAppearanceDialogTitle}" LineHeight="32" FontSize="23" FontWeight="Bold" Foreground="{DynamicResource ClubAccent}" /><Button Name="CloseAccountAppearanceButton" Grid.Column="1" Content="关闭" Command="{Binding CloseAppearanceCommand}" Padding="10,2" MinHeight="27" /></Grid>
+        <StackPanel Grid.Row="1" Spacing="2"><TextBlock Text="{Binding AccountAppearancePlayer}" LineHeight="20" FontSize="14" /><TextBlock Text="{Binding AccountAppearanceSummary}" Classes="appearanceHint" /><TextBlock Text="{Binding AccountAppearanceStatus}" Classes="appearanceHint" IsVisible="{Binding HasAccountAppearanceMessage}" /></StackPanel>
         <Grid Grid.Row="2">
           <Grid IsVisible="{Binding IsAccountPreviewPage}">
             <Border Name="AccountPreviewViewport" Background="{DynamicResource ClubSelection}" CornerRadius="6" ClipToBounds="True"><local:AccountSkinPreviewControl Name="AccountSkinPreview" Skin="{Binding AccountSkin}" Cape="{Binding PreviewCapeTexture}" Model="{Binding AccountSkinModel}" ShowOuterLayer="{Binding ShowSkinOuterLayer}" ShowCape="{Binding ShowPreviewCape}" MinHeight="160" /></Border>
@@ -28,9 +28,7 @@
             <StackPanel Grid.Column="1" Spacing="14" VerticalAlignment="Center">
             <TextBlock Text="{Binding AccountAppearanceCapability}" Classes="appearanceHint" />
             <Grid ColumnDefinitions="70,*"><TextBlock Text="皮肤模型" VerticalAlignment="Center" /><ComboBox Name="LocalSkinModelSelector" Grid.Column="1" ItemsSource="{Binding SkinModelChoices}" SelectedItem="{Binding SelectedLocalSkinModel}" IsEnabled="{Binding CanChooseLocalSkin}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
-            <TextBlock Text="选择 64×64 或 64×32 的本机 PNG（最大 2 MiB）。选择后保存到当前离线角色；取消不改动原皮肤。" Classes="appearanceHint" />
-            <StackPanel Spacing="8"><Button Name="PickOfflineSkinButton" Classes="primary" Content="选择并保存 PNG" IsEnabled="{Binding CanChooseLocalSkin}" Click="PickOfflineSkin_Click" /><Button Name="SaveLocalSkinPngButton" Content="另存当前皮肤" IsEnabled="{Binding CanSaveSkinPng}" Click="SaveSkinPng_Click" /></StackPanel>
-            <TextBlock Text="左侧可拖动旋转、滚轮缩放。" Classes="appearanceHint" />
+            <StackPanel Spacing="8"><Button Name="PickOfflineSkinButton" Classes="primary" Content="选择并保存 PNG" ToolTip.Tip="选择 64×64 或 64×32 的本机 PNG（最大 2 MiB）。选择后保存到当前离线角色；取消不改动原皮肤。" IsEnabled="{Binding CanChooseLocalSkin}" Click="PickOfflineSkin_Click" /><Button Name="SaveLocalSkinPngButton" Content="另存当前皮肤" IsEnabled="{Binding CanSaveSkinPng}" Click="SaveSkinPng_Click" /></StackPanel>
             </StackPanel>
           </Grid>
         </Grid>
@@ -38,7 +36,7 @@
           <StackPanel Orientation="Horizontal" Spacing="14"><CheckBox Name="PreviewOuterLayerCheckBox" Content="皮肤外层" IsChecked="{Binding ShowSkinOuterLayer}" /><CheckBox Name="PreviewCapeCheckBox" Content="显示披风" IsChecked="{Binding ShowPreviewCape}" /></StackPanel>
           <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"><Button Name="ResetAccountPreviewButton" Content="复位" Click="ResetPreview_Click" /><Button Name="RefreshAccountPreviewButton" Content="刷新" Command="{Binding RefreshAppearanceCommand}" /></StackPanel>
         </Grid>
-        <Grid Grid.Row="4" ColumnDefinitions="*,Auto"><TextBlock Text="拖动旋转 · 滚轮缩放 · 方向键旋转 · Esc 关闭" IsVisible="{Binding IsAccountPreviewPage}" Classes="appearanceHint" VerticalAlignment="Center" /><TextBlock Text="{Binding AccountAppearanceCapability}" IsVisible="{Binding IsAccountCapePage}" Classes="appearanceHint" /><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"><Button Content="刷新外观" Command="{Binding RefreshAppearanceCommand}" IsVisible="{Binding !IsAccountPreviewPage}" /><Button Content="取消读取" Command="{Binding CancelAppearanceReadCommand}" IsVisible="{Binding IsAccountAppearanceBusy}" /></StackPanel></Grid>
+        <Grid Grid.Row="4" ColumnDefinitions="*,Auto"><TextBlock Text="拖动旋转 · 滚轮缩放 · Esc 关闭" ToolTip.Tip="也可使用方向键旋转。" IsVisible="{Binding IsAccountPreviewPage}" Classes="appearanceHint" VerticalAlignment="Center" /><TextBlock Text="{Binding AccountAppearanceCapability}" IsVisible="{Binding IsAccountCapePage}" Classes="appearanceHint" /><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"><Button Content="刷新外观" Command="{Binding RefreshAppearanceCommand}" IsVisible="{Binding !IsAccountPreviewPage}" /><Button Content="取消读取" Command="{Binding CancelAppearanceReadCommand}" IsVisible="{Binding IsAccountAppearanceBusy}" /></StackPanel></Grid>
       </Grid>
     </Border>
   </Grid>

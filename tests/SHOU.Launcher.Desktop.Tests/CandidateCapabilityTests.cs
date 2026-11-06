@@ -62,7 +62,7 @@ public sealed class CandidateCapabilityTests
             Assert.Equal(0, fake.SaveCalls); Assert.Empty(fake.SavedSecretKinds);
             Assert.Equal(existingRemote, fake.Snapshot.Settings.Aria2!.Endpoint);
             Assert.Equal("System", fake.Snapshot.Settings.Theme);
-            Assert.Contains("回退内部下载器", Find<TextBlock>(window, "Aria2CapabilityHint").Text);
+            Assert.Contains("回退内部下载器", Assert.IsType<string>(ToolTip.GetTip(Find<TextBlock>(window, "Aria2SectionTitle"))));
             Find<TextBox>(window, "Aria2EndpointSetting").Text = "http://[::1]:6800/jsonrpc"; Pump(window);
             await vm.Settings.SaveCommand.ExecuteAsync(null); Pump(window);
             Assert.False(vm.HasError); Assert.Equal(1, fake.SaveCalls);

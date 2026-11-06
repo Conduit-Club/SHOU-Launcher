@@ -60,7 +60,8 @@ public sealed class WpfShellCompositionTests
             Near(149, Find<Border>(window, "SkinDownloadCard").Bounds.Height);
             Near(84, Find<Border>(window, "ServerQueryCard").Bounds.Height);
             Assert.False(Find<Button>(window, "CustomDownloadButton").IsEffectivelyEnabled);
-            Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "自定义文件下载尚未迁移；当前可打开数据目录。" && t.IsEffectivelyVisible);
+            Assert.Contains("尚未接入", Assert.IsType<string>(ToolTip.GetTip(Find<TextBlock>(window, "CustomDownloadTitle"))));
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>(), t => t.Text == "自定义文件下载尚未迁移；当前可打开数据目录。" && t.IsEffectivelyVisible);
         }
         finally { window.Close(); }
     }

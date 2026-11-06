@@ -3,7 +3,7 @@
   <Grid Background="#66000000" KeyboardNavigation.TabNavigation="Cycle">
     <Border Name="ClubUpdatesCard" Background="{DynamicResource ClubSurface}" CornerRadius="9" Padding="28,20" Margin="24" MaxWidth="700" MaxHeight="440" BoxShadow="0 8 24 0 #55000000">
       <Grid RowDefinitions="Auto,3,Auto,*,Auto" RowSpacing="10">
-        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="社团更新日志" FontSize="23" FontWeight="Bold" Foreground="{DynamicResource ClubAccent}" /><Button Name="CloseClubUpdatesButton" Grid.Column="1" Content="关闭" Command="{Binding CloseUpdatesCommand}" /></Grid>
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Text="社团更新日志" LineHeight="32" FontSize="23" FontWeight="Bold" Foreground="{DynamicResource ClubAccent}" /><Button Name="CloseClubUpdatesButton" Grid.Column="1" Content="关闭" Command="{Binding CloseUpdatesCommand}" /></Grid>
         <Border Grid.Row="1" Background="{DynamicResource ClubAccent}" />
         <TextBlock Grid.Row="2" Name="ClubUpdatesStatus" Text="{Binding UpdatesStatus}" TextWrapping="Wrap" />
         <ScrollViewer Grid.Row="3" Name="ClubUpdatesScroller" HorizontalScrollBarVisibility="Disabled">
@@ -21,7 +21,7 @@
           </StackPanel>
         </ScrollViewer>
         <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-          <TextBlock Text="{Binding UpdatesCacheSummary}" VerticalAlignment="Center" FontSize="11" TextWrapping="Wrap" />
+          <TextBlock Text="{Binding UpdatesCacheSummary}" VerticalAlignment="Center" LineHeight="16" FontSize="11" TextWrapping="Wrap" />
           <Button Grid.Column="1" Content="社团网站" Command="{Binding OpenUpdatesWebsiteCommand}" />
           <Button Name="RefreshClubUpdatesButton" Grid.Column="2" Content="刷新" Command="{Binding RefreshUpdatesCommand}" />
         </Grid>

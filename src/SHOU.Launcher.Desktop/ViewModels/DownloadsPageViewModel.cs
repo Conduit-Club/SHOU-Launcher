@@ -40,7 +40,7 @@ public sealed class DownloadCategoryViewModel(DownloadsPageViewModel owner, stri
 {
     public string Id { get; } = id;
     public string Title { get; } = title;
-    public string IconPath { get; } = icon;
+    public string IconKind { get; } = icon;
     public bool IsSelected => owner.SelectedCategory.Id == Id;
     public RelayCommand SelectCommand { get; } = new(() => owner.SelectCategory(id));
     internal void RefreshSelection() => OnPropertyChanged(nameof(IsSelected));
@@ -147,6 +147,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private bool _catalogLoaded;
     private bool _catalogRequestActive, _catalogRequested;
     private string _catalogStatus = "正在准备 Minecraft 版本目录…";
+    private bool _requestMessageVisible, _catalogMessageVisible;
     private string? _catalogSourceConfiguration;
     private int _catalogSourceRevision;
     private bool _searchCompleted;
@@ -189,7 +190,10 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public bool CatalogAvailable => _catalog is not null;
     public bool CanQuery => !_disposed && CatalogAvailable && Owner.CanReadRemote;
     public bool IsLoading => _loading;
-    public string RequestStatus { get => _requestStatus; private set => SetProperty(ref _requestStatus, value); }
+    public string RequestStatus { get => _requestStatus; private set { if (SetProperty(ref _requestStatus, value)) OnPropertyChanged(nameof(ShowRequestStatus)); } }
+    public bool ShowRequestStatus => _requestMessageVisible;
+    private void SetRequestStatus(string message, bool visible = true)
+    { _requestMessageVisible = visible; RequestStatus = message; OnPropertyChanged(nameof(ShowRequestStatus)); }
     public string CatalogSource { get => _catalogSource; private set => SetProperty(ref _catalogSource, value); }
     public bool HasCatalog => LatestVersions.Count > 0 || VersionGroups.Count > 0;
     public ObservableCollection<GameCatalogRowViewModel> LatestVersions { get; } = [];
@@ -217,6 +221,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         : "名称可用。";
     public bool ValidInstallation => _selectedVersion is { CanInstall: true } && !string.IsNullOrWhiteSpace(InstallationName) && InstallationName.Trim().Length <= 80
         && ValidAdditionalLoader && !Owner.Snapshot.Instances.Any(i => string.Equals(i.Name, InstallationName.Trim(), StringComparison.OrdinalIgnoreCase));
+    public bool HasInstallationValidation => _createdInstanceId is null && !ValidInstallation;
     public string InstallationSummary => _selectedAdditionalLoader is { } loader ? $"Minecraft {SelectedVersionId} + {LoaderTitle(loader.Loader)} {loader.Version}"
         : _selectedFabric is { } fabric ? $"Minecraft {SelectedVersionId} + Fabric Loader {fabric.Version}" : $"Minecraft {SelectedVersionId} · 原版";
     public ObservableCollection<LoaderCatalogVersion> FabricVersions { get; } = [];
@@ -338,14 +343,15 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             _selectedCategory = selected;
             _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
             _searchOffset = 0; _searchCompleted = false; ClearProjectRows(Projects);
-            RequestStatus = id is "minecraft" or "installer-minecraft" ? _catalogStatus
-                : id == "world" ? SearchCapabilityReason : "输入条件后点击搜索。";
+            SetRequestStatus(id is "minecraft" or "installer-minecraft" ? _catalogStatus
+                : id == "world" ? SearchCapabilityReason : "输入条件后点击搜索。", id is "minecraft" or "installer-minecraft" && _catalogMessageVisible);
         }
         NotifyPage();
         OnNavigatedTo();
     }
     private void NotifyPage()
     {
+        OnPropertyChanged(nameof(ShowRequestStatus));
         foreach (var category in Categories) category.RefreshSelection();
         OnPropertyChanged(nameof(IsPackageDetail)); OnPropertyChanged(nameof(CatalogPurpose));
         NotifyContentInstallationPage();
@@ -355,7 +361,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private async Task<bool> QueryAsync(string label, int revision, Func<CancellationToken, Task> action)
     {
         if (!CanQuery) return false;
-        _loading = true; OnPropertyChanged(nameof(IsLoading)); RequestStatus = label + "…";
+        _loading = true; OnPropertyChanged(nameof(IsLoading)); SetRequestStatus(label + "…");
         try
         {
             var success = await Owner.RunAsync(label, async ct =>
@@ -364,10 +370,10 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
                 try { await action(lifetime.Token); }
                 catch (OperationCanceledException) when (_disposed && !ct.IsCancellationRequested) { }
             }, true);
-            if (!success && revision == _requestRevision) RequestStatus = Owner.ErrorMessage ?? "查询已取消，可重试。";
+            if (!success && revision == _requestRevision) SetRequestStatus(Owner.ErrorMessage ?? "查询已取消，可重试。");
             return success;
         }
-        finally { _loading = false; OnPropertyChanged(nameof(IsLoading)); NotifyCommands(); }
+        finally { _loading = false; OnPropertyChanged(nameof(IsLoading)); OnPropertyChanged(nameof(ShowRequestStatus)); NotifyCommands(); }
     }
     private async Task RefreshCatalogAsync(bool forceRefresh)
     {
@@ -392,7 +398,8 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
                 + (catalog.FromCache ? " · 本地缓存" : "") + (catalog.FetchedAt is { } date ? $" · 更新于 {date.LocalDateTime:yyyy/M/d HH:mm}" : "");
             _catalogStatus = (rows.Length == 0 ? "目录没有返回版本。" : $"已读取 {rows.Length} 个版本。")
                 + (catalog.Notice is { Length: > 0 } notice ? " " + notice : "");
-            if (IsCatalogPage) RequestStatus = _catalogStatus;
+            _catalogMessageVisible = rows.Length == 0 || !string.IsNullOrEmpty(catalog.Notice);
+            if (IsCatalogPage) SetRequestStatus(_catalogStatus, _catalogMessageVisible);
             OnPropertyChanged(nameof(HasCatalog)); NotifyCommands();
         }); }
         finally { _catalogRequestActive = false; NotifyCommands(); }
@@ -415,7 +422,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private void BackToList()
     {
         ++_requestRevision; _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
-        RequestStatus = IsCatalogPage ? _catalogStatus : _searchCompleted ? $"已返回 {Projects.Count} 项资源。" : "输入条件后点击搜索。";
+        SetRequestStatus(IsCatalogPage ? _catalogStatus : _searchCompleted ? $"已返回 {Projects.Count} 项资源。" : "输入条件后点击搜索。", IsCatalogPage && _catalogMessageVisible);
         NotifyPage();
     }
     private async Task RefreshFabricAsync()
@@ -434,7 +441,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     }
     private void NotifyInstallDraft()
     {
-        OnPropertyChanged(nameof(InstallationValidation)); OnPropertyChanged(nameof(ValidInstallation)); OnPropertyChanged(nameof(InstallationSummary));
+        OnPropertyChanged(nameof(InstallationValidation)); OnPropertyChanged(nameof(ValidInstallation)); OnPropertyChanged(nameof(HasInstallationValidation)); OnPropertyChanged(nameof(InstallationSummary));
         InstallVersionCommand?.NotifyCanExecuteChanged(); ClearFabricCommand?.NotifyCanExecuteChanged();
     }
     private async Task InstallVersionAsync()
@@ -466,7 +473,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             if (revision != _requestRevision) return;
             ClearProjectRows(Projects); foreach (var project in projects) Projects.Add(new(this, project));
             _searchOffset = offset; _searchCompleted = true;
-            RequestStatus = projects.Count == 0 ? "没有符合条件的资源，请调整搜索条件。" : $"已返回 {projects.Count} 项资源。";
+            SetRequestStatus(projects.Count == 0 ? "没有符合条件的资源，请调整搜索条件。" : $"已返回 {projects.Count} 项资源。", projects.Count == 0);
             OnPropertyChanged(nameof(HasProjects)); OnPropertyChanged(nameof(PageSummary)); NotifyCommands();
             using var images = CancellationTokenSource.CreateLinkedTokenSource(ct, _imageToken);
             await Task.WhenAll(Projects.ToArray().Select(p => p.LoadIconAsync(_catalog!, _imageGate, images.Token)));
@@ -493,7 +500,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             ReleaseGroups.Clear();
             foreach (var group in releases.OrderByDescending(r => r.Published).GroupBy(r => string.Join(" / ", r.Loaders) + " " + (r.GameVersions.Count > 3 ? $"{r.GameVersions[0]} 等 {r.GameVersions.Count} 个版本" : string.Join(" / ", r.GameVersions))))
                 ReleaseGroups.Add(new(group.Key.Trim(), group.Select(r => new ContentReleaseRowViewModel(r, r.Files.OrderByDescending(f => f.Primary).Select(f => new ContentFileRowViewModel(this, f, r)).ToArray())).ToArray()));
-            RequestStatus = releases.Count == 0 ? "没有匹配当前版本与加载器的文件。" : $"已读取 {releases.Count} 个资源版本。";
+            SetRequestStatus(releases.Count == 0 ? "没有匹配当前版本与加载器的文件。" : $"已读取 {releases.Count} 个资源版本。", releases.Count == 0);
             OnPropertyChanged(nameof(HasReleases)); NotifyCommands();
         });
     }
@@ -501,7 +508,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     {
         if (!CatalogAvailable) return;
         var success = await Owner.RunAsync("下载并校验资源", async ct => LastDownloadPath = await _catalog!.DownloadContentAsync(file, ct));
-        RequestStatus = success ? "文件已校验并保存到缓存；尚未自动装入实例或存档。" : Owner.ErrorMessage ?? "下载已取消，可重试。";
+        SetRequestStatus(success ? "文件已校验并保存到缓存；尚未自动装入实例或存档。" : Owner.ErrorMessage ?? "下载已取消，可重试。");
     }
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
@@ -565,7 +572,8 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             _catalogSourceConfiguration = snapshot.Settings.DownloadSourcesJson; ++_catalogSourceRevision;
             _catalogLoaded = false; _catalogRequested = true; _catalogStatus = "下载来源已更改，正在重新读取版本目录…";
             LatestVersions.Clear(); VersionGroups.Clear(); OnPropertyChanged(nameof(HasCatalog));
-            if (IsCatalogPage) RequestStatus = _catalogStatus;
+            _catalogMessageVisible = false;
+            if (IsCatalogPage) SetRequestStatus(_catalogStatus, false);
         }
         var ids = snapshot.Downloads.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
         for (var i = Tasks.Count - 1; i >= 0; i--) if (!ids.Contains(Tasks[i].Task.Id)) Tasks.RemoveAt(i);

@@ -32,7 +32,7 @@
               <TextBlock Text="当前步骤" Classes="muted" VerticalAlignment="Center" /><TextBlock Grid.Column="2" Text="{Binding Root.LaunchStage}" TextWrapping="Wrap" />
               <TextBlock Grid.Row="1" Text="验证方式" Classes="muted" Margin="0,6,0,0" /><TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Root.LaunchAuthentication}" Margin="0,6,0,0" TextWrapping="Wrap" />
             </Grid>
-            <TextBlock Text="{Binding Root.LaunchTransferSummary}" Classes="muted" FontSize="11" TextAlignment="Center" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding Root.LaunchTransferSummary}" Classes="muted" LineHeight="16" FontSize="11" TextAlignment="Center" TextWrapping="Wrap" />
           </StackPanel>
           <Button Name="CancelHomeLaunchButton" Grid.Row="1" Content="取消" Command="{Binding Root.CancelOperationCommand}" HorizontalAlignment="Stretch" Height="35" AutomationProperties.Name="取消本次游戏启动" />
         </Grid>
@@ -43,7 +43,7 @@
         <Border Name="ClubIntroductionCard" Classes="card" Padding="20" IsVisible="{Binding ShowClubIntroduction}">
           <StackPanel Spacing="14">
             <DockPanel Name="ClubBrandRow" Height="46">
-              <Border DockPanel.Dock="Right" Background="{DynamicResource ClubSelection}" CornerRadius="6" Padding="10,4" Margin="12,0,0,0" ToolTip.Tip="{Binding ServerStatusSummary}"><StackPanel><TextBlock Text="社团在线" Classes="muted" FontSize="11" LineHeight="14" HorizontalAlignment="Center" /><TextBlock Name="ClubOnlineCount" Text="{Binding OnlinePlayerSummary}" FontSize="20" LineHeight="24" FontWeight="Bold" HorizontalAlignment="Center" /></StackPanel></Border>
+              <Border DockPanel.Dock="Right" Background="{DynamicResource ClubSelection}" CornerRadius="6" Padding="10,4" Margin="12,0,0,0"><StackPanel><TextBlock Text="社团在线" Classes="muted" FontSize="11" LineHeight="14" HorizontalAlignment="Center"  ToolTip.Tip="{Binding ServerStatusSummary}"/><TextBlock Name="ClubOnlineCount" Text="{Binding OnlinePlayerSummary}" FontSize="20" LineHeight="24" FontWeight="Bold" HorizontalAlignment="Center" /></StackPanel></Border>
               <StackPanel Orientation="Horizontal" Spacing="15"><Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="44" Height="44" /><StackPanel VerticalAlignment="Center"><TextBlock Name="BrandTitle" Text="{Binding ClubName}" FontSize="24" LineHeight="28" FontWeight="Bold" Foreground="{DynamicResource ClubAccent}" /><TextBlock Text="五湖四海之士，汇于东海之滨" LineHeight="18" /></StackPanel></StackPanel>
             </DockPanel>
             <WrapPanel>

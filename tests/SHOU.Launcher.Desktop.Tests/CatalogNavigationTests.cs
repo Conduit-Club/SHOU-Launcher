@@ -9,6 +9,21 @@ namespace SHOU.Launcher.Desktop.Tests;
 public sealed class CatalogNavigationTests
 {
     [AvaloniaFact]
+    public async Task RoutineCatalogSuccessIsQuietButOfflineNoticeAndErrorsRemainVisible()
+    {
+        var service = new CatalogService(); using var owner = new MainWindowViewModel(service, new FakeExternalLauncher());
+        owner.ShowDownloadsCommand.Execute(null); await Settle(() => !owner.IsBusy);
+        Assert.False(owner.Downloads.ShowRequestStatus);
+        service.Next = _ => Task.FromResult(CatalogService.Games with { Notice = "Offline cache fixture notice" });
+        await owner.Downloads.RefreshCatalogCommand.ExecuteAsync(null); Assert.True(owner.Downloads.ShowRequestStatus);
+        owner.Downloads.SelectCategory("mod"); Assert.False(owner.Downloads.ShowRequestStatus);
+        owner.Downloads.SelectCategory("minecraft"); Assert.True(owner.Downloads.ShowRequestStatus);
+        service.Next = _ => throw new IOException("Fixture network error");
+        await owner.Downloads.RefreshCatalogCommand.ExecuteAsync(null); Assert.True(owner.Downloads.ShowRequestStatus); Assert.True(owner.HasError);
+        service.Next = _ => Task.FromResult(CatalogService.Games);
+        await owner.Downloads.RefreshCatalogCommand.ExecuteAsync(null); Assert.False(owner.Downloads.ShowRequestStatus);
+    }
+    [AvaloniaFact]
     public async Task FirstEntryUsesCacheAndManualRefreshForcesNetworkWithoutLosingRowsOnNavigation()
     {
         var service = new CatalogService(); using var owner = new MainWindowViewModel(service, new FakeExternalLauncher());

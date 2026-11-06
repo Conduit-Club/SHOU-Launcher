@@ -9,7 +9,7 @@ public sealed record JavaTrustFindingViewModel(string Path, string Hash, string 
 public sealed class JavaTrustToolsViewModel : PageViewModel
 {
     private readonly IJavaTrustWorkflowService? workflow;
-    private string target = "", status = "选择一个 Java 后开始只读检查。", provenance = "";
+    private string target = "", status = "", provenance = "";
     private long generation;
     private bool inspected, repairable, preferenceLoaded, autoRepair = true, preferenceDirty, detailsExpanded;
     private JavaTrustDerivation? prepared;
@@ -31,7 +31,7 @@ public sealed class JavaTrustToolsViewModel : PageViewModel
         {
             if (!SetProperty(ref target, value ?? "")) return;
             ++generation; inspected = repairable = false; prepared = null; Findings.Clear(); Provenance = "";
-            Status = "尚未扫描当前 Java。检查路径不会更改默认 Java。";
+            Status = "";
             NotifyPresentation();
         }
     }
@@ -43,13 +43,13 @@ public sealed class JavaTrustToolsViewModel : PageViewModel
     public string PreparedJava => prepared?.Java.ExecutablePath ?? "";
     public bool HasRollback => selectionChange is not null;
     public string RollbackLabel => selectionChange?.PreviousJavaExecutable is null ? "恢复自动选择" : "恢复之前的默认 Java";
-    public string CurrentDefaultJava => Owner.Snapshot.Settings.JavaExecutable ?? "自动选择 Java（由版本需求和实例设置决定）";
+    public string CurrentDefaultJava => Owner.Snapshot.Settings.JavaExecutable ?? "自动选择 Java";
     public bool AutoRepair
     {
         get => autoRepair;
         set { if (SetProperty(ref autoRepair, value)) { preferenceDirty = value != Owner.Snapshot.Settings.ConduitJavaTrustAutoRepair; OnPropertyChanged(nameof(PreferenceSummary)); NotifyCommands(); } }
     }
-    public string PreferenceSummary => preferenceDirty ? "自动修复偏好尚未保存。" : "自动修复偏好已保存；仅用于以后新下载的 Java。";
+    public string PreferenceSummary => preferenceDirty ? "有未保存的更改。" : "";
     public string Status { get => status; private set => SetProperty(ref status, value); }
     public string Provenance { get => provenance; private set { SetProperty(ref provenance, value); OnPropertyChanged(nameof(HasProvenance)); } }
     public bool HasProvenance => Provenance.Length > 0;
