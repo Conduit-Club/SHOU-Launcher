@@ -30,7 +30,7 @@ public sealed class LoaderCatalog(HttpClient http)
         if (text.Contains("<!DOCTYPE", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("加载器目录不接受DTD。");
         var versions = XDocument.Parse(text).Descendants("version").Select(x => x.Value).Take(50000);
         var prefix = loader == "forge" ? gameVersion + "-" : NeoPrefix(gameVersion);
-        return versions.Where(v => v.StartsWith(prefix, StringComparison.Ordinal)).Distinct(StringComparer.Ordinal)
+        return versions.Where(v => loader == "forge" ? v.StartsWith(prefix, StringComparison.Ordinal) : NeoGameVersion(v) == gameVersion).Distinct(StringComparer.Ordinal)
             .Select(v => new LoaderVersionChoice(loader, SafePath.Identifier(loader == "forge" ? v[prefix.Length..] : v), !v.Any(char.IsLetter)))
             .OrderByDescending(v => NumericKey(v.Version), StringComparer.Ordinal).Take(2000).ToArray();
     }
@@ -38,7 +38,21 @@ public sealed class LoaderCatalog(HttpClient http)
     {
         var parts = gameVersion.Split('.');
         if (parts.Length is < 2 or > 3 || parts.Any(p => !int.TryParse(p, out _))) throw new PlatformNotSupportedException("NeoForge仅支持正式数字版本目录。");
-        return parts[0] == "1" ? parts[1] + "." + (parts.Length == 3 ? parts[2] : "0") + "." : parts[0] + "." + parts[1] + ".";
+        return parts[0] == "1" ? parts[1] + "." + (parts.Length == 3 ? parts[2] : "0") + "." : parts[0] + "." + parts[1] + "." + (parts.Length == 3 ? parts[2] : "0") + ".";
+    }
+    internal static string? NeoGameVersion(string version)
+    {
+        // Only numeric releases and beta coordinates have an unambiguous supported game identity.
+        // Snapshot/alpha metadata uses +snapshot-N and must not poison the whole stable directory.
+        var release = version.Split('-', 2);
+        if (release.Length == 2 && release[1] != "beta") return null;
+        var parts = release[0].Split('.');
+        if (parts.Any(p => p.Length == 0 || p.Any(c => !char.IsAsciiDigit(c)) || !int.TryParse(p, out _))) return null;
+        if (parts.Length == 3 && int.Parse(parts[0]) is >= 20 and < 26)
+            return "1." + parts[0] + (int.Parse(parts[1]) == 0 ? "" : "." + parts[1]);
+        if (parts.Length == 4 && int.Parse(parts[0]) >= 26)
+            return parts[0] + "." + parts[1] + (int.Parse(parts[2]) == 0 ? "" : "." + parts[2]);
+        return null;
     }
     private static string NumericKey(string version) => string.Join('.', version.Split('.', '-').Select(p => int.TryParse(p, out var number) ? number.ToString("D9", System.Globalization.CultureInfo.InvariantCulture) : p));
     public async Task<string> TextAsync(Uri uri, int maximum, CancellationToken ct)

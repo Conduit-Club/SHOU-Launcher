@@ -25,7 +25,6 @@ public sealed class InstallerCatalogReader(HttpClient http)
             "forge" => "https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml",
             "neoforge" => "https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml",
             "quilt" => "https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/maven-metadata.xml",
-            "legacyfabric" => "https://maven.legacyfabric.net/net/legacyfabric/fabric-installer/maven-metadata.xml",
             _ => null
         };
         if (url is null) return new([], loader switch
@@ -38,25 +37,26 @@ public sealed class InstallerCatalogReader(HttpClient http)
         });
         var text = await reader.TextAsync(new(url), 4 * 1024 * 1024, ct);
         if (text.Contains("<!DOCTYPE", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("安装器目录不接受 DTD。");
-        var versions = XDocument.Parse(text).Descendants("version").Select(x => SafePath.Identifier(x.Value)).Distinct(StringComparer.Ordinal).ToArray();
+        var versions = XDocument.Parse(text).Descendants("version").Select(x => x.Value).Distinct(StringComparer.Ordinal).ToArray();
         if (versions.Length > 20000) throw new InvalidDataException("安装器目录数量超过限制。");
         var rows = new List<InstallerVersion>();
         foreach (var artifact in versions)
         {
             if (loader == "forge")
             {
+                SafePath.Identifier(artifact);
                 var separator = artifact.IndexOf('-');
                 if (separator <= 0 || separator == artifact.Length - 1) continue;
                 rows.Add(new(loader, artifact[..separator], artifact[(separator + 1)..], artifact));
             }
             else if (loader == "neoforge")
             {
-                var parts = artifact.Split('.', '-');
-                if (parts.Length < 3 || !int.TryParse(parts[0], out var major) || !int.TryParse(parts[1], out var minor)) continue;
-                var game = major >= 26 ? $"{major}.{minor}" : $"1.{major}" + (minor == 0 ? "" : "." + minor);
+                var game = LoaderCatalog.NeoGameVersion(artifact);
+                if (game is null) continue;
+                SafePath.Identifier(artifact);
                 rows.Add(new(loader, game, artifact, artifact));
             }
-            else rows.Add(new(loader, "通用安装器", artifact, artifact));
+            else { SafePath.Identifier(artifact); rows.Add(new(loader, "通用安装器", artifact, artifact)); }
         }
         if (loader == "forge")
         {
@@ -83,7 +83,7 @@ public sealed class InstallerCatalogReader(HttpClient http)
             "neoforge" => $"https://maven.neoforged.net/releases/net/neoforged/neoforge/{artifact}/neoforge-{artifact}-installer.jar",
             "fabric" => $"https://maven.fabricmc.net/net/fabricmc/fabric-installer/{version}/fabric-installer-{version}.jar",
             "quilt" => $"https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/{version}/quilt-installer-{version}.jar",
-            "legacyfabric" => $"https://maven.legacyfabric.net/net/legacyfabric/fabric-installer/{version}/fabric-installer-{version}.jar",
+            "legacyfabric" => $"https://repo.legacyfabric.net/legacyfabric/net/legacyfabric/fabric-installer/{version}/fabric-installer-{version}.jar",
             _ => throw new NotSupportedException("此安装器尚不支持直接另存。")
         });
     }

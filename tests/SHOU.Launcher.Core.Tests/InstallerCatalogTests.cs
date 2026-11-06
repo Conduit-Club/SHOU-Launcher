@@ -30,9 +30,25 @@ public sealed class InstallerCatalogTests
         var row = (await new InstallerCatalogReader(http).ReadAsync("fabric", default)).Versions.Single();
         Assert.AreEqual("maven.fabricmc.net", InstallerCatalogReader.ArtifactUri(row).Host);
         var legacy = (await new InstallerCatalogReader(http).ReadAsync("legacyfabric", default)).Versions.Single();
-        Assert.AreEqual("maven.legacyfabric.net", InstallerCatalogReader.ArtifactUri(legacy).Host);
+        Assert.AreEqual("repo.legacyfabric.net", InstallerCatalogReader.ArtifactUri(legacy).Host);
+        Assert.AreEqual("/legacyfabric/net/legacyfabric/fabric-installer/1.1.2/fabric-installer-1.1.2.jar", InstallerCatalogReader.ArtifactUri(legacy).AbsolutePath);
         Assert.ThrowsExactly<ArgumentException>(() => InstallerCatalogReader.ArtifactUri(row with { ArtifactVersion = "../escape" }));
         Assert.ThrowsExactly<InvalidDataException>(() => InstallerCatalogReader.ArtifactUri(row with { ArtifactVersion = "other-version" }));
+    }
+    [TestMethod]
+    public async Task NeoForgeDirectoryKeepsCalendarHotfixesSeparateAndSkipsUnmappedAlphaCoordinates()
+    {
+        const string metadata = "<metadata><versions><version>21.1.265</version><version>26.1.0.19-beta</version><version>26.1.1.15-beta</version><version>26.1.2.126</version><version>26.1.0.0-alpha.4+snapshot-1</version></versions></metadata>";
+        using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(ScriptedHttpHandler.Json(metadata))));
+        var rows = (await new InstallerCatalogReader(http).ReadAsync("neoforge", default)).Versions;
+        Assert.AreEqual(4, rows.Count);
+        Assert.AreEqual("26.1.2", rows.Single(r => r.Version == "26.1.2.126").GameVersion);
+        Assert.AreEqual("26.1", rows.Single(r => r.Version == "26.1.0.19-beta").GameVersion);
+        var loader = new LoaderCatalog(http);
+        Assert.AreEqual("26.1.2.126", (await loader.GetAsync("neoforge", "26.1.2", default)).Single().Version);
+        Assert.AreEqual("26.1.0.19-beta", (await loader.GetAsync("neoforge", "26.1", default)).Single().Version);
+        Assert.AreEqual("26.1.2.", LoaderCatalog.NeoPrefix("26.1.2"));
+        Assert.AreEqual("26.1.0.", LoaderCatalog.NeoPrefix("26.1"));
     }
     [TestMethod]
     public async Task MetadataRejectsDtdAndUnknownProvidersHaveAnExplicitEmptyResult()
@@ -46,15 +62,18 @@ public sealed class InstallerCatalogTests
     public async Task SaveVerifiesHashPublishesOnlyCompleteFileAndKeepsStagingOutOfDestination()
     {
         var bytes = Encoding.UTF8.GetBytes("controlled installer fixture, never executed");
-        using var http = InstallerTransport(bytes, Convert.ToHexStringLower(SHA1.HashData(bytes)));
-        var root = Path.Combine(Environment.GetEnvironmentVariable("SHOU_DEV_ROOT")!, "test-data/r12", Guid.NewGuid().ToString("N"));
-        var target = Path.Combine(root, "中文 output", "fabric installer.jar"); var staging = Path.Combine(root, "staging");
-        var reader = new InstallerCatalogReader(http); var row = new InstallerVersion("fabric", "通用安装器", "1.1.2", "1.1.2");
-        await reader.SaveAsync(row, target, staging, null, default);
-        CollectionAssert.AreEqual(bytes, await File.ReadAllBytesAsync(target));
-        CollectionAssert.AreEqual(new[] { "fabric installer.jar" }, Directory.GetFiles(Path.GetDirectoryName(target)!).Select(Path.GetFileName).ToArray());
-        Assert.AreEqual(0, Directory.GetFiles(staging, "*", SearchOption.AllDirectories).Length);
-        await reader.SaveAsync(row, target, staging, null, default); CollectionAssert.AreEqual(bytes, await File.ReadAllBytesAsync(target));
+        foreach (var provider in new[] { "fabric", "legacyfabric" })
+        {
+            using var http = InstallerTransport(bytes, Convert.ToHexStringLower(SHA1.HashData(bytes)), provider == "fabric" ? "maven.fabricmc.net" : "repo.legacyfabric.net");
+            var root = Path.Combine(Environment.GetEnvironmentVariable("SHOU_DEV_ROOT")!, "test-data/r12", Guid.NewGuid().ToString("N"));
+            var target = Path.Combine(root, "中文 output", "fabric installer.jar"); var staging = Path.Combine(root, "staging");
+            var reader = new InstallerCatalogReader(http); var row = new InstallerVersion(provider, "通用安装器", "1.1.2", "1.1.2");
+            await reader.SaveAsync(row, target, staging, null, default);
+            CollectionAssert.AreEqual(bytes, await File.ReadAllBytesAsync(target));
+            CollectionAssert.AreEqual(new[] { "fabric installer.jar" }, Directory.GetFiles(Path.GetDirectoryName(target)!).Select(Path.GetFileName).ToArray());
+            Assert.AreEqual(0, Directory.GetFiles(staging, "*", SearchOption.AllDirectories).Length);
+            await reader.SaveAsync(row, target, staging, null, default); CollectionAssert.AreEqual(bytes, await File.ReadAllBytesAsync(target));
+        }
     }
     [TestMethod]
     public async Task CorruptTransferPreservesExistingDestinationAndCleansOwnedStaging()
@@ -103,9 +122,9 @@ public sealed class InstallerCatalogTests
         Assert.IsFalse(Uri.UnescapeDataString(observed.Query).Contains("categories:datapack", StringComparison.Ordinal));
         await Assert.ThrowsExactlyAsync<ArgumentException>(() => catalog.SearchAsync(new("mod", Category: "invalid:facet")));
     }
-    private static HttpClient InstallerTransport(byte[] bytes, string sha) => new(new ScriptedHttpHandler(request =>
+    private static HttpClient InstallerTransport(byte[] bytes, string sha, string host = "maven.fabricmc.net") => new(new ScriptedHttpHandler(request =>
     {
-        Assert.AreEqual("maven.fabricmc.net", request.RequestUri!.Host); Assert.IsNull(request.Headers.Authorization);
+        Assert.AreEqual(host, request.RequestUri!.Host); Assert.IsNull(request.Headers.Authorization);
         return Task.FromResult(request.RequestUri.AbsolutePath.EndsWith(".sha1") ? ScriptedHttpHandler.Json(sha)
             : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) });
     }));
