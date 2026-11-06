@@ -73,7 +73,7 @@
 
           <ItemsControl Name="AdditionalLoaderCatalogs" ItemsSource="{Binding AdditionalLoaders}" ItemTemplate="{StaticResource AdditionalLoaderTemplate}" />
           <Expander Header="Fabric" IsExpanded="True"><StackPanel Spacing="10" Margin="20,0,20,15">
-            <DockPanel><Button Name="RefreshFabricCatalogButton" DockPanel.Dock="Right" Content="读取 Fabric 版本" Command="{Binding RefreshFabricCommand}" /><TextBlock Text="{Binding FabricStatus}" Classes="muted" LineHeight="18" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" /></DockPanel>
+            <DockPanel><Button Name="RefreshFabricCatalogButton" DockPanel.Dock="Right" Content="读取 Fabric 版本" Command="{Binding RefreshFabricCommand}" /><TextBlock Text="{Binding FabricStatus}" Classes="status muted" LineHeight="18" FontSize="12" VerticalAlignment="Center" Margin="0,0,12,0" /></DockPanel>
             <ListBox Name="FabricCatalogSelector" ItemsSource="{Binding FabricVersions}" SelectedItem="{Binding SelectedFabric}" IsEnabled="{Binding CanEdit}" MaxHeight="220" BorderThickness="0" Background="Transparent"><ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Version}" /><CheckBox Grid.Column="1" Content="稳定版" IsChecked="{Binding Stable, Mode=OneWay}" IsHitTestVisible="False" IsTabStop="False" MinHeight="18" /></Grid></DataTemplate></ListBox.ItemTemplate></ListBox>
             <Button Content="使用原版，不添加加载器" Command="{Binding ClearFabricCommand}" HorizontalAlignment="Left" />
           </StackPanel></Expander>

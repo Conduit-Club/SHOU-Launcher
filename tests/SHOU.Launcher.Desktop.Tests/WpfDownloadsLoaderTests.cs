@@ -21,7 +21,9 @@ public sealed class WpfDownloadsLoaderTests
         Assert.Empty(fixture.Requests); vm.SelectVersion(new("1.21.1", "release", DateTimeOffset.UtcNow));
         foreach (var loader in vm.AdditionalLoaders)
         {
-            Assert.Null(loader.SelectedVersion); await loader.RefreshCommand.ExecuteAsync(null); Assert.Null(loader.SelectedVersion);
+            Assert.Empty(loader.Status); Assert.Null(loader.SelectedVersion);
+            await loader.RefreshCommand.ExecuteAsync(null); Assert.Null(loader.SelectedVersion);
+            Assert.Empty(loader.Status); Assert.False(vm.ShowRequestStatus);
             loader.SelectedVersion = loader.Versions.Single(); Assert.Null(vm.SelectedFabric); Assert.Equal(loader.Id, vm.SelectedAdditionalLoader!.Loader);
             vm.InstallationName = "Explicit " + loader.Title;
             await vm.InstallVersionCommand.ExecuteAsync(null);

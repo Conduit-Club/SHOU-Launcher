@@ -11,7 +11,7 @@ public sealed class AdditionalLoaderCatalogViewModel(DownloadsPageViewModel owne
     public string Title { get; } = title;
     public ObservableCollection<LoaderVersionChoice> Versions { get; } = [];
     public LoaderVersionChoice? SelectedVersion { get => owner.SelectedAdditionalLoader?.Loader == Id ? owner.SelectedAdditionalLoader : null; set => owner.SelectAdditionalLoader(Id, value); }
-    private string _status = "点击读取所选Minecraft版本的目录；安装前须明确选择具体加载器版本。";
+    private string _status = "";
     public string Status { get => _status; internal set => SetProperty(ref _status, value); }
     public bool CanEdit => owner.CanEdit;
     public AsyncRelayCommand RefreshCommand { get; } = new(() => owner.RefreshAdditionalLoaderAsync(id), () => owner.CanReadAdditionalLoader);
@@ -82,15 +82,16 @@ public sealed partial class DownloadsPageViewModel
                 }
                 SelectAdditionalLoader(loader, next, internalUpdate: true);
             }
-            catalog.Status = versions.Count == 0 ? "此Minecraft版本没有返回可用的" + catalog.Title + "构建。"
-                : $"找到 {catalog.Versions.Count} 个构建，须明确选择；" + (game == "1.21.1" ? "不支持的构建将禁用并显示原因。" : "此Minecraft版本的安装尚未验证，暂不可安装。");
+            catalog.Status = versions.Count == 0 ? "此 Minecraft 版本没有可用的 " + catalog.Title + " 构建。"
+                : game == "1.21.1" ? "" : "此 Minecraft 版本暂不支持安装此加载器。";
         });
-        if (!success && revision == _requestRevision) catalog.Status = RequestStatus;
+        if (revision == _requestRevision)
+        { if (!success) catalog.Status = RequestStatus; else SetRequestStatus("", false); }
     }
     private void ResetAdditionalLoaders()
     {
         ClearAdditionalSelection();
-        foreach (var catalog in AdditionalLoaders) { catalog.Versions.Clear(); catalog.Status = "点击读取当前Minecraft版本的官方目录；安装前须明确选择具体版本。"; }
+        foreach (var catalog in AdditionalLoaders) { catalog.Versions.Clear(); catalog.Status = ""; }
     }
     private void ClearAllLoaders()
     {

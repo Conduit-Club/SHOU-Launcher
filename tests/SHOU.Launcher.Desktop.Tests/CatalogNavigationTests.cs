@@ -64,7 +64,9 @@ public sealed class CatalogNavigationTests
         var service = new CatalogService(); using var owner = new MainWindowViewModel(service, new FakeExternalLauncher());
         owner.ShowDownloadsCommand.Execute(null); await Settle(() => !owner.IsBusy);
         var vm = owner.Downloads; vm.SelectVersion(CatalogService.Games.Versions[0]); vm.InstallationName = "保留 中文 draft";
+        Assert.Empty(vm.FabricStatus);
         await vm.RefreshFabricCommand.ExecuteAsync(null); vm.SelectedFabric = vm.FabricVersions.Single();
+        Assert.Empty(vm.FabricStatus); Assert.False(vm.ShowRequestStatus);
         vm.BackToListCommand.Execute(null); vm.SelectCategory("installer-minecraft");
         await vm.OpenPackageVersionAsync(new("other-version", "release", DateTimeOffset.UtcNow));
         Assert.Equal("other-version", vm.PackageVersionId); Assert.Equal("1.21.1", vm.SelectedVersionId);

@@ -162,7 +162,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private GameCatalogVersion? _selectedVersion;
     private LoaderCatalogVersion? _selectedFabric;
     private string _installationName = "";
-    private string _fabricStatus = "展开后点击读取，查询所选 Minecraft 版本可用的 Fabric Loader。";
+    private string _fabricStatus = "";
     private string _installStatus = "";
     private string? _createdInstanceId;
     private ContentProject? _selectedProject;
@@ -415,7 +415,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         ResetAdditionalLoaders();
         _isConfiguration = true; _isResourceDetail = false; _isPackageDetail = false; FabricVersions.Clear();
         _installationName = DefaultInstallationName; InstallStatus = "";
-        FabricStatus = "点击读取，查询当前 Minecraft 版本的 Fabric Loader。";
+        FabricStatus = "";
         OnPropertyChanged(nameof(InstallationName)); OnPropertyChanged(nameof(SelectedVersionId)); OnPropertyChanged(nameof(SelectedFabric)); OnPropertyChanged(nameof(HasCreatedInstance));
         NotifyInstallDraft(); NotifyPage();
     }
@@ -435,9 +435,10 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             if (revision != _requestRevision) return;
             FabricVersions.Clear(); foreach (var version in versions) FabricVersions.Add(version);
             if (SelectedFabric is not null && !versions.Contains(SelectedFabric)) SelectedFabric = null;
-            FabricStatus = versions.Count == 0 ? "此 Minecraft 版本没有可用的 Fabric Loader。" : $"找到 {versions.Count} 个 Fabric Loader 版本，安装前须明确选择。";
+            FabricStatus = versions.Count == 0 ? "此 Minecraft 版本没有可用的 Fabric Loader。" : "";
         });
-        if (!success && revision == _requestRevision) FabricStatus = RequestStatus;
+        if (revision == _requestRevision)
+        { if (!success) FabricStatus = RequestStatus; else SetRequestStatus("", false); }
     }
     private void NotifyInstallDraft()
     {
