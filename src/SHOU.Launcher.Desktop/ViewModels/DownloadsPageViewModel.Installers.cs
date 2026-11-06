@@ -7,7 +7,7 @@ namespace SHOU.Launcher.Desktop.ViewModels;
 public sealed record InstallerVersionRow(InstallerVersion Version)
 {
     public string Title => Version.Version;
-    public string FileName => Path.GetFileName(SHOU.Launcher.Core.Loaders.InstallerCatalogReader.ArtifactUri(Version).AbsolutePath);
+    public string FileName => Uri.UnescapeDataString(Path.GetFileName(SHOU.Launcher.Core.Loaders.InstallerCatalogReader.ArtifactUri(Version).AbsolutePath));
     public string Detail => (Version.Recommended ? "推荐版" : "") + (Version.Published is { } date ? (Version.Recommended ? " · " : "") + $"发布于 {date.LocalDateTime:yyyy/M/d HH:mm}" : "");
     public Avalonia.Media.IImage Icon => LoaderArtwork.For(Version.Loader);
 }

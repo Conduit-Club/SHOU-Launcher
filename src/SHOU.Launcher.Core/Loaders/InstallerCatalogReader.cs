@@ -17,8 +17,8 @@ public sealed class InstallerCatalogReader(HttpClient http)
             var meta = loader == "fabric" ? "meta.fabricmc.net" : "meta.legacyfabric.net";
             var data = JsonNode.Parse(await reader.TextAsync(new("https://" + meta + "/v2/versions/installer"), 1024 * 1024, ct)) as JsonArray
                 ?? throw new InvalidDataException("Fabric 安装器目录无效。");
-            return new(data.Take(200).Select(x => new InstallerVersion(loader, "通用安装器", SafePath.Identifier((string?)x?["version"] ?? ""),
-                SafePath.Identifier((string?)x?["version"] ?? ""), (bool?)x?["stable"] == true)).ToArray());
+            return new(data.Take(200).Select(x => new InstallerVersion(loader, "通用安装器", Coordinate((string?)x?["version"] ?? ""),
+                Coordinate((string?)x?["version"] ?? ""), (bool?)x?["stable"] == true)).ToArray());
         }
         var url = loader switch
         {
@@ -44,7 +44,7 @@ public sealed class InstallerCatalogReader(HttpClient http)
         {
             if (loader == "forge")
             {
-                SafePath.Identifier(artifact);
+                Coordinate(artifact);
                 var separator = artifact.IndexOf('-');
                 if (separator <= 0 || separator == artifact.Length - 1) continue;
                 rows.Add(new(loader, artifact[..separator], artifact[(separator + 1)..], artifact));
@@ -53,10 +53,10 @@ public sealed class InstallerCatalogReader(HttpClient http)
             {
                 var game = LoaderCatalog.NeoGameVersion(artifact);
                 if (game is null) continue;
-                SafePath.Identifier(artifact);
+                Coordinate(artifact);
                 rows.Add(new(loader, game, artifact, artifact));
             }
-            else { SafePath.Identifier(artifact); rows.Add(new(loader, "通用安装器", artifact, artifact)); }
+            else { Coordinate(artifact); rows.Add(new(loader, "通用安装器", artifact, artifact)); }
         }
         if (loader == "forge")
         {
@@ -73,19 +73,27 @@ public sealed class InstallerCatalogReader(HttpClient http)
     }
     public static Uri ArtifactUri(InstallerVersion row)
     {
-        var artifact = SafePath.Identifier(row.ArtifactVersion); var version = SafePath.Identifier(row.Version);
+        var artifact = Coordinate(row.ArtifactVersion); var version = Coordinate(row.Version);
         if (row.Loader == "forge" && artifact != SafePath.Identifier(row.GameVersion) + "-" + version)
             throw new InvalidDataException("Forge 安装器身份不匹配。");
         if (row.Loader != "forge" && artifact != version) throw new InvalidDataException("安装器版本身份不匹配。");
+        var encodedArtifact = Uri.EscapeDataString(artifact); var encodedVersion = Uri.EscapeDataString(version);
         return new(row.Loader switch
         {
-            "forge" => $"https://maven.minecraftforge.net/net/minecraftforge/forge/{artifact}/forge-{artifact}-installer.jar",
-            "neoforge" => $"https://maven.neoforged.net/releases/net/neoforged/neoforge/{artifact}/neoforge-{artifact}-installer.jar",
-            "fabric" => $"https://maven.fabricmc.net/net/fabricmc/fabric-installer/{version}/fabric-installer-{version}.jar",
-            "quilt" => $"https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/{version}/quilt-installer-{version}.jar",
-            "legacyfabric" => $"https://repo.legacyfabric.net/legacyfabric/net/legacyfabric/fabric-installer/{version}/fabric-installer-{version}.jar",
+            "forge" => $"https://maven.minecraftforge.net/net/minecraftforge/forge/{encodedArtifact}/forge-{encodedArtifact}-installer.jar",
+            "neoforge" => $"https://maven.neoforged.net/releases/net/neoforged/neoforge/{encodedArtifact}/neoforge-{encodedArtifact}-installer.jar",
+            "fabric" => $"https://maven.fabricmc.net/net/fabricmc/fabric-installer/{encodedVersion}/fabric-installer-{encodedVersion}.jar",
+            "quilt" => $"https://maven.quiltmc.org/repository/release/org/quiltmc/quilt-installer/{encodedVersion}/quilt-installer-{encodedVersion}.jar",
+            "legacyfabric" => $"https://repo.legacyfabric.net/legacyfabric/net/legacyfabric/fabric-installer/{encodedVersion}/fabric-installer-{encodedVersion}.jar",
             _ => throw new NotSupportedException("此安装器尚不支持直接另存。")
         });
+    }
+    private static string Coordinate(string value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length > 160 || !char.IsAsciiLetterOrDigit(value[0])
+            || value.Any(c => !char.IsAsciiLetterOrDigit(c) && c is not '.' and not '_' and not '-' and not '+'))
+            throw new ArgumentException("Invalid installer coordinate.", nameof(value));
+        return value;
     }
     public async Task SaveAsync(InstallerVersion row, string destination, string stagingRoot, IProgress<TransferProgress>? progress, CancellationToken ct)
     {

@@ -36,6 +36,16 @@ public sealed class InstallerCatalogTests
         Assert.ThrowsExactly<InvalidDataException>(() => InstallerCatalogReader.ArtifactUri(row with { ArtifactVersion = "other-version" }));
     }
     [TestMethod]
+    public async Task LegacyBuildMetadataIsEscapedAsOnePinnedOfficialCoordinate()
+    {
+        using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(ScriptedHttpHandler.Json("""[{"version":"1.1.0+1","stable":true,"url":"https://evil.invalid/private.jar"}]"""))));
+        var row = (await new InstallerCatalogReader(http).ReadAsync("legacyfabric", default)).Versions.Single();
+        var uri = InstallerCatalogReader.ArtifactUri(row);
+        Assert.AreEqual("https://repo.legacyfabric.net/legacyfabric/net/legacyfabric/fabric-installer/1.1.0%2B1/fabric-installer-1.1.0%2B1.jar", uri.AbsoluteUri);
+        foreach (var invalid in new[] { "../escape", "%2e%2e", "1.0?private", "https:evil" })
+            Assert.ThrowsExactly<ArgumentException>(() => InstallerCatalogReader.ArtifactUri(row with { Version = invalid, ArtifactVersion = invalid }));
+    }
+    [TestMethod]
     public async Task NeoForgeDirectoryKeepsCalendarHotfixesSeparateAndSkipsUnmappedAlphaCoordinates()
     {
         const string metadata = "<metadata><versions><version>21.1.265</version><version>26.1.0.19-beta</version><version>26.1.1.15-beta</version><version>26.1.2.126</version><version>26.1.0.0-alpha.4+snapshot-1</version></versions></metadata>";
