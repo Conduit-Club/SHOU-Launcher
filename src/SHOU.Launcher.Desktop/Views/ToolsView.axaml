@@ -8,11 +8,11 @@
       <StackPanel>
         <TextBlock Classes="contextHeading" Text="运行环境" />
         <ToggleButton Name="JavaTrustNavigationButton" Classes="contextNavigation" IsChecked="{Binding IsJavaTrust, Mode=OneWay}" Command="{Binding ShowJavaTrustCommand}">
-          <StackPanel Orientation="Horizontal" Spacing="10"><views:ClubIcon Classes="contextIcon" Kind="{x:Static themes:ClubIcons.Settings}"  /><TextBlock Text="Java 证书" Classes="navigationLabel" /></StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10"><views:ClubIcon Classes="contextIcon" Kind="{x:Static themes:ClubIcons.Settings}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" /><TextBlock Text="Java 证书" Classes="navigationLabel" /></StackPanel>
         </ToggleButton>
         <TextBlock Classes="contextHeading" Text="奇妙小工具" />
         <ToggleButton Name="ToolboxNavigationButton" Classes="contextNavigation" IsChecked="{Binding IsToolbox, Mode=OneWay}" Command="{Binding ShowToolboxCommand}">
-          <StackPanel Orientation="Horizontal" Spacing="10"><views:ClubIcon Classes="contextIcon" Kind="{x:Static themes:ClubIcons.Toolbox}"  /><TextBlock Text="百宝箱" Classes="navigationLabel" /></StackPanel>
+          <StackPanel Orientation="Horizontal" Spacing="10"><views:ClubIcon Classes="contextIcon" Kind="{x:Static themes:ClubIcons.Toolbox}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" /><TextBlock Text="百宝箱" Classes="navigationLabel" /></StackPanel>
         </ToggleButton>
       </StackPanel>
     </Border>

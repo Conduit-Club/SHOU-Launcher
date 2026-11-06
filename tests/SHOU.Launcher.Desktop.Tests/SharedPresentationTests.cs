@@ -1,6 +1,7 @@
 using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless.XUnit;
 using Avalonia.Media;
 using Avalonia.Styling;
@@ -53,6 +54,16 @@ public sealed class SharedPresentationTests
                     Assert.Equal(10, label.Bounds.Left - icon.Bounds.Right);
                     Assert.NotNull(icon.Foreground);
                 }
+            }
+            vm.ShowToolsCommand.Execute(null); Pump(window);
+            foreach (var selectToolbox in new[] { false, true })
+            {
+                if (selectToolbox) vm.Tools.ShowToolboxCommand.Execute(null);
+                else vm.Tools.ShowJavaTrustCommand.Execute(null);
+                Pump(window);
+                var selected = Find<ToggleButton>(window, selectToolbox ? "ToolboxNavigationButton" : "JavaTrustNavigationButton");
+                var icon = ((StackPanel)selected.Content!).Children.OfType<ClubIcon>().Single();
+                Assert.Equal(selected.Foreground?.ToString(), icon.Foreground?.ToString());
             }
         }
         finally { window.Close(); }
