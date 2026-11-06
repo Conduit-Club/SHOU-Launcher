@@ -4,7 +4,7 @@
     <Style Selector="ListBox.instanceList ListBoxItem"><Setter Property="Padding" Value="10,7"/><Setter Property="CornerRadius" Value="3"/><Setter Property="Margin" Value="0,1"/></Style>
     <Style Selector="ListBox.instanceList ListBoxItem:selected /template/ ContentPresenter"><Setter Property="Background" Value="{DynamicResource ClubSelection}"/></Style>
     <Style Selector="TextBlock.instanceLabel"><Setter Property="Width" Value="105"/><Setter Property="VerticalAlignment" Value="Center"/></Style>
-    <Style Selector="ListBox.instanceNavigation ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="MinHeight" Value="36"/><Setter Property="Margin" Value="0"/></Style>
+    <Style Selector="ListBox.instanceNavigation ListBoxItem"><Setter Property="Padding" Value="0"/><Setter Property="MinHeight" Value="36"/><Setter Property="Margin" Value="0"/><Setter Property="AutomationProperties.Name" Value="{Binding Title}"/></Style>
     <Style Selector="ListBox.instanceNavigation ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderBrush" Value="{DynamicResource ClubSelectionForeground}"/><Setter Property="BorderThickness" Value="3,0,0,0"/></Style>
     <Style Selector="ListBox.instanceNavigation ListBoxItem:selected TextBlock"><Setter Property="Foreground" Value="{DynamicResource ClubSelectionForeground}"/></Style>
     <Style Selector="ListBox.instanceNavigation ListBoxItem:selected Path"><Setter Property="Stroke" Value="{DynamicResource ClubSelectionForeground}"/></Style>

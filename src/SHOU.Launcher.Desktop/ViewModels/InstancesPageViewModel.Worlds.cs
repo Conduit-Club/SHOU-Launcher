@@ -82,6 +82,7 @@ public sealed partial class InstancesPageViewModel
     public bool WorldWorkspaceCanRead => _worldWorkspaceReady && SelectedInstance is not null && Service is IInstanceWorldService
         && Service.Paths.IsIsolated && SelectedInstance.Id == Owner.Snapshot.SelectedInstanceId && Owner.CanReadRemote;
     public bool WorldWorkspaceCanWrite => WorldWorkspaceCanRead && CanEdit && !IsSelectedInstanceRunning;
+    public bool ShowWorldWorkspaceCapability => !WorldWorkspaceCanRead || IsSelectedInstanceRunning;
     public string WorldWorkspaceCapability => Service is not IInstanceWorldService ? "此服务尚未接入存档与服务器读写。"
         : !Service.Paths.IsIsolated ? "当前并非隔离数据目录，存档和服务器文件的读取与写入已禁用。"
         : SelectedInstance is null || SelectedInstance.Id != Owner.Snapshot.SelectedInstanceId ? "请先选定当前隔离实例。"
@@ -187,6 +188,7 @@ public sealed partial class InstancesPageViewModel
     }
     private void NotifyWorldPresentation()
     {
+        OnPropertyChanged(nameof(ShowWorldWorkspaceCapability));
         OnPropertyChanged(nameof(IsEditingExistingServer));
         foreach (var name in new[] { nameof(IsWorldWorkspaceSection), nameof(IsWorldListPage), nameof(IsWorldDetails), nameof(IsWorldInformationPage), nameof(IsWorldDatapacksPage), nameof(IsInstanceServersPage), nameof(WorldWorkspaceCanRead), nameof(WorldWorkspaceCanWrite), nameof(WorldWorkspaceCapability), nameof(WorldContextTitle), nameof(WorldWorkspaceFeedback), nameof(WorldRows), nameof(WorldSearchText), nameof(WorldCountSummary), nameof(WorldListStatus), nameof(ShowWorldListStatus), nameof(SelectedWorldRow), nameof(WorldDetailName), nameof(WorldDetailVersion), nameof(WorldDetailLastPlayed), nameof(WorldSeedText), nameof(HasWorldSeed), nameof(WorldGameModeText), nameof(WorldHardcoreText), nameof(DatapackRows), nameof(SelectedDatapacks), nameof(DatapackSearchText), nameof(DatapackCountSummary), nameof(DatapackSelectionSummary), nameof(HasSelectedDatapacks), nameof(DatapackListStatus), nameof(CanImportWorldDatapack), nameof(InstanceServerRows), nameof(SelectedInstanceServer), nameof(IsServerDraftDirty), nameof(HasServerConflict), nameof(ServerDraftStatus), nameof(ServerListStatus), nameof(IsServerEditorOpen), nameof(ServerEditorTitle), nameof(ServerNameDraft), nameof(ServerAddressDraft), nameof(ServerBackupPath), nameof(HasServerBackup) }) OnPropertyChanged(name);
         NotifyWorldCommands();

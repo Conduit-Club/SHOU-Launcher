@@ -17,13 +17,13 @@
                 </StackPanel>
               </Expander>
             </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
-            <TextBlock Text="尚无可阅读记录，可刷新或在社团网站阅读。" IsVisible="{Binding !HasUpdates}" TextWrapping="Wrap" Foreground="{DynamicResource ClubMuted}" />
+            <TextBlock Name="ClubUpdatesEmpty" Text="尚无可阅读记录，可刷新或在社团网站阅读。" IsVisible="{Binding ShowUpdatesEmpty}" TextWrapping="Wrap" Foreground="{DynamicResource ClubMuted}" />
           </StackPanel>
         </ScrollViewer>
         <Grid Grid.Row="4" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-          <TextBlock Text="{Binding UpdatesCacheSummary}" VerticalAlignment="Center" LineHeight="16" FontSize="11" TextWrapping="Wrap" />
+          <TextBlock Classes="status" Text="{Binding UpdatesCacheSummary}" VerticalAlignment="Center" LineHeight="16" FontSize="11" TextWrapping="Wrap" />
           <Button Grid.Column="1" Content="社团网站" Command="{Binding OpenUpdatesWebsiteCommand}" />
-          <Button Name="RefreshClubUpdatesButton" Grid.Column="2" Content="刷新" Command="{Binding RefreshUpdatesCommand}" />
+          <Button Name="RefreshClubUpdatesButton" Grid.Column="2" Content="刷新" Command="{Binding RefreshUpdatesCommand}" ToolTip.Tip="重新读取社团更新日志；网络不可用时保留已有缓存。" />
         </Grid>
       </Grid>
     </Border>

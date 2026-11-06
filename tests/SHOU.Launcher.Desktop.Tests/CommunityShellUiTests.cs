@@ -64,6 +64,25 @@ public sealed class CommunityShellUiTests
         Assert.True(root.Downloads.IsConfiguration); Assert.False(root.Downloads.IsPackageDetail);
     }
     [AvaloniaFact]
+    public async Task ClubHistoryShowsEmptyOnlyAfterLoadingCompletesWithoutRecords()
+    {
+        var pending = new TaskCompletionSource<ClubUpdateHistory>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var root = new MainWindowViewModel(new CommunityFixture { PendingUpdates = pending }, new FakeExternalLauncher());
+        var window = new MainWindow { Width = 880, Height = 560, DataContext = root }; window.Show(); Pump(window);
+        try
+        {
+            var read = root.Home.OpenReleasesCommand.ExecuteAsync(null); Pump(window);
+            Assert.True(root.Home.IsUpdatesLoading);
+            Assert.False(Find<TextBlock>(window, "ClubUpdatesEmpty").IsEffectivelyVisible);
+            pending.SetResult(new ClubUpdateHistory([], DateTimeOffset.UtcNow));
+            await read; Pump(window);
+            Assert.False(root.Home.IsUpdatesLoading);
+            Assert.True(Find<TextBlock>(window, "ClubUpdatesEmpty").IsEffectivelyVisible);
+            Assert.Empty(root.Home.UpdatesCacheSummary);
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
     public async Task InAppClubHistoryReadsArticleAndEscapeClosesOverlayAtMinimumSize()
     {
         using var root = new MainWindowViewModel(new CommunityFixture(), new FakeExternalLauncher());
@@ -112,8 +131,9 @@ public sealed class CommunityShellUiTests
     {
         private static readonly ClubUpdateNotice Notice = new(new(2026, 1, 2), "Fixture update", new("https://conduit-club.github.io/updates/2026-01-02/"));
         public int CatalogCalls { get; private set; }
+        public TaskCompletionSource<ClubUpdateHistory>? PendingUpdates { get; init; }
         public (string Version, string Kind, string Destination)? SavedPackage { get; private set; }
-        public Task<ClubUpdateHistory> GetClubUpdatesAsync(bool refresh = false, CancellationToken ct = default) => Task.FromResult(new ClubUpdateHistory([Notice], DateTimeOffset.UtcNow));
+        public Task<ClubUpdateHistory> GetClubUpdatesAsync(bool refresh = false, CancellationToken ct = default) => PendingUpdates?.Task.WaitAsync(ct) ?? Task.FromResult(new ClubUpdateHistory([Notice], DateTimeOffset.UtcNow));
         public Task<ClubUpdateArticle> GetClubUpdateArticleAsync(ClubUpdateNotice notice, bool refresh = false, CancellationToken ct = default) => Task.FromResult(new ClubUpdateArticle(notice, "Fixture article body"));
         public Task<IReadOnlyList<MinecraftPackage>> GetMinecraftPackagesAsync(string version, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<MinecraftPackage>>([new("client", "minecraft-client.jar", 42, new string('a', 40))]);
         public Task DownloadMinecraftPackageAsync(string version, string kind, string destination, CancellationToken ct = default) { SavedPackage = (version, kind, destination); return Task.CompletedTask; }

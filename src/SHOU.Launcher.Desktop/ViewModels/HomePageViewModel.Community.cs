@@ -35,8 +35,9 @@ public sealed partial class HomePageViewModel : IDisposable
     public bool IsServerRefreshing { get => serverRefreshing; private set { SetProperty(ref serverRefreshing, value); RefreshServersCommand.NotifyCanExecuteChanged(); } }
     public string ServerStatusSummary => IsServerRefreshing ? "正在查询服务器状态…" : serverFeedback + "\n" + string.Join("\n", Owner.Snapshot.Servers.Where(s => s.Id != "none").Select(s => s.Name + "：" + (s.OnlinePlayers is { } n ? n + " 人在线" : s.Status)));
     public bool IsUpdatesOpen { get => updatesOpen; private set => SetProperty(ref updatesOpen, value); }
-    public bool IsUpdatesLoading { get => updatesLoading; private set { SetProperty(ref updatesLoading, value); RefreshUpdatesCommand.NotifyCanExecuteChanged(); } }
+    public bool IsUpdatesLoading { get => updatesLoading; private set { if (SetProperty(ref updatesLoading, value)) OnPropertyChanged(nameof(ShowUpdatesEmpty)); RefreshUpdatesCommand.NotifyCanExecuteChanged(); } }
     public bool HasUpdates => UpdateItems.Count > 0;
+    public bool ShowUpdatesEmpty => !IsUpdatesLoading && !HasUpdates;
     public string UpdatesStatus { get => updatesStatus; private set => SetProperty(ref updatesStatus, value); }
     public string UpdatesCacheSummary { get => updatesCache; private set => SetProperty(ref updatesCache, value); }
     public RelayCommand CloseUpdatesCommand { get; private set; } = null!;
@@ -85,9 +86,9 @@ public sealed partial class HomePageViewModel : IDisposable
             if (generation != updatesGeneration) return;
             var previous = UpdateItems.ToDictionary(i => i.Notice.Id);
             UpdateItems.Clear(); foreach (var notice in result.Notices) UpdateItems.Add(previous.GetValueOrDefault(notice.Id) ?? new(this, notice));
-            OnPropertyChanged(nameof(HasUpdates));
+            OnPropertyChanged(nameof(HasUpdates)); OnPropertyChanged(nameof(ShowUpdatesEmpty));
             UpdatesStatus = result.Warning ?? (result.FromCache ? "已读取缓存" : "已刷新 " + result.FetchedAt.LocalDateTime.ToString("HH:mm"));
-            UpdatesCacheSummary = "断网时显示本地缓存。";
+            UpdatesCacheSummary = "";
             if (UpdateItems.FirstOrDefault() is { } first)
             { first.ExpandWithoutLoading(); if (refresh || !first.Loaded) await ReadArticleAsync(first, refresh); }
         }

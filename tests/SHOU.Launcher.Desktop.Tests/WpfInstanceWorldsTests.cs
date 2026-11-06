@@ -128,12 +128,16 @@ public sealed class WpfInstanceWorldsTests
     public async Task NonisolatedAndRunningGameStatesDisableRealFileWrites()
     {
         using var fixture = new Fixture(); await fixture.OpenServersAsync(); fixture.AddDraft("No unsafe save", "safe.invalid");
+        Assert.False(fixture.Vm.ShowWorldWorkspaceCapability);
+        Assert.DoesNotContain(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), text => text.IsEffectivelyVisible && text.Text == fixture.Vm.WorldWorkspaceCapability);
         var before = File.ReadAllBytes(fixture.ServersOne); fixture.Service.Isolated = false;
         fixture.Service.Base.Publish(fixture.Service.Base.Snapshot); Pump(fixture.Window);
         Assert.False(fixture.Vm.WorldWorkspaceCanRead); Assert.False(fixture.Vm.WorldWorkspaceCanWrite); Assert.Contains("读取与写入已禁用", fixture.Vm.WorldWorkspaceCapability);
+        Assert.True(fixture.Vm.ShowWorldWorkspaceCapability);
         Assert.False(fixture.Vm.SaveInstanceServersCommand.CanExecute(null)); await fixture.Vm.SaveInstanceServersCommand.ExecuteAsync(null); Assert.Equal(before, File.ReadAllBytes(fixture.ServersOne));
         fixture.Service.Isolated = true; fixture.Service.Base.Publish(fixture.Service.Base.Snapshot with { GameProcessId = 42, State = "Running" }); Pump(fixture.Window);
         Assert.True(fixture.Vm.WorldWorkspaceCanRead); Assert.False(fixture.Vm.WorldWorkspaceCanWrite); Assert.False(Find<Button>(fixture.Window, "SaveInstanceServersButton").IsEffectivelyEnabled);
+        Assert.True(fixture.Vm.ShowWorldWorkspaceCapability);
     }
     private static async Task WaitForAsync(Fixture fixture, Func<bool> condition)
     {
