@@ -29,7 +29,7 @@
     <DataTemplate x:Key="GameVersionTemplate">
       <Button Classes="flat" Command="{Binding SelectCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="7,4" MinHeight="43" ToolTip.Tip="{Binding Detail}">
         <Grid ColumnDefinitions="36,*">
-          <Image Source="{Binding IconUri}" Width="28" Height="28" VerticalAlignment="Center" RenderOptions.BitmapInterpolationMode="None" />
+          <Image Source="{Binding Icon}" Width="28" Height="28" VerticalAlignment="Center" RenderOptions.BitmapInterpolationMode="None" />
           <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center"><TextBlock Text="{Binding Id}" FontSize="14" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" /></StackPanel>
         </Grid>
       </Button>
@@ -66,7 +66,7 @@
             <TextBlock Text="{Binding RequestStatus}" Classes="muted" FontSize="11" /><TextBlock Text="{Binding CatalogSource}" Classes="muted" FontSize="11" />
             <TextBlock Text="{Binding QueryCapabilityReason}" Classes="capability" />
           </StackPanel></Border>
-          <ItemsControl Name="GameVersionGroups" ItemsSource="{Binding VersionGroups}"><ItemsControl.ItemTemplate><DataTemplate><Expander Header="{Binding Header}" Margin="0,0,0,12"><ItemsControl ItemsSource="{Binding Versions}" ItemTemplate="{StaticResource GameVersionTemplate}" Margin="15,0,15,15" /></Expander></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+          <ItemsControl Name="GameVersionGroups" ItemsSource="{Binding VersionGroups}"><ItemsControl.ItemTemplate><DataTemplate><Expander Header="{Binding Header}" HorizontalAlignment="Stretch" Margin="0,0,0,12"><ItemsControl ItemsSource="{Binding Versions}" ItemTemplate="{StaticResource GameVersionTemplate}" Margin="15,0,15,15" /></Expander></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
         </StackPanel>
         <StackPanel Name="MinecraftInstallConfiguration" IsVisible="{Binding IsConfiguration}" Spacing="12">
           <Border Classes="card"><StackPanel Spacing="8"><Grid ColumnDefinitions="34,*"><Button Classes="flat" Content="←" Command="{Binding BackToListCommand}" Padding="4" AutomationProperties.Name="返回版本列表" /><TextBox Grid.Column="1" Name="CatalogInstallationName" Text="{Binding InstallationName}" IsEnabled="{Binding CanEdit}" /></Grid><TextBlock Text="{Binding InstallationValidation}" Classes="muted" Margin="34,0,0,0" /><TextBlock Text="{Binding InstallationSummary}" Margin="34,0,0,0" /></StackPanel></Border>

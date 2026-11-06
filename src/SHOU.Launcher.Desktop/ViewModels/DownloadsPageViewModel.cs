@@ -50,7 +50,11 @@ public sealed class GameCatalogRowViewModel
 {
     public GameCatalogVersion Version { get; }
     public string Id => Version.Id;
-    public string IconUri => "avares://SHOU.Launcher.Desktop/Assets/Minecraft/" + (Version.Kind == "snapshot" ? "CommandBlock.png" : "Grass.png");
+    private static readonly Lazy<Avalonia.Media.Imaging.Bitmap> ReleaseIcon = new(() => LoadIcon("Grass"));
+    private static readonly Lazy<Avalonia.Media.Imaging.Bitmap> SnapshotIcon = new(() => LoadIcon("CommandBlock"));
+    private static Avalonia.Media.Imaging.Bitmap LoadIcon(string name)
+    { using var stream = Avalonia.Platform.AssetLoader.Open(new("avares://SHOU.Launcher.Desktop/Assets/Minecraft/" + name + ".png")); return new(stream); }
+    public Avalonia.Media.IImage Icon => Version.Kind == "snapshot" ? SnapshotIcon.Value : ReleaseIcon.Value;
     public string Detail => !Version.CanInstall ? "此历史版本标识暂不支持安装。"
         : (Version.Latest ? (Version.Kind == "release" ? "最新正式版，" : "最新预览版，") : "")
             + (Version.ReleaseTime == DateTimeOffset.MinValue ? "未提供发布时间" : $"发布于 {Version.ReleaseTime.LocalDateTime:yyyy/M/d HH:mm}");
@@ -369,7 +373,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             if (revision != _requestRevision) return;
             LatestVersions.Clear(); VersionGroups.Clear();
             var rows = catalog.Versions.OrderByDescending(v => v.ReleaseTime).Select(v => new GameCatalogRowViewModel(this, v)).ToArray();
-            foreach (var row in rows.Where(v => v.Version.Latest)) LatestVersions.Add(row);
+            foreach (var row in rows.Where(v => v.Version.Latest).OrderBy(v => v.Version.Kind == "release" ? 0 : 1)) LatestVersions.Add(row);
             foreach (var group in rows.GroupBy(v => v.Version.Kind switch { "release" => "正式版", "snapshot" => "预览版", "old_beta" or "old_alpha" => "远古版", _ => "其他版本" }).OrderBy(g => g.Key switch { "正式版" => 0, "预览版" => 1, "远古版" => 2, _ => 3 }))
                 VersionGroups.Add(new(group.Key, group.ToArray()));
             _catalogLoaded = true;

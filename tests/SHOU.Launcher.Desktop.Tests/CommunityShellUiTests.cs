@@ -73,6 +73,22 @@ public sealed class CommunityShellUiTests
         finally { window.Close(); }
     }
     [AvaloniaFact]
+    public async Task CatalogIconsResolveToImagesAndCollapsedVersionGroupsFillPageWidth()
+    {
+        using var root = new MainWindowViewModel(new CommunityFixture(), new FakeExternalLauncher());
+        var vm = root.Downloads; await vm.RefreshCatalogCommand.ExecuteAsync(null);
+        var window = new Window { Width = 976, Height = 636, Content = new DownloadsView { DataContext = vm } }; window.Show(); Pump(window);
+        try
+        {
+            var latest = Find<ItemsControl>(window, "LatestGameVersions");
+            Assert.NotEmpty(latest.GetVisualDescendants().OfType<Image>());
+            Assert.All(latest.GetVisualDescendants().OfType<Image>(), image => Assert.NotNull(image.Source));
+            var group = Assert.Single(Find<ItemsControl>(window, "GameVersionGroups").GetVisualDescendants().OfType<Expander>());
+            Assert.True(group.Bounds.Width >= latest.Bounds.Width, $"Group {group.Bounds.Width}; latest {latest.Bounds.Width}");
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
     public void GatewayOnlineCountsUseMaximumAndDistinguishUnknownFromZero()
     {
         var service = new FakeLauncherService(); using var root = new MainWindowViewModel(service, new FakeExternalLauncher());
