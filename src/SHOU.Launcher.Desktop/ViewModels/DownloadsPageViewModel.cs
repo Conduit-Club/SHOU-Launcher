@@ -50,6 +50,7 @@ public sealed class GameCatalogRowViewModel
 {
     public GameCatalogVersion Version { get; }
     public string Id => Version.Id;
+    public string IconUri => "avares://SHOU.Launcher.Desktop/Assets/Minecraft/" + (Version.Kind == "snapshot" ? "CommandBlock.png" : "Grass.png");
     public string Detail => !Version.CanInstall ? "此历史版本标识暂不支持安装。"
         : (Version.Latest ? (Version.Kind == "release" ? "最新正式版，" : "最新预览版，") : "")
             + (Version.ReleaseTime == DateTimeOffset.MinValue ? "未提供发布时间" : $"发布于 {Version.ReleaseTime.LocalDateTime:yyyy/M/d HH:mm}");
@@ -147,7 +148,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private string _gameVersionFilter = "";
     private string _loaderFilter = "任意";
     private ContentSortChoice _selectedSort = null!;
-    private string _requestStatus = "点击刷新读取 Minecraft 版本目录。";
+    private string _requestStatus = "正在准备 Minecraft 版本目录…";
     private string _catalogSource = "";
     private GameCatalogVersion? _selectedVersion;
     private LoaderCatalogVersion? _selectedFabric;
@@ -169,9 +170,9 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public DownloadCategoryViewModel TasksCategory { get; }
     public DownloadCategoryViewModel SelectedCategory => _selectedCategory;
     private IEnumerable<DownloadCategoryViewModel> Categories => new[] { MinecraftCategory }.Concat(CommunityCategories).Concat(InstallerCategories).Append(TasksCategory);
-    public bool IsCatalogPage => !_isConfiguration && !_isResourceDetail && SelectedCategory.Id == "minecraft";
+    public bool IsCatalogPage => !_isConfiguration && !_isResourceDetail && !IsPackageDetail && SelectedCategory.Id is "minecraft" or "installer-minecraft";
     public bool IsSearchPage => !_isConfiguration && !_isResourceDetail && SelectedCategory.Id is "mod" or "modpack" or "datapack" or "resourcepack" or "shader" or "world";
-    public bool IsInstallerPage => !_isConfiguration && !_isResourceDetail && SelectedCategory.Id.StartsWith("installer-", StringComparison.Ordinal);
+    public bool IsInstallerPage => !_isConfiguration && !_isResourceDetail && !IsPackageDetail && SelectedCategory.Id != "installer-minecraft" && SelectedCategory.Id.StartsWith("installer-", StringComparison.Ordinal);
     public bool IsFavoritesPage => !_isConfiguration && !_isResourceDetail && SelectedCategory.Id == "favorites";
     public bool IsTasksPage => !_isConfiguration && !_isResourceDetail && SelectedCategory.Id == "tasks";
     public bool IsConfiguration => _isConfiguration;
@@ -326,16 +327,18 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         {
             ++_requestRevision;
             _selectedCategory = selected;
-            _isConfiguration = false; _isResourceDetail = false;
+            _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
             _searchOffset = 0; _searchCompleted = false; ClearProjectRows(Projects);
-            RequestStatus = id == "minecraft" ? (_catalogLoaded ? "已读取版本目录。" : "点击刷新读取 Minecraft 版本目录。")
+            RequestStatus = id is "minecraft" or "installer-minecraft" ? (_catalogLoaded ? "已读取版本目录。" : "正在准备 Minecraft 版本目录…")
                 : id == "world" ? SearchCapabilityReason : "输入条件后点击搜索。";
         }
         NotifyPage();
+        OnNavigatedTo();
     }
     private void NotifyPage()
     {
         foreach (var category in Categories) category.RefreshSelection();
+        OnPropertyChanged(nameof(IsPackageDetail)); OnPropertyChanged(nameof(CatalogPurpose));
         NotifyContentInstallationPage();
         foreach (var name in new[] { nameof(SelectedCategory), nameof(IsCatalogPage), nameof(IsSearchPage), nameof(IsInstallerPage), nameof(IsFavoritesPage), nameof(IsTasksPage), nameof(IsConfiguration), nameof(IsResourceDetail), nameof(ShowCategorySidebar), nameof(SearchPlaceholder), nameof(SearchSupported), nameof(SearchCapabilityReason), nameof(PageSummary), nameof(InstallerTitle), nameof(InstallerDescription), nameof(HasProjects) }) OnPropertyChanged(name);
         NotifyCommands();
@@ -378,6 +381,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public void SelectVersion(GameCatalogVersion version)
     {
         if (!CanEdit || !version.CanInstall) return;
+        if (SelectedCategory.Id == "installer-minecraft") { _ = OpenPackageVersionAsync(version); return; }
         ++_requestRevision;
         _selectedVersion = version; _selectedFabric = null; _createdInstanceId = null;
         ResetAdditionalLoaders();
@@ -389,7 +393,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     }
     private void BackToList()
     {
-        ++_requestRevision; _isConfiguration = false; _isResourceDetail = false;
+        ++_requestRevision; _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
         RequestStatus = IsCatalogPage ? "已读取版本目录。" : _searchCompleted ? $"已返回 {Projects.Count} 项资源。" : "输入条件后点击搜索。";
         NotifyPage();
     }
@@ -416,8 +420,8 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     {
         if (!ValidInstallation || _selectedVersion is null) return;
         var name = InstallationName.Trim(); var version = _selectedVersion.Id; var fabric = SelectedFabric?.Version; var loader = SelectedAdditionalLoader;
-        InstallStatus = "正在创建并安装实例…";
-        var success = await Owner.RunAsync("创建并安装游戏", async ct =>
+        InstallStatus = "正在下载并安装 Minecraft…";
+        var success = await Owner.RunAsync("下载并安装 Minecraft", async ct =>
         {
             var instance = loader is not null ? await _loaderService!.CreateLoaderInstanceAsync(name, version, loader.Loader, loader.Version, ct)
                 : fabric is null ? await Service.CreateInstanceAsync(name, version, ct)
@@ -425,7 +429,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             _createdInstanceId = instance.Id; OnPropertyChanged(nameof(HasCreatedInstance));
             await Service.InstallInstanceAsync(instance.Id, ct);
         });
-        InstallStatus = success ? "实例已创建并安装，可返回启动页选择并启动。"
+        InstallStatus = success ? "Minecraft 已下载并安装，可在启动页选择此版本。"
             : _createdInstanceId is null ? Owner.ErrorMessage ?? "创建已取消。" : "实例已创建，但安装尚未完成。可在实例页继续安装。";
         ShowCreatedInstanceCommand.NotifyCanExecuteChanged(); NotifyInstallDraft();
     }

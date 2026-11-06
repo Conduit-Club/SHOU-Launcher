@@ -10,7 +10,7 @@ using SHOU.Launcher.Desktop.ViewModels;
 
 namespace SHOU.Launcher.Desktop.Views;
 
-public partial class HomeView : UserControl { public HomeView() => AvaloniaXamlLoader.Load(this); }
+public partial class HomeView : UserControl { public HomeView() { AvaloniaXamlLoader.Load(this); InitializeUpdatesOverlay(); } }
 public partial class DownloadsView : UserControl { public DownloadsView() => AvaloniaXamlLoader.Load(this); }
 
 public partial class InstancesView : UserControl

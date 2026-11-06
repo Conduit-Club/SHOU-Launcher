@@ -19,12 +19,20 @@
             <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="8"><TextBlock Text="{Binding AccountCapeSummary}" Classes="appearanceHint" /><ListBox Grid.Row="1" Name="AccountCapeList" ItemsSource="{Binding AccountCapes}" SelectedItem="{Binding SelectedPreviewCape}" MinHeight="64"><ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" Margin="7,6"><TextBlock Text="{Binding Name}" /><TextBlock Grid.Column="1" Text="已穿戴" IsVisible="{Binding IsActive}" Classes="appearanceHint" /></Grid></DataTemplate></ListBox.ItemTemplate></ListBox><TextBlock Grid.Row="2" Text="没有可显示的披风；可点击刷新读取当前档案。" IsVisible="{Binding !HasAccountCapes}" Classes="appearanceHint" /><Button Grid.Row="3" Name="ManageAccountCapeWebsiteButton" Content="前往官网修改披风" Command="{Binding OpenAppearanceWebsiteCommand}" IsVisible="{Binding CanOpenAppearanceWebsite}" HorizontalAlignment="Left" /></Grid>
             <Border Grid.Column="1" Background="{DynamicResource ClubSelection}" CornerRadius="6"><local:AccountSkinPreviewControl Name="AccountCapePreview" Skin="{Binding AccountSkin}" Cape="{Binding PreviewCapeTexture}" Model="{Binding AccountSkinModel}" ShowOuterLayer="{Binding ShowSkinOuterLayer}" ShowCape="True" /></Border>
           </Grid>
-          <StackPanel IsVisible="{Binding IsLocalSkinPage}" Spacing="16" VerticalAlignment="Center" Margin="10,0">
+          <Grid IsVisible="{Binding IsLocalSkinPage}" ColumnDefinitions="*,220" ColumnSpacing="14">
+            <Border Background="{DynamicResource ClubSelection}" CornerRadius="6" ClipToBounds="True">
+              <Grid><local:AccountSkinPreviewControl Name="LocalSkin3DPreview" Skin="{Binding AccountSkin}" Model="{Binding SelectedLocalSkinModel.Value}" ShowOuterLayer="True" MinHeight="160" />
+                <TextBlock Text="选择皮肤后在此显示 3D 预览。" IsVisible="{Binding !HasAccountSkin}" TextWrapping="Wrap" Margin="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="14" VerticalAlignment="Center">
             <TextBlock Text="{Binding AccountAppearanceCapability}" Classes="appearanceHint" />
             <Grid ColumnDefinitions="70,*"><TextBlock Text="皮肤模型" VerticalAlignment="Center" /><ComboBox Name="LocalSkinModelSelector" Grid.Column="1" ItemsSource="{Binding SkinModelChoices}" SelectedItem="{Binding SelectedLocalSkinModel}" IsEnabled="{Binding CanChooseLocalSkin}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
             <TextBlock Text="选择 64×64 或 64×32 的本机 PNG（最大 2 MiB）。选择后保存到当前离线角色；取消不改动原皮肤。" Classes="appearanceHint" />
-            <StackPanel Orientation="Horizontal" Spacing="8"><Button Name="PickOfflineSkinButton" Classes="primary" Content="选择并保存 PNG" IsEnabled="{Binding CanChooseLocalSkin}" Click="PickOfflineSkin_Click" /><Button Name="SaveLocalSkinPngButton" Content="另存当前皮肤" IsEnabled="{Binding CanSaveSkinPng}" Click="SaveSkinPng_Click" /></StackPanel>
-          </StackPanel>
+            <StackPanel Spacing="8"><Button Name="PickOfflineSkinButton" Classes="primary" Content="选择并保存 PNG" IsEnabled="{Binding CanChooseLocalSkin}" Click="PickOfflineSkin_Click" /><Button Name="SaveLocalSkinPngButton" Content="另存当前皮肤" IsEnabled="{Binding CanSaveSkinPng}" Click="SaveSkinPng_Click" /></StackPanel>
+            <TextBlock Text="左侧可拖动旋转、滚轮缩放。" Classes="appearanceHint" />
+            </StackPanel>
+          </Grid>
         </Grid>
         <Grid Grid.Row="3" ColumnDefinitions="*,Auto" IsVisible="{Binding IsAccountPreviewPage}">
           <StackPanel Orientation="Horizontal" Spacing="14"><CheckBox Name="PreviewOuterLayerCheckBox" Content="皮肤外层" IsChecked="{Binding ShowSkinOuterLayer}" /><CheckBox Name="PreviewCapeCheckBox" Content="显示披风" IsChecked="{Binding ShowPreviewCape}" /></StackPanel>

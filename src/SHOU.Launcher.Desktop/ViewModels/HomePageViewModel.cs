@@ -6,7 +6,7 @@ namespace SHOU.Launcher.Desktop.ViewModels;
 
 public sealed record ServerChoice(string Id, string Name, string Detail, string Status);
 
-public sealed class HomePageViewModel : PageViewModel
+public sealed partial class HomePageViewModel : PageViewModel
 {
     private bool _showClubIntroduction;
     private bool _showClubServers;
@@ -33,8 +33,9 @@ public sealed class HomePageViewModel : PageViewModel
         get
         {
             var servers = Owner.Snapshot.Servers.Where(s => s.Id != "none").ToArray();
-            return servers.Length > 0 && servers.All(s => s.OnlinePlayers is not null)
-                ? servers.Sum(s => s.OnlinePlayers ?? 0).ToString() : "未知";
+            var known = servers.Where(s => s.OnlinePlayers is not null).ToArray();
+            // The entrances share the club gateway: do not count the same population three times.
+            return known.Length == 0 ? "未知" : known.Max(s => s.OnlinePlayers ?? 0).ToString() + (known.Length < servers.Length ? "+" : "");
         }
     }
     public string PlatformSummary => Owner.PlatformSummary;
@@ -48,11 +49,12 @@ public sealed class HomePageViewModel : PageViewModel
 
     public HomePageViewModel(MainWindowViewModel owner) : base(owner, "社团首页", "五湖四海之士，汇于东海之滨")
     {
-        RefreshServersCommand = AsyncCommand(() => Owner.RunAsync("查询服务器", ct => Service.RefreshServersAsync(ct), true), () => Owner.CanReadRemote);
+        RefreshServersCommand = AsyncCommand(RefreshServerStatusAsync, () => !IsServerRefreshing);
         OpenWikiCommand = Open("https://conduit-club.github.io/");
         OpenGuideCommand = Open("https://conduit-club.github.io/servers/velocity/");
-        OpenReleasesCommand = Open("https://github.com/Conduit-Club/SHOU-Launcher/releases");
+        OpenReleasesCommand = AsyncCommand(OpenUpdatesAsync);
         OpenDataDirectoryCommand = AsyncCommand(() => Owner.RunControlAsync("打开数据目录", ct => Owner.ExternalLauncher.OpenDirectoryAsync(Service.Paths.DataDirectory, ct)));
+        InitializeCommunityCommands();
     }
     private AsyncRelayCommand Open(string url) => AsyncCommand(() => Owner.RunControlAsync("打开链接", ct => Owner.ExternalLauncher.OpenUriAsync(new Uri(url), ct)));
     public void SetPresentation(bool showIntroduction, bool showServers, bool rotateBackground = true, double opacity = 1)
@@ -75,6 +77,7 @@ public sealed class HomePageViewModel : PageViewModel
         OnPropertyChanged(nameof(BrandName));
         OnPropertyChanged(nameof(SelectedInstanceName));
         OnPropertyChanged(nameof(OnlinePlayerSummary));
+        OnPropertyChanged(nameof(ServerStatusSummary));
         OnPropertyChanged(nameof(PlatformSummary));
         OnPropertyChanged(nameof(CapabilitiesSummary));
         base.Refresh(snapshot);

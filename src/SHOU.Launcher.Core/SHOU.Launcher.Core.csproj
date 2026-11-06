@@ -10,5 +10,6 @@
     <Compile Include="../../PCL.Core/Conduit/ModDownloadSources.cs" Link="Downloads/ModDownloadSources.cs" />
     <Compile Include="../../PCL.Core/Conduit/CurseForgeAccess.cs" Link="Downloads/CurseForgeAccess.cs" />
     <Compile Include="../../PCL.Core/Conduit/Aria2RpcClient.cs" Link="Downloads/Aria2RpcClient.cs" />
+    <Compile Include="../../PCL.Core/Conduit/ClubUpdateNotice.cs" Link="Community/ClubUpdateNotice.cs" />
   </ItemGroup>
 </Project>

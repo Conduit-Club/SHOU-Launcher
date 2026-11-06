@@ -23,13 +23,13 @@
     </DataTemplate>
     <DataTemplate x:Key="DownloadCategoryTemplate">
       <ToggleButton Classes="contextNavigation" IsChecked="{Binding IsSelected, Mode=OneWay}" Command="{Binding SelectCommand}" HorizontalAlignment="Stretch" MinHeight="35">
-        <Grid ColumnDefinitions="22,*"><Path Data="{Binding IconPath}" Width="18" Height="18" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" StrokeThickness="1.5" VerticalAlignment="Center" /><TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" /></Grid>
+        <Grid ColumnDefinitions="24,10,*"><Path Data="{Binding IconPath}" Width="18" Height="18" Stretch="Uniform" Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" StrokeThickness="1.5" VerticalAlignment="Center" /><TextBlock Grid.Column="2" Text="{Binding Title}" FontSize="14" VerticalAlignment="Center" /></Grid>
       </ToggleButton>
     </DataTemplate>
     <DataTemplate x:Key="GameVersionTemplate">
       <Button Classes="flat" Command="{Binding SelectCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="7,4" MinHeight="43" ToolTip.Tip="{Binding Detail}">
         <Grid ColumnDefinitions="36,*">
-          <Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="28" Height="28" VerticalAlignment="Center" />
+          <Image Source="{Binding IconUri}" Width="28" Height="28" VerticalAlignment="Center" RenderOptions.BitmapInterpolationMode="None" />
           <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center"><TextBlock Text="{Binding Id}" FontSize="14" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" /></StackPanel>
         </Grid>
       </Button>
@@ -59,6 +59,7 @@
     <ScrollViewer Grid.Column="1" Name="DownloadsPageScroller" HorizontalScrollBarVisibility="Disabled">
       <Grid Margin="24">
         <StackPanel Name="MinecraftCatalogPage" IsVisible="{Binding IsCatalogPage}" Spacing="15">
+          <TextBlock Text="{Binding CatalogPurpose}" Classes="muted" />
           <Border Classes="card"><StackPanel Spacing="10">
             <DockPanel><Button Name="RefreshGameCatalogButton" DockPanel.Dock="Right" Classes="flat" Content="刷新" Command="{Binding RefreshCatalogCommand}" MinHeight="18" Height="18" Padding="6,1" /><TextBlock Text="最新版本" Classes="sectionTitle" /></DockPanel>
             <ItemsControl Name="LatestGameVersions" ItemsSource="{Binding LatestVersions}" ItemTemplate="{StaticResource GameVersionTemplate}" />
@@ -80,7 +81,12 @@
           <Border Classes="card"><Grid ColumnDefinitions="116,*"><TextBlock Text="LabyMod" FontSize="14" /><TextBlock Grid.Column="1" Text="安装链尚未迁移" Classes="capability" /></Grid></Border>
           <Border Classes="card"><Grid ColumnDefinitions="116,*"><TextBlock Text="OptiFine" FontSize="14" /><TextBlock Grid.Column="1" Text="安装链尚未迁移" Classes="capability" /></Grid></Border>
           <TextBlock Name="CatalogInstallStatus" Text="{Binding InstallStatus}" Classes="muted" />
-          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,8"><Button Name="InstallCatalogVersionButton" Classes="primary" Content="开始下载" Command="{Binding InstallVersionCommand}" Height="42" MinWidth="135" /><Button Content="查看已创建实例" Command="{Binding ShowCreatedInstanceCommand}" IsVisible="{Binding HasCreatedInstance}" Height="42" /></StackPanel>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" Margin="0,8"><Button Name="InstallCatalogVersionButton" Classes="primary" Content="下载并安装" Command="{Binding InstallVersionCommand}" Height="42" MinWidth="135" /><Button Content="查看已安装游戏" Command="{Binding ShowCreatedInstanceCommand}" IsVisible="{Binding HasCreatedInstance}" Height="42" /></StackPanel>
+        </StackPanel>
+        <StackPanel Name="MinecraftPackagePage" IsVisible="{Binding IsPackageDetail}" Spacing="15">
+          <Border Classes="card"><StackPanel Spacing="10"><DockPanel><Button DockPanel.Dock="Left" Classes="flat" Content="←" Command="{Binding BackToListCommand}" AutomationProperties.Name="返回 Minecraft 版本列表" Margin="0,0,10,0" /><TextBlock Text="{Binding SelectedVersionId}" Classes="sectionTitle" VerticalAlignment="Center" /></DockPanel><TextBlock Text="下载官方客户端或服务端 JAR 文件，保存到所选位置。要安装可启动的基础游戏，请使用左侧顶部的 Minecraft。" Classes="muted" /></StackPanel></Border>
+          <TextBlock Text="{Binding RequestStatus}" Classes="muted" />
+          <ItemsControl Name="MinecraftPackageFiles" ItemsSource="{Binding MinecraftPackages}" IsEnabled="{Binding CanEdit}"><ItemsControl.ItemTemplate><DataTemplate><Border Classes="card" Margin="0,0,0,12"><Grid ColumnDefinitions="*,12,Auto"><StackPanel Spacing="6"><TextBlock Text="{Binding Title}" Classes="sectionTitle" /><TextBlock Text="{Binding Detail}" TextWrapping="Wrap" /><TextBlock Text="{Binding Checksum}" Classes="muted" FontSize="11" /></StackPanel><Button Grid.Column="2" Name="SaveMinecraftPackageButton" Content="下载文件…" Click="SaveMinecraftPackage_Click" VerticalAlignment="Center" /></Grid></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
         </StackPanel>
         <StackPanel Name="CommunitySearchPage" IsVisible="{Binding IsSearchPage}" Spacing="15">
           <Border Classes="card" Padding="12,5"><Grid ColumnDefinitions="*,10,60"><TextBox Name="ContentSearchQuery" Text="{Binding QueryText}" PlaceholderText="{Binding SearchPlaceholder}" BorderThickness="0" Background="Transparent" IsEnabled="{Binding CanQuery}" /><Button Grid.Column="2" Name="SearchContentButton" Classes="primary" Content="搜索" Command="{Binding SearchCommand}" /></Grid></Border>

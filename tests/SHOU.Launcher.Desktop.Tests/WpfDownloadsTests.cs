@@ -67,7 +67,7 @@ public sealed class WpfDownloadsTests
         await vm.InstallVersionCommand.ExecuteAsync(null);
         Assert.Equal(1, fake.FabricCreateCalls);
         Assert.Equal(("fixture-game-Fabric_0.99-fixture", "fixture-game", "0.99-fixture"), fake.LastFabricRequest);
-        Assert.Contains("已创建并安装", vm.InstallStatus);
+        Assert.Contains("已下载并安装", vm.InstallStatus);
     }
 
     [AvaloniaFact]

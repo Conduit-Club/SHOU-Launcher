@@ -115,11 +115,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         set
         {
             if (value is null) return;
-            if (ReferenceEquals(value, _selectedPage)) { NotifyNavigation(); return; }
+            if (ReferenceEquals(value, _selectedPage)) { NotifyNavigation(); if (ReferenceEquals(value, Downloads)) Downloads.OnNavigatedTo(); return; }
             var leavingAccounts = ReferenceEquals(_selectedPage, Accounts) || ReferenceEquals(_selectedPage, Home);
             if (!SetProperty(ref _selectedPage, value)) return;
             if (leavingAccounts) Accounts.OnNavigatingAway();
             NotifyNavigation();
+            if (ReferenceEquals(value, Downloads)) Downloads.OnNavigatedTo();
         }
     }
     private void NotifyNavigation()
@@ -171,6 +172,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             await Service.InitializeAsync(ct);
             foreach (var log in Service.GetRecentLogs()) Logs.Append(log);
         }, allowWhileRunning: true);
+        if (!_disposed) { Home.StartCommunityRefresh(); Downloads.OnNavigatedTo(); }
     }
 
     public async Task<bool> RunAsync(string label, Func<CancellationToken, Task> action, bool allowWhileRunning = false, params string?[] sensitiveValues)
@@ -293,6 +295,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _operation?.Cancel();
         _lifetime.Cancel();
         Accounts.CancelAuthenticationState(_lifetime.Token);
+        Home.Dispose();
         Instances.Dispose();
         Downloads.Dispose();
         _lifetime.Dispose();

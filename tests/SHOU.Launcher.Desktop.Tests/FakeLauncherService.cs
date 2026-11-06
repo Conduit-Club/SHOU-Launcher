@@ -3,7 +3,7 @@ using SHOU.Launcher.Core.Abstractions;
 namespace SHOU.Launcher.Desktop.Tests;
 
 // Explicit test fake. No production composition root references this implementation.
-internal sealed class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMigrationService
+internal class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMigrationService
 {
     public bool SupportsLegacyMicrosoftImport { get; set; }
     public IReadOnlyList<LegacyMicrosoftAccountChoice> LegacyChoices { get; set; } = [];

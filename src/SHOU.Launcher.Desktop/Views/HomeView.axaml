@@ -43,13 +43,13 @@
         <Border Name="ClubIntroductionCard" Classes="card" Padding="20" IsVisible="{Binding ShowClubIntroduction}">
           <StackPanel Spacing="14">
             <DockPanel Name="ClubBrandRow" Height="46">
-              <Border DockPanel.Dock="Right" Background="{DynamicResource ClubSelection}" CornerRadius="6" Padding="10,4" Margin="12,0,0,0"><StackPanel><TextBlock Text="社团在线" Classes="muted" FontSize="11" LineHeight="14" HorizontalAlignment="Center" /><TextBlock Text="{Binding OnlinePlayerSummary}" FontSize="20" LineHeight="24" FontWeight="Bold" HorizontalAlignment="Center" /></StackPanel></Border>
+              <Border DockPanel.Dock="Right" Background="{DynamicResource ClubSelection}" CornerRadius="6" Padding="10,4" Margin="12,0,0,0" ToolTip.Tip="{Binding ServerStatusSummary}"><StackPanel><TextBlock Text="社团在线" Classes="muted" FontSize="11" LineHeight="14" HorizontalAlignment="Center" /><TextBlock Name="ClubOnlineCount" Text="{Binding OnlinePlayerSummary}" FontSize="20" LineHeight="24" FontWeight="Bold" HorizontalAlignment="Center" /></StackPanel></Border>
               <StackPanel Orientation="Horizontal" Spacing="15"><Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="44" Height="44" /><StackPanel VerticalAlignment="Center"><TextBlock Name="BrandTitle" Text="{Binding ClubName}" FontSize="24" LineHeight="28" FontWeight="Bold" Foreground="{DynamicResource ClubAccent}" /><TextBlock Text="五湖四海之士，汇于东海之滨" LineHeight="18" /></StackPanel></StackPanel>
             </DockPanel>
             <WrapPanel>
               <Button Content="社团 Wiki" Command="{Binding OpenWikiCommand}" Height="32" Margin="0,0,8,0" />
               <Button Content="登录与入服指南" Command="{Binding OpenGuideCommand}" Height="32" Margin="0,0,8,0" />
-              <Button Content="社团更新日志" Command="{Binding OpenReleasesCommand}" Height="32" Margin="0,0,8,0" />
+              <Button Name="OpenClubUpdatesButton" Content="社团更新日志" Command="{Binding OpenReleasesCommand}" Height="32" Margin="0,0,8,0" />
               <TextBlock Text="QQ群 756155087" FontSize="12" LineHeight="16" VerticalAlignment="Center" Margin="0,5,0,0" />
             </WrapPanel>
           </StackPanel>

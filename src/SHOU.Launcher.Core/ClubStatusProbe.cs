@@ -12,7 +12,8 @@ public static class ClubStatusProbe
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(4));
         try
         {
-            var uri = new Uri("minecraft://" + server.Address); var port = uri.IsDefaultPort || uri.Port < 0 ? 25565 : uri.Port;
+            var uri = new Uri("minecraft://" + server.Address);
+            var port = uri.Port >= 0 ? uri.Port : await IO.MinecraftSrvResolver.ResolvePortAsync(uri.DnsSafeHost, timeout.Token).ConfigureAwait(false);
             using var tcp = new TcpClient(); await tcp.ConnectAsync(uri.Host, port, timeout.Token).ConfigureAwait(false);
             await using var stream = tcp.GetStream();
             using var payload = new MemoryStream(); WriteVarInt(payload, 0); WriteVarInt(payload, 767);
@@ -23,10 +24,12 @@ public static class ClubStatusProbe
             if (await ReadVarIntAsync(stream, timeout.Token).ConfigureAwait(false) != 0) throw new InvalidDataException("Invalid server status packet.");
             var jsonLength = await ReadVarIntAsync(stream, timeout.Token).ConfigureAwait(false); if (jsonLength is < 2 or > 1048576 || jsonLength > length) throw new InvalidDataException("Invalid server status JSON length.");
             var bytes = new byte[jsonLength]; await stream.ReadExactlyAsync(bytes, timeout.Token).ConfigureAwait(false);
-            var json = JsonNode.Parse(bytes); return server with { Status = "在线", OnlinePlayers = (int?)json?["players"]?["online"] };
+            var json = JsonNode.Parse(bytes); var online = (int?)json?["players"]?["online"];
+            if (online is null or < 0) throw new InvalidDataException("Invalid online player count.");
+            return server with { Status = "在线", OnlinePlayers = online };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-        catch (Exception ex) when (ex is IOException or SocketException or OperationCanceledException or System.Text.Json.JsonException or UriFormatException)
+        catch (Exception ex) when (ex is IOException or InvalidDataException or SocketException or OperationCanceledException or System.Text.Json.JsonException or UriFormatException or InvalidOperationException or FormatException)
         { return server with { Status = "状态暂不可用", OnlinePlayers = null }; }
     }
     private static void WriteVarInt(Stream stream, int value) { do { var b = value & 0x7f; value >>>= 7; stream.WriteByte((byte)(b | (value != 0 ? 0x80 : 0))); } while (value != 0); }

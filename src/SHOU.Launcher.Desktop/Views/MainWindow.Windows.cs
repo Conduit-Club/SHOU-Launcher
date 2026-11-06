@@ -12,6 +12,7 @@ namespace SHOU.Launcher.Desktop.Views;
 
 public partial class MainWindow
 {
+    private (int Width, int Height, int Radius)? windowsRegion;
     private void ConfigureWindowsChrome()
     {
         // Keep the native resize frame, work-area maximization and system menu while
@@ -34,11 +35,30 @@ public partial class MainWindow
             if (change.Property == WindowStateProperty || change.Property == CanMaximizeProperty) UpdateWindowsCaption();
             if (change.Property == OffScreenMarginProperty) this.FindControl<Border>("WindowSurface")!.Margin = OffScreenMargin;
         };
+        Opened += (_, _) =>
+        {
+            if (TryGetPlatformHandle() is { Handle: var hwnd } && WindowsFrame.IsWindow(hwnd))
+                WindowsFrame.SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, 0x0037); // FRAMECHANGED, no move/size/activation
+            UpdateWindowsRegion();
+        };
+        SizeChanged += (_, _) => UpdateWindowsRegion();
+        ScalingChanged += (_, _) => UpdateWindowsRegion();
         UpdateWindowsCaption();
     }
 
     private IntPtr WindowsCaptionMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (message == 0x0083 && wParam != IntPtr.Zero) // WM_NCCALCSIZE: paint the full HWND, not inside a white native frame.
+        {
+            if (WindowsFrame.IsZoomed(hwnd))
+            {
+                var monitor = new WindowsFrame.MonitorInfo { Size = Marshal.SizeOf<WindowsFrame.MonitorInfo>() };
+                if (WindowsFrame.GetMonitorInfo(WindowsFrame.MonitorFromWindow(hwnd, 2), ref monitor))
+                    Marshal.StructureToPtr(monitor.Work, lParam, false);
+            }
+            handled = true;
+            return IntPtr.Zero;
+        }
         // Consume the gesture before a focused Button handles Space. Dispatch the
         // standard system command so Windows owns its keyboard/menu loop.
         if (message == 0x0106 && wParam.ToInt64() == 0x20) // WM_SYSCHAR / Space
@@ -107,5 +127,35 @@ public partial class MainWindow
         this.FindControl<Avalonia.Controls.Shapes.Path>("MaximizeGlyph")!.Data = Geometry.Parse(maximized
             ? "M 3,3 H 11 V 11 H 3 Z M 5,3 V 1 H 13 V 9 H 11" : "M 1,1 H 11 V 11 H 1 Z");
         this.FindControl<Border>("WindowSurface")!.CornerRadius = new CornerRadius(maximized ? 0 : 6);
+        UpdateWindowsRegion();
+    }
+
+    private void UpdateWindowsRegion()
+    {
+        if (TryGetPlatformHandle() is not { Handle: var hwnd } || !WindowsFrame.IsWindow(hwnd)
+            || !WindowsFrame.GetWindowRect(hwnd, out var rect)) return;
+        var width = rect.Right - rect.Left; var height = rect.Bottom - rect.Top;
+        var radius = WindowState == WindowState.Maximized ? 0 : Math.Max(1, (int)Math.Round(6 * RenderScaling));
+        var shape = (width, height, radius);
+        if (width <= 0 || height <= 0 || windowsRegion == shape) return;
+        windowsRegion = shape; // SetWindowRgn itself sends window-position messages.
+        var region = radius == 0 ? IntPtr.Zero : WindowsFrame.CreateRoundRectRgn(0, 0, width + 1, height + 1, radius * 2, radius * 2);
+        if (WindowsFrame.SetWindowRgn(hwnd, region, true) == 0 && region != IntPtr.Zero)
+        { WindowsFrame.DeleteObject(region); windowsRegion = null; }
+        // On success Windows owns HRGN. The region also gives Windows 10 real outer rounded corners.
+    }
+    private static class WindowsFrame
+    {
+        [StructLayout(LayoutKind.Sequential)] internal struct Rect { public int Left, Top, Right, Bottom; }
+        [StructLayout(LayoutKind.Sequential)] internal struct MonitorInfo { public int Size; public Rect Monitor, Work; public uint Flags; }
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool IsWindow(IntPtr hwnd);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool IsZoomed(IntPtr hwnd);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool GetWindowRect(IntPtr hwnd, out Rect rect);
+        [DllImport("user32.dll")] internal static extern int SetWindowRgn(IntPtr hwnd, IntPtr region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
+        [DllImport("gdi32.dll")] internal static extern IntPtr CreateRoundRectRgn(int left, int top, int right, int bottom, int ellipseWidth, int ellipseHeight);
+        [DllImport("gdi32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool DeleteObject(IntPtr value);
+        [DllImport("user32.dll")] internal static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+        [DllImport("user32.dll", CharSet = CharSet.Unicode)] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool GetMonitorInfo(IntPtr monitor, ref MonitorInfo info);
+        [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool SetWindowPos(IntPtr hwnd, IntPtr after, int x, int y, int width, int height, uint flags);
     }
 }

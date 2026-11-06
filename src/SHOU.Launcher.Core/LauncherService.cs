@@ -349,6 +349,11 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     public async Task RetryDownloadAsync(string taskId, CancellationToken cancellationToken = default)
     {
         var owner = downloadOwners.Resolve(taskId);
+        if (owner.InstanceId.StartsWith("minecraft-package:", StringComparison.Ordinal))
+        {
+            if (!packageTransfers.TryGetValue(owner.Generation, out var package)) throw new InvalidOperationException("该文件记录已失效，请重新选择版本。");
+            await DownloadMinecraftPackageAsync(package.Version, package.Kind, package.Destination, cancellationToken).ConfigureAwait(false); return;
+        }
         if (await TryRetryContentOperationAsync(owner.Generation, cancellationToken).ConfigureAwait(false)) return;
         if (owner.InstanceId.StartsWith("content:", StringComparison.Ordinal))
         {
@@ -480,7 +485,6 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     public async Task RefreshServersAsync(CancellationToken cancellationToken = default)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(false);
-        if (Paths.IsIsolated) { Set(s => s with { Servers = s.Servers.Select(server => server.Id == "none" ? server : server with { Status = "隔离验证未连接服务器" }).ToArray() }); return; }
         var current = Snapshot.Servers;
         var refreshed = await Task.WhenAll(current.Select(async server => server.Id == "none" ? server : await ClubStatusProbe.ProbeAsync(server, cancellationToken).ConfigureAwait(false))).ConfigureAwait(false);
         Set(s => s with { Servers = refreshed });
