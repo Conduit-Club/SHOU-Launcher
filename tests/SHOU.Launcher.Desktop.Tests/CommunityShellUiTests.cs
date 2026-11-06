@@ -25,6 +25,14 @@ public sealed class CommunityShellUiTests
         try
         {
             var selector = Find<ComboBox>(window, "AccountSelector");
+            var lines = selector.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible && !string.IsNullOrWhiteSpace(t.Text)).ToArray();
+            Assert.True(lines.Length >= 2);
+            foreach (var line in lines)
+            {
+                var top = line.TranslatePoint(default, selector)!.Value.Y;
+                Assert.InRange(top, 0, selector.Bounds.Height);
+                Assert.InRange(top + line.Bounds.Height, 0, selector.Bounds.Height);
+            }
             foreach (var name in new[] { "BeginAddAccountButton", "RequestAccountRemovalButton" })
             {
                 var button = Find<Button>(window, name); Assert.Equal(new Size(32, 32), button.Bounds.Size);
