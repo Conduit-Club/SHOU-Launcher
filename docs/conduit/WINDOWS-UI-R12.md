@@ -1,6 +1,6 @@
 # R12：下载目录自动加载与页面内状态
 
-2026-11-06。继续 `features/windows-parity` 上的 Avalonia 跨平台实现；本轮没有启动 Minecraft、运行安装器、读取真实账户缓存、推送、合并或切换默认入口。
+2026-11-06 至 11-07。继续 `features/windows-parity` 上的 Avalonia 跨平台实现；本轮没有启动 Minecraft、运行安装器、读取真实账户缓存、推送、合并或切换默认入口。
 
 ## 源码与参考
 
@@ -41,10 +41,10 @@
 
 | 检查 | 最终结果 | 记录 |
 |---|---|---|
-| Desktop Release / win-x64 | **145 通过，0 失败，0 跳过**；最终产品补验见 final3 | [TRX](../../artifacts/windows-main-20261105/build/main/r12-desktop-final3/Desktop/Release/win-x64/default/reports/tests.trx) |
+| Desktop Release / win-x64 | **145 通过，0 失败，0 跳过** | [TRX](../../artifacts/windows-main-20261105/build/main/r12-desktop-final3/Desktop/Release/win-x64/default/reports/tests.trx) |
 | Core Release / win-x64 | **373 通过，0 失败，16 显式跳过** | [TRX](../../artifacts/windows-main-20261105/build/main/r12-core-final3/Desktop/Release/win-x64/default/reports/tests.trx) |
-| Windows RC1 自包含发布 | 成功；干净源码 `1b74f352` | [控制记录](../../artifacts/windows-main-20261105/reports/r12-download-rc1-Publish-win-x64-default-controller.json) |
-| macOS ARM64 交叉构建 | 成功，0 warning / 0 error；原生待验 | [控制记录](../../artifacts/windows-main-20261105/reports/r12-macos-rc1-Build-osx-arm64-default-controller.json) |
+| Windows RC2 自包含发布 | 成功；干净源码 `cb31fe63` | [控制记录](../../artifacts/windows-main-20261105/reports/r12-download-rc2-Publish-win-x64-default-controller.json) |
+| macOS ARM64 RC2 交叉构建 | 成功，0 warning / 0 error；原生待验 | [控制记录](../../artifacts/windows-main-20261105/reports/r12-macos-rc2-Build-osx-arm64-default-controller.json) |
 
 新增有行为意义的回归：五类资源自动加载/排序与导航可用、迟到响应隔离、右侧加载范围、四类加载器自动读取/横条宽度/图标/无隐式选择、全局加载不增加底行；官方安装器身份/推荐版/类别字段、拒绝 DTD、忽略任意元数据 URL、真实文件保存/重复执行、坏哈希与取消均保留原文件并清理暂存。
 
@@ -74,15 +74,19 @@
 
 RC1 已以全新空账户/空实例数据根打开，窗口为 976×636、200% DPI；首页显示实际只读社团在线数。Computer Use 点击仍报 `coordinate input geometry is unavailable`，继续使用本会话明确授权的 Win32/UIA 备用路径。
 
-当前实际前台进程为 LockApp，已停止全部界面输入并请用户解锁。最初命名为 catalog 的 001–003 截图实际仍为首页，**不作为下载页验收证据，不打包冒充目录截图**。下载页真实鼠标、首次加载图案、热门列表、安装器分组、最小窗口及深色状态待恢复会话后完成。
+23:58 再次确认实际前台进程为 LockApp，已停止全部界面输入并请用户解锁。最初命名为 catalog 的 001–003 截图实际仍为首页，**不作为下载页验收证据，不打包冒充目录截图**。下载页真实鼠标、首次加载图案、热门列表、安装器分组、最小窗口及深色状态待恢复会话后完成。[原生阻挡记录](../../artifacts/windows-main-20261105/reports/r12-native-blocker.json)。
+
+为避免留着本轮空数据测试进程，核对 RC1 的 PID、完整 EXE 路径和启动时间后仅清理其进程，没有终止进程树或触碰用户原有 WPF/R11 窗口。[清理记录](../../artifacts/windows-main-20261105/reports/r12-native-rc1-owned-cleanup.json)；这次清理不计为正常点击关闭通过。RC2 另以全新数据根执行 30 秒原生启动/自动退出检查：内部状态 Ready、已观察到原生窗口句柄，**exit0、无外层超时清理、stderr 为空**。[启动观察](../../artifacts/windows-main-20261105/reports/r12-native-rc2-startup-native.json)、[退出记录](../../artifacts/windows-main-20261105/reports/r12-native-rc2-startup-exit.json)。仅记录应用内部窗口观察，不在锁屏下发送 UI 输入，也不计为下载页实际截图或鼠标验收。
 
 ## Windows 候选
 
-[Windows x64 自包含 RC1](../../artifacts/windows-main-20261105/dist/r12-download-rc1/Desktop/Release/win-x64/default/SHOU-Launcher-win-x64-v1.5.0-dev.g1b74f352.zip)，**80,885,728 字节**。
+[Windows x64 自包含 RC2](../../artifacts/windows-main-20261105/dist/r12-download-rc2/Desktop/Release/win-x64/default/SHOU-Launcher-win-x64-v1.5.0-dev.gcb31fe63.zip)，**80,886,165 字节**。
 
-SHA-256：`04ff6f9da4545cc64f1a59e1fee307304818d07348e05a20e0a7e3fa2d1d2bf5`
+SHA-256：`8ae2f9f6c904b31a1705f7c16004d488d187965ab8ba165b7ac3b3036865f8e5`
 
-Release / win-x64 / self-contained，源码 `1b74f35294c24ee4116f086f5cdecda2b6b2ba73`，构建时工作区干净。主程序、CoreCLR、Skia 本机库均为 AMD64；266 个包内条目未发现 .env、账户缓存、实例、日志、密钥或测试数据。[候选审计](../../artifacts/windows-main-20261105/reports/r12-rc1-candidate-audit.json)。未签名，只有本机候选；旧 WPF 工程和默认入口保留。未向 SMB/Mac 外传包或截图。
+Release / win-x64 / self-contained，构建来源 `cb31fe63ff21b084cffd1e81c11a7215ef2a8e5a`，工作区干净；它仅比最终产品源码 `656f4ebe` 多本轮说明和 todo 更新，两者产品代码相同。主程序、CoreCLR、Skia 本机库均为 AMD64；266 个包内条目未发现 .env、账户缓存、实例、日志、密钥或测试数据。[RC2 候选审计](../../artifacts/windows-main-20261105/reports/r12-rc2-candidate-audit.json)。未签名，只有本机候选；旧 WPF 工程和默认入口保留。RC1 及其审计保留为早期结果，不作为最终交付包。未向 SMB/Mac 外传包或截图。
+
+收尾核对：任务占用 **34.883 / 35 GiB**，D 盘可用 **277.439 GiB**，保留 20 GiB 下限；无 heavy owner，本轮 RC1/RC2 进程均已结束。原工作区 AGENTS.md 修改与参考 ZIP/目录、todo 均保留。[收尾记录](../../artifacts/windows-main-20261105/reports/r12-delivery-final.json)。
 
 ## 未完成项
 
