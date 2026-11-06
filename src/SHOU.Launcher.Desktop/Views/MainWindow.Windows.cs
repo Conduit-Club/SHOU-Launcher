@@ -15,6 +15,7 @@ public partial class MainWindow
     private (int Width, int Height, int Radius)? windowsRegion;
     private void ConfigureWindowsChrome()
     {
+        var initialSize = new Size(Width, Height);
         // Keep the native resize frame, work-area maximization and system menu while
         // using shared title-bar content. No Windows hooks enter a shared page VM.
         WindowDecorations = WindowDecorations.BorderOnly;
@@ -37,8 +38,9 @@ public partial class MainWindow
         };
         Opened += (_, _) =>
         {
-            if (TryGetPlatformHandle() is { Handle: var hwnd } && WindowsFrame.IsWindow(hwnd))
-                WindowsFrame.SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0, 0x0037); // FRAMECHANGED, no move/size/activation
+            if (WindowState == WindowState.Normal && TryGetPlatformHandle() is { Handle: var hwnd } && WindowsFrame.IsWindow(hwnd))
+                WindowsFrame.SetWindowPos(hwnd, IntPtr.Zero, 0, 0, (int)Math.Round(initialSize.Width * RenderScaling),
+                    (int)Math.Round(initialSize.Height * RenderScaling), 0x0036); // Full-client HWND needs no extra native-frame pixels.
             UpdateWindowsRegion();
         };
         SizeChanged += (_, _) => UpdateWindowsRegion();
@@ -48,6 +50,13 @@ public partial class MainWindow
 
     private IntPtr WindowsCaptionMessage(IntPtr hwnd, uint message, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
+        if (message == 0x0024 && lParam != IntPtr.Zero) // WM_GETMINMAXINFO: full-client minimum, without the removed frame.
+        {
+            var limits = Marshal.PtrToStructure<WindowsFrame.MinMaxInfo>(lParam);
+            limits.MinTrackSize = new() { X = (int)Math.Ceiling(MinWidth * RenderScaling), Y = (int)Math.Ceiling(MinHeight * RenderScaling) };
+            Marshal.StructureToPtr(limits, lParam, false);
+            handled = true; return IntPtr.Zero;
+        }
         if (message == 0x0083 && wParam != IntPtr.Zero) // WM_NCCALCSIZE: paint the full HWND, not inside a white native frame.
         {
             if (WindowsFrame.IsZoomed(hwnd))
@@ -147,6 +156,8 @@ public partial class MainWindow
     private static class WindowsFrame
     {
         [StructLayout(LayoutKind.Sequential)] internal struct Rect { public int Left, Top, Right, Bottom; }
+        [StructLayout(LayoutKind.Sequential)] internal struct Point { public int X, Y; }
+        [StructLayout(LayoutKind.Sequential)] internal struct MinMaxInfo { public Point Reserved, MaxSize, MaxPosition, MinTrackSize, MaxTrackSize; }
         [StructLayout(LayoutKind.Sequential)] internal struct MonitorInfo { public int Size; public Rect Monitor, Work; public uint Flags; }
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool IsWindow(IntPtr hwnd);
         [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] internal static extern bool IsZoomed(IntPtr hwnd);
