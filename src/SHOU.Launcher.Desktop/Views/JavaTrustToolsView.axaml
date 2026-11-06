@@ -25,7 +25,6 @@
     <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="新下载 Java 的自动修复" Classes="sectionTitle" />
       <CheckBox Name="JavaTrustAutoRepairSetting" Content="自动修复已知证书问题（推荐）" IsChecked="{Binding AutoRepair}" IsEnabled="{Binding CanEdit}" />
       <DockPanel><Button Name="SaveJavaTrustPreferenceButton" DockPanel.Dock="Right" Content="保存自动修复偏好" Command="{Binding SavePreferenceCommand}" Margin="10,0,0,0" /><TextBlock Text="{Binding PreferenceSummary}" TextWrapping="Wrap" VerticalAlignment="Center" /></DockPanel>
-      <TextBlock Text="{Binding Feedback}" Classes="muted" />
     </StackPanel></Border>
   </StackPanel>
 </UserControl>

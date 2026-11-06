@@ -9,7 +9,7 @@ public sealed record JavaTrustFindingViewModel(string Path, string Hash, string 
 public sealed class JavaTrustToolsViewModel : PageViewModel
 {
     private readonly IJavaTrustWorkflowService? workflow;
-    private string target = "", status = "选择一个 Java 后开始只读检查。", provenance = "", feedback = "";
+    private string target = "", status = "选择一个 Java 后开始只读检查。", provenance = "";
     private long generation;
     private bool inspected, repairable, preferenceLoaded, autoRepair = true, preferenceDirty, detailsExpanded;
     private JavaTrustDerivation? prepared;
@@ -53,7 +53,6 @@ public sealed class JavaTrustToolsViewModel : PageViewModel
     public string Status { get => status; private set => SetProperty(ref status, value); }
     public string Provenance { get => provenance; private set { SetProperty(ref provenance, value); OnPropertyChanged(nameof(HasProvenance)); } }
     public bool HasProvenance => Provenance.Length > 0;
-    public string Feedback { get => feedback; private set => SetProperty(ref feedback, value); }
     public bool DetailsExpanded { get => detailsExpanded; set => SetProperty(ref detailsExpanded, value); }
     public ObservableCollection<JavaTrustFindingViewModel> Findings { get; } = [];
     public AsyncRelayCommand InspectCommand { get; }
@@ -122,9 +121,8 @@ public sealed class JavaTrustToolsViewModel : PageViewModel
     private async Task SavePreferenceAsync()
     {
         var value = AutoRepair;
-        var success = await Owner.RunAsync("保存 Java 自动修复偏好", ct => Service.SaveSettingsAsync(Service.Snapshot.Settings with { ConduitJavaTrustAutoRepair = value }, ct));
+        await Owner.RunAsync("保存 Java 自动修复偏好", ct => Service.SaveSettingsAsync(Service.Snapshot.Settings with { ConduitJavaTrustAutoRepair = value }, ct));
         preferenceDirty = AutoRepair != Owner.Snapshot.Settings.ConduitJavaTrustAutoRepair;
-        Feedback = success ? "自动修复偏好已保存。" : "偏好未保存，可以重试。";
         OnPropertyChanged(nameof(PreferenceSummary)); NotifyCommands();
     }
     private void ShowFindings(IReadOnlyList<JavaTrustFinding> findings)
