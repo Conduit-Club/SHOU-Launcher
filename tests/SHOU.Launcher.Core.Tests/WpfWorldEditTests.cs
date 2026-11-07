@@ -146,7 +146,7 @@ public sealed class WpfWorldEditTests
         CollectionAssert.AreEqual(LevelBytes(), await File.ReadAllBytesAsync(external)); Assert.IsEmpty(fixture.Backups());
     }
     [TestMethod, DataRow(false), DataRow(true)]
-    public async Task NewServiceEntryPointsRequireSelectedIsolatedTargetWithoutCredentials(bool isolated)
+    public async Task NewServiceEntryPointsRequireSelectedRegisteredTargetWithoutCredentials(bool isolated)
     {
         var downloader = new NoDownloads(); var native = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); var credentials = new NoCredentials();
         var platform = native with { Credentials = credentials, Paths = new FixturePaths(native.Paths, isolated) };
@@ -157,8 +157,6 @@ public sealed class WpfWorldEditTests
         var edits = (IInstanceWorldEditService)service;
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => edits.GetWorldEditStateAsync(first.Id, "world"));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => edits.SaveWorldMetadataAsync(first.Id, "world", Hash(LevelBytes()), new(true, 3, false)));
-        if (!isolated) await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => edits.SaveWorldMetadataAsync(second.Id, "world", Hash(LevelBytes()), new(true, 3, false)));
-        else
         {
             var read = await edits.GetWorldEditStateAsync(second.Id, "world"); var saved = await edits.SaveWorldMetadataAsync(second.Id, "world", read.Revision, new(true, 3, false));
             Assert.IsNotNull(saved.BackupPath); CollectionAssert.AreEqual(LevelBytes(allow: 1, difficulty: 3), await File.ReadAllBytesAsync(Path.Combine(second.GameDirectory, "saves/world/level.dat")));

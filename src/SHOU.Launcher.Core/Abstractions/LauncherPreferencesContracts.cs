@@ -3,7 +3,7 @@ namespace SHOU.Launcher.Core.Abstractions;
 public sealed record LauncherBehavior(string RegionalFormat = "system", int LogLineLimit = 2000,
     bool DisableHardwareAcceleration = false, bool UseDnsOverHttps = false);
 public sealed record LauncherRelease(string Tag, string Title, string Notes, DateTimeOffset Published,
-    Uri Page, bool Prerelease);
+    Uri Page, bool? Prerelease);
 public sealed record LauncherFeedback(string Title, string State, Uri Page, string Body);
 public interface IJavaManagementService
 {

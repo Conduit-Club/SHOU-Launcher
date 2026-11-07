@@ -105,7 +105,7 @@ public sealed partial class SettingsPageViewModel
         {
             if (Service is not ILauncherInformationService info) throw new NotSupportedException("当前服务不支持版本检查。");
             var releases = await info.CheckLauncherReleasesAsync(ct); ct.ThrowIfCancellationRequested(); Releases.Clear(); foreach (var release in releases) Releases.Add(release);
-            SelectedRelease = Releases.FirstOrDefault(r => !r.Prerelease) ?? Releases.FirstOrDefault();
+            SelectedRelease = Releases.FirstOrDefault(r => r.Prerelease == false) ?? Releases.FirstOrDefault();
             LauncherFeedback = releases.Count == 0 ? "没有已发布版本。" : "最新发布：" + SelectedRelease?.Tag;
         }), () => !IsLauncherBusy);
         OpenSelectedReleaseCommand = AsyncCommand(() => Owner.RunControlAsync("打开发行下载页", ct => Owner.ExternalLauncher.OpenUriAsync(SelectedRelease!.Page, ct)), () => SelectedRelease is not null);

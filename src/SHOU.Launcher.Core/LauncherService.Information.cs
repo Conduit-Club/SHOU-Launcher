@@ -12,7 +12,7 @@ public sealed partial class LauncherService : ILauncherInformationService
     private readonly HttpClient informationHttp;
     private readonly bool ownsInformationHttp;
     private const string RepositoryApi = "https://api.github.com/repos/Conduit-Club/SHOU-Launcher/";
-    public async Task<IReadOnlyList<LauncherRelease>> CheckLauncherReleasesAsync(CancellationToken cancellationToken = default)
+    private async Task<IReadOnlyList<LauncherRelease>> ReadReleasesApiAsync(CancellationToken cancellationToken)
     {
         using var json = JsonDocument.Parse(await ReadPublicDocumentAsync(new(RepositoryApi + "releases?per_page=20"), 2 * 1024 * 1024, cancellationToken));
         List<LauncherRelease> releases = [];
@@ -58,11 +58,11 @@ public sealed partial class LauncherService : ILauncherInformationService
         }
         return Encoding.UTF8.GetString(bytes);
     }
-    private async Task<byte[]> ReadPublicDocumentAsync(Uri uri, int limit, CancellationToken ct)
+    private async Task<byte[]> ReadPublicDocumentAsync(Uri uri, int limit, CancellationToken ct, string accept = "application/json")
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(20));
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.5.0"); request.Headers.Accept.ParseAdd("application/json");
+        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.5.0"); request.Headers.Accept.ParseAdd(accept);
         using var response = await informationHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength > limit) throw new InvalidDataException("响应超过大小限制。");
@@ -71,8 +71,6 @@ public sealed partial class LauncherService : ILauncherInformationService
         while ((count = await source.ReadAsync(buffer, timeout.Token)) != 0) { if (target.Length + count > limit) throw new InvalidDataException("响应超过大小限制。"); target.Write(buffer, 0, count); }
         return target.ToArray();
     }
-    private static bool IsReleaseAsset(Uri uri) => uri.Scheme == "https" && uri.Host == "github.com" && string.IsNullOrEmpty(uri.UserInfo)
-        && uri.AbsolutePath.StartsWith("/Conduit-Club/SHOU-Launcher/releases/download/", StringComparison.Ordinal);
     private static bool IsRepositoryPage(Uri uri) => uri.Scheme == "https" && uri.Host == "github.com" && string.IsNullOrEmpty(uri.UserInfo)
         && uri.AbsolutePath.StartsWith("/Conduit-Club/SHOU-Launcher/", StringComparison.Ordinal);
 }

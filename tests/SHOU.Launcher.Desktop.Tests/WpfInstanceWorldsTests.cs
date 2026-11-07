@@ -125,16 +125,16 @@ public sealed class WpfInstanceWorldsTests
     }
 
     [AvaloniaFact]
-    public async Task NonisolatedAndRunningGameStatesDisableRealFileWrites()
+    public async Task OrdinaryDataRootsAllowSelectedInstanceFilesAndRunningGamesStillBlockWrites()
     {
         using var fixture = new Fixture(); await fixture.OpenServersAsync(); fixture.AddDraft("No unsafe save", "safe.invalid");
         Assert.False(fixture.Vm.ShowWorldWorkspaceCapability);
         Assert.DoesNotContain(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), text => text.IsEffectivelyVisible && text.Text == fixture.Vm.WorldWorkspaceCapability);
         var before = File.ReadAllBytes(fixture.ServersOne); fixture.Service.Isolated = false;
         fixture.Service.Base.Publish(fixture.Service.Base.Snapshot); Pump(fixture.Window);
-        Assert.False(fixture.Vm.WorldWorkspaceCanRead); Assert.False(fixture.Vm.WorldWorkspaceCanWrite); Assert.Contains("读取与写入已禁用", fixture.Vm.WorldWorkspaceCapability);
-        Assert.True(fixture.Vm.ShowWorldWorkspaceCapability);
-        Assert.False(fixture.Vm.SaveInstanceServersCommand.CanExecute(null)); await fixture.Vm.SaveInstanceServersCommand.ExecuteAsync(null); Assert.Equal(before, File.ReadAllBytes(fixture.ServersOne));
+        Assert.True(fixture.Vm.WorldWorkspaceCanRead); Assert.True(fixture.Vm.WorldWorkspaceCanWrite);
+        Assert.False(fixture.Vm.ShowWorldWorkspaceCapability);
+        Assert.True(fixture.Vm.SaveInstanceServersCommand.CanExecute(null)); await fixture.Vm.SaveInstanceServersCommand.ExecuteAsync(null); Assert.NotEqual(before, File.ReadAllBytes(fixture.ServersOne));
         fixture.Service.Isolated = true; fixture.Service.Base.Publish(fixture.Service.Base.Snapshot with { GameProcessId = 42, State = "Running" }); Pump(fixture.Window);
         Assert.True(fixture.Vm.WorldWorkspaceCanRead); Assert.False(fixture.Vm.WorldWorkspaceCanWrite); Assert.False(Find<Button>(fixture.Window, "SaveInstanceServersButton").IsEffectivelyEnabled);
         Assert.True(fixture.Vm.ShowWorldWorkspaceCapability);
@@ -197,7 +197,7 @@ public sealed class WpfInstanceWorldsTests
         public IPlatformCapabilities Capabilities => Base.Capabilities;
         public event EventHandler<LauncherSnapshot>? SnapshotChanged { add => Base.SnapshotChanged += value; remove => Base.SnapshotChanged -= value; }
         public event EventHandler<LauncherLog>? LogReceived { add => Base.LogReceived += value; remove => Base.LogReceived -= value; }
-        public InstanceWorldStore Store(string id) { Assert.True(Isolated); Assert.Equal(Snapshot.SelectedInstanceId, id); return new(Paths.DataDirectory, Snapshot.Instances.Single(instance => instance.Id == id).GameDirectory); }
+        public InstanceWorldStore Store(string id) { Assert.Equal(Snapshot.SelectedInstanceId, id); return new(Paths.DataDirectory, Snapshot.Instances.Single(instance => instance.Id == id).GameDirectory); }
         public Task<InstanceServerList> GetInstanceServersAsync(string id, CancellationToken ct = default) => ServerRead?.Invoke(id, ct) ?? Store(id).GetServersAsync(ct);
         public Task<InstanceServerList> SaveInstanceServersAsync(string id, string revision, IReadOnlyList<InstanceServerEdit> entries, CancellationToken ct = default) { ServerSaveCalls++; return Store(id).SaveServersAsync(revision, entries, ct); }
         public Task<IReadOnlyList<InstanceWorldSummary>> GetInstanceWorldsAsync(string id, CancellationToken ct = default) => WorldRead?.Invoke(id, ct) ?? Store(id).GetWorldsAsync(ct);

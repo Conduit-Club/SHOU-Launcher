@@ -160,7 +160,7 @@ public sealed class WpfWorldStoreTests
     [TestMethod, TestCategory("DesktopPlatforms")]
     [DataRow(true)]
     [DataRow(false)]
-    public async Task ServiceRequiresExplicitSelectedIsolatedInstanceAndDoesNotUseCredentials(bool isolated)
+    public async Task ServiceRequiresExplicitSelectedRegisteredInstanceAndDoesNotUseCredentials(bool isolated)
     {
         var downloader = new NoDownloads(); var native = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
         var credentials = new NoCredentials(); var platform = native with { Credentials = credentials, Paths = new FixturePaths(native.Paths, isolated) };
@@ -172,11 +172,6 @@ public sealed class WpfWorldStoreTests
             var worlds = (IInstanceWorldService)service;
             await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => worlds.SaveInstanceServersAsync(first.Id, "missing", [new(null, "Rejected", "rejected.invalid")]));
             Assert.IsFalse(File.Exists(Path.Combine(first.GameDirectory, "servers.dat")));
-            if (!isolated)
-            {
-                await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => worlds.SaveInstanceServersAsync(second.Id, "missing", [new(null, "Rejected", "rejected.invalid")]));
-                Assert.IsFalse(File.Exists(Path.Combine(second.GameDirectory, "servers.dat"))); Assert.AreEqual(0, credentials.Calls); return;
-            }
             var saved = await worlds.SaveInstanceServersAsync(second.Id, "missing", [new(null, "Explicit", "example.invalid:25565")]);
             Assert.HasCount(1, saved.Entries); Assert.IsTrue(File.Exists(Path.Combine(second.GameDirectory, "servers.dat")));
             Assert.AreEqual(0, credentials.Calls); Assert.IsEmpty(service.Snapshot.Accounts);

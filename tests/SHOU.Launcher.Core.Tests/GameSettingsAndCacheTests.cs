@@ -112,6 +112,35 @@ public sealed class GameSettingsAndCacheTests
         Put(folder, name + ".json", """{"id":"中文 XPlus (Fabric)","clientVersion":"1.21.1","mainClass":"net.fabricmc.loader.impl.launch.knot.KnotClient","libraries":[{"name":"net.fabricmc:fabric-loader:0.16.10"}],"downloads":{"client":{"url":"https://piston-data.mojang.com/v1/objects/fixture/client.jar"}}} """);
         Put(folder, "mods/example.jar"); Put(folder, "saves/fixture/level.dat"); return folder;
     }
+    private sealed class OrdinaryPaths(IAppPaths source) : IAppPaths
+    {
+        public string DataDirectory => source.DataDirectory; public string SharedDataDirectory => source.SharedDataDirectory;
+        public string LocalDataDirectory => source.LocalDataDirectory; public string CacheDirectory => source.CacheDirectory;
+        public string LogsDirectory => source.LogsDirectory; public string RuntimesDirectory => source.RuntimesDirectory;
+        public string InstancesDirectory => source.InstancesDirectory; public string TempDirectory => source.TempDirectory;
+        public string ResourcesDirectory => source.ResourcesDirectory; public string LockFile => source.LockFile;
+        public string CredentialScope => source.CredentialScope; public bool IsIsolated => false;
+    }
+    [TestMethod, DataRow(false), DataRow(true)]
+    public async Task ExplicitExternalInstancesKeepWorldAndServerActionsBoundedInBothDataModes(bool ordinary)
+    {
+        using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("No networking expected.")));
+        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        if (ordinary) platform = platform with { Paths = new OrdinaryPaths(platform.Paths) };
+        using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
+        await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
+        var external = ExistingVersion(TestFiles.Root()); var instance = await service.AttachExistingInstanceAsync((await service.InspectInstanceFolderAsync(external)).Single());
+        var before = await File.ReadAllBytesAsync(Path.Combine(external, Path.GetFileName(external) + ".json"));
+        var list = await service.GetInstanceServersAsync(instance.Id); Assert.IsEmpty(list.Entries);
+        var saved = await service.SaveInstanceServersAsync(instance.Id, list.Revision, [new(null, "SMP", "smp.shoumc.com")]);
+        Assert.AreEqual("smp.shoumc.com", (await service.GetInstanceServersAsync(instance.Id)).Entries.Single().Address);
+        await Assert.ThrowsAsync<IOException>(() => service.SaveInstanceServersAsync(instance.Id, list.Revision, []));
+        Assert.HasCount(1, await service.GetInstanceWorldsAsync(instance.Id));
+        var other = await service.CreateInstanceAsync("other", "1.21.1");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.GetInstanceServersAsync(instance.Id));
+        CollectionAssert.AreEqual(before, await File.ReadAllBytesAsync(Path.Combine(external, Path.GetFileName(external) + ".json")));
+        Assert.IsFalse(File.Exists(Path.Combine(Directory.GetParent(external)!.FullName, "servers.dat")));
+    }
     [TestMethod]
     public async Task ExistingChineseSpaceProfileReadsOnlyVersionMetadataAndRetainsSourceIdentity()
     {
