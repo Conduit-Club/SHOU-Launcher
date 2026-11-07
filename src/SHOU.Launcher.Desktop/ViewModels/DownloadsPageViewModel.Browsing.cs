@@ -11,7 +11,7 @@ public sealed partial class DownloadsPageViewModel
         public bool Page { get; } = page;
         public CancellationTokenSource Cancellation { get; } = CancellationTokenSource.CreateLinkedTokenSource(token);
     }
-    private sealed record SearchDraft(string Query, string Game, string Loader, ContentSortChoice Sort, string Category,
+    private sealed record SearchDraft(string Query, string Game, string Loader, ContentSortChoice Sort, string Category, string Source,
         int Offset, bool Completed, DateTimeOffset Fetched, ContentProject[] Projects, string Status, bool ShowStatus);
     private readonly Dictionary<string, BrowseRead> _browseReads = new(StringComparer.Ordinal);
     private readonly Dictionary<string, SearchDraft> _searchDrafts = new(StringComparer.Ordinal);
@@ -89,7 +89,7 @@ public sealed partial class DownloadsPageViewModel
     private void SaveSearchDraft()
     {
         if (!IsSearchPage && !IsResourceDetail) return;
-        _searchDrafts[SelectedCategory.Id] = new(QueryText, GameVersionFilter, LoaderFilter, SelectedSort, SelectedContentCategory.Id, _searchOffset,
+        _searchDrafts[SelectedCategory.Id] = new(QueryText, GameVersionFilter, LoaderFilter, SelectedSort, SelectedContentCategory.Id, SelectedSource.Id, _searchOffset,
             _searchCompleted, _searchFetched, Projects.Select(p => p.Project).ToArray(), RequestStatus, ShowRequestStatus);
     }
     private void RestoreSearchDraft(string category)
@@ -99,7 +99,8 @@ public sealed partial class DownloadsPageViewModel
         {
             _searchDrafts.TryGetValue(category, out var draft);
             QueryText = draft?.Query ?? ""; GameVersionFilter = draft?.Game ?? ""; LoaderFilter = draft?.Loader ?? "任意";
-            SelectedSort = draft?.Sort ?? SortChoices.First(s => s.Id == "downloads");
+            SelectedSource = ContentSourceChoices.FirstOrDefault(s => s.Id == draft?.Source) ?? ContentSourceChoices[0];
+            SelectedSort = draft?.Sort ?? SortChoices[0];
             _contentCategory = new(draft?.Category ?? "", CategoryName(draft?.Category ?? "")); UpdateContentCategories();
             _searchOffset = draft?.Offset ?? 0; _searchCompleted = draft?.Completed ?? false; _searchFetched = draft?.Fetched ?? DateTimeOffset.MinValue;
             ClearProjectRows(Projects);

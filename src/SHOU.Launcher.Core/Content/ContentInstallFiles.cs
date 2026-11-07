@@ -14,10 +14,11 @@ public static class ContentInstallFiles
     public static void ValidateFile(ContentFile file)
     {
         if (file.FileName.Length is 0 or > 200 || file.FileName.Any(c => char.IsControl(c) || c is '/' or '\\' or ':') || file.FileName is "." or ".." ||
-            !Hash(file.Sha1, 40) || file.Size is < 0 or > ContentInstallPlanner.MaximumTotalBytes || !AllowedUri(file.Uri)) throw new InvalidDataException("资源文件身份、来源或大小无效。");
+            !Hash(file.Sha1, 40) || file.Size is < 0 or > ContentInstallPlanner.MaximumTotalBytes || !AllowedResourceUri(file.Uri)) throw new InvalidDataException("资源文件身份、来源或大小无效。");
     }
     public static bool Hash(string? value, int length) => value is not null && value.Length == length && value.All(Uri.IsHexDigit);
     public static bool AllowedUri(Uri uri) => uri.IsAbsoluteUri && uri.Scheme == "https" && uri.Host.Equals("cdn.modrinth.com", StringComparison.OrdinalIgnoreCase) && uri.UserInfo.Length == 0 && uri.Fragment.Length == 0 && uri.IsDefaultPort;
+    private static bool AllowedResourceUri(Uri uri) => AllowedUri(uri) || CurseForgePackResolver.AllowedCurseForgeUri(uri);
     public static string Literal(string root, string relative)
     {
         if (relative.Length is 0 or > 512 || relative.Contains('\\') || relative.Split('/').Any(p => p.Length == 0 || p is "." or ".." || p.Any(c => char.IsControl(c) || c == ':'))) throw new InvalidDataException("文件路径无效。");
@@ -37,7 +38,7 @@ public static class ContentInstallFiles
         {
             _ = Literal(instance.GameDirectory, item.RelativePath);
             if (!Hash(item.Sha1, 40) || !Hash(item.Sha512, 128) || item.Size is < 0 or > ContentInstallPlanner.MaximumTotalBytes ||
-                item.DownloadUrl is { } url && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !AllowedUri(uri))) throw new InvalidDataException("安装清单文件身份无效。");
+                item.DownloadUrl is { } url && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !AllowedResourceUri(uri))) throw new InvalidDataException("安装清单文件身份无效。");
         }
         return manifest;
     }

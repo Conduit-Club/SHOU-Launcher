@@ -78,7 +78,7 @@ public sealed class InstallerCatalogTests
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(ScriptedHttpHandler.Json("<!DOCTYPE metadata><metadata/>"))));
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => new InstallerCatalogReader(http).ReadAsync("forge", default));
-        var unavailable = await new InstallerCatalogReader(http).ReadAsync("optifine", default);
+        var unavailable = await new InstallerCatalogReader(http).ReadAsync("unknown", default);
         Assert.AreEqual(0, unavailable.Versions.Count); Assert.IsFalse(string.IsNullOrWhiteSpace(unavailable.Notice));
     }
     [TestMethod]

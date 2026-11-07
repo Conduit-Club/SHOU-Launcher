@@ -9,7 +9,7 @@ internal static class LoaderArtwork
     private static readonly Dictionary<string, Bitmap> Images = new(StringComparer.Ordinal);
     public static IImage For(string loader)
     {
-        var name = loader is "fabric" or "legacyfabric" ? "Fabric" : loader == "quilt" ? "Quilt" : "Anvil";
+        var name = loader switch { "fabric" or "legacyfabric" => "Fabric", "quilt" => "Quilt", "optifine" => "Grass", "cleanroom" => "Cleanroom", "labymod" => "LabyMod", "liteloader" => "Egg", _ => "Anvil" };
         if (!Images.TryGetValue(name, out var image))
         {
             using var stream = AssetLoader.Open(new("avares://SHOU.Launcher.Desktop/Assets/Minecraft/" + name + ".png"));

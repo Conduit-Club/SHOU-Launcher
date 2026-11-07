@@ -71,6 +71,7 @@ public sealed record GameCatalogGroupViewModel(string Name, IReadOnlyList<GameCa
     public string Header => $"{Name} ({Versions.Count})";
 }
 public sealed record ContentSortChoice(string Id, string Name);
+public sealed record ContentSourceChoice(string Id, string Name);
 
 public sealed class ContentProjectRowViewModel : ObservableObject, IDisposable
 {
@@ -82,7 +83,8 @@ public sealed class ContentProjectRowViewModel : ObservableObject, IDisposable
     public string Title => Project.Title;
     public string Description => Project.Description;
     public string Tile => Title.Length == 0 ? "?" : System.Globalization.StringInfo.GetNextTextElement(Title);
-    public string Detail => $"{Project.Author}  ·  下载 {Project.Downloads:N0} 次  ·  Modrinth";
+    public string SourceName => Project.Source == "curseforge" ? "CurseForge" : "Modrinth";
+    public string Detail => $"{Project.Author}  ·  下载 {Project.Downloads:N0} 次  ·  {SourceName}";
     public string Downloads => Project.Downloads >= 100000000 ? $"{Project.Downloads / 100000000d:0.##} 亿" : Project.Downloads >= 10000 ? $"{Project.Downloads / 10000d:0.##} 万" : Project.Downloads.ToString("N0");
     public string Tags => string.Join(" · ", (Project.Categories ?? []).Where(c => c is not ("fabric" or "forge" or "neoforge" or "quilt" or "datapack")).Take(2).Select(DownloadsPageViewModel.CategoryName));
     public bool HasTags => Tags.Length > 0;
@@ -133,6 +135,8 @@ public sealed class ContentFileRowViewModel
 }
 public sealed record ContentReleaseRowViewModel(ContentRelease Release, IReadOnlyList<ContentFileRowViewModel> Files)
 {
+    public string Notice => Release.Notice ?? "";
+    public bool HasNotice => !string.IsNullOrWhiteSpace(Release.Notice);
     public string Name => Release.Name;
     public string Detail => $"{Release.Version} · {Release.Published.LocalDateTime:yyyy/M/d HH:mm}" +
         (Release.Environment is "server_only" or "server_only_client_optional" or "dedicated_server_only" ? " · 服务器专用，客户端不支持安装" : "");
@@ -165,6 +169,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private string _gameVersionFilter = "";
     private string _loaderFilter = "任意";
     private ContentSortChoice _selectedSort = null!;
+    private ContentSourceChoice _selectedSource = new("all", "全部");
     private string _requestStatus = "正在准备 Minecraft 版本目录…";
     private string _catalogSource = "";
     private GameCatalogVersion? _selectedVersion;
@@ -210,14 +215,24 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public string GameVersionFilter { get => _gameVersionFilter; set { if (SetProperty(ref _gameVersionFilter, value ?? "")) FiltersChanged(); } }
     public IReadOnlyList<string> LoaderFilters { get; } = ["任意", "Fabric", "Forge", "NeoForge", "Quilt"];
     public string LoaderFilter { get => _loaderFilter; set { if (SetProperty(ref _loaderFilter, value ?? "任意")) FiltersChanged(); } }
-    public IReadOnlyList<ContentSortChoice> SortChoices { get; } = [new("relevance", "默认"), new("downloads", "下载数量"), new("follows", "收藏数量"), new("newest", "最新发布"), new("updated", "最近更新")];
+    public IReadOnlyList<ContentSortChoice> SortChoices { get; } = [new("relevance", "默认"), new("downloads", "下载数量"), new("newest", "最新发布"), new("updated", "最近更新")];
     public ContentSortChoice SelectedSort { get => _selectedSort; set { if (value is not null && SetProperty(ref _selectedSort, value)) FiltersChanged(); } }
+    public IReadOnlyList<ContentSourceChoice> ContentSourceChoices => SelectedCategory.Id == "world" ? [new("all", "全部"), new("curseforge", "CurseForge")] : [new("all", "全部"), new("curseforge", "CurseForge"), new("modrinth", "Modrinth")];
+    public ContentSourceChoice SelectedSource
+    {
+        get => _selectedSource;
+        set
+        {
+            if (value is null || !SetProperty(ref _selectedSource, value) || _restoringSearch) return;
+            ++_requestRevision; CancelBrowseReads(); _searchCompleted = false;
+            _contentCategory = new("", "全部"); UpdateContentCategories(); FiltersChanged();
+        }
+    }
     public ObservableCollection<ContentProjectRowViewModel> Projects { get; } = [];
     public bool HasProjects => Projects.Count > 0;
     public string SearchPlaceholder => "搜索" + SelectedCategory.Title;
-    public bool SearchSupported => SelectedCategory.Id != "world";
-    public string SearchCapabilityReason => SelectedCategory.Id == "world"
-        ? "当前资源接口尚未提供世界 / 地图检索。" : "当前来源为 Modrinth。";
+    public bool SearchSupported => SelectedCategory.Id != "world" || SelectedSource.Id != "modrinth";
+    public string SearchCapabilityReason => SearchSupported ? "" : "Modrinth 未提供世界目录，请选择 CurseForge。";
     public string PageSummary => $"第 {_searchOffset / 30 + 1} 页 · {Projects.Count} 项";
     public string QueryCapabilityReason => CatalogAvailable ? "" : "目录服务尚未接入，当前可在实例页手动创建并安装游戏。";
     public string SelectedVersionId => _selectedVersion?.Id ?? "";
@@ -254,7 +269,8 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public ContentProject? SelectedProject => _selectedProject;
     public string ProjectTitle => _selectedProject?.Title ?? "";
     public string ProjectDescription => _selectedProject?.Description ?? "";
-    public string ProjectDetail => _selectedProject is { } project ? $"{project.Author} · 下载 {project.Downloads:N0} 次 · Modrinth" : "";
+    public string ProjectSourceName => _selectedProject?.Source == "curseforge" ? "CurseForge" : "Modrinth";
+    public string ProjectDetail => _selectedProject is { } project ? $"{project.Author} · 下载 {project.Downloads:N0} 次 · {ProjectSourceName}" : "";
     public string ProjectTile => ProjectTitle.Length == 0 ? "?" : System.Globalization.StringInfo.GetNextTextElement(ProjectTitle);
     public ObservableCollection<ContentReleaseGroupViewModel> ReleaseGroups { get; } = [];
     public bool HasReleases => ReleaseGroups.Count > 0;
@@ -319,14 +335,14 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         InstallerCategories = [Category("installer-minecraft", "Minecraft"), Category("installer-optifine", "OptiFine"), Category("installer-forge", "Forge"), Category("installer-neoforge", "NeoForge"), Category("installer-cleanroom", "Cleanroom"), Category("installer-fabric", "Fabric"), Category("installer-quilt", "Quilt"), Category("installer-legacyfabric", "Legacy Fabric"), Category("installer-labymod", "LabyMod"), Category("installer-liteloader", "LiteLoader")];
         TasksCategory = Category("tasks", "下载任务");
         _selectedCategory = MinecraftCategory;
-        _selectedSort = SortChoices.First(s => s.Id == "downloads");
+        _selectedSort = SortChoices[0];
         InitializeBrowsing();
         InitializeInstallerBrowsing();
         RefreshCatalogCommand = AsyncCommand(() => RefreshCatalogAsync(true), () => CanQuery && !_catalogRequestActive);
         SearchCommand = AsyncCommand(() => SearchAsync(0), () => CanQuery && IsSearchPage && SearchSupported);
         NextPageCommand = AsyncCommand(() => SearchAsync(_searchOffset + 30), () => CanQuery && _searchCompleted && Projects.Count == 30);
         PreviousPageCommand = AsyncCommand(() => SearchAsync(Math.Max(0, _searchOffset - 30)), () => CanQuery && _searchCompleted && _searchOffset > 0);
-        ResetFiltersCommand = Command(() => { QueryText = ""; GameVersionFilter = ""; LoaderFilter = "任意"; SelectedSort = SortChoices.First(s => s.Id == "downloads"); SelectedContentCategory = ContentCategoryChoices[0]; FiltersChanged(); }, () => CanEdit);
+        ResetFiltersCommand = Command(() => { QueryText = ""; GameVersionFilter = ""; LoaderFilter = "任意"; SelectedSort = SortChoices[0]; SelectedContentCategory = ContentCategoryChoices[0]; FiltersChanged(); }, () => CanEdit);
         BackToListCommand = Command(BackToList);
         ShowAutomaticInstallCommand = Command(() => SelectCategory("minecraft"));
         RefreshFabricCommand = AsyncCommand(RefreshFabricAsync, () => CanQuery && _selectedVersion is not null);
@@ -368,6 +384,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     {
         OnPropertyChanged(nameof(ShowRequestStatus));
         OnPropertyChanged(nameof(InstallerIntroduction));
+        OnPropertyChanged(nameof(ContentSourceChoices)); OnPropertyChanged(nameof(SelectedSource));
         foreach (var category in Categories) category.RefreshSelection();
         OnPropertyChanged(nameof(IsPackageDetail)); OnPropertyChanged(nameof(CatalogPurpose));
         NotifyContentInstallationPage();
@@ -393,7 +410,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             LatestVersions.Clear(); VersionGroups.Clear();
             var rows = catalog.Versions.OrderByDescending(v => v.ReleaseTime).Select(v => new GameCatalogRowViewModel(this, v)).ToArray();
             foreach (var row in rows.Where(v => v.Version.Latest).OrderBy(v => v.Version.Kind == "release" ? 0 : 1)) LatestVersions.Add(row);
-            foreach (var group in rows.GroupBy(v => v.Version.Kind switch { "release" => "正式版", "snapshot" => "预览版", "old_beta" or "old_alpha" => "远古版", _ => "其他版本" }).OrderBy(g => g.Key switch { "正式版" => 0, "预览版" => 1, "远古版" => 2, _ => 3 }))
+            foreach (var group in rows.GroupBy(v => SHOU.Launcher.Core.Catalog.MinecraftCatalogGroups.Group(v.Version)).OrderBy(g => g.Key switch { "正式版" => 0, "预览版" => 1, "远古版" => 2, "愚人节版" => 3, _ => 4 }))
                 VersionGroups.Add(new(group.Key, group.ToArray()));
             _catalogLoaded = true;
             CatalogSource = "来源：" + catalog.Source + (catalog.Partial ? " · 精简目录，可能缺少历史版本" : "")
@@ -472,14 +489,15 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         _filterDelay?.Cancel(); _searchRequested = false;
         var revision = ++_requestRevision;
         _ = ReadContentCategoriesAsync(revision);
-        var query = new ContentQuery(SelectedCategory.Id, QueryText.Trim(), NullIfBlank(GameVersionFilter), LoaderFilter == "任意" ? null : LoaderFilter.ToLowerInvariant(), SelectedSort.Id, offset, NullIfBlank(SelectedContentCategory.Id));
+        var query = new ContentQuery(SelectedCategory.Id, QueryText.Trim(), NullIfBlank(GameVersionFilter), LoaderFilter == "任意" ? null : LoaderFilter.ToLowerInvariant(), SelectedSort.Id, offset, NullIfBlank(SelectedContentCategory.Id), SelectedSource.Id);
         await QueryAsync("查询社区资源", revision, async ct =>
         {
-            var projects = await _catalog!.SearchContentAsync(query, ct); ct.ThrowIfCancellationRequested();
+            var page = (_catalog as IContentSourceCatalogService) is { } multi ? await multi.SearchContentPageAsync(query, ct) : new ContentSearchPage(await _catalog!.SearchContentAsync(query, ct));
+            var projects = page.Projects; ct.ThrowIfCancellationRequested();
             if (revision != _requestRevision) return;
             ClearProjectRows(Projects); foreach (var project in projects) Projects.Add(new(this, project));
             _searchOffset = offset; _searchCompleted = true; _searchFetched = DateTimeOffset.UtcNow;
-            SetRequestStatus(projects.Count == 0 ? "没有符合条件的资源，请调整搜索条件。" : $"已返回 {projects.Count} 项资源。", projects.Count == 0);
+            SetRequestStatus(page.Notice ?? (projects.Count == 0 ? "没有符合条件的资源，请调整搜索条件。" : $"已返回 {projects.Count} 项资源。"), projects.Count == 0 || page.Notice is not null);
             OnPropertyChanged(nameof(HasProjects)); OnPropertyChanged(nameof(PageSummary)); NotifyBrowseState(); NotifyCommands();
             SaveSearchDraft();
             using var images = CancellationTokenSource.CreateLinkedTokenSource(ct, _imageToken);
@@ -491,6 +509,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         if (!CanQuery) return;
         ++_requestRevision; CancelBrowseReads(); _selectedProject = project; _isResourceDetail = true; _isConfiguration = false;
         ResetResourceInstallStatus();
+        OnPropertyChanged(nameof(ProjectSourceName));
         ReleaseGroups.Clear(); LastDownloadPath = "";
         foreach (var name in new[] { nameof(SelectedProject), nameof(ProjectTitle), nameof(ProjectDescription), nameof(ProjectDetail), nameof(ProjectTile), nameof(IsProjectFavorite), nameof(FavoriteAction), nameof(HasReleases) }) OnPropertyChanged(name);
         NotifyPage(); await RefreshReleasesAsync();
@@ -528,7 +547,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             if (!File.Exists(path)) { FavoriteStatus = "尚未收藏任何资源。"; return; }
             if (new FileInfo(path).Length > 1048576) throw new IOException("收藏文件超过大小限制。");
             var items = System.Text.Json.JsonSerializer.Deserialize<List<ContentProject>>(File.ReadAllText(path)) ?? [];
-            if (items.Count > 1000 || items.Any(p => string.IsNullOrWhiteSpace(p.Id) || p.PageUri.Scheme != "https" || p.PageUri.Host != "modrinth.com")) throw new IOException("收藏文件格式无效。");
+            if (items.Count > 1000 || items.Any(p => string.IsNullOrWhiteSpace(p.Id) || p.PageUri.Scheme != "https" || !p.PageUri.IsDefaultPort || p.PageUri.UserInfo.Length != 0 || (p.Source == "curseforge" ? !p.Id.StartsWith("cf-", StringComparison.Ordinal) || p.PageUri.Host is not ("www.curseforge.com" or "curseforge.com") : p.PageUri.Host != "modrinth.com"))) throw new IOException("收藏文件格式无效。");
             _favorites.AddRange(items.DistinctBy(p => p.Id)); RefreshFavorites();
         }
         catch (Exception ex) { _favoritesLoadFailed = true; FavoriteStatus = "收藏读取失败，原文件已保留：" + UiPrivacy.Redact(ex.Message); }

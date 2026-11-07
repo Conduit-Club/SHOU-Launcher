@@ -24,8 +24,8 @@ public sealed partial class DownloadsPageViewModel
         var selected = _contentCategory.Id;
         ContentCategoryChoices.Clear(); ContentCategoryChoices.Add(new("", "全部"));
         var kind = SelectedCategory.Id == "datapack" ? "mod" : SelectedCategory.Id;
-        foreach (var tag in (_contentCategories ?? []).Where(c => c.Kind == kind).OrderBy(c => c.Id, StringComparer.Ordinal))
-            if (!LoaderFilters.Any(l => l.Equals(tag.Id, StringComparison.OrdinalIgnoreCase)) && tag.Id != "datapack") ContentCategoryChoices.Add(new(tag.Id, CategoryName(tag.Id)));
+        foreach (var tag in (_contentCategories ?? []).Where(c => (c.Source == "curseforge" ? c.Kind == SelectedCategory.Id : c.Kind == kind) && (SelectedSource.Id == "all" || c.Source == SelectedSource.Id)).OrderBy(c => c.Name ?? c.Id, StringComparer.Ordinal))
+            if (!LoaderFilters.Any(l => l.Equals(tag.Id, StringComparison.OrdinalIgnoreCase)) && tag.Id != "datapack") ContentCategoryChoices.Add(new(tag.Id, (tag.Name ?? CategoryName(tag.Id)) + (SelectedSource.Id == "all" ? tag.Source == "curseforge" ? " (CurseForge)" : " (Modrinth)" : "")));
         _contentCategory = ContentCategoryChoices.FirstOrDefault(c => c.Id == selected) ?? ContentCategoryChoices[0];
         OnPropertyChanged(nameof(SelectedContentCategory)); OnPropertyChanged(nameof(HasContentCategoryChoices));
         } finally { _restoringSearch = wasRestoring; }

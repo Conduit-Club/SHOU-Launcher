@@ -9,11 +9,16 @@ public interface IMinecraftCatalogCacheService
 }
 public sealed record LoaderCatalogVersion(string Version, bool Stable);
 public sealed record ContentQuery(string Kind, string Search = "", string? GameVersion = null, string? Loader = null,
-    string Sort = "relevance", int Offset = 0, string? Category = null);
+    string Sort = "relevance", int Offset = 0, string? Category = null, string Source = "modrinth", int Limit = 30);
 public sealed record ContentProject(string Id, string Slug, string Title, string Description, string Author,
     long Downloads, string Kind, string? IconUrl, Uri PageUri, string ClientSide = "unknown",
-    IReadOnlyList<string>? Categories = null, IReadOnlyList<string>? GameVersions = null, DateTimeOffset? Updated = null);
-public sealed record ContentCategory(string Id, string Kind);
+    IReadOnlyList<string>? Categories = null, IReadOnlyList<string>? GameVersions = null, DateTimeOffset? Updated = null, string Source = "modrinth");
+public sealed record ContentCategory(string Id, string Kind, string? Name = null, string Source = "modrinth");
+public sealed record ContentSearchPage(IReadOnlyList<ContentProject> Projects, string? Notice = null);
+public interface IContentSourceCatalogService
+{
+    Task<ContentSearchPage> SearchContentPageAsync(ContentQuery query, CancellationToken cancellationToken = default);
+}
 public interface IContentCategoryCatalogService
 {
     Task<IReadOnlyList<ContentCategory>> GetContentCategoriesAsync(CancellationToken cancellationToken = default);
@@ -21,7 +26,7 @@ public interface IContentCategoryCatalogService
 public sealed record ContentFile(string FileName, Uri Uri, string Sha1, long Size, bool Primary = false);
 public sealed record ContentRelease(string Id, string Name, string Version, DateTimeOffset Published,
     IReadOnlyList<string> GameVersions, IReadOnlyList<string> Loaders, IReadOnlyList<ContentFile> Files,
-    IReadOnlyList<ContentDependency>? Dependencies = null, string? ProjectId = null, string Environment = "unknown");
+    IReadOnlyList<ContentDependency>? Dependencies = null, string? ProjectId = null, string Environment = "unknown", string? Notice = null);
 public sealed record ContentDependency(string Type, string? ProjectId = null, string? VersionId = null, string? FileName = null);
 public interface IContentDependencyCatalogService
 {

@@ -1,7 +1,7 @@
 namespace SHOU.Launcher.Core.Abstractions;
 
 public sealed record InstallerVersion(string Loader, string GameVersion, string Version, string ArtifactVersion,
-    bool Recommended = false, DateTimeOffset? Published = null);
+    bool Recommended = false, DateTimeOffset? Published = null, bool Latest = false, string? Channel = null);
 public sealed record InstallerCatalog(IReadOnlyList<InstallerVersion> Versions, string? Notice = null);
 public interface IInstallerCatalogService
 {

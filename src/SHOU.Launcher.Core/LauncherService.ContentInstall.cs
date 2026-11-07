@@ -4,6 +4,7 @@ using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Core.Content;
 using SHOU.Launcher.Core.Instances;
 using SHOU.Launcher.Core.IO;
+using SHOU.Launcher.Core.Catalog;
 
 namespace SHOU.Launcher.Core;
 
@@ -11,9 +12,11 @@ public sealed partial class LauncherService : IContentInstallationService, ICont
 {
     private readonly ConcurrentDictionary<string, Func<CancellationToken, Task>> contentOperationRetries = new(StringComparer.Ordinal);
     public async Task<ContentRelease> GetContentReleaseAsync(string releaseId, CancellationToken cancellationToken = default)
-    { await InitializeAsync(cancellationToken).ConfigureAwait(false); return await Catalog.ReleaseAsync(releaseId, cancellationToken).ConfigureAwait(false); }
+    { await InitializeAsync(cancellationToken).ConfigureAwait(false); if (!CurseForgeCatalog.IsProject(releaseId)) return await Catalog.ReleaseAsync(releaseId, cancellationToken).ConfigureAwait(false);
+      using var transport = ContentTransport(); return await new CurseForgeCatalog(transport, build.CurseForgeApiKey).ReleaseAsync(releaseId, cancellationToken).ConfigureAwait(false); }
     public async Task<ContentProject> GetContentProjectAsync(string projectId, CancellationToken cancellationToken = default)
-    { await InitializeAsync(cancellationToken).ConfigureAwait(false); return await Catalog.ProjectAsync(projectId, cancellationToken).ConfigureAwait(false); }
+    { await InitializeAsync(cancellationToken).ConfigureAwait(false); if (!CurseForgeCatalog.IsProject(projectId)) return await Catalog.ProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+      using var transport = ContentTransport(); return await new CurseForgeCatalog(transport, build.CurseForgeApiKey).ProjectAsync(projectId, cancellationToken).ConfigureAwait(false); }
     private GameInstance ContentTarget(string instanceId, bool mutate)
     {
         var instance = FindInstance(instanceId); EnsureIsolatedGamePath(instance.GameDirectory);
@@ -42,11 +45,17 @@ public sealed partial class LauncherService : IContentInstallationService, ICont
         }, cancellationToken).ConfigureAwait(false);
         return result!;
     }
-    private Task DownloadInstallFileAsync(ContentFile file, string target, CancellationToken ct)
+    private async Task DownloadInstallFileAsync(ContentFile file, string target, CancellationToken ct)
     {
         ContentInstallFiles.ValidateFile(file);
+        if (CurseForgePackResolver.AllowedCurseForgeUri(file.Uri))
+        {
+            using var transport = ContentTransport();
+            await new CurseForgePackResolver(transport, null).DownloadAsync(new(0, 0, file.FileName, file.Sha1, null, file.Size, file.Uri, false), target, new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
+            return;
+        }
         var sources = ModDownloadSources.Resolve(file.Uri.AbsoluteUri, Sources()).Select(s => new Uri(s)).ToArray();
-        return downloader.DownloadAsync(new(sources, target, file.Sha1, Size: file.Size), new InlineProgress<TransferProgress>(OnTransfer), ct);
+        await downloader.DownloadAsync(new(sources, target, file.Sha1, Size: file.Size), new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
     }
     private async Task RunContentTransferAsync(string identity, Func<CancellationToken, Task> retry,
         Func<CancellationToken, Task> action, CancellationToken ct)

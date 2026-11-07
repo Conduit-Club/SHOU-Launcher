@@ -85,7 +85,7 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
     {
         var type = query.Kind switch { "mod" => "mod", "modpack" => "modpack", "resourcepack" => "resourcepack",
             "shader" => "shader", "datapack" => "datapack", _ => throw new NotSupportedException("此来源尚不支持这类内容。") };
-        if (query.Search.Length > 256 || query.Offset is < 0 or > 10000) throw new ArgumentException("搜索条件超出范围。");
+        if (query.Search.Length > 256 || query.Offset < 0 || query.Limit is < 1 or > 50 || query.Offset + query.Limit > 10000) throw new ArgumentException("搜索条件超出范围。");
         if (query.Sort is not ("relevance" or "downloads" or "follows" or "newest" or "updated")) throw new ArgumentException("未知排序。");
         var facets = new List<string[]> { new[] { "project_type:" + type } };
         if (!string.IsNullOrWhiteSpace(query.GameVersion)) facets.Add(["versions:" + query.GameVersion]);
@@ -95,8 +95,8 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
             if (query.Category.Length > 80 || query.Category.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-')) throw new ArgumentException("标签无效。");
             facets.Add(["categories:" + query.Category]);
         }
-        var url = "https://api.modrinth.com/v2/search?limit=30&offset=" + query.Offset + "&query=" + Uri.EscapeDataString(query.Search)
-            + "&index=" + query.Sort + "&facets=" + Uri.EscapeDataString(JsonSerializer.Serialize(facets));
+        var url = "https://api.modrinth.com/v2/search?limit=" + query.Limit + "&offset=" + query.Offset + "&query=" + Uri.EscapeDataString(query.Search)
+            + "&index=" + (query.Sort == "relevance" && string.IsNullOrWhiteSpace(query.Search) ? "downloads" : query.Sort) + "&facets=" + Uri.EscapeDataString(JsonSerializer.Serialize(facets));
         var document = await ReadAsync(url, true, ct, n => n["hits"] is JsonArray).ConfigureAwait(false);
         var data = document.Data;
         if (data["hits"] is not JsonArray hits || hits.Count > 100) throw new InvalidDataException("资源搜索响应无效。");

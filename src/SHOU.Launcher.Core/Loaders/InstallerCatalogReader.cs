@@ -7,18 +7,20 @@ using SHOU.Launcher.Core.Downloads;
 namespace SHOU.Launcher.Core.Loaders;
 
 /// <summary>Read-only installer catalogs. Browsing never creates instances or starts Java.</summary>
-public sealed class InstallerCatalogReader(HttpClient http)
+public sealed partial class InstallerCatalogReader(HttpClient http)
 {
     private readonly LoaderCatalog reader = new(http);
     public async Task<InstallerCatalog> ReadAsync(string loader, CancellationToken ct)
     {
+        if (Additional(loader)) return await ReadAdditionalAsync(loader, ct).ConfigureAwait(false);
         if (loader is "fabric" or "legacyfabric")
         {
             var meta = loader == "fabric" ? "meta.fabricmc.net" : "meta.legacyfabric.net";
             var data = JsonNode.Parse(await reader.TextAsync(new("https://" + meta + "/v2/versions/installer"), 1024 * 1024, ct)) as JsonArray
                 ?? throw new InvalidDataException("Fabric 安装器目录无效。");
-            return new(data.Take(200).Select(x => new InstallerVersion(loader, "通用安装器", Coordinate((string?)x?["version"] ?? ""),
-                Coordinate((string?)x?["version"] ?? ""), (bool?)x?["stable"] == true)).ToArray());
+            var stable = data.FirstOrDefault(x => (bool?)x?["stable"] == true)?["version"]?.GetValue<string>();
+            return new(data.Take(200).Select((x, i) => new InstallerVersion(loader, "通用安装器", Coordinate((string?)x?["version"] ?? ""),
+                Coordinate((string?)x?["version"] ?? ""), (string?)x?["version"] == stable, Latest: i == 0)).ToArray());
         }
         var url = loader switch
         {
@@ -63,16 +65,19 @@ public sealed class InstallerCatalogReader(HttpClient http)
             try
             {
                 var promotions = JsonNode.Parse(await reader.TextAsync(new("https://files.minecraftforge.net/net/minecraftforge/forge/promotions_slim.json"), 256 * 1024, ct))?["promos"];
-                rows = rows.Select(r => r with { Recommended = (string?)promotions?[r.GameVersion + "-recommended"] == r.Version }).ToList();
+                rows = rows.Select(r => r with { Recommended = (string?)promotions?[r.GameVersion + "-recommended"] == r.Version,
+                    Latest = (string?)promotions?[r.GameVersion + "-latest"] == r.Version }).ToList();
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
             catch (Exception ex) when (ex is HttpRequestException or IOException or System.Text.Json.JsonException or OperationCanceledException) { }
         }
         return new(rows.OrderByDescending(r => NumericKey(r.GameVersion), StringComparer.Ordinal)
-            .ThenByDescending(r => NumericKey(r.Version), StringComparer.Ordinal).ToArray());
+            .ThenByDescending(r => NumericKey(r.Version), StringComparer.Ordinal).GroupBy(r => r.GameVersion)
+            .SelectMany(g => g.Select((r, i) => r with { Latest = r.Latest || i == 0 && !g.Any(x => x.Latest) })).ToArray());
     }
     public static Uri ArtifactUri(InstallerVersion row)
     {
+        if (Additional(row.Loader)) return AdditionalArtifact(row);
         var artifact = Coordinate(row.ArtifactVersion); var version = Coordinate(row.Version);
         if (row.Loader == "forge" && artifact != SafePath.Identifier(row.GameVersion) + "-" + version)
             throw new InvalidDataException("Forge 安装器身份不匹配。");
@@ -98,6 +103,7 @@ public sealed class InstallerCatalogReader(HttpClient http)
     public async Task SaveAsync(InstallerVersion row, string destination, string stagingRoot, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         if (!Path.IsPathFullyQualified(destination) || !Path.GetExtension(destination).Equals(".jar", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("请选择本机 JAR 文件保存位置。");
+        if (Additional(row.Loader)) { await SaveAdditionalAsync(row, destination, stagingRoot, progress, ct).ConfigureAwait(false); return; }
         var uri = ArtifactUri(row);
         var text = await reader.TextAsync(new(uri.AbsoluteUri + ".sha1"), 4096, ct);
         var sha = text.Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
@@ -129,5 +135,6 @@ public sealed class InstallerCatalogReader(HttpClient http)
             { if (File.Exists(path)) { VerifiedDownloader.RejectLink(path); File.Delete(path); } }
         }
     }
-    private static string NumericKey(string version) => string.Join('.', version.Split('.', '-').Select(p => int.TryParse(p, out var n) ? n.ToString("D9", System.Globalization.CultureInfo.InvariantCulture) : p));
+    private static string NumericKey(string version) => System.Text.RegularExpressions.Regex.Replace(version, "[0-9]+", m => long.TryParse(m.Value, out var n) ? n.ToString("D12", System.Globalization.CultureInfo.InvariantCulture) : m.Value,
+        System.Text.RegularExpressions.RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 }

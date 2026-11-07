@@ -99,7 +99,7 @@ public sealed class WpfDownloadsTests
         vm.SelectCategory("mod");
         vm.QueryText = "  query  "; vm.GameVersionFilter = "fixture-game"; vm.LoaderFilter = "Fabric"; vm.SelectedSort = vm.SortChoices.Single(s => s.Id == "downloads");
         await vm.SearchCommand.ExecuteAsync(null);
-        Assert.Equal(new ContentQuery("mod", "query", "fixture-game", "fabric", "downloads", 0), catalog.Queries[0]);
+        Assert.Equal(new ContentQuery("mod", "query", "fixture-game", "fabric", "downloads", 0, Source: "all"), catalog.Queries[0]);
         Assert.True(vm.NextPageCommand.CanExecute(null));
         await vm.NextPageCommand.ExecuteAsync(null);
         Assert.Equal(30, catalog.Queries[1].Offset);
@@ -112,10 +112,24 @@ public sealed class WpfDownloadsTests
         Assert.Empty(vm.Projects);
         Assert.Equal("resourcepack", vm.SelectedCategory.Id);
         vm.SelectCategory("world");
-        Assert.False(vm.SearchCommand.CanExecute(null));
-        Assert.Contains("尚未提供", vm.SearchCapabilityReason);
+        Assert.True(vm.SearchCommand.CanExecute(null));
+        Assert.DoesNotContain(vm.ContentSourceChoices, source => source.Id == "modrinth");
     }
 
+    [AvaloniaFact]
+    public async Task CurseForgeFavoritesRetainTheirProviderAndOfficialProjectLinkAfterReload()
+    {
+        var path = FixturePath("cf-favorites.json"); var catalog = new CatalogFixture();
+        var project = Project("fixture") with { Id = "cf-42", Source = "curseforge", PageUri = new("https://www.curseforge.com/minecraft/mc-mods/fixture") };
+        using var owner = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
+        using (var vm = new DownloadsPageViewModel(owner, catalog, path))
+        {
+            vm.SelectCategory("mod"); await vm.OpenProjectAsync(project); await vm.ToggleFavoriteCommand.ExecuteAsync(null);
+            Assert.True(vm.IsProjectFavorite); Assert.Equal("CurseForge", vm.ProjectSourceName);
+        }
+        using var reloaded = new DownloadsPageViewModel(owner, catalog, path);
+        var favorite = Assert.Single(reloaded.FavoriteProjects); Assert.Equal("CurseForge", favorite.SourceName); Assert.Equal(project.PageUri, favorite.Project.PageUri);
+    }
     [AvaloniaFact]
     public async Task ResourceDetailsDownloadTheReturnedFileAndFavoritesRoundTripWithoutFakeSuccess()
     {
