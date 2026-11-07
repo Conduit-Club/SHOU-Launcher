@@ -78,8 +78,8 @@ public sealed class ModrinthPackTests
     {
         var root = TestFiles.Root(); var index = Index(); index["files"]![0]!["downloads"] = new JsonArray("https://example.invalid/file.jar");
         await Assert.ThrowsExactlyAsync<NotSupportedException>(() => new ModrinthPackArchive().InspectAsync(Archive(root, index)));
-        var unsupported = Archive(root, Index(loader: "forge")); var inspection = await new ModrinthPackArchive().InspectAsync(unsupported);
-        Assert.IsFalse(inspection.CanImport); StringAssert.Contains(inspection.CapabilityReason!, "forge");
+        var unsupported = Archive(root, Index(loader: "unknown-loader")); var inspection = await new ModrinthPackArchive().InspectAsync(unsupported);
+        Assert.IsFalse(inspection.CanImport); StringAssert.Contains(inspection.CapabilityReason!, "unknown-loader");
         await Assert.ThrowsExactlyAsync<NotSupportedException>(() => new ModrinthPackArchive().StageAsync(unsupported, inspection.ArchiveSha256, Path.Combine(root, "unsupported"), [], Download));
     }
 

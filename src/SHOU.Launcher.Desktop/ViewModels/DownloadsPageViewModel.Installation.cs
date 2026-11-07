@@ -30,6 +30,7 @@ public sealed partial class DownloadsPageViewModel
     private LocalPackInspection? _localPackInspection;
     private IReadOnlyList<string> _packImportDetails = [];
     private int _packRevision;
+    public bool PreparePackAfterImport { get; set; }
     public ObservableCollection<ContentTargetChoice> ContentInstallTargets { get; } = [];
     public ContentTargetChoice? SelectedInstallTarget
     {
@@ -133,7 +134,7 @@ public sealed partial class DownloadsPageViewModel
         if (!CanImportLocalPack || !PackServiceAvailable) return;
         var hash = _localPackInspection?.ArchiveSha256 ?? _packInspection!.ArchiveSha256;
         var selected = OptionalPackFiles.Where(f => f.Selected).Select(f => f.Path).ToArray();
-        var request = new ModrinthPackImportRequest(_localPackPath, hash, PackInstanceName, selected);
+        var request = new ModrinthPackImportRequest(_localPackPath, hash, PackInstanceName, selected, PreparePackAfterImport);
         ModrinthPackImportResult? imported = null; var revision = _packRevision;
         LocalPackImportResult? local = null;
         _packImportDetails = [];
@@ -141,7 +142,7 @@ public sealed partial class DownloadsPageViewModel
         PackStatus = "正在校验文件并导入独立新实例…";
         var success = await Owner.RunAsync("导入整合包", async ct =>
         {
-            if (_localPacks is not null) local = await _localPacks.ImportLocalPackAsync(new(_localPackPath, hash, PackInstanceName, selected), ct);
+            if (_localPacks is not null) local = await _localPacks.ImportLocalPackAsync(new(_localPackPath, hash, PackInstanceName, selected, PreparePackAfterImport), ct);
             else imported = await _packs!.ImportModrinthPackAsync(request, ct);
         });
         if (revision != _packRevision || _disposed) return;

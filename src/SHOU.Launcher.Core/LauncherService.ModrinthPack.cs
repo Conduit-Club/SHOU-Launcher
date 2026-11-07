@@ -27,14 +27,17 @@ public sealed partial class LauncherService : IModrinthPackService
                 await RunContentTransferAsync("mrpack-import:" + Guid.NewGuid().ToString("N"), token => ImportModrinthPackAsync(request, token), async token =>
                 {
                     var inspection = await new ModrinthPackArchive().StageAsync(request.ArchivePath, request.ExpectedSha256, stage, request.OptionalClientFiles, DownloadPackFileAsync, token).ConfigureAwait(false);
-                    var profile = inspection.Loader == "fabric"
-                        ? await new FabricMetadataProvider(http, Paths.CacheDirectory, Sources).CacheProfileAsync(inspection.GameVersion, inspection.LoaderVersion!, token).ConfigureAwait(false)
-                        : inspection.GameVersion;
+                    var profile = await CacheLoaderProfileAsync(inspection.Loader, inspection.GameVersion, inspection.LoaderVersion, token).ConfigureAwait(false);
                     var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination,
                         Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);
                     var manifestPath = ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName);
                     var manifest = JsonSerializer.Deserialize<ContentInstallManifest>(await File.ReadAllBytesAsync(manifestPath, token).ConfigureAwait(false)) ?? throw new InvalidDataException("整合包安装清单缺失。");
                     await File.WriteAllBytesAsync(manifestPath, JsonSerializer.SerializeToUtf8Bytes(manifest with { InstanceId = instance.Id }), token).ConfigureAwait(false);
+                    if (request.PrepareAfterImport)
+                    {
+                        await PrepareInstanceAsync(instance with { GameDirectory = stage }, token, publishInstalled: false).ConfigureAwait(false);
+                        instance = instance with { Installed = true };
+                    }
                     token.ThrowIfCancellationRequested(); _ = ContentInstallFiles.Literal(root, Path.GetFileName(stage)); _ = ContentInstallFiles.Literal(root, Path.GetFileName(destination));
                     await IO.DirectoryPublication.PublishAsync(stage, destination, token).ConfigureAwait(false); moved = true;
                     var candidate = Snapshot with { Instances = Snapshot.Instances.Append(instance).ToArray(), SelectedInstanceId = Snapshot.Settings.Downloads?.SelectInstalledInstance == false ? Snapshot.SelectedInstanceId : instance.Id };

@@ -172,13 +172,25 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     private async Task<(InstalledGame Game, JavaInstallation Java)> PrepareInstanceCoreAsync(GameInstance instance, CancellationToken ct, bool publishInstalled)
     {
         EnsureIsolatedGamePath(instance.GameDirectory);
-        if (instance.Loader is not ("vanilla" or "fabric" or "quilt" or "forge" or "neoforge")) throw new PlatformNotSupportedException("当前预览尚未实现此loader的processor链。");
+        if (instance.Loader is not ("vanilla" or "fabric" or "quilt" or "forge" or "neoforge" or "cleanroom" or "legacyfabric") && !Loaders.PortableVendorInstaller.Supports(instance.Loader)) throw new PlatformNotSupportedException("当前预览尚未实现此loader的processor链。");
         if (instance.Loader != "vanilla") _ = Instances.InstanceIdentity.GameVersion(instance);
         var resolver = new VersionMetadataResolver(http, downloader, Paths.CacheDirectory, Sources);
-        if ((instance.Origin is null || instance.RuntimeProfileOverride) && instance.Loader is "forge" or "neoforge")
+        if ((instance.Origin is null || instance.RuntimeProfileOverride) && Loaders.PortableVendorInstaller.Supports(instance.Loader))
+        {
+            var profile = await CacheVendorProfileAsync(instance.Loader, Instances.InstanceIdentity.GameVersion(instance), instance.LoaderVersion!, ct).ConfigureAwait(false);
+            if (profile != instance.VersionId) throw new InvalidDataException("安装适配器的实例身份不一致。");
+        }
+        if ((instance.Origin is null || instance.RuntimeProfileOverride) && instance.Loader is "forge" or "neoforge" or "cleanroom")
         {
             var vanilla = await resolver.ResolveAsync(Instances.InstanceIdentity.GameVersion(instance), ct).ConfigureAwait(false);
-            var processorJava = await SelectInstanceJavaAsync(instance, vanilla, ct).ConfigureAwait(false);
+            var processorVersion = vanilla;
+            if (instance.Loader == "cleanroom")
+            {
+                var metadata = (System.Text.Json.Nodes.JsonObject)vanilla.Metadata.DeepClone();
+                metadata["javaVersion"] = new System.Text.Json.Nodes.JsonObject { ["majorVersion"] = 25, ["component"] = "java-runtime-epsilon" };
+                processorVersion = vanilla with { Metadata = metadata };
+            }
+            var processorJava = await SelectInstanceJavaAsync(instance, processorVersion, ct).ConfigureAwait(false);
             await OfficialLoaders.EnsureInstalledAsync(instance, vanilla, processorJava, Context(processorJava), new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
         }
         var version = instance.Origin is { } origin && !instance.RuntimeProfileOverride ? await Instances.ExistingInstanceReader.ResolveAsync(origin, instance.VersionId, Instances.InstanceIdentity.GameVersion(instance), ct).ConfigureAwait(false) : await resolver.ResolveAsync(instance.VersionId, ct).ConfigureAwait(false);
@@ -187,6 +199,11 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         var context = Context(java);
         var gameFiles = await new MinecraftInstaller(http, downloader, Paths.CacheDirectory, Sources).InstallAsync(version, context,
             instance.GameDirectory, new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
+        if ((instance.Origin is null || instance.RuntimeProfileOverride) && Loaders.PortableVendorInstaller.Supports(instance.Loader))
+        {
+            using var vendorClient = new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false));
+            await VendorInstaller(vendorClient).CopyPayloadAsync(instance, ct).ConfigureAwait(false);
+        }
         if (publishInstalled)
         {
             var installedInstances = Snapshot.Instances.Select(i => i.Id == instance.Id ? i with { Installed = true } : i).ToArray();

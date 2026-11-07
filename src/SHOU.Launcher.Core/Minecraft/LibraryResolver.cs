@@ -41,8 +41,15 @@ public static class LibraryResolver
                 var classifier = template.Replace("${arch}", context.JavaArchitecture == RuntimeArchitecture.X86 ? "32" : "64", StringComparison.Ordinal);
                 if (context.JavaArchitecture == RuntimeArchitecture.Arm64 && !classifier.Contains("arm64", StringComparison.OrdinalIgnoreCase) && !classifier.Contains("aarch64", StringComparison.OrdinalIgnoreCase))
                     throw new PlatformNotSupportedException($"Legacy native {name}/{classifier} has no verified ARM64 slice; x64 compatibility is not enabled.");
-                var native = downloads?["classifiers"]?[classifier] as JsonObject
-                    ?? throw new PlatformNotSupportedException($"{name} does not provide native classifier {classifier}.");
+                var native = downloads?["classifiers"]?[classifier] as JsonObject;
+                if (native is null && downloads is null && (string?)lib["url"] is { } repository)
+                {
+                    // Legacy Fabric publishes Maven coordinates rather than Mojang's classifiers table.
+                    // The installer still obtains and verifies the repository's SHA-1 before downloading.
+                    var path = MavenPath(name + ":" + classifier);
+                    native = new JsonObject { ["path"] = path, ["url"] = repository.TrimEnd('/') + "/" + path };
+                }
+                if (native is null) throw new PlatformNotSupportedException($"{name} does not provide native classifier {classifier}.");
                 var excludes = (lib["extract"]?["exclude"] as JsonArray)?.Select(n => n?.GetValue<string>() ?? "").ToArray() ?? [];
                 files.Add(ParseFile(name + ":" + classifier, native, true) with { Excludes = excludes });
             }

@@ -245,7 +245,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public bool ValidInstallation => _selectedVersion is { CanInstall: true } && !string.IsNullOrWhiteSpace(InstallationName) && InstallationName.Trim().Length <= 80
         && ValidAdditionalLoader && !Owner.Snapshot.Instances.Any(i => string.Equals(i.Name, InstallationName.Trim(), StringComparison.OrdinalIgnoreCase));
     public bool HasInstallationValidation => _createdInstanceId is null && !ValidInstallation;
-    public string InstallationSummary => _selectedAdditionalLoader is { } loader ? $"Minecraft {SelectedVersionId} + {LoaderTitle(loader.Loader)} {loader.Version}"
+    public string InstallationSummary => _selectedAdditionalLoader is { } loader ? $"Minecraft {SelectedVersionId} + {LoaderTitle(loader.Loader)} {loader.DisplayVersion}"
         : _selectedFabric is { } fabric ? $"Minecraft {SelectedVersionId} + Fabric Loader {fabric.Version}" : $"Minecraft {SelectedVersionId} · 原版";
     public ObservableCollection<LoaderCatalogVersion> FabricVersions { get; } = [];
     public LoaderCatalogVersion? SelectedFabric
@@ -261,7 +261,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             OnPropertyChanged(nameof(FabricSummary));
         }
     }
-    private string DefaultInstallationName => _selectedAdditionalLoader is { } loader ? $"{SelectedVersionId}-{LoaderTitle(loader.Loader)}_{loader.Version}"
+    private string DefaultInstallationName => _selectedAdditionalLoader is { } loader ? $"{SelectedVersionId}-{LoaderTitle(loader.Loader)}_{loader.DisplayVersion}"
         : _selectedFabric is { } fabric ? $"{SelectedVersionId}-Fabric_{fabric.Version}" : SelectedVersionId;
     public string FabricStatus { get => _fabricStatus; private set => SetProperty(ref _fabricStatus, value); }
     public string InstallStatus { get => _installStatus; private set => SetProperty(ref _installStatus, value); }
@@ -469,14 +469,17 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     {
         if (!ValidInstallation || _selectedVersion is null) return;
         var name = InstallationName.Trim(); var version = _selectedVersion.Id; var fabric = SelectedFabric?.Version; var loader = SelectedAdditionalLoader;
+        _createdInstanceId = null; OnPropertyChanged(nameof(HasCreatedInstance));
         InstallStatus = "正在下载并安装 Minecraft…";
         var success = await Owner.RunAsync("下载并安装 Minecraft", async ct =>
         {
-            var instance = loader is not null ? await _loaderService!.CreateLoaderInstanceAsync(name, version, loader.Loader, loader.Version, ct)
+            var instance = Service is ITransactionalInstanceInstaller transactional ? await transactional.CreateInstalledInstanceAsync(name, version,
+                loader?.Loader ?? (fabric is null ? "vanilla" : "fabric"), loader?.Version ?? fabric, ct)
+                : loader is not null ? await _loaderService!.CreateLoaderInstanceAsync(name, version, loader.Loader, loader.Version, ct)
                 : fabric is null ? await Service.CreateInstanceAsync(name, version, ct)
                 : await Service.CreateFabricInstanceAsync(name, version, fabric, ct);
             _createdInstanceId = instance.Id; OnPropertyChanged(nameof(HasCreatedInstance));
-            await Service.InstallInstanceAsync(instance.Id, ct);
+            if (!instance.Installed) await Service.InstallInstanceAsync(instance.Id, ct);
         });
         InstallStatus = success ? "Minecraft 已下载并安装，可在启动页选择此版本。"
             : _createdInstanceId is null ? Owner.ErrorMessage ?? "创建已取消。" : "实例已创建，但安装尚未完成。可在实例页继续安装。";

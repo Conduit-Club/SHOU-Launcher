@@ -6,7 +6,7 @@ public sealed record ModrinthPackInspection(string Name, string VersionId, strin
     string? LoaderVersion, string ArchiveSha256, IReadOnlyList<ModrinthPackFile> Files,
     IReadOnlyList<string> Overrides, IReadOnlyList<string> Warnings, bool CanImport, string? CapabilityReason = null);
 public sealed record ModrinthPackImportRequest(string ArchivePath, string ExpectedSha256, string InstanceName,
-    IReadOnlyList<string>? OptionalClientFiles = null);
+    IReadOnlyList<string>? OptionalClientFiles = null, bool PrepareAfterImport = false);
 public sealed record ModrinthPackImportResult(GameInstance Instance, int InstalledFiles, int SkippedServerFiles, int SkippedOptionalFiles);
 public sealed record ModrinthPackExportOptions(string Name, string VersionId = "1.0.0",
     IReadOnlyList<string>? OverridePaths = null, bool BundleInstalledFiles = false);

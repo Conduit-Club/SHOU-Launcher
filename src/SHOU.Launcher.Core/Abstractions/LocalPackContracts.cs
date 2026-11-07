@@ -8,7 +8,7 @@ public sealed record LocalPackInspection(LocalPackFormat Format, string Name, st
     string? CapabilityReason = null, ModrinthPackInspection? Modrinth = null,
     IReadOnlyList<string>? LocalFiles = null, int SkippedFiles = 0);
 public sealed record LocalPackImportRequest(string ArchivePath, string ExpectedSha256, string InstanceName,
-    IReadOnlyList<string>? OptionalClientFiles = null);
+    IReadOnlyList<string>? OptionalClientFiles = null, bool PrepareAfterImport = false);
 public sealed record LocalPackImportResult(GameInstance Instance, int InstalledFiles, IReadOnlyList<string> Warnings,
     ModrinthPackImportResult? Modrinth = null);
 

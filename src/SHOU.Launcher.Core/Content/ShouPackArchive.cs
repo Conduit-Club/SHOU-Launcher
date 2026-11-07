@@ -24,9 +24,9 @@ internal static class ShouPackArchive
         return Path.GetExtension(path).ToLowerInvariant() is not (".exe" or ".com" or ".bat" or ".cmd" or ".ps1" or ".sh" or ".command" or ".dll" or ".so" or ".dylib" or ".js" or ".vbs" or ".key" or ".pem" or ".pfx");
     }
 
-    internal static async Task<string> ExportAsync(GameInstance instance, string outputDirectory, bool includeWorlds, CancellationToken ct)
+    internal static async Task<string> ExportAsync(GameInstance instance, string outputDirectory, bool includeWorlds, CancellationToken ct, CurseForgeExportPlan? cf = null)
     {
-        if (instance.Loader is not ("vanilla" or "fabric")) throw new NotSupportedException("SHOU 包目前支持原版和 Fabric 实例；其它加载器仍可独立修改。");
+        PackLoaderIdentity.ValidateShou(instance.Loader, instance.LoaderVersion);
         var gameVersion = InstanceIdentity.GameVersion(instance);
         if (instance.Loader == "fabric") IO.SafePath.Identifier(instance.LoaderVersion ?? throw new InvalidDataException("Fabric 版本身份缺失。"));
         if (string.IsNullOrWhiteSpace(instance.Name) || instance.Name.Length > 160 || instance.Name.Any(char.IsControl)) throw new InvalidDataException("实例名称不适合导出，请先修改名称。");
@@ -50,6 +50,18 @@ internal static class ShouPackArchive
                 }
             }
         }
+        if (cf is not null)
+        {
+            foreach (var path in cf.Paths)
+            {
+                ct.ThrowIfCancellationRequested(); var full = ContentInstallFiles.Literal(instance.GameDirectory, path);
+                var size = new FileInfo(full).Length;
+                if (size > PackArchiveReader.MaximumFileBytes || (total = checked(total + size)) > PackArchiveReader.MaximumExpandedBytes - 4 * 1024 * 1024) throw new IOException("导出内容超过大小限制。");
+                files.Add(path); sizes.Add(path, size);
+            }
+        }
+        else
+        {
         foreach (var folder in new[] { "mods", "resourcepacks", "shaderpacks", "config", "defaultconfigs", "schematics" }.Concat(includeWorlds ? ["saves"] : Array.Empty<string>())) Visit(folder, 0);
         foreach (var name in new[] { "options.txt", "servers.dat", "icon.png", "pack.png" })
         {
@@ -58,9 +70,10 @@ internal static class ShouPackArchive
             if (size > PackArchiveReader.MaximumFileBytes || (total = checked(total + size)) > PackArchiveReader.MaximumExpandedBytes - 4 * 1024 * 1024) throw new IOException("导出文件超过大小限制。");
             files.Add(name); sizes.Add(name, size);
         }
+        }
         if (files.Count > 2048) throw new IOException("导出文件超过 2048 项。");
         PackArchiveReader.CheckTargets(files); Directory.CreateDirectory(outputDirectory);
-        var destination = ContentInstallFiles.Literal(outputDirectory, "SHOU-" + IO.SafePath.Identifier(instance.Id) + "-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".zip");
+        var destination = ContentInstallFiles.Literal(outputDirectory, (cf is null ? "SHOU-" : "CF-") + IO.SafePath.Identifier(instance.Id) + "-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".zip");
         var temp = ContentInstallFiles.Literal(outputDirectory, ".export-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -74,7 +87,7 @@ internal static class ShouPackArchive
                     await using var input = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
                     if (WorldFileIdentity.FromHandle(input.SafeFileHandle) != guard.Final || input.Length != sizes[path] || input.Length > PackArchiveReader.MaximumFileBytes) throw new IOException("导出文件身份发生变化。");
                     using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1); using var sha512 = IncrementalHash.CreateHash(HashAlgorithmName.SHA512);
-                    await using var output = zip.CreateEntry(path, CompressionLevel.Fastest).Open(); var buffer = new byte[131072]; long length = 0;
+                    await using var output = zip.CreateEntry((cf is null ? "" : "overrides/") + path, CompressionLevel.Fastest).Open(); var buffer = new byte[131072]; long length = 0;
                     while (true)
                     {
                         var count = await input.ReadAsync(buffer, ct).ConfigureAwait(false); if (count == 0) break;
@@ -84,10 +97,21 @@ internal static class ShouPackArchive
                     guard.Verify(); if (length != guard.Final.Size || WorldFileIdentity.FromHandle(input.SafeFileHandle) != guard.Final) throw new IOException("导出文件在读取时发生变化。");
                     manifest.Add(new(path, length, Convert.ToHexStringLower(sha1.GetHashAndReset()), Convert.ToHexStringLower(sha512.GetHashAndReset())));
                 }
-                await using var metadata = zip.CreateEntry("shou-instance.json").Open();
-                await JsonSerializer.SerializeAsync(metadata, new { schemaVersion = 2, instance.Name, GameVersion = gameVersion, instance.Loader, instance.LoaderVersion, Files = manifest }, cancellationToken: ct).ConfigureAwait(false);
+                if (cf is null)
+                {
+                    await using var metadata = zip.CreateEntry("shou-instance.json").Open();
+                    await JsonSerializer.SerializeAsync(metadata, new { schemaVersion = 2, instance.Name, GameVersion = gameVersion, instance.Loader, instance.LoaderVersion, Files = manifest }, cancellationToken: ct).ConfigureAwait(false);
+                }
+                else
+                {
+                    await using var metadata = zip.CreateEntry("manifest.json").Open();
+                    await JsonSerializer.SerializeAsync(metadata, new { manifestType = "minecraftModpack", manifestVersion = 1, name = cf.Name, version = cf.Version, author = "", overrides = "overrides",
+                        minecraft = new { version = gameVersion, modLoaders = instance.Loader == "vanilla" ? Array.Empty<object>() : new object[] { new { id = instance.Loader + "-" + instance.LoaderVersion, primary = true } } },
+                        files = cf.References.Select(f => new { projectID = f.ProjectId, fileID = f.FileId, required = true }) }, cancellationToken: ct).ConfigureAwait(false);
+                }
             }
             using (var validate = PackArchiveReader.Open(temp)) validate.Verify();
+            if (cf is not null) foreach (var guard in cf.Guards) guard.Verify();
             ct.ThrowIfCancellationRequested(); File.Move(temp, destination, false); return destination;
         }
         finally { VerifiedDownloader.RejectLink(temp); if (File.Exists(temp)) File.Delete(temp); }
@@ -97,8 +121,8 @@ internal static class ShouPackArchive
     {
         static string Text(JsonElement e, string key) { var s = e.GetProperty(key).GetString() ?? ""; if (s.Length is < 1 or > 160 || s.Any(char.IsControl)) throw new InvalidDataException("SHOU 元数据文字无效。"); return s; }
         var game = IO.SafePath.Identifier(Text(root, "GameVersion")); var loader = Text(root, "Loader");
-        if (loader is not ("vanilla" or "fabric")) throw new NotSupportedException("SHOU 包暂支持原版和 Fabric。");
-        var loaderVersion = loader == "fabric" ? IO.SafePath.Identifier(Text(root, "LoaderVersion")) : null;
+        var loaderVersion = loader != "vanilla" ? IO.SafePath.Identifier(Text(root, "LoaderVersion")) : null;
+        PackLoaderIdentity.ValidateShou(loader, loaderVersion);
         var files = root.GetProperty("Files").Deserialize<Entry[]>() ?? throw new InvalidDataException("SHOU 文件清单缺失。");
         if (files.Length > 2048) throw new InvalidDataException("SHOU 文件清单超过 2048 项。");
         PackArchiveReader.CheckTargets(files.Select(f => f.Path));

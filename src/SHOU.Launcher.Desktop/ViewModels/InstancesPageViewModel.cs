@@ -84,7 +84,7 @@ public sealed partial class InstancesPageViewModel : PageViewModel
     {
         get
         {
-            if (SelectedInstance is not { Loader: "vanilla" or "fabric" or "quilt" or "forge" or "neoforge" } instance) return false;
+            if (SelectedInstance is not { Loader: "vanilla" or "fabric" or "quilt" or "forge" or "neoforge" or "cleanroom" or "legacyfabric" or "optifine" or "labymod" or "liteloader" } instance) return false;
             try { _ = Core.Instances.InstanceIdentity.GameVersion(instance); return true; }
             catch (InvalidDataException) { return false; }
         }

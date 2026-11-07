@@ -23,11 +23,14 @@ public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader
     public async Task<LoaderRecipe> CacheAsync(string loader, string gameVersion, string loaderVersion, CancellationToken ct)
     {
         SafePath.Identifier(gameVersion); SafePath.Identifier(loaderVersion);
-        if (loader is not ("forge" or "neoforge")) throw new ArgumentException("Unsupported official installer.");
+        if (loader is not ("forge" or "neoforge" or "cleanroom")) throw new ArgumentException("Unsupported official installer.");
+        if (loader == "cleanroom" && gameVersion != "1.12.2") throw new InvalidDataException("Cleanroom 仅支持 Minecraft 1.12.2。");
         if (loader == "neoforge" && !loaderVersion.StartsWith(LoaderCatalog.NeoPrefix(gameVersion), StringComparison.Ordinal)) throw new InvalidDataException("NeoForge与Minecraft版本不匹配。");
         var artifactVersion = loader == "forge" ? gameVersion + "-" + loaderVersion : loaderVersion;
         var stem = loader + "-" + artifactVersion + "-installer.jar";
-        var uri = new Uri(loader == "forge" ? $"https://maven.minecraftforge.net/net/minecraftforge/forge/{artifactVersion}/{stem}" : $"https://maven.neoforged.net/releases/net/neoforged/neoforge/{artifactVersion}/{stem}");
+        var uri = new Uri(loader == "forge" ? $"https://maven.minecraftforge.net/net/minecraftforge/forge/{artifactVersion}/{stem}"
+            : loader == "cleanroom" ? $"https://maven.cleanroommc.com/com/cleanroommc/cleanroom/{artifactVersion}/{stem}"
+            : $"https://maven.neoforged.net/releases/net/neoforged/neoforge/{artifactVersion}/{stem}");
         var sha = (await Catalog.TextAsync(new(uri.AbsoluteUri + ".sha1"), 4096, ct)).Trim().Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
         if (sha?.Length != 40 || !sha.All(Uri.IsHexDigit)) throw new InvalidDataException("官方安装器校验值无效。");
         var relative = $"loaders/{loader}/{artifactVersion}/{stem}"; var installer = ContentInstallFiles.Literal(cache, relative);
@@ -41,10 +44,11 @@ public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader
         if (new FileInfo(installer).Length > 32 * 1024 * 1024) throw new InvalidDataException("官方安装器超过32MiB限制。");
         using var jar = ZipFile.OpenRead(installer);
         var install = await JsonEntryAsync(jar, "install_profile.json", ct); var version = await JsonEntryAsync(jar, "version.json", ct);
+        if (loader == "cleanroom") NormalizeCleanroom(version, gameVersion, loaderVersion);
         if ((string?)install["minecraft"] != gameVersion || (string?)version["inheritsFrom"] != gameVersion) throw new InvalidDataException("官方安装器中的Minecraft版本不匹配。");
         var id = SafePath.Identifier((string?)version["id"] ?? throw new InvalidDataException("安装器没有版本标识。"));
-        if (id != (loader == "forge" ? gameVersion + "-forge-" + loaderVersion : "neoforge-" + loaderVersion)) throw new InvalidDataException("安装器加载器版本标识不匹配。");
-        ValidateMainClass(version);
+        if (id != (loader == "forge" ? gameVersion + "-forge-" + loaderVersion : loader == "cleanroom" ? "Cleanroom-" + loaderVersion : "neoforge-" + loaderVersion)) throw new InvalidDataException("安装器加载器版本标识不匹配。");
+        ValidateMainClass(version, loader);
         _ = VersionMetadataResolver.ParseVersion(version.ToJsonString(), id);
         var recipe = new LoaderRecipe(loader, gameVersion, loaderVersion, id, relative, sha.ToLowerInvariant());
         var path = Profile(id); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -99,17 +103,32 @@ public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader
                 var address = new Uri(proxy.Address!);
                 args.AddRange(["-Dhttp.proxyHost=" + address.Host, "-Dhttp.proxyPort=" + address.Port, "-Dhttps.proxyHost=" + address.Host, "-Dhttps.proxyPort=" + address.Port]);
             }
-            args.AddRange(["-jar", installer, "--installClient", stage]);
+            args.AddRange(["-jar", installer]);
+            if (recipe.Loader == "cleanroom") args.AddRange(["client", "--version", recipe.LoaderVersion, "--dir", stage, "--no-gui", "--no-profile", "--no-provision-java", "--java", java.JavaHome, "--full", "--yes", "--json"]);
+            else args.AddRange(["--installClient", stage]);
             var environment = new Dictionary<string, string?> { ["JAVA_HOME"] = java.JavaHome, ["JAVA_TOOL_OPTIONS"] = null, ["JDK_JAVA_OPTIONS"] = null, ["_JAVA_OPTIONS"] = null, ["CLASSPATH"] = null };
-            foreach (var key in Environment.GetEnvironmentVariables().Keys.Cast<string>().Where(k => k.StartsWith("PCL_", StringComparison.Ordinal) || k is "MS_CLIENT_ID" or "CLIENT_ID" or "CURSEFORGE_API" or "CURSEFORGE_API_KEY")) environment[key] = null;
+            if (recipe.Loader == "cleanroom")
+            {
+                environment["APPDATA"] = home; environment["LOCALAPPDATA"] = home;
+                environment["XDG_CACHE_HOME"] = Path.Combine(home, "cache"); environment["XDG_DATA_HOME"] = Path.Combine(home, "data");
+            }
+            foreach (var key in Environment.GetEnvironmentVariables().Keys.Cast<string>().Where(k => k.StartsWith("PCL_", StringComparison.Ordinal) || k.StartsWith("SHOU_", StringComparison.Ordinal)
+                || k is "MS_CLIENT_ID" or "CLIENT_ID" or "CURSEFORGE_API" or "CURSEFORGE_API_KEY"
+                || new[] { "TOKEN", "SECRET", "PASSWORD", "CREDENTIAL", "COOKIE", "API_KEY", "APIKEY" }.Any(part => k.Contains(part, StringComparison.OrdinalIgnoreCase)))) environment[key] = null;
             progress?.Report(new(id, "Downloading", 0, null));
             var result = await RunWithStageBudgetAsync(new(java.ExecutablePath, args, stage, environment, TimeSpan.FromMinutes(8), 1024 * 1024), stage, ct).ConfigureAwait(false);
             if (result.Cancelled) throw new OperationCanceledException(ct);
             if (result.TimedOut || result.ExitCode != 0) throw new IOException($"官方{instance.Loader}处理器未完成（exit={result.ExitCode}，timeout={result.TimedOut}）。" + Tail(result.StandardError + "\n" + result.StandardOutput));
             var generatedPath = ContentInstallFiles.Literal(stage, "versions/" + recipe.ProfileId + "/" + recipe.ProfileId + ".json");
             var generated = VersionMetadataResolver.ParseVersion(await ReadJsonTextAsync(generatedPath, 4 * 1024 * 1024, ct), recipe.ProfileId);
+            if (recipe.Loader == "cleanroom")
+            {
+                NormalizeCleanroom(generated, recipe.GameVersion, recipe.LoaderVersion);
+                if ((string?)generated["downloads"]?["client"]?["sha1"] != (string?)vanilla.Metadata["downloads"]?["client"]?["sha1"])
+                    throw new InvalidDataException("Cleanroom 客户端身份与官方 Minecraft 不一致。");
+            }
             if ((string?)generated["inheritsFrom"] != vanilla.Id) throw new InvalidDataException("处理器输出的父版本不匹配。");
-            ValidateMainClass(generated);
+            ValidateMainClass(generated, recipe.Loader);
             var hashes = await ImportLibrariesAsync(stage, ct);
             foreach (var library in generated["libraries"] as JsonArray ?? [])
             {
@@ -129,7 +148,7 @@ public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader
         }
         finally { if (Directory.Exists(stage)) Directory.Delete(stage, true); }
     }
-    private async Task<Dictionary<string, string>> ImportLibrariesAsync(string stage, CancellationToken ct)
+    internal async Task<Dictionary<string, string>> ImportLibrariesAsync(string stage, CancellationToken ct)
     {
         var result = new Dictionary<string, string>(StringComparer.Ordinal); var root = Path.Combine(stage, "libraries"); long bytes = 0;
         var folders = new Stack<(string Path, int Depth)>(); folders.Push((root, 0));
@@ -172,11 +191,22 @@ public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader
     private string Profile(string id) => ContentInstallFiles.Literal(cache, "versions/" + SafePath.Identifier(id) + "/" + id + ".json");
     private string RecipePath(string id) => ContentInstallFiles.Literal(cache, "versions/" + SafePath.Identifier(id) + "/loader-recipe.json");
     private string ReceiptPath(string id) => ContentInstallFiles.Literal(cache, "versions/" + SafePath.Identifier(id) + "/loader-installed.json");
-    private static void ValidateMainClass(JsonObject profile)
+    private static void ValidateMainClass(JsonObject profile, string loader)
     {
-        if ((string?)profile["mainClass"] != "cpw.mods.bootstraplauncher.BootstrapLauncher") throw new InvalidDataException("此官方安装器的启动主类尚未支持，未记入已安装缓存。");
+        var main = (string?)profile["mainClass"];
+        if (loader == "cleanroom" && main == "top.outlands.foundation.boot.Foundation") return;
+        if (main != "cpw.mods.bootstraplauncher.BootstrapLauncher" && !(loader == "forge" && main is "cpw.mods.modlauncher.Launcher" or "net.minecraftforge.bootstrap.ForgeBootstrap"))
+            throw new InvalidDataException("此官方安装器的启动主类尚未支持，未记入已安装缓存。");
     }
-    private async Task<ProcessResult> RunWithStageBudgetAsync(ProcessSpec spec, string stage, CancellationToken ct)
+    private static void NormalizeCleanroom(JsonObject profile, string game, string version)
+    {
+        if (game != "1.12.2" || (string?)profile["id"] != "Cleanroom-" + version || (string?)profile["mainClass"] != "top.outlands.foundation.boot.Foundation"
+            || (int?)profile["javaVersion"]?["majorVersion"] != 25 || !ContentInstallFiles.Hash((string?)profile["downloads"]?["client"]?["sha1"], 40))
+            throw new InvalidDataException("此 Cleanroom 独立配置的客户端/Java 身份尚未支持。");
+        if (profile["inheritsFrom"] is not null && (string?)profile["inheritsFrom"] != game) throw new InvalidDataException("Cleanroom 父版本身份不匹配。");
+        profile["inheritsFrom"] = game;
+    }
+    internal async Task<ProcessResult> RunWithStageBudgetAsync(ProcessSpec spec, string stage, CancellationToken ct)
     {
         CheckStageBudget(stage, ct);
         using var owned = CancellationTokenSource.CreateLinkedTokenSource(ct);
@@ -231,11 +261,11 @@ public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader
         if (!info.Exists && info.LinkTarget is null) throw new FileNotFoundException("加载器文件已移动。", path);
         if (info.LinkTarget is not null || (info.Attributes & FileAttributes.ReparsePoint) != 0) throw new IOException("加载器缓存不接受链接。");
     }
-    private static async Task<bool> HashMatchesAsync(string file, string? expected, bool sha256, CancellationToken ct)
+    internal static async Task<bool> HashMatchesAsync(string file, string? expected, bool sha256, CancellationToken ct)
     { if (expected?.Length != (sha256 ? 64 : 40) || !expected.All(Uri.IsHexDigit) || !File.Exists(file)) return false; RejectLink(file); return string.Equals(await DigestAsync(file, sha256, ct), expected, StringComparison.OrdinalIgnoreCase); }
     private static async Task<string> DigestAsync(string path, bool sha256, CancellationToken ct)
     { await using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true); return Convert.ToHexStringLower(sha256 ? await SHA256.HashDataAsync(file, ct) : await SHA1.HashDataAsync(file, ct)); }
-    private static async Task<JsonObject> JsonEntryAsync(ZipArchive jar, string name, CancellationToken ct)
+    internal static async Task<JsonObject> JsonEntryAsync(ZipArchive jar, string name, CancellationToken ct)
     {
         var entries = jar.Entries.Where(e => e.FullName == name).ToArray(); if (entries.Length != 1 || entries[0].Length > 4 * 1024 * 1024) throw new InvalidDataException("安装器元数据缺失、重复或过大。");
         await using var input = entries[0].Open(); using var output = new MemoryStream(); var buffer = new byte[16384];
@@ -247,7 +277,7 @@ public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader
         RejectLink(file); if (new FileInfo(file).Length > maximum) throw new InvalidDataException("加载器本地元数据超过限制。");
         return await File.ReadAllTextAsync(file, ct).ConfigureAwait(false);
     }
-    private static async Task AtomicJsonAsync<T>(string path, T value, CancellationToken ct)
+    internal static async Task AtomicJsonAsync<T>(string path, T value, CancellationToken ct)
     {
         Downloads.VerifiedDownloader.RejectLink(path);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!); var stage = path + ".tmp-" + Guid.NewGuid().ToString("N");

@@ -16,7 +16,7 @@ public sealed class AdditionalLoaderCatalogViewModel(DownloadsPageViewModel owne
     private bool _isLoading;
     public bool Loaded { get; internal set; }
     public bool IsLoading { get => _isLoading; internal set { if (SetProperty(ref _isLoading, value)) NotifyState(); } }
-    public string Summary => SelectedVersion?.Version ?? (IsLoading ? "正在获取版本…" : Versions.Count > 0 ? owner.SelectedVersionId == "1.21.1" ? "可以添加" : "仅浏览" : Loaded ? "无可用版本" : Status.Length > 0 ? "读取失败" : "");
+    public string Summary => SelectedVersion?.DisplayVersion ?? (IsLoading ? "正在获取版本…" : Versions.Count > 0 ? Versions.Any(v => v.CanInstall) ? "可以添加" : "仅浏览" : Loaded ? "无可用版本" : Status.Length > 0 ? "读取失败" : "");
     public bool HasSelection => SelectedVersion is not null;
     public string Status { get => _status; internal set { if (SetProperty(ref _status, value)) OnPropertyChanged(nameof(Summary)); } }
     public bool CanEdit => owner.CanEdit;
@@ -47,18 +47,17 @@ public sealed partial class DownloadsPageViewModel
     public IReadOnlyList<AdditionalLoaderCatalogViewModel> AdditionalLoaders { get; private set; } = [];
     public LoaderVersionChoice? SelectedAdditionalLoader => _selectedAdditionalLoader;
     public string AdditionalLoaderCapability => _loaderService is null ? "当前后端尚未提供Forge / NeoForge / Quilt安装能力。"
-        : "Forge / NeoForge / Quilt当前开放已验证的Minecraft 1.21.1安装；其它版本可读取目录，安装暂不可用。";
+        : "选择目录中受支持的加载器版本进行安装。";
     internal bool CanReadAdditionalLoader => _loaderService is not null && CanQuery && _selectedVersion is { CanInstall: true } && IsConfiguration;
-    private bool ValidAdditionalLoader => _selectedAdditionalLoader is null || _loaderService is not null && SelectedVersionId == "1.21.1" && _selectedAdditionalLoader.CanInstall;
+    private bool ValidAdditionalLoader => _selectedAdditionalLoader is null || _loaderService is not null && _selectedAdditionalLoader.CanInstall;
     private string AdditionalLoaderValidation => _selectedAdditionalLoader is null ? ""
         : _loaderService is null ? "当前后端未提供所选加载器安装能力。"
-        : SelectedVersionId != "1.21.1" ? "当前已验证的Forge / NeoForge / Quilt安装范围为Minecraft 1.21.1；此版本暂不可安装。"
         : !_selectedAdditionalLoader.CanInstall ? _selectedAdditionalLoader.Detail ?? "此加载器版本的安装链尚未支持。" : "";
-    private static string LoaderTitle(string loader) => loader switch { "forge" => "Forge", "neoforge" => "NeoForge", "quilt" => "Quilt", _ => loader };
+    private static string LoaderTitle(string loader) => loader switch { "forge" => "Forge", "neoforge" => "NeoForge", "quilt" => "Quilt", "cleanroom" => "Cleanroom", "legacyfabric" => "Legacy Fabric", "optifine" => "OptiFine", "labymod" => "LabyMod", "liteloader" => "LiteLoader", _ => loader };
     private void InitializeAdditionalLoaders(ILoaderInstanceService? service)
     {
         _loaderService = service ?? Service as ILoaderInstanceService;
-        AdditionalLoaders = [new(this, "forge", "Forge"), new(this, "neoforge", "NeoForge"), new(this, "quilt", "Quilt")];
+        AdditionalLoaders = [new(this, "forge", "Forge"), new(this, "neoforge", "NeoForge"), new(this, "quilt", "Quilt"), new(this, "cleanroom", "Cleanroom"), new(this, "legacyfabric", "Legacy Fabric"), new(this, "optifine", "OptiFine"), new(this, "labymod", "LabyMod"), new(this, "liteloader", "LiteLoader")];
     }
     private void ClearAdditionalSelection()
     {
@@ -101,7 +100,7 @@ public sealed partial class DownloadsPageViewModel
                 SelectAdditionalLoader(loader, next, internalUpdate: true);
             }
             catalog.Status = versions.Count == 0 ? "此 Minecraft 版本没有可用的 " + catalog.Title + " 构建。"
-                : game == "1.21.1" ? "" : "此 Minecraft 版本暂不支持安装此加载器。";
+                : versions.Any(v => v.CanInstall) ? "" : "此 Minecraft 版本暂不支持安装此加载器。";
             catalog.Loaded = true;
         }, "loader-" + loader, page: false, failure: message => catalog.Status = message); }
         finally { if (revision == _requestRevision) { catalog.IsLoading = false; catalog.NotifyState(); } }

@@ -129,7 +129,7 @@ public sealed partial class ModrinthPackArchive
             if (property.Name == "minecraft") continue;
             loaders++; loaderVersion = IO.SafePath.Identifier(property.Value.GetString() ?? "");
             loader = property.Name switch { "fabric-loader" => "fabric", "forge" => "forge", "neoforge" => "neoforge", "quilt-loader" => "quilt", _ => "unknown" };
-            if (loader != "fabric") unsupported = "首批.mrpack导入仅支持vanilla/Fabric；此包的加载器尚未接入：" + property.Name;
+            if (!PackLoaderIdentity.Supported(loader)) unsupported = "此包的加载器尚未接入：" + property.Name;
         }
         if (loaders > 1) unsupported = "整合包同时声明多个加载器，首批不支持此组合。";
         var sourceFiles = root.GetProperty("files");

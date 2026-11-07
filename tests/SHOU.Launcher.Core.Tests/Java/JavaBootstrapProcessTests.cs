@@ -16,6 +16,29 @@ public sealed class JavaBootstrapProcessTests
 {
     private static readonly Lazy<Task<NativeFixture>> Fixture = new(NativeFixture.CreateAsync);
 
+    [TestMethod, DataRow("success"), DataRow("identity"), DataRow("root"), DataRow("cancel")]
+    public async Task InstallerBridgeCallsOnlyInstallApiAndCancellationStopsItsOwnedJvm(string scenario)
+    {
+        var fixture = await Fixture.Value;
+        var stage = Path.Combine(fixture.Root, "bridge-" + scenario + "-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(stage);
+        var other = Path.Combine(fixture.Root, "other-" + Guid.NewGuid().ToString("N")); Directory.CreateDirectory(other);
+        await using var runner = new ProcessRunner(); using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        var spec = new ProcessSpec(fixture.Java, ["-Djava.awt.headless=true", "-cp", fixture.Classes, "org.shou.launcher.bootstrap.InstallerBridge", "optifine", scenario == "root" ? other : stage,
+            "1.21.1", scenario == "identity" ? "HD_U_DIFFERENT" : "HD_U_FIXTURE", "unused", "unused"], stage, fixture.Environment, Timeout: TimeSpan.FromSeconds(8));
+        var running = runner.RunAsync(spec, cancellationToken: ct.Token);
+        if (scenario == "cancel")
+        {
+            while (!File.Exists(Path.Combine(stage, "install-only"))) { await Task.Delay(10, ct.Token); }
+            ct.Cancel();
+        }
+        var result = await running;
+        if (scenario == "success") { Assert.AreEqual(0, result.ExitCode); StringAssert.Contains(result.StandardOutput, "SHOU_INSTALLER_COMPLETE"); Assert.IsTrue(File.Exists(Path.Combine(stage, "install-only"))); }
+        else if (scenario == "cancel") Assert.IsTrue(result.Cancelled);
+        else { Assert.AreNotEqual(0, result.ExitCode); Assert.IsFalse(File.Exists(Path.Combine(stage, "install-only"))); }
+        Assert.IsFalse(File.Exists(Path.Combine(stage, "game-main-was-called")));
+        Assert.IsFalse(File.Exists(Path.Combine(other, "install-only")));
+    }
+
     [TestMethod, TestCategory("JavaArgumentProtection")]
     public async Task SessionOutputIsRedactedAndContinuesAfterLauncherOwnerCloses()
     {
@@ -290,7 +313,20 @@ public sealed class JavaBootstrapProcessTests
             var environment = new Dictionary<string, string?> { ["TMPDIR"] = root, ["TMP"] = root, ["TEMP"] = root,
                 ["JAVA_TOOL_OPTIONS"] = null, ["JDK_JAVA_OPTIONS"] = null, ["_JAVA_OPTIONS"] = null, ["_JAVA_LAUNCHER_DEBUG"] = null };
             await using var runner = new ProcessRunner();
-            string[] compile = ["-J-XX:-UsePerfData", "-J-Djava.io.tmpdir=" + root, "--release", "8", "-d", classes, Source(), Path.Combine(Path.GetDirectoryName(Source())!, "SessionLog.java"), source];
+            var fakeInstaller = Path.Combine(root, "optifine/Installer.java"); Directory.CreateDirectory(Path.GetDirectoryName(fakeInstaller)!);
+            await File.WriteAllTextAsync(fakeInstaller, """
+                package optifine;
+                import java.io.*;
+                public class Installer {
+                    public static String getOptiFineVersion(){return "OptiFine_1.21.1_HD_U_FIXTURE";}
+                    public static void doInstall(File root) throws Exception {
+                        new File(root,"install-only").createNewFile();
+                        if(root.getName().contains("-cancel-")) Thread.sleep(30000);
+                    }
+                    public static void main(String[] args) throws Exception {new File("game-main-was-called").createNewFile();}
+                }
+                """);
+            string[] compile = ["-J-XX:-UsePerfData", "-J-Djava.io.tmpdir=" + root, "--release", "8", "-d", classes, .. Directory.GetFiles(Path.GetDirectoryName(Source())!, "*.java"), source, fakeInstaller];
             var compiled = await runner.RunAsync(new(javac, compile, root, environment, Timeout: TimeSpan.FromSeconds(30)));
             Assert.AreEqual(0, compiled.ExitCode, "Controlled javac --release 8 failed.");
             var classFile = Path.Combine(classes, "org", "shou", "launcher", "bootstrap", "BootstrapMain.class");

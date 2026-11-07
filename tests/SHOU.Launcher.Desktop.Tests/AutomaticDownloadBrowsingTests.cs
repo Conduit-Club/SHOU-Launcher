@@ -105,9 +105,10 @@ public sealed class AutomaticDownloadBrowsingTests
         try
         {
             owner.ShowDownloadsCommand.Execute(null); owner.Downloads.SelectVersion(new("1.21.1", "release", DateTimeOffset.UnixEpoch)); Pump(window);
-            Assert.Equal(4, source.LoaderReads.Count); Assert.Null(owner.Downloads.SelectedFabric); Assert.Null(owner.Downloads.SelectedAdditionalLoader);
+            Assert.Equal(new[] { "cleanroom", "fabric", "forge", "labymod", "legacyfabric", "liteloader", "neoforge", "optifine", "quilt" }, source.LoaderReads.Order());
+            Assert.Null(owner.Downloads.SelectedFabric); Assert.Null(owner.Downloads.SelectedAdditionalLoader);
             var configuration = Find<StackPanel>(window, "MinecraftInstallConfiguration");
-            var rows = configuration.GetVisualDescendants().OfType<Expander>().ToArray(); Assert.Equal(4, rows.Length);
+            var rows = configuration.GetVisualDescendants().OfType<Expander>().ToArray(); Assert.Equal(9, rows.Length);
             foreach (var row in rows) { Assert.False(row.IsExpanded); Assert.InRange(row.Bounds.Width, configuration.Bounds.Width - 1, configuration.Bounds.Width + 1); Assert.Contains(row.GetVisualDescendants().OfType<Image>(), image => image.Source is not null); }
             Assert.False(owner.IsBusy); Assert.Equal(0, source.VanillaCreateCalls); Assert.Equal(0, source.FabricCreateCalls);
         }

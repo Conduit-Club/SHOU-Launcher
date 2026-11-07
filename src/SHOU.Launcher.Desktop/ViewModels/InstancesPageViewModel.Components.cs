@@ -12,7 +12,7 @@ public sealed partial class InstancesPageViewModel
     private InstanceLoaderChoice componentLoader = new("fabric", "Fabric");
     private LoaderVersionChoice? componentVersion;
     private TaskCompletionSource? componentDone;
-    public IReadOnlyList<InstanceLoaderChoice> ComponentLoaderChoices { get; } = [new("vanilla", "原版"), new("fabric", "Fabric"), new("quilt", "Quilt"), new("forge", "Forge"), new("neoforge", "NeoForge")];
+    public IReadOnlyList<InstanceLoaderChoice> ComponentLoaderChoices { get; } = [new("vanilla", "原版"), new("fabric", "Fabric"), new("quilt", "Quilt"), new("forge", "Forge"), new("neoforge", "NeoForge"), new("cleanroom", "Cleanroom"), new("legacyfabric", "Legacy Fabric"), new("optifine", "OptiFine"), new("labymod", "LabyMod"), new("liteloader", "LiteLoader")];
     public ObservableCollection<LoaderVersionChoice> ComponentVersions { get; } = [];
     public InstanceLoaderChoice ComponentLoader { get => componentLoader; set { if (value is null || !SetProperty(ref componentLoader, value)) return; componentReadKey = ""; ConfirmComponentChange = false; OnPropertyChanged(nameof(ComponentNeedsVersion)); ScheduleComponentRefresh(); NotifyCommands(); } }
     public LoaderVersionChoice? ComponentVersion { get => componentVersion; set { if (SetProperty(ref componentVersion, value)) { ConfirmComponentChange = false; NotifyCommands(); } } }

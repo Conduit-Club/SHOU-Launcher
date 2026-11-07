@@ -9,7 +9,7 @@ public sealed partial class LauncherService : IInstanceComponentService
 {
     public async Task<GameInstance> ChangeInstanceLoaderAsync(string instanceId, string loader, string? loaderVersion, CancellationToken cancellationToken = default)
     {
-        if (loader is not ("vanilla" or "fabric" or "quilt" or "forge" or "neoforge")) throw new NotSupportedException("此加载器暂不支持实例内修改。");
+        if (loader is not ("vanilla" or "fabric" or "quilt" or "forge" or "neoforge" or "cleanroom" or "legacyfabric") && !Loaders.PortableVendorInstaller.Supports(loader)) throw new NotSupportedException("此加载器暂不支持实例内修改。");
         if (loader != "vanilla") SafePath.Identifier(loaderVersion ?? throw new ArgumentException("请明确选择加载器版本。"));
         GameInstance? updated = null;
         await ExecuteAsync("Installing", async ct =>
@@ -18,7 +18,9 @@ public sealed partial class LauncherService : IInstanceComponentService
             var game = InstanceIdentity.GameVersion(instance); var profile = game;
             if (loader == "fabric") profile = await new FabricMetadataProvider(http, Paths.CacheDirectory, Sources).CacheProfileAsync(game, loaderVersion!, ct).ConfigureAwait(false);
             else if (loader == "quilt") profile = await CacheQuiltProfileAsync(game, loaderVersion!, ct).ConfigureAwait(false);
-            else if (loader is "forge" or "neoforge") profile = (await OfficialLoaders.CacheAsync(loader, game, loaderVersion!, ct).ConfigureAwait(false)).ProfileId;
+            else if (loader == "legacyfabric") profile = await CacheQuiltProfileAsync(game, loaderVersion!, ct, loader).ConfigureAwait(false);
+            else if (loader is "forge" or "neoforge" or "cleanroom") profile = (await OfficialLoaders.CacheAsync(loader, game, loaderVersion!, ct).ConfigureAwait(false)).ProfileId;
+            else if (Loaders.PortableVendorInstaller.Supports(loader)) profile = await CacheVendorProfileAsync(loader, game, loaderVersion!, ct).ConfigureAwait(false);
             var candidate = instance with { VersionId = profile, GameVersionId = game, Loader = loader, LoaderVersion = loader == "vanilla" ? null : loaderVersion,
                 RuntimeProfileOverride = instance.Origin is not null, Installed = false };
             // Preparation writes verified shared caches; the selected instance identity changes only after success.

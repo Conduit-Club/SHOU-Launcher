@@ -10,14 +10,15 @@ public sealed class LoaderCatalog(HttpClient http)
     public async Task<IReadOnlyList<LoaderVersionChoice>> GetAsync(string loader, string gameVersion, CancellationToken ct)
     {
         SafePath.Identifier(gameVersion);
-        if (loader == "quilt")
+        if (loader is "quilt" or "legacyfabric")
         {
-            var data = JsonNode.Parse(await TextAsync(new("https://meta.quiltmc.org/v3/versions/loader/" + Uri.EscapeDataString(gameVersion)), 4 * 1024 * 1024, ct)) as JsonArray
+            var endpoint = loader == "quilt" ? "https://meta.quiltmc.org/v3" : "https://meta.legacyfabric.net/v2";
+            var data = JsonNode.Parse(await TextAsync(new(endpoint + "/versions/loader/" + Uri.EscapeDataString(gameVersion)), 4 * 1024 * 1024, ct)) as JsonArray
                 ?? throw new InvalidDataException("Quilt目录不是数组。");
             return data.Take(2000).Select(row =>
             {
                 var version = SafePath.Identifier((string?)row?["loader"]?["version"] ?? throw new InvalidDataException("Quilt版本缺失。"));
-                return new LoaderVersionChoice("quilt", version, (bool?)row?["loader"]?["stable"] ?? !version.Contains('-'));
+                return new LoaderVersionChoice(loader, version, (bool?)row?["loader"]?["stable"] ?? !version.Contains('-'));
             }).OrderByDescending(v => v.Stable).ThenByDescending(v => NumericKey(v.Version), StringComparer.Ordinal).ToArray();
         }
         var uri = loader switch
@@ -31,7 +32,9 @@ public sealed class LoaderCatalog(HttpClient http)
         var versions = XDocument.Parse(text).Descendants("version").Select(x => x.Value).Take(50000);
         var prefix = loader == "forge" ? gameVersion + "-" : NeoPrefix(gameVersion);
         return versions.Where(v => loader == "forge" ? v.StartsWith(prefix, StringComparison.Ordinal) : NeoGameVersion(v) == gameVersion).Distinct(StringComparer.Ordinal)
-            .Select(v => new LoaderVersionChoice(loader, SafePath.Identifier(loader == "forge" ? v[prefix.Length..] : v), !v.Any(char.IsLetter)))
+            .Select(v => new LoaderVersionChoice(loader, SafePath.Identifier(loader == "forge" ? v[prefix.Length..] : v), !v.Any(char.IsLetter),
+                loader == "forge" && (!Version.TryParse(gameVersion, out var game) || game < new Version(1, 13)) ? "此历史 Forge 安装器格式尚未接入。" : null,
+                loader != "forge" || Version.TryParse(gameVersion, out var supportedGame) && supportedGame >= new Version(1, 13)))
             .OrderByDescending(v => NumericKey(v.Version), StringComparer.Ordinal).Take(2000).ToArray();
     }
     public static string NeoPrefix(string gameVersion)

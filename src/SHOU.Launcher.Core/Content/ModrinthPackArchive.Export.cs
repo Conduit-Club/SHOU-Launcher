@@ -14,7 +14,7 @@ public sealed partial class ModrinthPackArchive
         if (string.IsNullOrWhiteSpace(options.Name) || options.Name.Length > 160 || options.Name.Any(char.IsControl) || string.IsNullOrWhiteSpace(options.VersionId) || options.VersionId.Length > 160 || options.VersionId.Any(char.IsControl))
             throw new ArgumentException("整合包名称与版本须为1–160字的单行文字。");
         var gameVersion = InstanceIdentity.GameVersion(instance);
-        if (instance.Loader is not ("vanilla" or "fabric")) throw new NotSupportedException("首批.mrpack导出支持vanilla/Fabric实例。");
+        PackLoaderIdentity.Validate(instance.Loader, instance.LoaderVersion);
         if (instance.Loader == "fabric" && string.IsNullOrWhiteSpace(instance.LoaderVersion)) throw new InvalidDataException("Fabric实例缺少Loader版本。");
         var manifest = await ContentInstallFiles.ReadManifestAsync(instance, ct).ConfigureAwait(false);
         VerifiedDownloader.RejectLink(instance.GameDirectory); VerifiedDownloader.RejectLink(exportDirectory);
@@ -92,7 +92,7 @@ public sealed partial class ModrinthPackArchive
                             throw new IOException("打包文件在读取时改变，未生成整合包。");
                     }
                     var dependencies = new Dictionary<string, string> { ["minecraft"] = gameVersion };
-                    if (instance.Loader == "fabric") dependencies.Add("fabric-loader", instance.LoaderVersion!);
+                    if (instance.Loader != "vanilla") dependencies.Add(PackLoaderIdentity.Dependency(instance.Loader), instance.LoaderVersion!);
                     var index = new { formatVersion = 1, game = "minecraft", versionId = options.VersionId, name = options.Name,
                         files = remote.Select(f => new { path = f.Path, hashes = new { sha1 = f.Sha1, sha512 = f.Sha512 }, env = new { client = f.Client, server = f.Server }, downloads = f.Downloads, fileSize = f.Size }), dependencies };
                     await using var indexStream = zip.CreateEntry("modrinth.index.json", CompressionLevel.Optimal).Open();

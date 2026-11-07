@@ -53,7 +53,8 @@ public sealed class LocalPackArchive
         if (loaders.GetArrayLength() > 0)
         {
             if (loaders.GetArrayLength() != 1 || primary.Length != 1) supported = false;
-            else { var id = Text(primary[0], "id"); if (id.StartsWith("fabric-", StringComparison.Ordinal)) { loaderKind = "fabric"; loaderVersionText = IO.SafePath.Identifier(id[7..]); } else { loaderKind = id.Split('-')[0]; supported = false; } }
+            else { var id = Text(primary[0], "id"); var dash = id.IndexOf('-'); loaderKind = dash > 0 ? id[..dash] : "unknown";
+                if (dash > 0 && PackLoaderIdentity.Supported(loaderKind) && loaderKind != "vanilla") loaderVersionText = IO.SafePath.Identifier(id[(dash + 1)..]); else supported = false; }
         }
         var files = root.GetProperty("files"); if (files.ValueKind != JsonValueKind.Array || files.GetArrayLength() > 512) throw new InvalidDataException("CurseForge 文件清单超过 512 项或类型无效。");
         var references = new List<CurseForgePackReference>(); var ids = new HashSet<int>();
@@ -71,7 +72,7 @@ public sealed class LocalPackArchive
         PackArchiveReader.CheckTargets(overrides.Keys); archive.Verify();
         var warnings = new List<string> { "仅创建新的客户端实例；游戏本体将在首次启动时按官方安装流程准备。", "模组版本标签及元数据只做静态提示，完整依赖与实际兼容性由加载器最终验证。" };
         if (skipped > 0) warnings.Add($"已排除 {skipped} 项不受支持的覆盖文件；不迁移启动器凭据、游戏存档或可执行脚本。");
-        var reason = supported ? "尚需通过 CurseForge 官方 API 核实清单文件与下载可用性。" : "本轮 CurseForge ZIP 导入仅支持单一 vanilla/Fabric 客户端加载器。";
+        var reason = supported ? "尚需通过 CurseForge 官方 API 核实清单文件与下载可用性。" : "此 CurseForge ZIP 的加载器身份尚未支持；不猜测多个加载器组合。";
         return new(new(LocalPackFormat.CurseForge, name, gameVersion, loaderKind, loaderVersionText, sha256, warnings, false, reason, LocalFiles: overrides.Keys.ToArray(), SkippedFiles: skipped), references, overrides, supported);
     }
     public async Task<LocalPackInspection> StageCurseForgeAsync(string path, string expectedSha256, string directory,
@@ -116,7 +117,7 @@ public sealed class LocalPackArchive
         }
         finally { VerifiedDownloader.RejectLink(copyPath); if (File.Exists(copyPath)) File.Delete(copyPath); }
     }
-    private static bool AllowedPayload(string path)
+    internal static bool AllowedPayload(string path)
     {
         ModrinthPackArchive.SafeRelative(path); var root = path.Split('/')[0];
         if (path is "options.txt" or "icon.png" or "pack.png") return true;

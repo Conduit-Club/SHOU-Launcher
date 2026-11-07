@@ -7,6 +7,7 @@
         <TextBlock Text="{Binding LocalPackPath}" Classes="muted" LineHeight="16" FontSize="11" TextTrimming="CharacterEllipsis" />
         <StackPanel IsVisible="{Binding HasPackInspection}" Spacing="6"><TextBlock Text="{loc:Loc t8bfc11ae086390df}" /><TextBox Name="ModrinthPackInstanceName" Text="{Binding PackInstanceName}" />
           <Expander Header="{loc:Loc t4440a2db7c16efb9}" IsVisible="{Binding HasOptionalPackFiles}"><ItemsControl ItemsSource="{Binding OptionalPackFiles}" Margin="12"><ItemsControl.ItemTemplate><DataTemplate><CheckBox Content="{Binding Path}" IsChecked="{Binding Selected}" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></Expander>
+          <CheckBox Name="PreparePackAfterImport" Content="同时下载并安装游戏文件" IsChecked="{Binding PreparePackAfterImport}"/>
           <Button Name="ImportModrinthPackButton" Content="{loc:Loc tb8d398d9ffed439a}" Classes="primary" Command="{Binding ImportLocalPackCommand}" HorizontalAlignment="Left" />
         </StackPanel>
         <TextBlock Name="ModrinthPackImportStatus" Text="{Binding PackStatus}" Classes="status muted" />
@@ -25,7 +26,7 @@
           <ListBox Name="AdditionalLoaderVersions" Classes="additionalLoaders" ItemsSource="{Binding Versions}" SelectedItem="{Binding SelectedVersion}" IsEnabled="{Binding CanEdit}" MaxHeight="360" BorderThickness="0" Background="Transparent">
             <ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="36,*,Auto" MinHeight="38" ToolTip.Tip="{Binding Detail}">
               <Image Source="{Binding DataContext.Icon, RelativeSource={RelativeSource AncestorType=ListBox}}" Width="28" Height="28" RenderOptions.BitmapInterpolationMode="None" VerticalAlignment="Center" />
-              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2"><TextBlock Text="{Binding Version}" FontSize="14" LineHeight="20" /><TextBlock Text="{Binding Detail}" Classes="status muted" FontSize="11" /></StackPanel>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2"><TextBlock Text="{Binding DisplayVersion}" FontSize="14" LineHeight="20" /><TextBlock Text="{Binding Detail}" Classes="status muted" FontSize="11" /></StackPanel>
               <TextBlock Grid.Column="2" Text="{loc:Loc t93a48223a516e074}" IsVisible="{Binding Stable}" Classes="muted" FontSize="11" VerticalAlignment="Center" />
             </Grid></DataTemplate></ListBox.ItemTemplate>
           </ListBox>

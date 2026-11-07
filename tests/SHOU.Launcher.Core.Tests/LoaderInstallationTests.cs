@@ -15,6 +15,61 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class LoaderInstallationTests
 {
     [TestMethod]
+    public void LegacyMavenNativesKeepTheirRepositoryAndDoNotInventArmSupport()
+    {
+        var metadata = new JsonObject { ["libraries"] = new JsonArray(new JsonObject { ["name"] = "org.lwjgl.lwjgl:lwjgl-platform:2.9.4+legacyfabric.17", ["url"] = "https://maven.legacyfabric.net/",
+            ["natives"] = new JsonObject { ["windows"] = "natives-windows", ["osx"] = "natives-osx" } }) };
+        var files = LibraryResolver.Resolve(metadata, new("windows", "10", RuntimeArchitecture.X64));
+        var file = files.Files.Single(); Assert.IsTrue(file.LegacyNative);
+        Assert.AreEqual("https://maven.legacyfabric.net/org/lwjgl/lwjgl/lwjgl-platform/2.9.4+legacyfabric.17/lwjgl-platform-2.9.4+legacyfabric.17-natives-windows.jar", file.Url.AbsoluteUri);
+        Assert.IsNull(file.Sha1); // MinecraftInstaller must read the repository checksum, never waive verification.
+        Assert.ThrowsExactly<PlatformNotSupportedException>(() => LibraryResolver.Resolve(metadata, new("osx", "26", RuntimeArchitecture.Arm64)));
+    }
+    [TestMethod, DataRow("valid"), DataRow("wrong-java"), DataRow("wrong-parent"), DataRow("wrong-main")]
+    public async Task CleanroomFullProfileRequiresExactIdentityAndJava25(string scenario)
+    {
+        var version = new JsonObject { ["id"] = "Cleanroom-0.7.14-alpha", ["mainClass"] = scenario == "wrong-main" ? "fixture.Untrusted" : "top.outlands.foundation.boot.Foundation",
+            ["javaVersion"] = new JsonObject { ["majorVersion"] = scenario == "wrong-java" ? 21 : 25 },
+            ["downloads"] = new JsonObject { ["client"] = new JsonObject { ["sha1"] = new string('a', 40) } } };
+        if (scenario == "wrong-parent") version["inheritsFrom"] = "1.13";
+        using var jar = new MemoryStream();
+        using (var zip = new ZipArchive(jar, ZipArchiveMode.Create, true))
+        {
+            using (var text = new StreamWriter(zip.CreateEntry("version.json").Open())) text.Write(version.ToJsonString());
+            using (var text = new StreamWriter(zip.CreateEntry("install_profile.json").Open())) text.Write("{\"minecraft\":\"1.12.2\"}");
+        }
+        var bytes = jar.ToArray();
+        using var http = new HttpClient(new ScriptedHttpHandler(request =>
+        {
+            Assert.AreEqual("maven.cleanroommc.com", request.RequestUri!.Host);
+            var content = request.Method == HttpMethod.Head ? new ByteArrayContent([]) : new ByteArrayContent(Encoding.UTF8.GetBytes(Fixture.Hash(bytes)));
+            if (request.Method == HttpMethod.Head) content.Headers.ContentLength = bytes.Length;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        }));
+        var root = TestFiles.Root(); var runner = new FixtureRunner("failure");
+        var installer = new OfficialLoaderInstaller(http, new FixtureDownloads(bytes, []), runner, Path.Combine(root, "cache"), Path.Combine(root, "tmp"), () => DownloadSources.Defaults(), () => new(ProxyMode.Direct));
+        if (scenario != "valid") await Assert.ThrowsAsync<InvalidDataException>(() => installer.CacheAsync("cleanroom", "1.12.2", "0.7.14-alpha", default));
+        else
+        {
+            var recipe = await installer.CacheAsync("cleanroom", "1.12.2", "0.7.14-alpha", default);
+            var cached = JsonNode.Parse(await File.ReadAllTextAsync(Path.Combine(root, "cache/versions", recipe.ProfileId, recipe.ProfileId + ".json")));
+            Assert.AreEqual("1.12.2", (string?)cached!["inheritsFrom"]); Assert.AreEqual(25, (int?)cached["javaVersion"]?["majorVersion"]);
+        }
+        Assert.AreEqual(0, runner.Count);
+    }
+
+    [TestMethod]
+    public async Task LegacyFabricCatalogUsesItsOwnEndpointAndKeepsDistinctLoaderIdentity()
+    {
+        using var http = new HttpClient(new ScriptedHttpHandler(request =>
+        {
+            Assert.AreEqual("https://meta.legacyfabric.net/v2/versions/loader/1.12.2", request.RequestUri!.AbsoluteUri);
+            return Task.FromResult(ScriptedHttpHandler.Json("""[{"loader":{"version":"0.20.1","stable":true}}]"""));
+        }));
+        var rows = await new LoaderCatalog(http).GetAsync("legacyfabric", "1.12.2", default);
+        Assert.AreEqual("legacyfabric", rows.Single().Loader); Assert.AreEqual("0.20.1", rows[0].Version);
+    }
+    [TestMethod]
     public async Task OfficialCatalogFiltersGameVersionsAndOrdersNumericLoaderVersions()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)

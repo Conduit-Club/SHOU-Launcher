@@ -80,7 +80,7 @@ public static partial class Bootstrap
         await launcher.SelectAccountAsync(account.Id, ct).ConfigureAwait(false);
         var version = ArgumentValue("--version") ?? "1.21.1";
         var loader = ArgumentValue("--loader") ?? "vanilla";
-        if (loader is not ("vanilla" or "fabric" or "quilt" or "forge" or "neoforge")) throw new ArgumentException("Unsupported loader.");
+        if (loader is not ("vanilla" or "fabric" or "quilt" or "forge" or "neoforge" or "cleanroom" or "legacyfabric" or "optifine" or "labymod" or "liteloader")) throw new ArgumentException("Unsupported loader.");
         var loaderVersion = ArgumentValue("--loader-version") ?? (loader == "fabric" ? "0.16.14" : loader == "vanilla" ? "" : throw new ArgumentException("An explicit loader-version is required."));
         var instance = launcher.Snapshot.Instances.FirstOrDefault(i => i.Loader == loader && (loader == "vanilla" ? i.VersionId == version : i.LoaderVersion == loaderVersion && Core.Instances.InstanceIdentity.GameVersion(i) == version))
             ?? (loader == "vanilla" ? await launcher.CreateInstanceAsync("Minecraft " + version + " · 隔离验证", version, ct).ConfigureAwait(false)

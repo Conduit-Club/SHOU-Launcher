@@ -104,7 +104,7 @@
             <Border Classes="card"><StackPanel Spacing="12">
               <Grid ColumnDefinitions="*,Auto"><TextBlock Text="实例组件" Classes="sectionTitle"/><views:LoadingGlyph Grid.Column="1" IsVisible="{Binding IsComponentBusy}" Width="28" Height="28" Foreground="{DynamicResource ClubAccent}"/></Grid>
               <Grid ColumnDefinitions="80,*"><TextBlock Text="加载器" VerticalAlignment="Center"/><ComboBox Name="ComponentLoaderChoice" Grid.Column="1" ItemsSource="{Binding ComponentLoaderChoices}" SelectedItem="{Binding ComponentLoader}" IsEnabled="{Binding !IsComponentBusy}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
-              <Grid ColumnDefinitions="80,*" IsVisible="{Binding ComponentNeedsVersion}"><TextBlock Text="版本" VerticalAlignment="Center"/><ComboBox Name="ComponentVersionChoice" Grid.Column="1" ItemsSource="{Binding ComponentVersions}" SelectedItem="{Binding ComponentVersion}" IsEnabled="{Binding !IsComponentBusy}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Version}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
+              <Grid ColumnDefinitions="80,*" IsVisible="{Binding ComponentNeedsVersion}"><TextBlock Text="版本" VerticalAlignment="Center"/><ComboBox Name="ComponentVersionChoice" Grid.Column="1" ItemsSource="{Binding ComponentVersions}" SelectedItem="{Binding ComponentVersion}" IsEnabled="{Binding !IsComponentBusy}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayVersion}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
               <CheckBox Name="ConfirmComponentChange" Content="确认修改所选实例的加载器" IsChecked="{Binding ConfirmComponentChange}" IsEnabled="{Binding !IsComponentBusy}" ToolTip.Tip="保留模组和资源文件。请先确认它们与新的加载器版本兼容。"/>
               <WrapPanel><Button Name="ChangeInstanceComponentButton" Content="应用修改" Command="{Binding ChangeInstanceComponentCommand}" Margin="0,0,8,0"/><Button Content="刷新" Command="{Binding RefreshComponentVersionsCommand}" Margin="0,0,8,0"/><Button Content="取消" Command="{Binding CancelComponentWorkCommand}" IsVisible="{Binding IsComponentBusy}"/></WrapPanel>
               <TextBlock Text="{Binding ComponentFeedback}" TextWrapping="Wrap"/>
@@ -120,6 +120,7 @@
             <CheckBox Content="{loc:Loc tefb82dfd5f5adf50}" IsChecked="{Binding ExportPackOptions}"/>
             <CheckBox Content="{loc:Loc t39ad239746a87b3b}" IsChecked="{Binding ExportPackLocalFiles}"/>
             <Button Name="ExportModrinthPackButton" Content="{loc:Loc t77587cdd53235518}" Command="{Binding ExportModrinthPackCommand}"/>
+            <Button Name="ExportCurseForgePackButton" Content="导出 CurseForge 整合包" Command="{Binding ExportCurseForgePackCommand}"/>
           </StackPanel></Border></StackPanel>
           <StackPanel IsVisible="{Binding IsFileSection}" Spacing="14">
             <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="{loc:Loc t899432d83d98c3bf}" Classes="sectionTitle" LineHeight="18"/>

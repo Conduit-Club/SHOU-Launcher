@@ -11,6 +11,29 @@ namespace SHOU.Launcher.Desktop.Tests;
 
 public sealed class WpfDownloadsLoaderTests
 {
+    private sealed class TransactionService : FakeLauncherService, ITransactionalInstanceInstaller
+    {
+        internal int Calls;
+        internal bool Cancel;
+        public Task<GameInstance> CreateInstalledInstanceAsync(string name, string gameVersion, string loader, string? loaderVersion, CancellationToken cancellationToken = default)
+        {
+            Calls++; if (Cancel) throw new OperationCanceledException();
+            var instance = new GameInstance(Guid.NewGuid().ToString("N"), name, gameVersion, Path.Combine(Path.GetTempPath(), "controlled-" + Guid.NewGuid().ToString("N")), Loader: loader, LoaderVersion: loaderVersion, GameVersionId: gameVersion, Installed: true);
+            Publish(Snapshot with { Instances = Snapshot.Instances.Append(instance).ToArray() }); return Task.FromResult(instance);
+        }
+    }
+    [AvaloniaFact]
+    public async Task DownloadInstallUsesAtomicServiceAndCancelledRetryDoesNotKeepOldSuccessLink()
+    {
+        var service = new TransactionService(); using var owner = new MainWindowViewModel(service, new FakeExternalLauncher()); var fixture = new LoaderFixture(service);
+        using var vm = new DownloadsPageViewModel(owner, fixture, Favorites(), loaderService: fixture);
+        vm.SelectVersion(new("1.21.1", "release", DateTimeOffset.UtcNow)); vm.InstallationName = "Atomic success";
+        await vm.InstallVersionCommand.ExecuteAsync(null);
+        Assert.Equal(1, service.Calls); Assert.Empty(fixture.Created); Assert.True(vm.HasCreatedInstance);
+        var before = service.Snapshot.Instances.ToArray(); service.Cancel = true; vm.InstallationName = "Atomic cancelled";
+        await vm.InstallVersionCommand.ExecuteAsync(null);
+        Assert.Equal(2, service.Calls); Assert.False(vm.HasCreatedInstance); Assert.Equal(before, service.Snapshot.Instances);
+    }
     private static string Favorites() => Path.Combine(Environment.GetEnvironmentVariable("SHOU_DEV_ROOT")!, "test-data/r5", Guid.NewGuid().ToString("N"), "favorites.json");
     private static void Pump(Window window) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
     [AvaloniaFact]
@@ -54,7 +77,7 @@ public sealed class WpfDownloadsLoaderTests
             Assert.False(list.GetVisualDescendants().OfType<ListBoxItem>().Single().IsEffectivelyEnabled);
             forge.SelectedVersion = forge.Versions[0]; Assert.False(vm.InstallVersionCommand.CanExecute(null)); Assert.Contains("fixture unsupported", vm.InstallationValidation);
             fixture.Unsupported = false; vm.SelectVersion(new("1.20.4", "release", DateTimeOffset.UtcNow)); await forge.RefreshCommand.ExecuteAsync(null); forge.SelectedVersion = forge.Versions[0];
-            Assert.False(vm.InstallVersionCommand.CanExecute(null)); Assert.Contains("1.21.1", vm.InstallationValidation); Assert.Empty(fixture.Created);
+            Assert.True(vm.InstallVersionCommand.CanExecute(null)); Assert.Empty(fixture.Created);
         }
         finally { window.Close(); }
     }
