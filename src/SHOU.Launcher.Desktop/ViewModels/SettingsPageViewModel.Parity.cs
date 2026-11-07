@@ -21,6 +21,8 @@ public sealed partial class SettingsPageViewModel
             foreach (var property in new[] { nameof(IsLaunchSection), nameof(IsJavaSection), nameof(IsManageSection), nameof(IsAppearanceSection), nameof(IsLanguageSection), nameof(IsMiscSection), nameof(IsAboutSection), nameof(IsUpdatesSection), nameof(IsFeedbackSection), nameof(IsLogsSection) }) OnPropertyChanged(property);
             if (IsLogsSection) RefreshLogFiles();
             if (IsLaunchSection) RefreshSystemMemory();
+            if (IsAppearanceSection) LoadFontChoices();
+            _ = NavigateLauncherSectionAsync(value);
         }
     }
     public bool IsLaunchSection => SelectedSection == "launch";
@@ -56,7 +58,7 @@ public sealed partial class SettingsPageViewModel
     private bool _aria2DetailsExpanded;
     public bool Aria2DetailsExpanded { get => _aria2DetailsExpanded; set => SetProperty(ref _aria2DetailsExpanded, value); }
     public JavaInstallation? SelectedJava { get => _selectedJava; set { if (SetProperty(ref _selectedJava, value)) UseSelectedJavaCommand.NotifyCanExecuteChanged(); } }
-    public string DiscoveredJavaTitle => $"已发现的 Java（{JavaInstallations.Count}）";
+    public string DiscoveredJavaTitle => Localization.UiLocalization.Instance.Format("已发现的 Java（{0}）", JavaInstallations.Count);
     public AsyncRelayCommand DiscoverJavaCommand { get; private set; } = null!;
     public RelayCommand UseAutomaticJavaCommand { get; private set; } = null!;
     public RelayCommand UseSelectedJavaCommand { get; private set; } = null!;
@@ -72,7 +74,7 @@ public sealed partial class SettingsPageViewModel
     public bool RotateHomeBackground { get => _rotateHomeBackground; set { if (SetProperty(ref _rotateHomeBackground, value)) MarkDirty(); } }
     public decimal WindowOpacity { get => _windowOpacity; set { if (SetProperty(ref _windowOpacity, value)) MarkDirty(); } }
     public string SoftwareName => Owner.Snapshot.Build.Name;
-    public string SoftwareVersion => $"发行版本 v{Owner.Snapshot.Build.Version} · 代号 {Owner.Snapshot.Build.Codename}";
+    public string SoftwareVersion => Localization.UiLocalization.Instance.Format("发行版本 v{0} · 代号 {1}", Owner.Snapshot.Build.Version, Owner.Snapshot.Build.Codename);
     public string BuildDetails => $"{Owner.Snapshot.Build.Configuration} · {Owner.Snapshot.Build.SourceSha}\n{RuntimeInformation.FrameworkDescription} · {Owner.Snapshot.Platform.OS} / {Owner.Snapshot.Platform.ProcessArchitecture}";
     public string CredentialCapability => Owner.Snapshot.CanPersistAccounts ? "系统安全存储可用" : "系统安全存储不可用";
     public string UpdateCapability => "在线版本检查尚未接入；请在本社团仓库的发行页核对版本。";
@@ -91,11 +93,7 @@ public sealed partial class SettingsPageViewModel
     private void InitializeParity()
     {
         SelectSectionCommand = new(section => { if (section is not null) SelectedSection = section; });
-        DiscoverJavaCommand = AsyncCommand(async () =>
-        {
-            IReadOnlyList<JavaInstallation>? found = null;
-            if (await Owner.RunAsync("发现本机 Java", async ct => found = await Service.DiscoverJavaAsync(ct), true) && found is not null) UpdateJava(found);
-        }, () => Owner.CanReadRemote);
+        DiscoverJavaCommand = AsyncCommand(() => RunSettingsWork(async ct => { autoJavaAttempted = true; var found = await Service.DiscoverJavaAsync(ct); ct.ThrowIfCancellationRequested(); UpdateJava(found); }), () => !IsLauncherBusy && Owner.CanReadRemote);
         UseAutomaticJavaCommand = Command(() => JavaExecutable = "", () => CanEdit);
         UseSelectedJavaCommand = Command(() => JavaExecutable = SelectedJava!.ExecutablePath, () => CanEdit && SelectedJava is { IsUsable: true });
         RefreshLogFilesCommand = Command(RefreshLogFiles);
@@ -110,20 +108,27 @@ public sealed partial class SettingsPageViewModel
         catch (Exception ex) when (ex is IOException or InvalidDataException or UnauthorizedAccessException or System.Text.Json.JsonException) { Feedback = "界面偏好未加载：" + UiPrivacy.Redact(ex.Message); }
         LoadPresentation(_savedPresentation);
         InitializeSourceEditor();
+        InitializeLauncherSettings();
     }
 
     private AsyncRelayCommand OpenLink(string label, string url) => AsyncCommand(() => Owner.RunControlAsync(label, ct => Owner.ExternalLauncher.OpenUriAsync(new Uri(url), ct)));
     private void LoadPresentation(SettingsPresentationPreferences preferences)
     {
         var wasLoading = _loading; _loading = true;
-        try { ShowClubIntroduction = preferences.ShowClubIntroduction; ShowClubServers = preferences.ShowClubServers; RotateHomeBackground = preferences.RotateHomeBackground; WindowOpacity = preferences.WindowOpacity; }
+        try { ShowClubIntroduction = preferences.ShowClubIntroduction; ShowClubServers = preferences.ShowClubServers; RotateHomeBackground = preferences.RotateHomeBackground; WindowOpacity = preferences.WindowOpacity; LoadAppearanceOptions(preferences); }
         finally { _loading = wasLoading; }
         ApplyPresentation();
     }
-    private void ApplyPresentation() => Owner.Home.SetPresentation(_savedPresentation.ShowClubIntroduction, _savedPresentation.ShowClubServers, _savedPresentation.RotateHomeBackground, (double)_savedPresentation.WindowOpacity / 100);
+    private void ApplyPresentation()
+    {
+        Owner.Home.SetPresentation(_savedPresentation.ShowClubIntroduction, _savedPresentation.ShowClubServers, _savedPresentation.RotateHomeBackground, (double)_savedPresentation.WindowOpacity / 100);
+        Owner.Home.ApplyAppearance(_savedPresentation);
+        OnPropertyChanged(nameof(SavedPresentation));
+        Owner.NotifyLauncherAppearance();
+    }
     private async Task SavePresentationAsync(CancellationToken cancellationToken)
     {
-        var preferences = new SettingsPresentationPreferences(ShowClubIntroduction, ShowClubServers, RotateHomeBackground, WindowOpacity);
+        var preferences = BuildPresentation(); SettingsPresentationStore.Validate(preferences);
         await _presentationStore.SaveAsync(preferences, cancellationToken);
         _savedPresentation = preferences;
         ApplyPresentation();
@@ -153,6 +158,7 @@ public sealed partial class SettingsPageViewModel
     }
     private void RefreshParity(LauncherSnapshot snapshot)
     {
+        OnPropertyChanged(nameof(SidebarWidth));
         UpdateJava(snapshot.JavaInstallations);
         OnPropertyChanged(nameof(SoftwareName)); OnPropertyChanged(nameof(SoftwareVersion)); OnPropertyChanged(nameof(BuildDetails)); OnPropertyChanged(nameof(CredentialCapability));
     }

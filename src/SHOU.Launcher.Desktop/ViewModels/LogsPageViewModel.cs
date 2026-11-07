@@ -26,7 +26,7 @@ public sealed class LogsPageViewModel(MainWindowViewModel owner) : PageViewModel
         var line = new LogLineViewModel(log.Timestamp, UiPrivacy.Redact(log.Level), UiPrivacy.Redact(log.Message));
         if (!_seen.Add(line)) return;
         Entries.Add(line);
-        while (Entries.Count > Capacity) { _seen.Remove(Entries[0]); Entries.RemoveAt(0); }
+        while (Entries.Count > (Owner.Snapshot.Settings.Launcher?.LogLineLimit ?? Capacity)) { _seen.Remove(Entries[0]); Entries.RemoveAt(0); }
         OnPropertyChanged(nameof(IsEmpty)); OnPropertyChanged(nameof(Summary)); OnPropertyChanged(nameof(ExportText));
     }
     public void ClearDisplay()

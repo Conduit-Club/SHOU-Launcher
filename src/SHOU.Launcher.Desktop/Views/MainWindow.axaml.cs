@@ -18,14 +18,15 @@ public partial class MainWindow : Window
         ConfigurePlatformChrome();
         InitializePackDrop();
         InitializeGameVisibility();
+        InitializeLauncherPreferences();
         Opened += async (_, _) => { if (DataContext is MainWindowViewModel vm) await vm.InitializeAsync(); };
         Closing += async (_, e) =>
         {
-            if (DataContext is not MainWindowViewModel vm || !vm.Tools.Toolbox.IsBusy) return;
+            if (DataContext is not MainWindowViewModel vm || !vm.Tools.Toolbox.IsBusy && !vm.Settings.IsLauncherBusy) return;
             e.Cancel = true;
             if (waitingForTools) return;
             waitingForTools = true;
-            try { await vm.Tools.Toolbox.CancelAndWaitAsync(); }
+            try { await Task.WhenAll(vm.Tools.Toolbox.CancelAndWaitAsync(), vm.Settings.CancelAndWaitAsync()); }
             finally { waitingForTools = false; }
             Close();
         };

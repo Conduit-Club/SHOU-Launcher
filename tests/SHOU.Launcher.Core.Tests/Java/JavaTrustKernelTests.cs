@@ -150,7 +150,7 @@ public sealed class JavaTrustKernelTests
     {
         File.WriteAllBytes(Store, Jks(2, [("root", RootCertificate()), ("safe", SafeCertificate())]));
         var results = JavaTrustRepair.RepairDownload(_root, true);
-        Assert.IsTrue(results.All(r => r.CanRepair && !r.NeedsRepair));
+        Assert.IsTrue(results.All(r => r.CanRepair && !r.NeedsRepair), string.Join("\n", results.Where(r => !r.CanRepair || r.NeedsRepair).Select(r => r.Details)));
         var backupCount = Directory.GetFiles(Path.GetDirectoryName(Store)!, "*.shou-backup-*").Length;
         var again = JavaTrustRepair.RepairDownload(_root, true);
         Assert.IsTrue(again.All(r => !r.NeedsRepair));

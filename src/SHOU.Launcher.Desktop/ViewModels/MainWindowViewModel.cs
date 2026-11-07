@@ -14,8 +14,8 @@ public abstract class PageViewModel(MainWindowViewModel owner, string title, str
     protected MainWindowViewModel Owner { get; } = owner;
     public MainWindowViewModel Root => Owner;
     protected ILauncherService Service => Owner.Service;
-    public string Title { get; } = title;
-    public string Description { get; } = description;
+    public string Title => Localization.UiLocalization.Instance.Text(title);
+    public string Description => Localization.UiLocalization.Instance.Text(description);
     private readonly List<IRelayCommand> _commands = [];
     protected AsyncRelayCommand AsyncCommand(Func<Task> execute, Func<bool>? canExecute = null)
     {
@@ -119,10 +119,12 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             var leavingAccounts = ReferenceEquals(_selectedPage, Accounts) || ReferenceEquals(_selectedPage, Home);
             var leavingDownloads = ReferenceEquals(_selectedPage, Downloads);
             var leavingTools = ReferenceEquals(_selectedPage, Tools);
+            var leavingSettings = ReferenceEquals(_selectedPage, Settings);
             if (!SetProperty(ref _selectedPage, value)) return;
             if (leavingAccounts) Accounts.OnNavigatingAway();
             if (leavingDownloads) Downloads.OnNavigatingAway();
             if (leavingTools) Tools.OnNavigatingAway();
+            if (leavingSettings) Settings.OnNavigatingAway();
             NotifyNavigation();
             if (ReferenceEquals(value, Downloads)) Downloads.OnNavigatedTo();
         }
@@ -151,7 +153,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool IsDownloadsSelected => CurrentSection == "download";
     public bool IsSettingsSelected => CurrentSection == "settings";
     public bool IsToolsSelected => CurrentSection == "tools";
-    public string WindowTitle => Snapshot.Build.Name;
+    public string WindowTitle => Localization.UiLocalization.Instance.Text(Snapshot.Build.Name);
+    public string BrandTitle => Settings.SavedPresentation.TitleMode == "text" ? Settings.SavedPresentation.TitleText : WindowTitle;
+    internal void NotifyLauncherAppearance() => OnPropertyChanged(nameof(BrandTitle));
     public string BuildSummary => $"{Snapshot.Build.Version} · {Snapshot.Build.Codename} · {Snapshot.Build.Configuration}";
     public string SourceSummary => Snapshot.Build.SourceSha.Length > 12 ? Snapshot.Build.SourceSha[..12] : Snapshot.Build.SourceSha;
     public string PlatformSummary => $"{Snapshot.Platform.OS} · 硬件 {Snapshot.Platform.HardwareArchitecture} / 进程 {Snapshot.Platform.ProcessArchitecture}";
@@ -262,12 +266,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void ApplySnapshot(LauncherSnapshot snapshot)
     {
         Snapshot = snapshot;
+        Localization.UiLocalization.Instance.SetLanguage(snapshot.Settings.Language, snapshot.Settings.Launcher?.RegionalFormat ?? "system");
         if (!string.IsNullOrWhiteSpace(snapshot.Error)) ShowError(snapshot.Error);
         foreach (var page in Pages) page.Refresh(snapshot);
         if (Application.Current is { } app)
             app.RequestedThemeVariant = snapshot.Settings.Theme switch { "Dark" => ThemeVariant.Dark, "Light" => ThemeVariant.Light, _ => ThemeVariant.Default };
         OnPropertyChanged(nameof(Snapshot));
         OnPropertyChanged(nameof(WindowTitle));
+        OnPropertyChanged(nameof(BrandTitle));
         OnPropertyChanged(nameof(BuildSummary));
         OnPropertyChanged(nameof(SourceSummary));
         OnPropertyChanged(nameof(PlatformSummary));
@@ -308,6 +314,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Instances.Dispose();
         Downloads.Dispose();
         Tools.Dispose();
+        Settings.DisposeLauncherSettings();
         _lifetime.Dispose();
         // Bootstrap owns the service, its processes, pending writes and data lease.
     }

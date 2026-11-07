@@ -98,6 +98,9 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
     public static void ValidateSettings(LauncherSettings settings)
     {
         Minecraft.GameSettingsPolicy.Validate(settings.LaunchOptions ?? new());
+        var launcher = settings.Launcher ?? new();
+        if (launcher.LogLineLimit is < 100 or > 20000) throw new ArgumentException("实时日志行数须为 100–20000。");
+        if (launcher.RegionalFormat != "system") _ = System.Globalization.CultureInfo.GetCultureInfo(launcher.RegionalFormat);
         var download = settings.Downloads ?? new();
         if (download.MaximumConnections is < 1 or > 64 || download.MaximumKiBPerSecond is < 0 or > 1048576 || !Enum.IsDefined(download.SourcePreference)) throw new ArgumentException("下载并发须为 1–64，限速须为 0–1048576 KiB/s（0 不限速）。");
         foreach (var property in typeof(LauncherSettings).GetProperties())

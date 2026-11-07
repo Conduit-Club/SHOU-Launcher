@@ -12,8 +12,8 @@ public sealed partial class HomePageViewModel : PageViewModel
     private bool _showClubServers;
     private bool _rotateHomeBackground = true;
     private double _windowOpacity = 1;
-    public bool ShowClubIntroduction => _showClubIntroduction;
-    public bool ShowClubServers => _showClubServers;
+    public bool ShowClubIntroduction => _showClubIntroduction && !IsCustomHome;
+    public bool ShowClubServers => _showClubServers && !IsCustomHome;
     public bool RotateHomeBackground => _rotateHomeBackground;
     public double WindowOpacity => _windowOpacity;
     public ObservableCollection<ServerChoice> Servers { get; } = [];

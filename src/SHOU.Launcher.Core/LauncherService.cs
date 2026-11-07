@@ -47,9 +47,12 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
 
     public LauncherService(PlatformServices platform, HttpClient http, IVerifiedDownloader downloader,
         NetworkOptions network, BuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null,
-        JavaBootstrapArtifact? javaBootstrap = null, IJavaTrustService? javaTrust = null, Content.CurseForgePackResolver? localPackResolver = null)
+        JavaBootstrapArtifact? javaBootstrap = null, IJavaTrustService? javaTrust = null, Content.CurseForgePackResolver? localPackResolver = null,
+        HttpClient? publicInformationHttp = null)
     {
         this.platform = platform; this.http = http; this.downloader = downloader; this.network = network;
+        informationHttp = publicInformationHttp ?? new(new InformationRedirectHandler(new ConfigurableNetworkHandler(network, false))) { Timeout = TimeSpan.FromMinutes(5) };
+        ownsInformationHttp = publicInformationHttp is null;
         gameCatalogCache = new(platform.Paths.CacheDirectory);
         build = buildConfiguration ?? new(); config = new(platform.Paths);
         authentication = authenticationClient ?? new(http);
@@ -620,7 +623,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
             if (sessionMonitor is not null) await sessionMonitor.ConfigureAwait(false);
             await config.DisposeAsync().ConfigureAwait(false);
         }
-        finally { operation.Release(); lifetime.Dispose(); }
+        finally { operation.Release(); lifetime.Dispose(); if (ownsInformationHttp) informationHttp.Dispose(); }
     }
     private sealed class InlineProgress<T>(Action<T> callback) : IProgress<T> { public void Report(T value) => callback(value); }
     private sealed class ProcessLogCollector(Action<bool, string> emit)

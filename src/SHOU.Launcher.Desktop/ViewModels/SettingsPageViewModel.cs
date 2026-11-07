@@ -56,7 +56,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
     public string CredentialsSummary => Owner.Snapshot.CanPersistAccounts ? "密钥写入系统安全存储；留空保留已有密钥。" : "安全存储不可用，不能保存新的连接密钥。";
     public ObservableCollection<string> Themes { get; } = ["System", "Light", "Dark"];
     public IReadOnlyList<ProxyMode> ProxyModes { get; } = Enum.GetValues<ProxyMode>();
-    public ObservableCollection<string> Languages { get; } = ["zh-CN", "en-US", "system"];
+    public ObservableCollection<string> Languages { get; } = ["zh-CN", "zh-TW", "en-US", "en-GB", "ja-JP", "fr-FR", "es-ES", "system"];
     public AsyncRelayCommand SaveCommand { get; }
     public RelayCommand DiscardDraftCommand { get; }
     public AsyncRelayCommand OpenDataDirectoryCommand { get; }
@@ -80,6 +80,8 @@ public sealed partial class SettingsPageViewModel : PageViewModel
         if ((gameRoot.Length > 0 && !Path.IsPathFullyQualified(gameRoot)) || (java.Length > 0 && !Path.IsPathFullyQualified(java))) { Owner.ShowError("游戏与 Java 路径须为绝对路径；留空使用默认选择。"); return; }
         if (MemoryMiB is < 512 or > 32768 || decimal.Truncate(MemoryMiB) != MemoryMiB) { Owner.ShowError("内存须为 512–32768 MiB 的整数。"); return; }
         if (!ValidateLaunchDraft() || !ValidateGameOptions()) return;
+        try { SettingsPresentationStore.Validate(BuildPresentation()); }
+        catch (InvalidDataException ex) { Owner.ShowError(ex.Message); SelectedSection = "appearance"; return; }
         if (!string.IsNullOrWhiteSpace(MicrosoftClientId) && !Guid.TryParse(MicrosoftClientId.Trim(), out _)) { Owner.ShowError("Microsoft Client ID 必须是有效 GUID。"); return; }
         try { _ = PCL.Core.Conduit.DownloadSources.Parse(DownloadSourcesJson); }
         catch (Exception ex) when (ex is JsonException or InvalidDataException or ArgumentException) { Owner.ShowError("下载源配置无效：" + UiPrivacy.Redact(ex.Message)); SelectedSection = "manage"; return; }
@@ -102,7 +104,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
                 MicrosoftClientId = string.IsNullOrWhiteSpace(MicrosoftClientId) ? null : MicrosoftClientId.Trim(),
                 GameWindowWidth = UseCustomWindow ? (int)GameWindowWidth : null, GameWindowHeight = UseCustomWindow ? (int)GameWindowHeight : null,
                 GameFullscreen = GameFullscreen, MinimumMemoryMiB = UseMinimumMemory ? (int)MinimumMemoryMiB : null,
-                CustomInfo = string.IsNullOrWhiteSpace(CustomInfo) ? null : CustomInfo.Trim(), LaunchOptions = BuildGameOptions(), Downloads = BuildDownloadOptions() };
+                CustomInfo = string.IsNullOrWhiteSpace(CustomInfo) ? null : CustomInfo.Trim(), LaunchOptions = BuildGameOptions(), Downloads = BuildDownloadOptions(), Launcher = launcherOptions };
             await Service.SaveSettingsAsync(settings, ct);
             await SavePresentationAsync(ct);
         }, false, proxySecret, ariaSecret);
@@ -128,6 +130,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
             MicrosoftClientId = settings.MicrosoftClientId ?? ""; ProxySecret = ""; Aria2Secret = "";
             LoadLaunchDraft(settings);
             LoadGameOptions(settings);
+            LoadLauncherOptions(settings);
             RefreshSourceEditor(settings.DownloadSourcesJson);
             IsDirty = false; _loaded = true;
         }

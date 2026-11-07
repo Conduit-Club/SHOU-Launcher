@@ -11,11 +11,11 @@ public sealed class NetworkOptions
     public Aria2Settings Aria2 => Capture().Aria2;
     public ICredentialStore? Credentials { get; set; }
     public DownloadBudget Budget { get; } = new();
-    public void Update(LauncherSettings settings) => Volatile.Write(ref current, new(settings.Proxy ?? new(), settings.Aria2 ?? new(), Interlocked.Increment(ref revision), settings.Downloads ?? new()));
+    public void Update(LauncherSettings settings) => Volatile.Write(ref current, new(settings.Proxy ?? new(), settings.Aria2 ?? new(), Interlocked.Increment(ref revision), settings.Downloads ?? new(), settings.Launcher));
     private long revision;
     public NetworkConfiguration Capture() => Volatile.Read(ref current);
 }
-public sealed record NetworkConfiguration(ProxySettings Proxy, Aria2Settings Aria2, long Revision, DownloadBehavior? Downloads = null);
+public sealed record NetworkConfiguration(ProxySettings Proxy, Aria2Settings Aria2, long Revision, DownloadBehavior? Downloads = null, LauncherBehavior? Launcher = null);
 
 /// <summary>System/Direct/Custom are handled without any legacy Windows registry initialization.</summary>
 public sealed class ConfigurableNetworkHandler(NetworkOptions options, bool allowAutoRedirect = true) : HttpMessageHandler
@@ -50,6 +50,7 @@ public sealed class ConfigurableNetworkHandler(NetworkOptions options, bool allo
                 var handler = new SocketsHttpHandler { UseProxy = proxySettings.Mode != ProxyMode.Direct, Proxy = proxy, AllowAutoRedirect = allowAutoRedirect,
                     ConnectTimeout = TimeSpan.FromSeconds(15), PooledConnectionLifetime = TimeSpan.FromMinutes(5),
                     AutomaticDecompression = DecompressionMethods.All };
+                if (configuration.Launcher?.UseDnsOverHttps == true && proxySettings.Mode == ProxyMode.Direct) handler.ConnectCallback = DnsOverHttpsConnector.ConnectAsync;
                 invoker = new HttpMessageInvoker(handler, true); clients.Add(revision, invoker);
             }
         }

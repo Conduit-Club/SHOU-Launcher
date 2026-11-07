@@ -5,8 +5,18 @@ using SHOU.Launcher.Core.IO;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService : IGameSettingsService
+public sealed partial class LauncherService : IGameSettingsService, IJavaManagementService
 {
+    public async Task<JavaInstallation> InspectJavaAsync(string executable, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken);
+        var name = Path.GetFileName(executable);
+        if (name is not ("java" or "java.exe" or "javaw.exe")) throw new ArgumentException("请选择 Java 的 java / java.exe 可执行文件。");
+        if (name == "javaw.exe" && File.Exists(Path.Combine(Path.GetDirectoryName(executable)!, "java.exe"))) executable = Path.Combine(Path.GetDirectoryName(executable)!, "java.exe");
+        var java = await platform.JavaDiscovery.ProbeAsync(executable, cancellationToken);
+        Set(s => s with { JavaInstallations = s.JavaInstallations.Where(j => !j.ExecutablePath.Equals(java.ExecutablePath, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)).Append(java).ToArray() });
+        return java;
+    }
     public MemoryStatus? ReadMemoryStatus()
     {
         try { return platform.MemoryInfo?.Read(); }

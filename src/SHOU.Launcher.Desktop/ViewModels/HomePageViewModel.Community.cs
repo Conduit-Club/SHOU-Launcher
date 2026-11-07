@@ -106,5 +106,5 @@ public sealed partial class HomePageViewModel : IDisposable
         finally { row.IsLoading = false; }
     }
     private void CloseUpdates() { updatesRead?.Cancel(); ++updatesGeneration; IsUpdatesOpen = false; IsUpdatesLoading = false; }
-    public void Dispose() { CloseUpdates(); communityLifetime.Cancel(); }
+    public void Dispose() { CloseUpdates(); DisposeAppearance(); communityLifetime.Cancel(); }
 }

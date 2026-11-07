@@ -8,6 +8,8 @@ public sealed partial class AccountsPageViewModel
 {
     private bool _panelReady;
     private bool _providerInitialized;
+    private bool _providerChosenByUser;
+    private bool _initialAccountApplied;
     private bool _showAllAccounts;
     private bool _isAddingAccount;
     private bool _showRemoval;
@@ -30,13 +32,13 @@ public sealed partial class AccountsPageViewModel
     public bool IsMicrosoftChannel => SelectedProvider.Id == "microsoft";
     public bool IsLittleSkinChannel => SelectedProvider.Id == "littleskin";
     public bool IsMuaChannel => SelectedProvider.Id == "mua";
-    public string MicrosoftChannelTitle => $"微软正版登录（{Accounts.Count(a => a.Kind == AccountKind.Microsoft)}）";
-    public string LittleSkinChannelTitle => $"LittleSkin 登录（{CountProvider("littleskin")}）";
-    public string MuaChannelTitle => $"MUA 登录（{CountProvider("mua")}）";
-    public string OfflineChannelTitle => $"离线登录（{Accounts.Count(a => a.Kind == AccountKind.Offline)}）";
-    public string ChannelTitle => ShowAllAccounts ? $"全部账户（{Accounts.Count} 个角色）" : $"{SelectedProvider.Name}（{ChannelAccounts.Count} 个角色）";
+    public string MicrosoftChannelTitle => Localization.UiLocalization.Instance.Format("微软正版登录（{0}）", Accounts.Count(a => a.Kind == AccountKind.Microsoft));
+    public string LittleSkinChannelTitle => Localization.UiLocalization.Instance.Format("LittleSkin 登录（{0}）", CountProvider("littleskin"));
+    public string MuaChannelTitle => Localization.UiLocalization.Instance.Format("MUA 登录（{0}）", CountProvider("mua"));
+    public string OfflineChannelTitle => Localization.UiLocalization.Instance.Format("离线登录（{0}）", Accounts.Count(a => a.Kind == AccountKind.Offline));
+    public string ChannelTitle => ShowAllAccounts ? Localization.UiLocalization.Instance.Format("全部账户（{0} 个角色）", Accounts.Count) : Localization.UiLocalization.Instance.Format("{0}（{1} 个角色）", Localization.UiLocalization.Instance.Text(SelectedProvider.Name), ChannelAccounts.Count);
     public string AllAccountsButtonLabel => ShowAllAccounts ? "隐藏" : "全部";
-    public string AddingAccountSummary => $"正在添加：{SelectedProvider.Name}。可直接点击其他登录方式切换。";
+    public string AddingAccountSummary => Localization.UiLocalization.Instance.Format("正在添加：{0}。可直接点击其他登录方式切换。", Localization.UiLocalization.Instance.Text(SelectedProvider.Name));
     public string SelectedPlayerName => SelectedChannelAccount?.DisplayName ?? "尚未选择角色";
     public string SelectedPlayerSource => SelectedChannelAccount is { } account ? SourceName(account) : "";
     public string SelectedPlayerStatus => SelectedChannelAccount is { } account ? UiPrivacy.Redact(account.Status) + (account.Persisted ? " · 已保存" : " · 本次会话") : "";
@@ -58,7 +60,7 @@ public sealed partial class AccountsPageViewModel
         SelectProviderCommand = new(id =>
         {
             if (!CanEdit) return;
-            if (Providers.FirstOrDefault(p => p.Id == id) is { } provider) { SelectedProvider = provider; ShowAllAccounts = false; IsAddingAccount = ChannelAccounts.Count == 0; }
+            if (Providers.FirstOrDefault(p => p.Id == id) is { } provider) { _providerChosenByUser = true; SelectedProvider = provider; ShowAllAccounts = false; IsAddingAccount = ChannelAccounts.Count == 0; }
         }, _ => CanEdit);
         ToggleAllAccountsCommand = Command(() => { ShowAllAccounts = !ShowAllAccounts; IsAddingAccount = false; Password = ""; OnPropertyChanged(nameof(ChannelTitle)); }, () => CanEdit);
         BeginAddAccountCommand = Command(() => { ShowAllAccounts = false; IsAddingAccount = true; ShowRemoval = false; ConfirmRemoval = false; }, () => CanEdit);
@@ -95,6 +97,13 @@ public sealed partial class AccountsPageViewModel
             if (SelectedAccount is { } selected && Providers.FirstOrDefault(p => p.Id == ProviderId(selected)) is { } provider) _provider = provider;
             _providerInitialized = true;
             OnPropertyChanged(nameof(SelectedProvider)); OnPropertyChanged(nameof(IsOffline)); OnPropertyChanged(nameof(IsMicrosoft)); OnPropertyChanged(nameof(IsYggdrasil));
+            UpdateChannelAccounts();
+            IsAddingAccount = ChannelAccounts.Count == 0;
+        }
+        // Configuration can arrive after the first empty snapshot. Preserve an explicit channel choice.
+        if (!_providerChosenByUser && !_initialAccountApplied && SelectedAccount is { } initial)
+        {
+            SelectProviderForAccount(initial); _initialAccountApplied = true; IsAddingAccount = false;
         }
         UpdateChannelAccounts();
         foreach (var property in new[] { nameof(MicrosoftChannelTitle), nameof(LittleSkinChannelTitle), nameof(MuaChannelTitle), nameof(OfflineChannelTitle), nameof(ChannelTitle) }) OnPropertyChanged(property);

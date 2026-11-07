@@ -100,7 +100,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
 
     public AccountsPageViewModel(MainWindowViewModel owner) : base(owner, "账户", "管理离线、Microsoft、MUA 与 LittleSkin 角色。")
     {
-        _provider = Providers[0];
+        _provider = Providers.First(p => p.Id == "microsoft");
         AddOfflineCommand = AsyncCommand(async () =>
         {
             var name = PlayerName.Trim(); var mode = offlineUuidMode; var custom = CustomOfflineUuid.Trim();

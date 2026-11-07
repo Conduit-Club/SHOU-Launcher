@@ -5,7 +5,7 @@ using SHOU.Launcher.Desktop.Platform.Windows;
 
 namespace SHOU.Launcher.Desktop.Platform;
 
-public sealed class JavaDiscovery : IJavaDiscovery
+public sealed partial class JavaDiscovery : IJavaDiscovery
 {
     private readonly IProcessRunner _processes;
     private readonly JavaRuntimeProbe _probe;
@@ -14,10 +14,11 @@ public sealed class JavaDiscovery : IJavaDiscovery
     private readonly string _home;
     private readonly bool _includeSystemSources;
     private readonly string? _managedRuntimeDirectory;
+    private readonly IReadOnlyList<string> _additionalSearchRoots;
 
     public JavaDiscovery(IProcessRunner processes, PlatformContext platform, PlatformOptions? options = null,
         string? homeDirectory = null, bool includeSystemSources = true, TimeSpan? probeTimeout = null,
-        string? managedRuntimeDirectory = null)
+        string? managedRuntimeDirectory = null, IReadOnlyList<string>? additionalSearchRoots = null)
     {
         _processes = processes;
         _probe = new JavaRuntimeProbe(processes, probeTimeout);
@@ -26,6 +27,7 @@ public sealed class JavaDiscovery : IJavaDiscovery
         _home = homeDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         _includeSystemSources = includeSystemSources;
         _managedRuntimeDirectory = managedRuntimeDirectory;
+        _additionalSearchRoots = additionalSearchRoots ?? [];
     }
 
     public async Task<JavaInstallation> ProbeAsync(string executable, CancellationToken cancellationToken = default)
@@ -43,6 +45,7 @@ public sealed class JavaDiscovery : IJavaDiscovery
     public async Task<IReadOnlyList<JavaInstallation>> DiscoverAsync(JavaDiscoveryRequest request,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var candidates = new Dictionary<string, string>(_platform.OS == LauncherOS.Windows
             ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         var configured = request.ConfiguredExecutable ?? _configuredExecutable;
@@ -93,6 +96,7 @@ public sealed class JavaDiscovery : IJavaDiscovery
             }
         }
 
+        foreach (var root in PortableSearchRoots().Distinct(_platform.OS == LauncherOS.Windows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)) ScanPortableRoot(root);
         var installations = new List<JavaInstallation>();
         foreach (var (path, source) in candidates)
         {
@@ -109,7 +113,7 @@ public sealed class JavaDiscovery : IJavaDiscovery
         return installations.OrderByDescending(java => java.IsUsable
             && (!request.RequiredMajorVersion.HasValue || java.MajorVersion == request.RequiredMajorVersion)
             && (!request.RequiredArchitecture.HasValue || java.RuntimeArchitecture == request.RequiredArchitecture))
-            .ToArray();
+            .ThenByDescending(java => java.MajorVersion).ThenBy(java => java.ExecutablePath, StringComparer.Ordinal).ToArray();
 
         void Add(string path, string source, bool requireExists = true)
         {
@@ -153,6 +157,27 @@ public sealed class JavaDiscovery : IJavaDiscovery
                     if (DerivedJavaTrustService.IsDerivedRootDirectory(directory)
                         && !DerivedJavaTrustService.IsCompletedVariantDirectory(child)) continue;
                     queue.Enqueue((child, depth + 1));
+                }
+            }
+        }
+
+        void ScanPortableRoot(string root)
+        {
+            if (!Path.IsPathFullyQualified(root) || !Directory.Exists(root) || IsLink(root)) return;
+            var pending = new Queue<(string Path, int Depth)>(); pending.Enqueue((root, 0));
+            var visited = 0;
+            while (pending.TryDequeue(out var entry) && visited++ < 1024 && candidates.Count < 64)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (MojangJavaRuntimeInstaller.IsIncompleteRuntime(entry.Path) || Path.GetFileName(entry.Path) == ".staging") continue;
+                AddHome(entry.Path, "portable");
+                if (Path.GetFileName(entry.Path).Equals("bin", StringComparison.OrdinalIgnoreCase)) Add(Path.Combine(entry.Path, JavaFilename), "portable");
+                if (entry.Depth >= 5 || File.Exists(Path.Combine(entry.Path, "bin", JavaFilename))) continue;
+                foreach (var child in EnumerateDirectories(entry.Path))
+                {
+                    if (IsLink(child) || !IsJavaSearchDirectory(Path.GetFileName(child))) continue;
+                    if (DerivedJavaTrustService.IsDerivedRootDirectory(entry.Path) && !DerivedJavaTrustService.IsCompletedVariantDirectory(child)) continue;
+                    pending.Enqueue((child, entry.Depth + 1));
                 }
             }
         }

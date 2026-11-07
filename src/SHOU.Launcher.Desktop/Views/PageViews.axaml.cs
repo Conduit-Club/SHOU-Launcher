@@ -41,7 +41,21 @@ public partial class AccountsView : UserControl
 
 public partial class SettingsView : UserControl
 {
-    public SettingsView() => AvaloniaXamlLoader.Load(this);
+    private SettingsPageViewModel? localeOwner;
+    public SettingsView()
+    {
+        AvaloniaXamlLoader.Load(this);
+        DataContextChanged += (_, _) => AttachLocale(); AttachedToVisualTree += (_, _) => AttachLocale();
+        DetachedFromVisualTree += (_, _) => { if (localeOwner is { } previous) previous.PropertyChanged -= LocaleLayoutChanged; localeOwner = null; };
+    }
+    private void AttachLocale()
+    {
+        if (localeOwner is { } previous) previous.PropertyChanged -= LocaleLayoutChanged;
+        localeOwner = DataContext as SettingsPageViewModel;
+        if (localeOwner is { } next) { next.PropertyChanged += LocaleLayoutChanged; this.FindControl<Grid>("SettingsLayout")!.ColumnDefinitions[0].Width = next.SidebarWidth; }
+    }
+    private void LocaleLayoutChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    { if (e.PropertyName == nameof(SettingsPageViewModel.SidebarWidth) && localeOwner is { } vm) this.FindControl<Grid>("SettingsLayout")!.ColumnDefinitions[0].Width = vm.SidebarWidth; }
     private async void PickGameRoot_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not SettingsPageViewModel vm) return;
@@ -56,7 +70,7 @@ public partial class SettingsView : UserControl
     private async void PickJava_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not SettingsPageViewModel vm) return;
-        try { if (await StorageDialogs.PickJavaAsync(this) is { } path) vm.JavaExecutable = path; }
+        try { if (await StorageDialogs.PickJavaAsync(this) is { } path) await vm.AddJavaAsync(path); }
         catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
     }
 }

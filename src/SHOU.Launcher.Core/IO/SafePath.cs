@@ -2,6 +2,8 @@ namespace SHOU.Launcher.Core.IO;
 
 public static class SafePath
 {
+    /// <summary>Reject symlink/reparse aliases in every existing component, including a destination's parents.</summary>
+    public static void RejectLinks(string path) => Downloads.VerifiedDownloader.RejectLink(path);
     /// <summary>Compare normalized paths after the caller resolves links. macOS never uses Path.GetRelativePath's case folding.</summary>
     public static bool IsWithin(string root, string path)
     {
