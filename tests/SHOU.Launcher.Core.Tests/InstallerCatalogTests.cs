@@ -19,7 +19,7 @@ public sealed class InstallerCatalogTests
         using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(ScriptedHttpHandler.Json(malformed
             ? """[{"loader":{"version":"../escape","stable":true}}]"""
             : """[{"loader":{"version":"0.20.1","stable":true}},{"loader":{"version":"0.10.6+build.214","stable":false}},{"loader":{"version":"0.19.3","stable":true}}]"""))));
-        var catalog = new LauncherCatalog(http, () => [new() { Category = SourceCategory.Mod, Layout = SourceLayout.Official }]);
+        var catalog = new LauncherCatalog(http, () => [new() { Category = SourceCategory.Loader, Layout = SourceLayout.Official }]);
         var versions = await catalog.FabricAsync("26.3");
         CollectionAssert.AreEqual(new[] { "0.20.1", "0.19.3" }, versions.Select(v => v.Version).ToArray());
         malformed = true;
