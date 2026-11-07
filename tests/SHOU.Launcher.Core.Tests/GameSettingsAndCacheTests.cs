@@ -72,6 +72,7 @@ public sealed class GameSettingsAndCacheTests
         Assert.AreEqual(4096, GameSettingsPolicy.MemoryMiB(instance with { MemoryMiB = 4096 }, settings, memory));
         Assert.AreEqual(2048, GameSettingsPolicy.MemoryMiB(instance, settings, null));
         Assert.AreEqual(1536, GameSettingsPolicy.MemoryMiB(instance, settings, memory, RuntimeArchitecture.X86));
+        Assert.AreEqual(2048, GameSettingsPolicy.MemoryMiB(instance with { LaunchOptions = new(AutomaticMemory: true, IpPreference: GameIpPreference.IPv6) }, settings with { LaunchOptions = new(AutomaticMemory: false) }, memory));
     }
     [TestMethod]
     public void SupportedJvmAndGameOptionsCannotOverrideCredentialsClasspathOrTls()

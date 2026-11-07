@@ -44,6 +44,7 @@ public sealed partial class SettingsPageViewModel
     public string SystemMemorySummary => systemMemory is { } memory ? $"已使用 / 已安装内存：{(memory.TotalBytes - memory.AvailableBytes) / 1073741824d:0.#} / {memory.TotalBytes / 1073741824d:0.#} GiB" : "无法读取系统内存；保留指定内存。";
     public double UsedMemoryPercent => systemMemory is { TotalBytes: > 0 } m ? 100d * (m.TotalBytes - m.AvailableBytes) / m.TotalBytes : 0;
     public int EffectiveMemoryMiB => GameSettingsPolicy.MemoryMiB(new("preview", "preview", "preview", Service.Paths.InstancesDirectory), Owner.Snapshot.Settings with { MemoryMiB = (int)MemoryMiB, MinimumMemoryMiB = UseMinimumMemory ? (int)MinimumMemoryMiB : null, LaunchOptions = BuildGameOptions() }, systemMemory);
+    public decimal DisplayMemoryMiB { get => AutomaticMemory ? EffectiveMemoryMiB : MemoryMiB; set { if (!AutomaticMemory) MemoryMiB = value; } }
     private GameLaunchOptions BuildGameOptions() => new(AutomaticMemory, Isolation, Visibility, Priority, IpPreference, GameTitle.Trim(), JvmArguments.Trim(), LockMemory,
         GameArguments: GameArguments.Trim(), BeforeLaunchExecutable: BeforeLaunchExecutable.Trim(), BeforeLaunchArguments: BeforeLaunchArguments.Trim());
     private DownloadBehavior BuildDownloadOptions() => new((int)MaximumConnections, (int)MaximumKiBPerSecond, HttpsOnly, SourcePreference, PreferOfficialCatalog, SelectInstalledInstance);
@@ -62,7 +63,7 @@ public sealed partial class SettingsPageViewModel
         lastMemoryRead = DateTime.UtcNow;
         systemMemory = (Service as IGameSettingsService)?.ReadMemoryStatus(); NotifyMemory();
     }
-    private void NotifyMemory() { OnPropertyChanged(nameof(MemorySummary)); OnPropertyChanged(nameof(SystemMemorySummary)); OnPropertyChanged(nameof(UsedMemoryPercent)); OnPropertyChanged(nameof(EffectiveMemoryMiB)); }
+    private void NotifyMemory() { OnPropertyChanged(nameof(MemorySummary)); OnPropertyChanged(nameof(SystemMemorySummary)); OnPropertyChanged(nameof(UsedMemoryPercent)); OnPropertyChanged(nameof(EffectiveMemoryMiB)); OnPropertyChanged(nameof(DisplayMemoryMiB)); }
     private bool ValidateGameOptions()
     {
         try

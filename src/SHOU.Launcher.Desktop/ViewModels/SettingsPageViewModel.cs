@@ -35,7 +35,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
             MarkDirty(); if (!_loading) ReconcileJavaSelection(Owner.Snapshot.Settings); NotifyCommands();
         }
     }
-    public decimal MemoryMiB { get => _memoryMiB; set { if (SetProperty(ref _memoryMiB, value)) { MarkDirty(); OnPropertyChanged(nameof(MemorySummary)); } } }
+    public decimal MemoryMiB { get => _memoryMiB; set { if (SetProperty(ref _memoryMiB, value)) { MarkDirty(); NotifyMemory(); } } }
     public string Language { get => _language; set { if (!string.IsNullOrWhiteSpace(value) && SetProperty(ref _language, value)) MarkDirty(); } }
     public string Theme { get => _theme; set { if (!string.IsNullOrWhiteSpace(value) && SetProperty(ref _theme, value)) MarkDirty(); } }
     public string DownloadSourcesJson { get => _downloadSourcesJson; set { if (SetProperty(ref _downloadSourcesJson, value)) { MarkDirty(); RefreshSourceEditor(value); } } }

@@ -55,7 +55,8 @@ public static class GameSettingsPolicy
     {
         var options = Options(instance, settings);
         var value = instance.MemoryMiB ?? settings.MemoryMiB;
-        if (instance.MemoryMiB is null && options.AutomaticMemory && memory is { TotalBytes: > 0, AvailableBytes: > 0 })
+        // The memory-follow switch is independent of the other per-instance launch overrides.
+        if (instance.MemoryMiB is null && settings.LaunchOptions?.AutomaticMemory == true && memory is { TotalBytes: > 0, AvailableBytes: > 0 })
         {
             var available = memory.AvailableBytes / 1048576;
             var total = memory.TotalBytes / 1048576;

@@ -14,8 +14,10 @@ public sealed partial class InstancesPageViewModel
     public bool IsFolderBusy { get => folderBusy; private set { SetProperty(ref folderBusy, value); NotifyCommands(); } }
     public AsyncRelayCommand AttachExistingCommand { get; private set; } = null!;
     public RelayCommand DismissExistingCommand { get; private set; } = null!;
+    public RelayCommand ManageGameDirectoryCommand { get; private set; } = null!;
     private void InitializeExistingInstances()
     {
+        ManageGameDirectoryCommand = Command(() => { Owner.Settings.SelectedSection = "manage"; Owner.ShowSettingsCommand.Execute(null); });
         DismissExistingCommand = Command(() => { ExistingCandidates.Clear(); ExistingCandidate = null; OnPropertyChanged(nameof(HasExistingCandidates)); });
         AttachExistingCommand = AsyncCommand(async () =>
         {

@@ -13,6 +13,20 @@ namespace SHOU.Launcher.Desktop.Tests;
 public sealed class GameSettingsUiTests
 {
     [AvaloniaFact]
+    public void AutomaticMemoryDisplayUsesCalculatedValueAndPreservesTheManualDraft()
+    {
+        using var vm = new MainWindowViewModel(new SettingsService(), new FakeExternalLauncher()); vm.Settings.MemoryMiB = 4096;
+        var view = new SettingsView { DataContext = vm.Settings }; var window = new Window { Content = view, Width = 976, Height = 636 }; window.Show(); Dispatcher.UIThread.RunJobs();
+        try
+        {
+            vm.Settings.AutomaticMemory = true; Dispatcher.UIThread.RunJobs();
+            Assert.Equal(9728m, view.FindControl<NumericUpDown>("MaximumMemorySetting")!.Value); Assert.Equal(4096m, vm.Settings.MemoryMiB);
+            vm.Settings.CustomMemory = true; Dispatcher.UIThread.RunJobs(); Assert.Equal(4096m, view.FindControl<NumericUpDown>("MaximumMemorySetting")!.Value);
+            vm.Instances.ManageGameDirectoryCommand.Execute(null); Assert.Same(vm.Settings, vm.SelectedPage); Assert.Equal("manage", vm.Settings.SelectedSection);
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
     public async Task GameControlsPersistDraftAndExposeAutomaticMemoryWithoutDefaultHelperParagraphs()
     {
         var service = new SettingsService(); using var vm = new MainWindowViewModel(service, new FakeExternalLauncher());
