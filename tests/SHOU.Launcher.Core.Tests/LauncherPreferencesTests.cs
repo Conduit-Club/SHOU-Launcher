@@ -20,13 +20,18 @@ public sealed class LauncherPreferencesTests
         var bytes = Encoding.UTF8.GetBytes("controlled cross-platform package fixture"); var hash = Convert.ToHexStringLower(SHA256.HashData(bytes));
         var name = "SHOU-Launcher-" + new NativePlatformInfo().Context.RuntimeIdentifier + "-v2.0.0.zip";
         var packageUrl = "https://github.com/Conduit-Club/SHOU-Launcher/releases/download/v2/" + name;
+        var manifestName = "SHOU-Launcher-" + new NativePlatformInfo().Context.RuntimeIdentifier + "-release.json";
+        var manifestUrl = "https://github.com/Conduit-Club/SHOU-Launcher/releases/download/v2/" + manifestName;
+        var manifest = JsonSerializer.Serialize(new { format = "SHOU-Desktop-Release-v1", product = "SHOU.Launcher.Desktop", runtime = new NativePlatformInfo().Context.RuntimeIdentifier,
+            sourceSha = new string('1', 40), selfContained = true, avalonia = "12.1.5", package = new { name, bytes = bytes.Length, sha256 = hash } });
         var body = JsonSerializer.Serialize(new[] { new { draft = false, tag_name = "v2.0.0", name = "Portable release", body = "Release notes", published_at = "2026-11-07T00:00:00Z", html_url = "https://github.com/Conduit-Club/SHOU-Launcher/releases/tag/v2", prerelease = false,
             assets = new[] { new { name = "Old-WPF.exe", size = 42, digest = "sha256:" + hash, browser_download_url = "https://github.com/Conduit-Club/SHOU-Launcher/releases/download/v2/old.exe" },
-                new { name, size = bytes.Length, digest = "sha256:" + hash, browser_download_url = packageUrl } } } });
+                new { name, size = bytes.Length, digest = "sha256:" + hash, browser_download_url = packageUrl },
+                new { name = manifestName, size = manifest.Length, digest = "sha256:" + hash, browser_download_url = manifestUrl } } } });
         using var info = new HttpClient(new ScriptedHttpHandler(request =>
         {
             Assert.IsNull(request.Headers.Authorization); Assert.IsFalse(request.Headers.Contains("x-api-key"));
-            return Task.FromResult(request.RequestUri!.Host == "api.github.com" ? ScriptedHttpHandler.Json(body) : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) });
+            return Task.FromResult(request.RequestUri!.Host == "api.github.com" ? ScriptedHttpHandler.Json(body) : request.RequestUri.AbsoluteUri == manifestUrl ? ScriptedHttpHandler.Json(manifest) : new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(bytes) });
         }));
         using var privateHttp = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Private API client must not be used.")));
         privateHttp.DefaultRequestHeaders.Add("x-api-key", "private-fixture-must-not-leak");
@@ -41,6 +46,21 @@ public sealed class LauncherPreferencesTests
             Assert.AreEqual(saved, await service.DownloadLauncherUpdateAsync(release.Package));
         }
         await Assert.ThrowsAsync<ArgumentException>(() => service.DownloadLauncherUpdateAsync(new("Old-WPF.exe", new(packageUrl), bytes.Length, hash)));
+    }
+    [TestMethod]
+    public async Task MatchingLegacyZipNameAndDigestCannotReplaceThePortableHostWithoutItsManifest()
+    {
+        var rid = new NativePlatformInfo().Context.RuntimeIdentifier;
+        var name = "SHOU-Launcher-" + rid + "-v1.5.0" + (OperatingSystem.IsWindows() ? ".zip" : ".tar.gz");
+        var hash = new string('1', 64); var url = "https://github.com/Conduit-Club/SHOU-Launcher/releases/download/v1.5.0/" + name;
+        var body = JsonSerializer.Serialize(new[] { new { draft = false, tag_name = "v1.5.0", name = "Legacy release", body = "Legacy notes remain readable", published_at = "2026-11-07T00:00:00Z", html_url = "https://github.com/Conduit-Club/SHOU-Launcher/releases/tag/v1.5.0", prerelease = false,
+            assets = new[] { new { name, size = 100, digest = "sha256:" + hash, browser_download_url = url } } } });
+        using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(ScriptedHttpHandler.Json(body))));
+        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        await using var processes = (ProcessRunner)platform.Processes;
+        await using var service = new LauncherService(platform, http, downloader, new NetworkOptions(), publicInformationHttp: http);
+        var release = (await service.CheckLauncherReleasesAsync()).Single(); Assert.IsNull(release.Package); Assert.AreEqual("Legacy notes remain readable", release.Notes);
+        await Assert.ThrowsAsync<ArgumentException>(() => service.DownloadLauncherUpdateAsync(new(name, new(url), 100, hash)));
     }
     [TestMethod]
     public async Task PublicRedirectsCannotDowngradeOrForwardAuthentication()

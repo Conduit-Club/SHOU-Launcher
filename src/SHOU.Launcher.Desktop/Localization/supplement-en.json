@@ -2,7 +2,7 @@
   "自动选择 Java（推荐）": "Select Java automatically (recommended)",
   "已指定全局 Java": "Global Java selected",
   "已发现的 Java（{0}）": "Discovered Java installations ({0})",
-  "微软正版登录（{0}）": "Microsoft account ({0})",
+  "微软正版登录（{0}）": "Microsoft ({0})",
   "LittleSkin 登录（{0}）": "LittleSkin ({0})",
   "MUA 登录（{0}）": "MUA ({0})",
   "离线登录（{0}）": "Offline ({0})",
@@ -154,5 +154,6 @@
   "选择 Java 可执行文件": "Choose Java executable",
   "服务暂时限制了请求。请稍后重试，或前往项目页面查看。": "The service is limiting requests. Try again later or open the project page.",
   "无法连接服务。请检查网络后重试。": "Cannot connect to the service. Check your network and try again.",
-  "Minecraft 运行环境": "Minecraft runtime"
+  "Minecraft 运行环境": "Minecraft runtime",
+  "实例选择": "Select instance"
 }

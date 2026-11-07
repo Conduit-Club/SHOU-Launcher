@@ -108,7 +108,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
             await Service.SaveSettingsAsync(settings, ct);
             await SavePresentationAsync(ct);
         }, false, proxySecret, ariaSecret);
-        if (saved) { Load(Service.Snapshot.Settings); Feedback = "设置已保存。"; }
+        if (saved) { Load(Service.Snapshot.Settings); LauncherFeedback = ""; Feedback = "设置已保存。"; }
         else Feedback = "保存未完成，请查看错误提示；部分已成功写入的项目可能已生效。已有密钥不会被空值覆盖。";
     }
     private static bool IsHttpEndpoint(string address) => Uri.TryCreate(address.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && string.IsNullOrEmpty(uri.UserInfo);

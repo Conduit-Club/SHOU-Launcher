@@ -80,7 +80,7 @@ public sealed class LauncherSettingsUiTests
         Assert.DoesNotContain("credential-fixture", text); Assert.DoesNotContain("11111111-2222-3333-4444-555555555555", text); Assert.DoesNotContain("accounts", text, StringComparison.OrdinalIgnoreCase);
         var node = JsonNode.Parse(bytes)!.AsObject(); node["settings"]!["memoryMiB"] = 4096; node["settings"]!["proxy"]!["credentialKey"] = "injected-key";
         root.Settings.ImportSettings(Encoding.UTF8.GetBytes(node.ToJsonString())); Assert.True(root.Settings.IsDirty); Assert.Equal(0, service.SaveCalls); Assert.Equal(4096, root.Settings.MemoryMiB);
-        await root.Settings.SaveCommand.ExecuteAsync(null); Assert.Equal("credential-fixture", service.Snapshot.Settings.Proxy!.CredentialKey); Assert.Equal(1, service.SaveCalls);
+        await root.Settings.SaveCommand.ExecuteAsync(null); Assert.Equal("credential-fixture", service.Snapshot.Settings.Proxy!.CredentialKey); Assert.Equal(1, service.SaveCalls); Assert.Equal("", root.Settings.LauncherFeedback);
     }
     [AvaloniaFact]
     public async Task RateLimitProducesActionableFeedbackAndDoesNotFollowTheUserToAnotherSection()
