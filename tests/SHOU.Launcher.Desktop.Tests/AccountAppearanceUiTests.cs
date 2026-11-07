@@ -21,6 +21,36 @@ namespace SHOU.Launcher.Desktop.Tests;
 
 public sealed class AccountAppearanceUiTests
 {
+    [AvaloniaFact]
+    public async Task RefreshedCredentialsRetryFailedPortraitAndUnrelatedProgressDoesNotRefetch()
+    {
+        var service = new AppearanceUiService(); var old = new AccountProfile("microsoft:fixture", AccountKind.Microsoft, "Fixture", new string('a', 32), ExpiresAt: DateTimeOffset.UtcNow.AddHours(-1));
+        service.Base.Publish(service.Snapshot with { Accounts = [old], SelectedAccountId = old.Id });
+        var online = new AccountAppearance(old.Id, AccountSkinModel.Classic, AccountAppearancePng.Decode(Png()), [], false, null, "fixture", true);
+        var refreshed = false; var remoteReads = 0;
+        service.Read = (_, remote, _) => !remote ? Task.FromResult(AccountAppearanceClient.Unread(old)) : (++remoteReads > 0 && refreshed ? Task.FromResult(online) : Task.FromException<AccountAppearance>(new HttpRequestException("HTTP 401")));
+        using var fixture = await Fixture.OpenAsync(service: service); Assert.False(fixture.Vm.HasAccountSkin); Assert.Contains("401", fixture.Vm.AccountAppearanceStatus);
+        refreshed = true; service.Base.Publish(service.Snapshot with { Accounts = [old with { ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) }] });
+        for (var i = 0; i < 100 && !fixture.Vm.HasAccountSkin; i++) { Pump(fixture.Window); await Task.Delay(10); }
+        Assert.True(fixture.Vm.HasAccountSkin); Assert.DoesNotContain("401", fixture.Vm.AccountAppearanceStatus); Assert.Equal(2, remoteReads);
+        service.Base.Publish(service.Snapshot with { Downloads = [new("progress", "fixture", "Downloading", 1, 10)] }); Pump(fixture.Window);
+        Assert.Equal(2, remoteReads); Assert.Same(online.Skin, fixture.Vm.AccountSkin);
+    }
+    [AvaloniaFact]
+    public async Task LateUnauthorizedPortraitCannotOverwriteFreshCredentialGeneration()
+    {
+        var service = new AppearanceUiService(); var old = new AccountProfile("microsoft:fixture", AccountKind.Microsoft, "Fixture", new string('b', 32), ExpiresAt: DateTimeOffset.UtcNow.AddHours(-1));
+        service.Base.Publish(service.Snapshot with { Accounts = [old], SelectedAccountId = old.Id });
+        var online = new AccountAppearance(old.Id, AccountSkinModel.Classic, AccountAppearancePng.Decode(Png()), [], false, null, "fixture", true);
+        service.Read = (_, _, _) => Task.FromResult(online); using var fixture = await Fixture.OpenAsync(service: service);
+        var delayed = new TaskCompletionSource<AccountAppearance>(TaskCreationOptions.RunContinuationsAsynchronously); var fresh = false;
+        service.Read = (_, _, _) => fresh ? Task.FromResult(online) : delayed.Task;
+        var pending = fixture.Vm.RefreshAppearanceCommand.ExecuteAsync(null); Pump(fixture.Window);
+        fresh = true; service.Base.Publish(service.Snapshot with { Accounts = [old with { ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) }] });
+        for (var i = 0; i < 100 && !fixture.Vm.HasAccountSkin; i++) { Pump(fixture.Window); await Task.Delay(10); }
+        delayed.SetException(new HttpRequestException("HTTP 401 stale")); await pending; Pump(fixture.Window);
+        Assert.Same(online.Skin, fixture.Vm.AccountSkin); Assert.DoesNotContain("401", fixture.Vm.AccountAppearanceStatus); Assert.False(fixture.Vm.IsAccountAppearanceBusy);
+    }
     private static void Pump(Window window) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
     private static void Click(Window window, string name) { var button = Find<Button>(window, name); if (button.Command is { } command) { Assert.True(command.CanExecute(button.CommandParameter)); command.Execute(button.CommandParameter); } else button.RaiseEvent(new RoutedEventArgs(Button.ClickEvent)); Pump(window); }

@@ -90,7 +90,8 @@ public sealed partial class AccountsPageViewModel
         CancelAppearanceReadCommand = Command(() => appearanceReadCancellation?.Cancel(), () => appearanceBusy);
         appearanceReady = true;
     }
-    private static string AppearanceIdentity(AccountProfile account) => account.Id + "\n" + account.Kind + "\n" + account.PlayerUuid + "\n" + account.AuthenticationServer;
+    private static string AppearanceIdentity(AccountProfile account) => account.Id + "\n" + account.Kind + "\n" + account.PlayerUuid + "\n" + account.AuthenticationServer
+        + "\n" + account.ExpiresAt?.UtcTicks.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private void RefreshAccountAppearanceRows()
     {
         if (!appearanceReady) return;
