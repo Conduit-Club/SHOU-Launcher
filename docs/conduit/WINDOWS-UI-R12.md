@@ -5,7 +5,7 @@
 ## 源码与参考
 
 - 工作树 `D:\Code\C#\SHOU-Launcher-Windows`；origin 为 `https://github.com/Conduit-Club/SHOU-Launcher.git`。本轮 fetch 后迁移分支远端仍为 `fb1b483a3373359fe9a257bcc86d498d068864b6`，没有合并 dev/main，原目录修改保留。
-- 产品提交：`1b74f35294c24ee4116f086f5cdecda2b6b2ba73` 实现目录与页面内状态；`3cd5f4bcc837246713e20f7518c0305921d66c8d` 修正官方仓库地址、NeoForge 热修复分组和预发行隔离；`656f4ebef9331cd3e43fdfb34d1ed134e41c97d9` 支持并转义合法 Maven build 坐标。**最终产品源码为 656f4ebe。**
+- 产品提交：`1b74f35294c24ee4116f086f5cdecda2b6b2ba73` 实现目录与页面内状态；`3cd5f4bcc837246713e20f7518c0305921d66c8d` 修正官方仓库地址、NeoForge 热修复分组和预发行隔离；`656f4ebef9331cd3e43fdfb34d1ed134e41c97d9` 支持并转义合法 Maven build 坐标；`16689afc2d7bb0373354e8f8e9fcaea3414ba90e` 修复原生发现的 Fabric 目录失败、资源行换行和加载图案颜色；`572c8b101728e018f13f5c54b0f4b38aaf4adc36` 修正新增回归的来源夹具。**最终 RC3 源码为 572c8b10。**
 - 参考用户提供的六张截图：加载器横条、目录加载卡、热门模组列表和 Forge 独立安装器目录。仅复用 v1.5.0 的独立 Anvil/Fabric/Quilt PNG，来源与哈希见 [素材记录](../../src/SHOU.Launcher.Desktop/Assets/Minecraft/README.md)；未读取旧 WPF 视图、样式模板、控件结构 JSON 或采集脚本。
 - 新增的 pickaxe 来自固定版本的 [Lucide 原始 SVG](https://raw.githubusercontent.com/lucide-icons/lucide/0.468.0/icons/pickaxe.svg)，沿用已有许可记录。共享图标共 88 个；未打包新字体。
 
@@ -20,6 +20,10 @@
 | 数据包 | 旧 mod + datapack 标签组合遗漏热门数据包 | 使用实际 `project_type:datapack` 目录；项目链接按返回的实际类型构造。通用实例装入仍不代替存档目标选择 |
 | 独立安装器 | Forge 等只有官网/返回按钮和空版本框 | Forge、NeoForge、Fabric、Quilt、Legacy Fabric 自动读取官方目录；按 Minecraft 版本或通用安装器分组，首组展开，Forge 推荐版有标记；点具体版本进入系统另存 |
 | 跨页操作 | 所有长操作都在底部增加状态和进度条 | 全局长操作改为相应内容区的加载卡与取消；浏览目录使用独立状态，不锁住导航、搜索条件或已有结果。下载任务页自身的真实传输进度保留 |
+
+解锁后的原生走查还发现并修正三项：Fabric 官方响应同时包含历史 `0.10.6+build.214` 等坐标，原标识校验使整份列表失败；现在只隔开安装身份策略尚不支持的历史 build 坐标，保留现代版本，非法路径仍拒绝。资源简介与标签受通用 muted 换行样式影响，行高和标签背景被拉长；改为单行截断及标签垂直居中。加载镐子原来被图标默认色覆盖，现显式跟随调用处的强调色；加载器横条状态字重也恢复正常。
+
+最终 Core 对 **26.3 和 1.21.1** 的真实 Fabric 请求均返回 **157** 项，首项 0.20.1；[联网修复验证](../../artifacts/windows-main-20261105/reports/r12-live-fabric-fixed.json)。这只证明目录可读，不宣称所有历史加载器都已安装或运行验证。
 
 本轮没有为了显示“可以添加”而放宽安装范围。Forge/NeoForge/Quilt 的游戏安装仍限定已验证的 Minecraft 1.21.1；其它版本可读目录，明确显示仅浏览。Fabric 安装范围沿用现有后端。未自动选择加载器、创建实例或执行下载。
 
@@ -41,14 +45,14 @@
 
 | 检查 | 最终结果 | 记录 |
 |---|---|---|
-| Desktop Release / win-x64 | **145 通过，0 失败，0 跳过** | [TRX](../../artifacts/windows-main-20261105/build/main/r12-desktop-final3/Desktop/Release/win-x64/default/reports/tests.trx) |
-| Core Release / win-x64 | **373 通过，0 失败，16 显式跳过** | [TRX](../../artifacts/windows-main-20261105/build/main/r12-core-final3/Desktop/Release/win-x64/default/reports/tests.trx) |
-| Windows RC2 自包含发布 | 成功；干净源码 `cb31fe63` | [控制记录](../../artifacts/windows-main-20261105/reports/r12-download-rc2-Publish-win-x64-default-controller.json) |
-| macOS ARM64 RC2 交叉构建 | 成功，0 warning / 0 error；原生待验 | [控制记录](../../artifacts/windows-main-20261105/reports/r12-macos-rc2-Build-osx-arm64-default-controller.json) |
+| Desktop Release / win-x64 | **145 通过，0 失败，0 跳过** | [TRX](../../artifacts/windows-main-20261105/build/main/r12-desktop-rc3/Desktop/Release/win-x64/default/reports/tests.trx) |
+| Core Release / win-x64 | **374 通过，0 失败，16 显式跳过** | [TRX](../../artifacts/windows-main-20261105/build/main/r12-core-rc3-fixed/Desktop/Release/win-x64/default/reports/tests.trx) |
+| Windows RC3 自包含发布 | 成功；干净源码 `572c8b10` | [控制记录](../../artifacts/windows-main-20261105/reports/r12-download-rc3-Publish-win-x64-default-controller.json) |
+| macOS ARM64 RC3 交叉构建 | 成功，0 warning / 0 error；原生待验 | [控制记录](../../artifacts/windows-main-20261105/reports/r12-macos-rc3-Build-osx-arm64-default-controller.json) |
 
 新增有行为意义的回归：五类资源自动加载/排序与导航可用、迟到响应隔离、右侧加载范围、四类加载器自动读取/横条宽度/图标/无隐式选择、全局加载不增加底行；官方安装器身份/推荐版/类别字段、拒绝 DTD、忽略任意元数据 URL、真实文件保存/重复执行、坏哈希与取消均保留原文件并清理暂存。
 
-直接调用最终 **Core DLL** 的真实联网验证也已完成，没有启动 UI 或 Java：
+早期候选直接调用 **Core DLL（656f4ebe）** 完成如下真实联网验证，没有启动 UI 或 Java；相关社区目录和独立安装器代码在 RC3 保持相同，最终 RC3 另有上文 Fabric 探测及下文 UI 复验：
 
 | 范围 | 实际结果 |
 |---|---|
@@ -67,26 +71,41 @@
 2. `r12-download-second`：138 通过、3 失败。发现离页取消后 loader loading 标志未复位并修正；另两项旧测试仍假定全局 busy/手动首次搜索，更新为实际的页面局部读取语义。
 3. `r12-download-third`：144 通过、1 失败。旧夹具在选版本触发自动读取后才替换响应，调整夹具设置顺序；`r12-download-fourth` 随后 145 全过。最终版本另跑上述完整 Desktop/Core 回归。
 4. [首轮公开端点探测](../../artifacts/windows-main-20261105/reports/r12-official-installer-probe.json)发现 Legacy Fabric 跳转；[首轮真实 Core 目录探测](../../artifacts/windows-main-20261105/reports/r12-real-core-installers.json)发现合法 `+1` 坐标被拒绝。均已补修，最终五类目录和两类真实另存全部通过。社区探测助手首轮有 PowerShell 单元素数组解包错误，未发送请求；修正助手返回方式后五类真实 Core 请求通过，原记录保留。此助手错误不计为产品缺陷。
+5. RC2 原生发现 Fabric 整份目录失败，原因与修复见上。`r12-core-rc3` 新增回归首轮 373 通过、1 失败、16 跳过：测试只配置了 Mod 来源，加载器请求没有候选地址；修正为 Loader 官方来源后 `r12-core-rc3-fixed` 374 通过。首轮 TRX 和日志保留，未清理失败输出；Desktop 随后 145 全过。
 
 首轮 Mac 构建被 **35 GiB 任务预算**在执行前阻止，[原记录](../../artifacts/windows-main-20261105/reports/r12-macos-rc1-admission-first.json)保留。仅对已确认 exit0 的历史任务在核对绝对 buildRoot 后执行编译器 `dotnet clean`，保留失败输出、报告、候选和数据；重试成功。磁盘保留 20 GiB 下限，没有提高预算或递归删除工作目录。
 
 ## Windows 原生验收
 
-RC1 已以全新空账户/空实例数据根打开，窗口为 976×636、200% DPI；首页显示实际只读社团在线数。Computer Use 点击仍报 `coordinate input geometry is unavailable`，继续使用本会话明确授权的 Win32/UIA 备用路径。
+**2026-11-07 用户解锁后，先前下载页原生验收阻挡已解除。** Computer Use 仍报 `coordinate input geometry is unavailable`，按本会话既有授权使用 Win32/UIA 备用接口；每次核对候选 EXE、PID、窗口归属与前台。200% DPI，全新空账户/空实例隔离数据；没有向其它应用或锁屏发送输入。
 
-23:58 再次确认实际前台进程为 LockApp，已停止全部界面输入并请用户解锁。最初命名为 catalog 的 001–003 截图实际仍为首页，**不作为下载页验收证据，不打包冒充目录截图**。下载页真实鼠标、首次加载图案、热门列表、安装器分组、最小窗口及深色状态待恢复会话后完成。[原生阻挡记录](../../artifacts/windows-main-20261105/reports/r12-native-blocker.json)。
+| 实际范围 | 结果与边界 |
+|---|---|
+| Minecraft 目录 | 首次进入右侧加载卡，随后自动显示最新版本和分组；没有点击读取或安装 |
+| 加载器配置 | 26.3 的四类横条独立自动读取；Fabric 修复后展开可见 0.20.1 等版本和图标，状态字重正常；其它三类在此版本明确仅浏览 |
+| 五类社区资源 | 空查询自动按下载量排序；真实图标、单行简介、紧凑标签及元信息；未安装任何资源 |
+| 输入与缓存 | UIA 输入 sodium 后自动更新，无需点击搜索；离页返回保留同会话查询与结果，图标缺失时局部补读 |
+| 刷新取消与恢复 | 深色最小窗口中真实 Esc 取消正在读取的查询/图标并保留当前列表；随后 Enter 重试，取消状态消失，结果恢复 |
+| 五类独立安装器 | RC2 实际自动打开 Forge/NeoForge/Fabric/Quilt/Legacy Fabric 目录和图标；RC3 又复验深色最小窗口的 Quilt 加载及结果；未点击 JAR 另存或执行安装器 |
+| 主题与最小窗口 | 浅色 976×636、深色 880×560；资源控件与元信息可读，加载卡和横条无底部进度栏；最小化后恢复正常 |
+| 保存与重启 | 仅在隔离数据中选择深色并保存；正常关闭再启动后仍为深色，设置页实际显示“深色” |
+| 正常退出 | RC2 续验、RC3、RC3 重启三次均点击关闭按钮后 **exit0**，stderr 为空，无外层超时清理 |
 
-为避免留着本轮空数据测试进程，核对 RC1 的 PID、完整 EXE 路径和启动时间后仅清理其进程，没有终止进程树或触碰用户原有 WPF/R11 窗口。[清理记录](../../artifacts/windows-main-20261105/reports/r12-native-rc1-owned-cleanup.json)；这次清理不计为正常点击关闭通过。RC2 另以全新数据根执行 30 秒原生启动/自动退出检查：内部状态 Ready、已观察到原生窗口句柄，**exit0、无外层超时清理、stderr 为空**。[启动观察](../../artifacts/windows-main-20261105/reports/r12-native-rc2-startup-native.json)、[退出记录](../../artifacts/windows-main-20261105/reports/r12-native-rc2-startup-exit.json)。仅记录应用内部窗口观察，不在锁屏下发送 UI 输入，也不计为下载页实际截图或鼠标验收。
+[RC2 续验退出](../../artifacts/windows-main-20261105/reports/r12-native-rc2-resumed-exit.json)、[RC3 退出](../../artifacts/windows-main-20261105/reports/r12-native-rc3-exit.json)、[RC3 重启退出](../../artifacts/windows-main-20261105/reports/r12-native-rc3-restart-exit.json)。控件树切换期间两次只读 UIA 快照出现瞬时异常；重新观察后继续，并为采集增加最多三次的只读重取，没有重复导航或写入。
+
+此前 RC1 锁屏时误命名为 catalog 的 001–003 实际为首页，仍不作为下载页证据；[原阻挡记录](../../artifacts/windows-main-20261105/reports/r12-native-blocker.json)和 [RC1 清理记录](../../artifacts/windows-main-20261105/reports/r12-native-rc1-owned-cleanup.json)保留为历史，不再作为当前阻挡。未触碰用户原有 WPF 窗口或默认入口。
 
 ## Windows 候选
 
-[Windows x64 自包含 RC2](../../artifacts/windows-main-20261105/dist/r12-download-rc2/Desktop/Release/win-x64/default/SHOU-Launcher-win-x64-v1.5.0-dev.gcb31fe63.zip)，**80,886,165 字节**。
+[Windows x64 自包含 RC3](../../artifacts/windows-main-20261105/dist/r12-download-rc3/Desktop/Release/win-x64/default/SHOU-Launcher-win-x64-v1.5.0-dev.g572c8b10.zip)，**80,886,341 字节**。
 
-SHA-256：`8ae2f9f6c904b31a1705f7c16004d488d187965ab8ba165b7ac3b3036865f8e5`
+SHA-256：`fa094223eabddbfdf77050c3dd8b5a45c6b00b798dd51441df60d74bec4b2313`
 
-Release / win-x64 / self-contained，构建来源 `cb31fe63ff21b084cffd1e81c11a7215ef2a8e5a`，工作区干净；它仅比最终产品源码 `656f4ebe` 多本轮说明和 todo 更新，两者产品代码相同。主程序、CoreCLR、Skia 本机库均为 AMD64；266 个包内条目未发现 .env、账户缓存、实例、日志、密钥或测试数据。[RC2 候选审计](../../artifacts/windows-main-20261105/reports/r12-rc2-candidate-audit.json)。未签名，只有本机候选；旧 WPF 工程和默认入口保留。RC1 及其审计保留为早期结果，不作为最终交付包。未向 SMB/Mac 外传包或截图。
+Release / win-x64 / self-contained，构建来源 `572c8b101728e018f13f5c54b0f4b38aaf4adc36`，工作区干净。主程序、CoreCLR、Skia 本机库均为 AMD64；266 个包内条目未发现 .env、账户缓存、实例、日志、密钥或测试数据。[RC3 候选审计](../../artifacts/windows-main-20261105/reports/r12-rc3-candidate-audit.json)。未签名，只有本机候选；旧 WPF 工程和默认入口保留。RC1/RC2 及其审计保留为早期结果，不作为最终交付包。未向 SMB/Mac 外传包或截图。
 
-收尾核对：任务占用 **34.883 / 35 GiB**，D 盘可用 **277.439 GiB**，保留 20 GiB 下限；无 heavy owner，本轮 RC1/RC2 进程均已结束。原工作区 AGENTS.md 修改与参考 ZIP/目录、todo 均保留。[收尾记录](../../artifacts/windows-main-20261105/reports/r12-delivery-final.json)。
+[按页截图与说明](../../artifacts/windows-main-20261105/public-evidence-r12-final/README.md)为 **13 个页面文件夹、23 张实际截图**；每张记录真实源码、DPI、尺寸与 SHA-256。四张未改布局的独立安装器目录来自 RC2，其余为最终 RC3；已区分来源，不将 RC2 的 Fabric 配置失败图放入最终参考。[截图 ZIP](../../artifacts/windows-main-20261105/SHOU-UI-Evidence-R12-RC3-20261107.zip)为 **4,569,550 字节**，SHA-256 `665e4899fa1f808078794e643ab4967749de32601c04885902469462ad9429e4`；复制哈希一致、ZIP 完整性通过，白名单仅 PNG/说明/清单，不含 UIA、账户、日志、程序或 JAR。[归档核对](../../artifacts/windows-main-20261105/reports/r12-final-public-evidence.json)。
+
+续验收尾：任务占用 **34.769 / 35 GiB**，D 盘可用 **277.026 GiB**，保留 20 GiB 下限；无 heavy owner，续验的三个候选进程均已正常结束。只清理已核对成功输出的编译器产物，失败目录、报告、候选、原工作区 AGENTS.md 修改、参考归档和 todo 均保留。[最终收尾记录](../../artifacts/windows-main-20261105/reports/r12-resumed-delivery-final.json)。
 
 ## 未完成项
 
@@ -94,5 +113,6 @@ Release / win-x64 / self-contained，构建来源 `cb31fe63ff21b084cffd1e81c11a7
 - OptiFine、Cleanroom、LabyMod、LiteLoader 的可校验独立安装器目录仍未接入；入口显示实际限制和官网，不以隐藏/禁用算完成。历史 Forge 工件并非都提供 installer.jar，更多历史版本的另存与失败恢复需原生补验。
 - 安装器本轮已做受控文件系统成功/坏哈希/取消/重复执行回归，以及两类真实官方 JAR 另存；真实系统选择器的完整提供方、取消/断网/覆盖矩阵待验。独立安装器暂未接镜像优先级。
 - 资源详情长介绍、完整兼容性、其它来源、依赖与存档目标安装链仍按 todo.md 追踪。数据包可浏览不等于已支持通用实例直接装入。
+- 加载器组与 Fabric 之间的间距、本机整合包导入卡占高，以及更多标签中文名仍需下一轮继续收紧；不将代表状态走查写成逐像素或所有业务已齐。
 - macOS 原生、125%/150%、跨显示器、全键盘/焦点、屏幕阅读器和高对比度完整矩阵待验。交叉构建不代替原生运行。
 - 没有新增游戏、正版登录或游戏内效果证据；不执行游戏验证，除非用户在后续当前任务中明确要求。
