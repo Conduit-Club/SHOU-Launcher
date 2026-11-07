@@ -43,7 +43,7 @@ public sealed partial class InstancesPageViewModel
     public bool IsSelection { get => _isSelection; private set { if (SetProperty(ref _isSelection, value)) { if (value) IsRenameEditorOpen = false; NotifyWorkspace(); } } }
     public string SearchText { get => _searchText; set { if (SetProperty(ref _searchText, value)) FilterInstances(); } }
     public string InstanceCountSummary => $"全部实例（{FilteredInstances.Count}）";
-    public string GameDirectorySummary => Owner.Snapshot.Settings.GameRoot ?? Service.Paths.InstancesDirectory;
+    public string GameDirectorySummary => SelectedInstance?.Origin?.MinecraftRoot ?? Owner.Snapshot.Settings.GameRoot ?? Service.Paths.InstancesDirectory;
     public string ContextTitle => IsSelection ? "实例选择" : "实例设置 · " + (SelectedInstance?.Name ?? "尚未选择实例");
     public InstanceSectionChoice SelectedSection
     {
@@ -110,7 +110,7 @@ public sealed partial class InstancesPageViewModel
         SaveRenameCommand = AsyncCommand(async () =>
         {
             var instance = SelectedInstance!;
-            if (await Owner.RunAsync("修改实例名", ct => ((IInstanceWorkspaceService)Service).UpdateInstanceAsync(instance.Id, new(RenameDraft.Trim(), instance.JavaExecutable, instance.MemoryMiB), ct)))
+            if (await Owner.RunAsync("修改实例名", ct => ((IInstanceWorkspaceService)Service).UpdateInstanceAsync(instance.Id, new(RenameDraft.Trim(), instance.JavaExecutable, instance.MemoryMiB, instance.LaunchOptions), ct)))
             { IsRenameEditorOpen = false; Feedback = "实例名称已保存。"; }
         }, () => IsRenameEditorOpen && CanEdit && SelectedInstance?.Id == _renamingInstance && Service is IInstanceWorkspaceService);
         ShowSelectionCommand = Command(() => { IsSelection = true; Owner.SelectedPage = this; });
@@ -118,11 +118,12 @@ public sealed partial class InstancesPageViewModel
         SaveInstanceSettingsCommand = AsyncCommand(SaveInstanceEditAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         RefreshContentCommand = AsyncCommand(RefreshContentAsync, () => SelectedInstance is not null && IsFileSection && Owner.CanReadRemote && Service is IInstanceWorkspaceService);
         RefreshContentCommand.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(RefreshContentCommand.IsRunning)) ScheduleContentRefresh(); };
-        OpenInstanceDirectoryCommand = AsyncCommand(() => Owner.RunControlAsync("打开实例目录", ct => Owner.ExternalLauncher.OpenDirectoryAsync(SelectedInstance!.GameDirectory, ct)), () => SelectedInstance is not null);
+        OpenInstanceDirectoryCommand = AsyncCommand(() => OpenInstanceFolderAsync(null), () => SelectedInstance is not null);
         OpenContentDirectoryCommand = AsyncCommand(OpenContentDirectoryAsync, () => SelectedInstance is not null && IsFileSection);
         ToggleModCommand = AsyncCommand(ToggleModAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedSection.Key == "mods" && SelectedContent is not null && Service is IInstanceWorkspaceService);
         ExportInstanceCommand = AsyncCommand(ExportAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         _workspaceReady = true;
+        InitializeExistingInstances();
     }
     private void ScheduleContentRefresh()
     {
@@ -150,6 +151,7 @@ public sealed partial class InstancesPageViewModel
             EditName = selected.Name; InstanceJavaExecutable = selected.JavaExecutable ?? "";
             InstanceMemoryMiB = selected.MemoryMiB ?? snapshot.Settings.MemoryMiB;
             UseGlobalJava = selected.JavaExecutable is null; UseGlobalMemory = selected.MemoryMiB is null;
+            LoadInstanceLaunchOptions(selected, snapshot.Settings);
             _instanceDraftDirty = false;
         }
         NotifyWorkspace();
@@ -169,14 +171,16 @@ public sealed partial class InstancesPageViewModel
     private void NotifyWorkspace()
     {
         foreach (var name in new[] { nameof(ContextTitle), nameof(IsOverview), nameof(IsInstanceSettings), nameof(IsModify), nameof(IsExport), nameof(IsFileSection), nameof(IsOtherSection),
-                     nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary), nameof(HasTruncatedScreenshots), nameof(IsModsSection), nameof(OpenContentFolderCaption), nameof(GameVersionLabel), nameof(HasModLoader), nameof(LoaderLabel) }) OnPropertyChanged(name);
+                     nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary), nameof(HasTruncatedScreenshots), nameof(IsModsSection), nameof(OpenContentFolderCaption), nameof(GameVersionLabel), nameof(HasModLoader), nameof(LoaderLabel), nameof(GameDirectorySummary) }) OnPropertyChanged(name);
         if (_workspaceReady) NotifyCommands();
     }
     private async Task SaveInstanceEditAsync()
     {
+        if (!UseGlobalLaunchOptions && InstanceCustomWindow && (InstanceWindowWidth != decimal.Truncate(InstanceWindowWidth) || InstanceWindowHeight != decimal.Truncate(InstanceWindowHeight) || InstanceWindowWidth is < 320 or > 16384 || InstanceWindowHeight is < 320 or > 16384))
+        { Owner.ShowError("窗口宽高须为 320–16384 的整数。"); return; }
         if (!UseGlobalMemory && (decimal.Truncate(InstanceMemoryMiB) != InstanceMemoryMiB || InstanceMemoryMiB is < 512 or > 32768))
         { Owner.ShowError("实例内存须为512–32768 MiB的整数。"); return; }
-        var edit = new InstanceEdit(EditName.Trim(), UseGlobalJava ? null : InstanceJavaExecutable.Trim(), UseGlobalMemory ? null : (int)InstanceMemoryMiB);
+        var edit = new InstanceEdit(EditName.Trim(), UseGlobalJava ? null : InstanceJavaExecutable.Trim(), UseGlobalMemory ? null : (int)InstanceMemoryMiB, BuildInstanceLaunchOptions());
         if (await Owner.RunAsync("保存实例设置", ct => ((IInstanceWorkspaceService)Service).UpdateInstanceAsync(SelectedInstance!.Id, edit, ct)))
         { _instanceDraftDirty = false; RefreshWorkspaceSnapshot(Service.Snapshot); Feedback = "实例设置已保存。"; }
     }
@@ -205,10 +209,11 @@ public sealed partial class InstancesPageViewModel
         if (await Owner.RunAsync(selected.Enabled ? "禁用模组" : "启用模组", ct => ((IInstanceWorkspaceService)Service).SetInstanceModEnabledAsync(SelectedInstance!.Id, selected.RelativePath, !selected.Enabled, ct)))
             await RefreshContentCommand.ExecuteAsync(null);
     }
-    private Task OpenContentDirectoryAsync() => Owner.RunControlAsync("打开内容文件夹", async ct =>
+    private Task OpenContentDirectoryAsync() => OpenInstanceFolderAsync(SelectedSection.Key);
+    public Task OpenInstanceFolderAsync(string? kind) => Owner.RunControlAsync("打开实例文件夹", async ct =>
     {
-        var folder = InstanceWorkspace.Folder(SelectedInstance!.GameDirectory, SelectedSection.Key);
-        Directory.CreateDirectory(folder);
+        if (Service is not IInstanceDirectoryService directories) throw new NotSupportedException("此服务没有实例目录适配器。");
+        var folder = await directories.GetInstanceDirectoryAsync(SelectedInstance!.Id, kind, kind is not null, ct);
         await Owner.ExternalLauncher.OpenDirectoryAsync(folder, ct);
     });
     private async Task ExportAsync()

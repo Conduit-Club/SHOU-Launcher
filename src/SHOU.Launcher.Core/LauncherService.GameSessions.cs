@@ -7,6 +7,11 @@ public sealed partial class LauncherService
     private Task? sessionMonitor;
     private void EnsureInstanceNotRunning(GameInstance instance)
     {
+        foreach (var other in Snapshot.Instances.Where(i => i.Id != instance.Id && PathEquals(i.GameDirectory, instance.GameDirectory)))
+        {
+            if (games.TryGetValue(other.Id, out var shared) && !shared.Process.Completion.IsCompleted) throw new InvalidOperationException("共用此游戏目录的另一实例仍在运行，请先退出。");
+            gameSessions.EnsureWritable(other);
+        }
         if (games.TryGetValue(instance.Id, out var owned) && !owned.Process.Completion.IsCompleted)
             throw new InvalidOperationException("此实例的游戏仍在运行。请先退出此游戏，或选择其它实例。");
         gameSessions.EnsureWritable(instance);

@@ -17,6 +17,7 @@ public partial class MainWindow : Window
         AvaloniaXamlLoader.Load(this);
         ConfigurePlatformChrome();
         InitializePackDrop();
+        InitializeGameVisibility();
         Opened += async (_, _) => { if (DataContext is MainWindowViewModel vm) await vm.InitializeAsync(); };
         Closing += async (_, e) =>
         {

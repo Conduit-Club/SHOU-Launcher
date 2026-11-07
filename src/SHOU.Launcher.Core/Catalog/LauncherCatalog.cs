@@ -8,7 +8,7 @@ using SHOU.Launcher.Core.IO;
 namespace SHOU.Launcher.Core.Catalog;
 
 /// <summary>Data-only catalogs share the production proxy/source policy. They never execute remote content.</summary>
-public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<DownloadSource>> sources)
+public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<DownloadSource>> sources, bool preferCompleteCatalog = true)
 {
     private const int MaximumBytes = 8 * 1024 * 1024;
     private async Task<(JsonNode Data, string Source, bool Partial)> ReadAsync(string url, bool modSource, CancellationToken ct, Func<JsonNode, bool> validate)
@@ -16,7 +16,7 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
         var candidates = modSource ? ModDownloadSources.Resolve(url, sources()).Select(u => new SourceAddress(u, "Modrinth", 0)).ToArray()
             : DownloadSources.Resolve([url], sources());
         var failures = new List<Exception>();
-        foreach (var candidate in candidates)
+        foreach (var candidate in preferCompleteCatalog && url == DownloadSources.ManifestUrl ? candidates.OrderBy(c => new Uri(c.Url).Host == new Uri(DownloadSources.ManifestUrl).Host ? 0 : c.IsPartialCatalog ? 2 : 1) : candidates.AsEnumerable())
         {
             ct.ThrowIfCancellationRequested();
             try

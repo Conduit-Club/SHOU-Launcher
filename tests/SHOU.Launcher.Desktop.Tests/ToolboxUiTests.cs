@@ -94,8 +94,20 @@ public sealed class ToolboxUiTests
         Assert.Equal("1234567890abcdef1234567890abcdef", service.Snapshot.Accounts.Single().PlayerUuid); Assert.Equal("中文角色", service.Snapshot.Accounts.Single().DisplayName);
         Assert.False(vm.Accounts.IsAddingAccount);
     }
-    private sealed class ToolService : FakeLauncherService, IToolboxService, IOfflineAccountService
+    [AvaloniaFact]
+    public async Task CachePreviewAndConfirmationDispatchLocallyAndNeverShowTheGlobalOperationBar()
     {
+        var service = new ToolService(); using var vm = new MainWindowViewModel(service, new FakeExternalLauncher()); var tools = vm.Tools.Toolbox;
+        Assert.False(tools.ClearCacheCommand.CanExecute(null)); await tools.ScanCacheCommand.ExecuteAsync(null);
+        Assert.True(tools.HasCachePreview); Assert.False(tools.ClearCacheCommand.CanExecute(null)); Assert.False(vm.IsBusy);
+        tools.ConfirmCache = true; Assert.True(tools.ClearCacheCommand.CanExecute(null)); await tools.ClearCacheCommand.ExecuteAsync(null);
+        Assert.True(service.CacheCleared); Assert.False(tools.HasCachePreview); Assert.Contains("已清理 1 个文件", tools.CacheFeedback); Assert.False(vm.ShowOperationStatus);
+    }
+    private sealed class ToolService : FakeLauncherService, IToolboxService, IOfflineAccountService, ICacheMaintenanceService
+    {
+        public bool CacheCleared;
+        public Task<CacheCleanupPlan> ScanLauncherCacheAsync(CancellationToken cancellationToken = default) => Task.FromResult(new CacheCleanupPlan([new("cache", "catalog/fixture.json", 42, new string('a', 64))], 0));
+        public Task<CacheCleanupResult> ClearLauncherCacheAsync(CacheCleanupPlan plan, CancellationToken cancellationToken = default) { CacheCleared = true; return Task.FromResult(new CacheCleanupResult(1, 42, 0, false)); }
         public Func<CancellationToken, Task>? DownloadBehavior { get; set; }
         public IProgress<TransferProgress>? LastProgress { get; private set; }
         public bool Moved { get; private set; }

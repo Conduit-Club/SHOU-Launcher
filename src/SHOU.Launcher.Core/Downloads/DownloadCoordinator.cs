@@ -15,7 +15,7 @@ public sealed class DownloadCoordinator(HttpClient http, IVerifiedDownloader int
     {
         var configuration = options.Capture();
         // Catalogs without a checksum must be fetched fresh; do not hand them to a resumable daemon.
-        if (!configuration.Aria2.Enabled || request.Sha1 is null && request.Sha256 is null)
+        if (!configuration.Aria2.Enabled || request.Sha1 is null && request.Sha256 is null || configuration.Downloads is { MaximumKiBPerSecond: > 0 } || configuration.Downloads?.HttpsOnly == true || configuration.Downloads is { MaximumConnections: not 8 })
         { await internalDownloader.DownloadAsync(request, progress, cancellationToken).ConfigureAwait(false); return; }
         if (request.Sources.Count == 0 || request.Sources.Any(uri => uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo)))
             throw new ArgumentException("Only HTTP(S) downloads without URL credentials are supported.");

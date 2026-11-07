@@ -52,7 +52,8 @@ public sealed record ProcessSpec(string FileName, IReadOnlyList<string> Argument
     IReadOnlyDictionary<string, string?>? EnvironmentOverrides = null, TimeSpan? Timeout = null,
     int OutputLimitCharacters = 1048576,
     [property: System.Text.Json.Serialization.JsonIgnore] SensitiveProcessInput? SensitiveInput = null,
-    [property: System.Text.Json.Serialization.JsonIgnore] Action<int>? OnStarted = null)
+    [property: System.Text.Json.Serialization.JsonIgnore] Action<int>? OnStarted = null,
+    GameProcessPriority Priority = GameProcessPriority.Normal)
 {
     public override string ToString() => "ProcessSpec [arguments/environment redacted; sensitive stdin=" + (SensitiveInput is not null) + "]";
 }
@@ -87,6 +88,7 @@ public sealed record PlatformServices(IPlatformInfo Info, IAppPaths Paths, IPlat
     IJavaDiscovery JavaDiscovery, IJavaRuntimeInstaller JavaInstaller, IDataDirectoryLock DataLock)
 {
     public ILegacyMicrosoftAccountReader? LegacyMicrosoftAccounts { get; init; }
+    public IMemoryInfo? MemoryInfo { get; init; }
 }
 
 public sealed record JavaInstallation(string ExecutablePath, string JavaHome, string FullVersion, int MajorVersion,

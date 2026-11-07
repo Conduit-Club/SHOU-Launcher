@@ -14,6 +14,17 @@ namespace SHOU.Launcher.Desktop.Views;
 
 public partial class InstancesView
 {
+    private async void PickExistingFolder_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not InstancesPageViewModel vm || !vm.CanEdit || vm.IsFolderBusy) return;
+        try
+        {
+            var provider = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境无法打开目录选择器。");
+            var folders = await provider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "选择已有 Minecraft 或实例目录", AllowMultiple = false });
+            if (folders.Count > 0) await vm.InspectExistingFolderAsync(folders[0].TryGetLocalPath() ?? throw new IOException("请选择本机目录。"));
+        }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
     private async void CopyScreenshot_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not InstancesPageViewModel vm || sender is not Control { DataContext: InstanceScreenshotPreview item }) return;
@@ -79,12 +90,8 @@ public partial class InstancesView
     }
     private async void OpenSavesDirectory_Click(object? sender, RoutedEventArgs e) => await OpenInstanceSubdirectoryAsync("saves");
     private async void OpenModsDirectory_Click(object? sender, RoutedEventArgs e) => await OpenInstanceSubdirectoryAsync("mods");
-    private Task OpenInstanceSubdirectoryAsync(string name) => DataContext is InstancesPageViewModel { SelectedInstance: { } instance } vm
-        ? vm.Root.RunControlAsync("打开实例文件夹", async ct =>
-        {
-            var path = SHOU.Launcher.Core.IO.SafePath.Within(instance.GameDirectory, name);
-            Directory.CreateDirectory(path); await vm.Root.ExternalLauncher.OpenDirectoryAsync(path, ct);
-        }) : Task.CompletedTask;
+    private Task OpenInstanceSubdirectoryAsync(string name) => DataContext is InstancesPageViewModel { SelectedInstance: not null } vm
+        ? vm.OpenInstanceFolderAsync(name == "saves" ? "worlds" : name) : Task.CompletedTask;
     private void RenameEditor_KeyDown(object? sender, KeyEventArgs e)
     {
         if (e.Key != Key.Escape || DataContext is not InstancesPageViewModel vm) return;

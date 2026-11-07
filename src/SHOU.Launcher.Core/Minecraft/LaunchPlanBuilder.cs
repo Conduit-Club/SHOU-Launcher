@@ -13,7 +13,8 @@ public sealed record LaunchInputs(ResolvedVersion Version, JavaInstallation Java
     LaunchIdentity Identity, string GameDirectory, string LibrariesDirectory, string AssetsDirectory,
     string NativesDirectory, string ClientJar, string AssetIndexId, int MemoryMiB,
     IReadOnlyList<string>? LegacyExtractions = null, IReadOnlyList<string>? ExtraJvmArguments = null, string? TemporaryDirectory = null,
-    int? WindowWidth = null, int? WindowHeight = null, bool Fullscreen = false, int? MinimumMemoryMiB = null, string? CustomInfo = null);
+    int? WindowWidth = null, int? WindowHeight = null, bool Fullscreen = false, int? MinimumMemoryMiB = null, string? CustomInfo = null,
+    IReadOnlyList<string>? ExtraGameArguments = null);
 
 public static class LaunchPlanBuilder
 {
@@ -99,6 +100,7 @@ public static class LaunchPlanBuilder
             else if (index >= 0) throw new InvalidDataException("Incomplete game window argument.");
             else { game.Add(name); game.Add(value); }
         }
+        if (input.ExtraGameArguments is { } gameExtras) game.AddRange(GameSettingsPolicy.ValidateGameArguments(gameExtras));
         var argv = jvm.Append(mainClass).Concat(game).ToArray();
         var diagnostics = new List<string>
         {

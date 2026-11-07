@@ -20,6 +20,7 @@ public sealed partial class SettingsPageViewModel
             if (!SectionIds.Contains(value) || !SetProperty(ref _selectedSection, value)) return;
             foreach (var property in new[] { nameof(IsLaunchSection), nameof(IsJavaSection), nameof(IsManageSection), nameof(IsAppearanceSection), nameof(IsLanguageSection), nameof(IsMiscSection), nameof(IsAboutSection), nameof(IsUpdatesSection), nameof(IsFeedbackSection), nameof(IsLogsSection) }) OnPropertyChanged(property);
             if (IsLogsSection) RefreshLogFiles();
+            if (IsLaunchSection) RefreshSystemMemory();
         }
     }
     public bool IsLaunchSection => SelectedSection == "launch";
@@ -48,7 +49,7 @@ public sealed partial class SettingsPageViewModel
     public bool UseMinimumMemory { get => _useMinimumMemory; set { if (SetProperty(ref _useMinimumMemory, value)) MarkDirty(); } }
     public decimal MinimumMemoryMiB { get => _minimumMemoryMiB; set { if (SetProperty(ref _minimumMemoryMiB, value)) MarkDirty(); } }
     public string CustomInfo { get => _customInfo; set { if (SetProperty(ref _customInfo, value)) MarkDirty(); } }
-    public string MemorySummary => $"游戏分配：{MemoryMiB / 1024:0.##} GiB（{MemoryMiB:0} MiB）";
+    public string MemorySummary => $"游戏分配：{EffectiveMemoryMiB / 1024d:0.##} GiB（{EffectiveMemoryMiB} MiB）";
     public string JavaSelectionSummary => string.IsNullOrWhiteSpace(JavaExecutable) ? "自动选择 Java（推荐）" : "已指定全局 Java";
     public ObservableCollection<JavaInstallation> JavaInstallations { get; } = [];
     private JavaInstallation? _selectedJava;
@@ -131,8 +132,8 @@ public sealed partial class SettingsPageViewModel
     {
         if (UseCustomWindow && (GameWindowWidth is < 320 or > 16384 || GameWindowHeight is < 320 or > 16384 || decimal.Truncate(GameWindowWidth) != GameWindowWidth || decimal.Truncate(GameWindowHeight) != GameWindowHeight))
         { Owner.ShowError("窗口宽高须为 320–16384 的整数。"); SelectedSection = "launch"; return false; }
-        if (UseMinimumMemory && (MinimumMemoryMiB < 128 || MinimumMemoryMiB > MemoryMiB || decimal.Truncate(MinimumMemoryMiB) != MinimumMemoryMiB))
-        { Owner.ShowError("初始内存须为不少于 128 MiB 且不超过最大内存的整数。"); SelectedSection = "launch"; return false; }
+        if (UseMinimumMemory && (MinimumMemoryMiB < 512 || MinimumMemoryMiB > MemoryMiB || decimal.Truncate(MinimumMemoryMiB) != MinimumMemoryMiB))
+        { Owner.ShowError("初始内存须为不少于 512 MiB 且不超过最大内存的整数。"); SelectedSection = "launch"; return false; }
         if (WindowOpacity is < 50 or > 100) { Owner.ShowError("窗口不透明度须为 50–100%。"); SelectedSection = "appearance"; return false; }
         return true;
     }

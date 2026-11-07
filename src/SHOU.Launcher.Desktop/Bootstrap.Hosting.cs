@@ -51,7 +51,7 @@ public static partial class Bootstrap
         networkOptions = new();
         httpClient = new(new ConfigurableNetworkHandler(networkOptions)) { Timeout = TimeSpan.FromSeconds(40), MaxResponseContentBufferSize = 4 * 1024 * 1024 };
         httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("SHOU-Launcher/1.5.0");
-        verifiedDownloader = new DownloadCoordinator(httpClient, new VerifiedDownloader(httpClient), networkOptions,
+        verifiedDownloader = new DownloadCoordinator(httpClient, new VerifiedDownloader(httpClient, networkOptions), networkOptions,
             warning => Console.Error.WriteLine(warning));
         platformServices = PlatformServicesFactory.Create(new(data, ArgumentValue("--java-path")), verifiedDownloader);
         // Constructors above do not create data or read credentials. The lease is the first write.

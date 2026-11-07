@@ -41,7 +41,7 @@ public sealed class WpfSettingsParityTests
             }
             Assert.Equal(10, window.GetVisualDescendants().OfType<Button>().Count(b => b.Classes.Contains("contextNavigation")));
             Assert.Null(((SettingsView)window.Content!).FindControl<Button>("SettingsNetworkNavigation"));
-            Assert.False(((SettingsView)window.Content!).FindControl<TextBox>("UnsupportedJvmArgumentsSetting")!.IsEnabled);
+            Assert.True(((SettingsView)window.Content!).FindControl<TextBox>("JvmArgumentsSetting")!.IsEnabled);
         }
         finally { window.Close(); }
     }

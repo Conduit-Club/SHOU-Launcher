@@ -1,4 +1,5 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:themes="using:SHOU.Launcher.Desktop.Themes" xmlns:views="using:SHOU.Launcher.Desktop.Views" x:Class="SHOU.Launcher.Desktop.Views.InstancesView" x:Name="InstancePage" AttachedToVisualTree="WorkspaceAttached" DetachedFromVisualTree="WorkspaceDetached" DataContextChanged="WorkspaceDataContextChanged">
+  <UserControl.Resources><views:SettingsPreferenceLabelConverter x:Key="GamePreferenceLabel" /></UserControl.Resources>
   <UserControl.Styles>
     <Style Selector="ListBox.instanceList"><Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/></Style>
     <Style Selector="ListBox.instanceList ListBoxItem"><Setter Property="Padding" Value="10,7"/><Setter Property="CornerRadius" Value="3"/><Setter Property="Margin" Value="0,1"/></Style>
@@ -16,12 +17,15 @@
           <TextBlock Text="{Binding GameDirectorySummary}" TextWrapping="Wrap" LineHeight="16" FontSize="11"/>
           <Button Content="管理游戏目录" Command="{Binding Root.ShowSettingsCommand}" HorizontalAlignment="Stretch"/>
           <Button Name="OpenInstancePackImport" Content="导入整合包" Command="{Binding OpenPackImportCommand}" HorizontalAlignment="Stretch"/>
+          <Button Name="AttachExistingFolderButton" Content="接入已有实例目录" Click="PickExistingFolder_Click" IsEnabled="{Binding CanEdit}" HorizontalAlignment="Stretch" />
           <Separator Margin="0,4"/>
 
         </StackPanel>
       </Border>
       <ScrollViewer Name="InstanceSelectionScroller" Grid.Column="1" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Margin="24" Spacing="12">
+          <views:LoadingGlyph Width="28" Height="28" IsVisible="{Binding IsFolderBusy}" HorizontalAlignment="Right" />
+          <Border Name="ExistingInstancePreviewCard" Classes="card" IsVisible="{Binding HasExistingCandidates}"><StackPanel Spacing="10"><TextBlock Text="接入已有实例" Classes="sectionTitle" /><ListBox Name="ExistingInstanceSelector" ItemsSource="{Binding ExistingCandidates}" SelectedItem="{Binding ExistingCandidate}" MaxHeight="220"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="3"><TextBlock Text="{Binding Name}" /><TextBlock Text="{Binding GameDirectory}" Classes="muted" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding GameVersion}" Classes="muted" /></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox><StackPanel Orientation="Horizontal" Spacing="8"><Button Name="ConfirmExistingInstanceButton" Content="接入所选实例" Command="{Binding AttachExistingCommand}" /><Button Content="取消" Command="{Binding DismissExistingCommand}" /></StackPanel></StackPanel></Border>
           <TextBox Name="InstanceSearch" Text="{Binding SearchText}" PlaceholderText="搜索实例名称、版本或加载器"/>
           <CheckBox Name="FavoriteInstancesFilter" Content="只显示收藏的实例" IsChecked="{Binding FavoritesOnly}"/>
           <Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="{Binding InstanceCountSummary}" FontWeight="SemiBold"/>
@@ -73,6 +77,18 @@
               <Grid ColumnDefinitions="105,*"><TextBlock Text="独立 Java 路径" Classes="instanceLabel"/><TextBox Grid.Column="1" Text="{Binding InstanceJavaExecutable}" IsEnabled="{Binding !UseGlobalJava}" PlaceholderText="Java 可执行文件的绝对路径"/></Grid>
               <CheckBox Content="内存跟随全局设置" IsChecked="{Binding UseGlobalMemory}"/>
               <Grid ColumnDefinitions="105,*"><TextBlock Text="最大内存（MiB）" Classes="instanceLabel"/><NumericUpDown Grid.Column="1" Minimum="512" Maximum="32768" Increment="256" Value="{Binding InstanceMemoryMiB}" IsEnabled="{Binding !UseGlobalMemory}"/></Grid>
+              <CheckBox Name="InstanceFollowLaunchSettings" Content="其它启动选项跟随全局设置" IsChecked="{Binding UseGlobalLaunchOptions}" />
+              <StackPanel IsEnabled="{Binding !UseGlobalLaunchOptions}" Spacing="9">
+                <Grid ColumnDefinitions="105,*"><TextBlock Text="进程优先级" Classes="instanceLabel" /><ComboBox Name="InstancePrioritySetting" Grid.Column="1" ItemsSource="{Binding Root.Settings.PriorityChoices}" SelectedItem="{Binding InstancePriority}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding ., Converter={StaticResource GamePreferenceLabel}}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
+                <Grid ColumnDefinitions="105,*"><TextBlock Text="IP 协议偏好" Classes="instanceLabel" /><ComboBox Name="InstanceIpSetting" Grid.Column="1" ItemsSource="{Binding Root.Settings.IpChoices}" SelectedItem="{Binding InstanceIpPreference}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding ., Converter={StaticResource GamePreferenceLabel}}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
+                <Grid ColumnDefinitions="105,*"><TextBlock Text="启动器可见性" Classes="instanceLabel" /><ComboBox Name="InstanceVisibilitySetting" Grid.Column="1" ItemsSource="{Binding Root.Settings.VisibilityChoices}" SelectedItem="{Binding InstanceVisibility}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding ., Converter={StaticResource GamePreferenceLabel}}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
+                <Grid ColumnDefinitions="105,*"><TextBlock Text="游戏窗口标题" Classes="instanceLabel" /><TextBox Name="InstanceWindowTitleSetting" Grid.Column="1" Text="{Binding InstanceWindowTitle}" IsEnabled="{Binding Root.Settings.CanCustomizeGameTitle}" /></Grid>
+                <Grid ColumnDefinitions="105,*"><TextBlock Text="JVM 参数头部" Classes="instanceLabel" /><TextBox Name="InstanceJvmArgumentsSetting" Grid.Column="1" Text="{Binding InstanceJvmArguments}" AcceptsReturn="True" MinHeight="68" ToolTip.Tip="每行一个 GC、编码或语言参数；保留安全引导。" /></Grid>
+                <CheckBox Name="InstanceLockMemorySetting" Content="锁定内存分配（-Xms = -Xmx）" IsChecked="{Binding InstanceLockMemory}" />
+                <Grid ColumnDefinitions="105,*"><TextBlock Text="窗口大小" Classes="instanceLabel" /><StackPanel Grid.Column="1" Spacing="6"><StackPanel Orientation="Horizontal" Spacing="16"><CheckBox Name="InstanceCustomWindowSetting" Content="自定义" IsChecked="{Binding InstanceCustomWindow}" /><CheckBox Name="InstanceFullscreenSetting" Content="全屏" IsChecked="{Binding InstanceFullscreen}" /></StackPanel><Grid IsVisible="{Binding InstanceCustomWindow}" ColumnDefinitions="*,20,*"><NumericUpDown Name="InstanceWindowWidthSetting" Minimum="320" Maximum="16384" FormatString="0" Value="{Binding InstanceWindowWidth}" /><TextBlock Grid.Column="1" Text="×" HorizontalAlignment="Center" VerticalAlignment="Center" /><NumericUpDown Name="InstanceWindowHeightSetting" Grid.Column="2" Minimum="320" Maximum="16384" FormatString="0" Value="{Binding InstanceWindowHeight}" /></Grid></StackPanel></Grid>
+                <Grid ColumnDefinitions="105,*"><TextBlock Text="自定义信息" Classes="instanceLabel" /><TextBox Name="InstanceCustomInfoSetting" Grid.Column="1" Text="{Binding InstanceCustomInfo}" /></Grid>
+                <Grid ColumnDefinitions="105,*"><TextBlock Text="游戏参数尾部" Classes="instanceLabel" /><TextBox Name="InstanceGameArgumentsSetting" Grid.Column="1" Text="{Binding InstanceGameArguments}" /></Grid>
+              </StackPanel>
               <Button Name="SaveInstanceSettingsButton" Content="保存实例设置" Command="{Binding SaveInstanceSettingsCommand}"/>
             </StackPanel></Border>
             <Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="全局 Java 与内存" Classes="sectionTitle"/>

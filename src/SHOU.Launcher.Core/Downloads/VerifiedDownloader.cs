@@ -7,11 +7,13 @@ using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Core.Downloads;
 
-public sealed class VerifiedDownloader(HttpClient http) : IVerifiedDownloader
+public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options = null) : IVerifiedDownloader
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Locks = new(StringComparer.Ordinal);
     public async Task DownloadAsync(DownloadRequest request, IProgress<TransferProgress>? progress = null, CancellationToken cancellationToken = default)
     {
+        var policy = options?.Capture().Downloads ?? new DownloadBehavior();
+        using var budgetLease = options is null ? null : await options.Budget.EnterAsync(policy.MaximumConnections, cancellationToken).ConfigureAwait(false);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.DestinationPath);
         if (request.Sources.Count == 0) throw new ArgumentException("Download has no sources.");
         var destination = Path.GetFullPath(request.DestinationPath);
@@ -31,7 +33,9 @@ public sealed class VerifiedDownloader(HttpClient http) : IVerifiedDownloader
                 return;
             }
             var failures = new List<Exception>();
-            foreach (var uri in request.Sources)
+            var sources = request.Sources.Where(uri => !policy.HttpsOnly || uri.Scheme == "https" || uri.IsLoopback).ToArray();
+            if (sources.Length == 0) throw new InvalidDataException("当前下载策略仅允许 HTTPS，请修改来源或协议设置。");
+            foreach (var uri in sources)
             {
                 if (uri.Scheme is not ("http" or "https") || !string.IsNullOrEmpty(uri.UserInfo)) throw new ArgumentException("Only HTTP(S) downloads without URL credentials are supported.");
                 for (var attempt = 0; attempt < 2; attempt++)
@@ -133,7 +137,8 @@ public sealed class VerifiedDownloader(HttpClient http) : IVerifiedDownloader
         var offset = request.AllowResume && hasHash && sameSource && File.Exists(part) ? new FileInfo(part).Length : 0;
         if (request.Size is { } size && offset > size) offset = 0;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeout.CancelAfter(TimeSpan.FromMinutes(3));
+        var rate = options?.Capture().Downloads?.MaximumKiBPerSecond ?? 0;
+        timeout.CancelAfter(TimeSpan.FromMinutes(rate > 0 ? 30 : 3));
         using var message = new HttpRequestMessage(HttpMethod.Get, uri);
         if (offset > 0)
         {
@@ -170,6 +175,7 @@ public sealed class VerifiedDownloader(HttpClient http) : IVerifiedDownloader
         {
             var read = await input.ReadAsync(buffer, timeout.Token).ConfigureAwait(false);
             if (read == 0) break;
+            if (options is not null) await options.Budget.ThrottleAsync(read, rate, timeout.Token).ConfigureAwait(false);
             bytes += read;
             if (request.Size is { } limit && bytes > limit) throw new InvalidDataException("Download exceeded declared size.");
             await output.WriteAsync(buffer.AsMemory(0, read), timeout.Token).ConfigureAwait(false);

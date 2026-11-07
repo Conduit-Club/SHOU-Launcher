@@ -9,7 +9,7 @@ using SHOU.Launcher.Desktop.Views;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
-public sealed class ToolboxViewModel : PageViewModel, IDisposable
+public sealed partial class ToolboxViewModel : PageViewModel, IDisposable
 {
     private readonly IToolboxService? tools;
     private readonly CancellationTokenSource lifetime = new();
@@ -70,6 +70,7 @@ public sealed class ToolboxViewModel : PageViewModel, IDisposable
         PreviewAchievementCommand = AsyncCommand(() => RunAsync("image", ct =>
         { ct.ThrowIfCancellationRequested(); achievementPng = ToolAchievementRenderer.Render(ItemId, AchievementTitle, AchievementLine1, AchievementLine2, customItemIcon); ReplacePreview(ref achievementPreview, achievementPng); OnPropertyChanged(nameof(AchievementPreview)); OnPropertyChanged(nameof(HasAchievement)); ImageFeedback = ""; return Task.CompletedTask; }), () => !IsBusy && CanEdit);
         CancelCommand = Command(() => operation?.Cancel(), () => IsBusy);
+        InitializeCacheTools();
     }
     public bool IsBusy => busyTool.Length != 0;
     public bool CanUseTools => !IsBusy && CanEdit && tools is not null;
@@ -78,6 +79,7 @@ public sealed class ToolboxViewModel : PageViewModel, IDisposable
     public bool IsSkinBusy => busyTool == "skin";
     public bool IsServerBusy => busyTool == "server";
     public bool IsImageBusy => busyTool is "image" or "avatar";
+    public bool IsCacheBusy => busyTool == "cache";
     public bool HasRunningGame => Service.Snapshot.GameSessions.Count > 0 || Service.Snapshot.GameProcessId is not null;
     public string ActionFeedback { get => actionFeedback; private set { SetProperty(ref actionFeedback, value); OnPropertyChanged(nameof(HasActionFeedback)); } }
     public bool HasActionFeedback => ActionFeedback.Length != 0;
@@ -109,7 +111,8 @@ public sealed class ToolboxViewModel : PageViewModel, IDisposable
     public bool HasCleanupPreview => cleanupPlan?.Files.Count > 0;
     public bool HasCleanupControls => cleanupRequested;
     public bool ConfirmCleanup { get => confirmCleanup; set { SetProperty(ref confirmCleanup, value); NotifyCommands(); } }
-    public string ItemId { get => itemId; set { SetProperty(ref itemId, value ?? ""); InvalidateAchievement(); } }
+    public string ItemId { get => itemId; set { SetProperty(ref itemId, value ?? ""); customItemIcon = null; InvalidateAchievement(); } }
+    public IReadOnlyList<string> LegacyItemNames => LegacyAchievementIcons.Names;
     public string AchievementTitle { get => achievementTitle; set { SetProperty(ref achievementTitle, value ?? ""); InvalidateAchievement(); } }
     public string AchievementLine1 { get => achievementLine1; set { SetProperty(ref achievementLine1, value ?? ""); InvalidateAchievement(); } }
     public string AchievementLine2 { get => achievementLine2; set { SetProperty(ref achievementLine2, value ?? ""); InvalidateAchievement(); } }
@@ -138,7 +141,7 @@ public sealed class ToolboxViewModel : PageViewModel, IDisposable
     public Task LoadItemIconAsync(string path) => RunAsync("image", async ct =>
     {
         var info = new FileInfo(path); if (info.Length is < 45 or > 2 * 1024 * 1024) throw new InvalidDataException("请选择不超过 2 MiB 的 PNG 图标。");
-        var bytes = await File.ReadAllBytesAsync(path, ct); ToolAchievementRenderer.ValidateIcon(bytes); customItemIcon = bytes; InvalidateAchievement(); ImageFeedback = "已选择物品图标。";
+        var bytes = await File.ReadAllBytesAsync(path, ct); ToolAchievementRenderer.ValidateIcon(bytes); ItemId = "custom"; customItemIcon = bytes; InvalidateAchievement(); ImageFeedback = "已选择物品图标。";
     });
     public Task SaveAchievementAsync(string destination) => RunAsync("image", async ct => { if (achievementPng is null) return; await WriteImageAsync(destination, achievementPng, ct); ImageFeedback = "成就图片已保存。"; });
     public Task SaveAvatarAsync(string destination) => RunAsync("avatar", async ct => { if (avatarPng is null) return; await WriteImageAsync(destination, avatarPng, ct); AvatarFeedback = "头像已保存。"; });
@@ -167,9 +170,9 @@ public sealed class ToolboxViewModel : PageViewModel, IDisposable
         finally { operation = null; busyTool = ""; NotifyBusy(); idle = null; completion.TrySetResult(); }
     }
     private void Feedback(string tool, string value)
-    { switch (tool) { case "download": DownloadFeedback = value; break; case "skin": SkinFeedback = value; break; case "server": ServerFeedback = value; break; case "image": ImageFeedback = value; break; case "avatar": AvatarFeedback = value; break; default: ActionFeedback = value; break; } }
+    { switch (tool) { case "cache": CacheFeedback = value; break; case "download": DownloadFeedback = value; break; case "skin": SkinFeedback = value; break; case "server": ServerFeedback = value; break; case "image": ImageFeedback = value; break; case "avatar": AvatarFeedback = value; break; default: ActionFeedback = value; break; } }
     private void NotifyBusy()
-    { foreach (var name in new[] { nameof(IsBusy), nameof(CanUseTools), nameof(IsActionsBusy), nameof(IsDownloadBusy), nameof(IsSkinBusy), nameof(IsServerBusy), nameof(IsImageBusy) }) OnPropertyChanged(name); NotifyCommands(); }
+    { foreach (var name in new[] { nameof(IsBusy), nameof(CanUseTools), nameof(IsActionsBusy), nameof(IsDownloadBusy), nameof(IsSkinBusy), nameof(IsServerBusy), nameof(IsImageBusy), nameof(IsCacheBusy) }) OnPropertyChanged(name); NotifyCommands(); }
     public override void Refresh(LauncherSnapshot snapshot) { base.Refresh(snapshot); OnPropertyChanged(nameof(CanUseTools)); OnPropertyChanged(nameof(HasRunningGame)); }
     public override void NotifyCommands() { base.NotifyCommands(); OnPropertyChanged(nameof(CanUseTools)); }
     public void Cancel() => operation?.Cancel();

@@ -63,8 +63,8 @@ public sealed partial class LauncherService
                     var manifestPath = ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName); var manifest = JsonSerializer.Deserialize<ContentInstallManifest>(await File.ReadAllBytesAsync(manifestPath, token).ConfigureAwait(false)) ?? throw new InvalidDataException("整合包安装清单缺失。");
                     await File.WriteAllBytesAsync(manifestPath, JsonSerializer.SerializeToUtf8Bytes(manifest with { InstanceId = instance.Id }), token).ConfigureAwait(false);
                     token.ThrowIfCancellationRequested(); _ = ContentInstallFiles.Literal(root, Path.GetFileName(stage)); _ = ContentInstallFiles.Literal(root, Path.GetFileName(destination)); await IO.DirectoryPublication.PublishAsync(stage, destination, token).ConfigureAwait(false); moved = true;
-                    var candidate = Snapshot with { Instances = Snapshot.Instances.Append(instance).ToArray(), SelectedInstanceId = instance.Id }; await PersistCandidateAsync(candidate, token).ConfigureAwait(false); registered = true;
-                    Set(s => s with { Instances = candidate.Instances, SelectedInstanceId = instance.Id }); imported = new(instance, manifest.Files.Count, capturedPlan.Warnings);
+                    var candidate = Snapshot with { Instances = Snapshot.Instances.Append(instance).ToArray(), SelectedInstanceId = Snapshot.Settings.Downloads?.SelectInstalledInstance == false ? Snapshot.SelectedInstanceId : instance.Id }; await PersistCandidateAsync(candidate, token).ConfigureAwait(false); registered = true;
+                    Set(s => s with { Instances = candidate.Instances, SelectedInstanceId = candidate.SelectedInstanceId }); imported = new(instance, manifest.Files.Count, capturedPlan.Warnings);
                 }, ct).ConfigureAwait(false);
             }
             finally { if (!registered) { var owned = moved ? destination : stage; VerifiedDownloader.RejectLink(owned); if (Directory.Exists(owned)) Directory.Delete(owned, true); } }

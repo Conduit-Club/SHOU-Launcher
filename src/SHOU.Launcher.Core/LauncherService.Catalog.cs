@@ -18,9 +18,9 @@ public sealed partial class LauncherService : ILauncherCatalogService, IMinecraf
     private async Task<GameCatalog> ReadGameCatalogAsync(bool refresh, CancellationToken ct)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
-        var configuration = Snapshot.Settings.DownloadSourcesJson;
-        var sources = DownloadSources.Parse(configuration);
-        return await gameCatalogCache.GetAsync(configuration ?? "", refresh, new LauncherCatalog(http, () => sources).GamesAsync, ct).ConfigureAwait(false);
+        var configuration = Snapshot.Settings.DownloadSourcesJson + ":" + (Snapshot.Settings.Downloads?.SourcePreference ?? DownloadSourcePreference.Custom) + ":" + (Snapshot.Settings.Downloads?.PreferOfficialCatalog ?? true);
+        var sources = Sources();
+        return await gameCatalogCache.GetAsync(configuration, refresh, new LauncherCatalog(http, () => sources, Snapshot.Settings.Downloads?.PreferOfficialCatalog ?? true).GamesAsync, ct).ConfigureAwait(false);
     }
     public async Task<IReadOnlyList<LoaderCatalogVersion>> GetFabricCatalogAsync(string gameVersion, CancellationToken cancellationToken = default)
     { await InitializeAsync(cancellationToken).ConfigureAwait(false); return await Catalog.FabricAsync(gameVersion, cancellationToken).ConfigureAwait(false); }

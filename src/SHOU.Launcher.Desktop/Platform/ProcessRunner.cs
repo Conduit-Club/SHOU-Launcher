@@ -7,7 +7,7 @@ using SHOU.Launcher.Core.Abstractions;
 namespace SHOU.Launcher.Desktop.Platform;
 
 /// <summary>Runs only explicit executables; shell scripts are a separate caller decision.</summary>
-public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable, IGameWindowObserver
+public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable, IGameWindowObserver, IGameWindowCustomization
 {
     private readonly ConcurrentDictionary<int, ManagedProcess> _owned = new();
     private int _disposed;
@@ -58,6 +58,8 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable, IGameWindo
             catch { process.Dispose(); throw; }
 
             managed = new ManagedProcess(process, spec, output, cancellationToken);
+            if (spec.Priority != GameProcessPriority.Normal)
+                process.PriorityClass = spec.Priority switch { GameProcessPriority.BelowNormal => ProcessPriorityClass.BelowNormal, GameProcessPriority.AboveNormal => ProcessPriorityClass.AboveNormal, GameProcessPriority.High => ProcessPriorityClass.High, _ => throw new ArgumentException("未知进程优先级。") };
             _owned[managed.ProcessId] = managed;
             var started = managed;
             _ = managed.Completion.ContinueWith(_ => _owned.TryRemove(started.ProcessId, out var removed),
@@ -116,6 +118,18 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable, IGameWindo
         }
         return false;
     }
+
+    public Task SetGameWindowTitleAsync(IManagedProcess process, string title, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!OperatingSystem.IsWindows()) throw new PlatformNotSupportedException("此平台尚未提供原生游戏窗口标题适配。");
+        using var native = Process.GetProcessById(process.ProcessId); native.Refresh();
+        if (native.MainWindowHandle != IntPtr.Zero && !SetWindowText(native.MainWindowHandle, title)) throw new IOException("无法设置游戏窗口标题。");
+        return Task.CompletedTask;
+    }
+    [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode, SetLastError = true)]
+    [return: System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.Bool)]
+    private static extern bool SetWindowText(IntPtr window, string text);
 
     private sealed class ManagedProcess : IDetachableProcess
     {

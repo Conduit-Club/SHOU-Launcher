@@ -37,9 +37,9 @@ public sealed partial class LauncherService : IModrinthPackService
                     await File.WriteAllBytesAsync(manifestPath, JsonSerializer.SerializeToUtf8Bytes(manifest with { InstanceId = instance.Id }), token).ConfigureAwait(false);
                     token.ThrowIfCancellationRequested(); _ = ContentInstallFiles.Literal(root, Path.GetFileName(stage)); _ = ContentInstallFiles.Literal(root, Path.GetFileName(destination));
                     await IO.DirectoryPublication.PublishAsync(stage, destination, token).ConfigureAwait(false); moved = true;
-                    var candidate = Snapshot with { Instances = Snapshot.Instances.Append(instance).ToArray(), SelectedInstanceId = instance.Id };
+                    var candidate = Snapshot with { Instances = Snapshot.Instances.Append(instance).ToArray(), SelectedInstanceId = Snapshot.Settings.Downloads?.SelectInstalledInstance == false ? Snapshot.SelectedInstanceId : instance.Id };
                     await PersistCandidateAsync(candidate, token).ConfigureAwait(false); registered = true;
-                    Set(s => s with { Instances = candidate.Instances, SelectedInstanceId = instance.Id });
+                    Set(s => s with { Instances = candidate.Instances, SelectedInstanceId = candidate.SelectedInstanceId });
                     result = new(instance, manifest.Files.Count, inspection.Files.Count(f => f.Client == "unsupported"), inspection.Files.Count(f => f.Client == "optional" && !(request.OptionalClientFiles ?? []).Contains(f.Path)));
                 }, ct).ConfigureAwait(false);
             }

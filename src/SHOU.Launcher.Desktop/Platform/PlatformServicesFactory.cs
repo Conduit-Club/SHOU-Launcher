@@ -23,6 +23,7 @@ public static class PlatformServicesFactory
         return new PlatformServices(info, paths, new Capabilities(info.Context), new ExternalLauncher(processes, info.Context),
             credentials, processes, discovery, installer, new DataDirectoryLock())
         {
+            MemoryInfo = new NativeMemoryInfo(),
             LegacyMicrosoftAccounts = OperatingSystem.IsWindows()
                 ? new WindowsLegacyMicrosoftAccountReader(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PCLCE")) : null
         };

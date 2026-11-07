@@ -82,7 +82,8 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
             var state = await config.LoadAsync(cancellationToken).ConfigureAwait(false);
             ConfigurationStore.ValidateSettings(state.Settings);
             if (state.Settings.GameRoot is { Length: > 0 } gameRoot) EnsureIsolatedGamePath(gameRoot);
-            foreach (var instance in state.Instances) EnsureIsolatedGamePath(instance.GameDirectory);
+            foreach (var instance in state.Instances)
+                if (!IsExplicitInstanceDirectory(instance, instance.GameDirectory)) EnsureIsolatedGamePath(instance.GameDirectory);
             network.Update(state.Settings);
             Set(s => s with { Settings = state.Settings, Instances = state.Instances, Accounts = state.Accounts,
                 SelectedAccountId = state.SelectedAccountId, SelectedInstanceId = state.SelectedInstanceId });
@@ -125,7 +126,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         if (string.IsNullOrWhiteSpace(name) || name.Length > 80 || name.Any(char.IsControl)) throw new ArgumentException("请输入1–80字的单行实例名称。");
         SafePath.Identifier(versionId);
         var instance = new GameInstance(Guid.NewGuid().ToString("N"), name.Trim(), versionId,
-            SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")), GameVersionId: versionId);
+            NewGameDirectory("vanilla"), GameVersionId: versionId);
         await ExecuteAsync("Ready", async ct =>
         {
             await RegisterNewInstanceAsync(instance, ct).ConfigureAwait(false);
@@ -143,7 +144,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         {
             var profile = await new FabricMetadataProvider(http, Paths.CacheDirectory, Sources).CacheProfileAsync(gameVersionId, loaderVersion, ct).ConfigureAwait(false);
             created = new(Guid.NewGuid().ToString("N"), name.Trim(), profile,
-                SafePath.Within(Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory, Guid.NewGuid().ToString("N")), Loader: "fabric", LoaderVersion: loaderVersion, GameVersionId: gameVersionId);
+                NewGameDirectory("fabric"), Loader: "fabric", LoaderVersion: loaderVersion, GameVersionId: gameVersionId);
             await RegisterNewInstanceAsync(created, ct).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
         return created!;
@@ -171,13 +172,13 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         if (instance.Loader is not ("vanilla" or "fabric" or "quilt" or "forge" or "neoforge")) throw new PlatformNotSupportedException("当前预览尚未实现此loader的processor链。");
         if (instance.Loader != "vanilla") _ = Instances.InstanceIdentity.GameVersion(instance);
         var resolver = new VersionMetadataResolver(http, downloader, Paths.CacheDirectory, Sources);
-        if (instance.Loader is "forge" or "neoforge")
+        if (instance.Origin is null && instance.Loader is "forge" or "neoforge")
         {
             var vanilla = await resolver.ResolveAsync(Instances.InstanceIdentity.GameVersion(instance), ct).ConfigureAwait(false);
             var processorJava = await SelectInstanceJavaAsync(instance, vanilla, ct).ConfigureAwait(false);
             await OfficialLoaders.EnsureInstalledAsync(instance, vanilla, processorJava, Context(processorJava), new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
         }
-        var version = await resolver.ResolveAsync(instance.VersionId, ct).ConfigureAwait(false);
+        var version = instance.Origin is { } origin ? await Instances.ExistingInstanceReader.ResolveAsync(origin, instance.VersionId, Instances.InstanceIdentity.GameVersion(instance), ct).ConfigureAwait(false) : await resolver.ResolveAsync(instance.VersionId, ct).ConfigureAwait(false);
         ValidateLoaderProfile(instance, version);
         var java = await SelectInstanceJavaAsync(instance, version, ct).ConfigureAwait(false);
         var context = Context(java);
@@ -258,11 +259,15 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         }
         var temporary = SafePath.Within(Paths.TempDirectory, "game-" + SafePath.Identifier(instance.Id));
         Directory.CreateDirectory(temporary);
-        return LaunchPlanBuilder.Build(new(installed.Version, java, Context(java), identity, instance.GameDirectory,
+        var options = GameSettingsPolicy.Options(instance, Snapshot.Settings);
+        var memory = GameSettingsPolicy.MemoryMiB(instance, Snapshot.Settings, ReadMemoryStatus(), java.RuntimeArchitecture);
+        var launchContext = Context(java) with { Features = new Dictionary<string, bool> { ["is_demo_user"] = false, ["has_custom_resolution"] = options.WindowWidth is not null || Snapshot.Settings.GameWindowWidth is not null, ["has_quick_plays_support"] = false } };
+        return LaunchPlanBuilder.Build(new(installed.Version, java, launchContext, identity, instance.GameDirectory,
             installed.LibrariesDirectory, installed.AssetsDirectory, installed.NativesDirectory, installed.ClientJar,
-            installed.Assets.Id, instance.MemoryMiB ?? Snapshot.Settings.MemoryMiB, installed.LegacyExtractions, TemporaryDirectory: temporary,
-            WindowWidth: Snapshot.Settings.GameWindowWidth, WindowHeight: Snapshot.Settings.GameWindowHeight,
-            Fullscreen: Snapshot.Settings.GameFullscreen, MinimumMemoryMiB: Snapshot.Settings.MinimumMemoryMiB, CustomInfo: Snapshot.Settings.CustomInfo));
+            installed.Assets.Id, memory, installed.LegacyExtractions, ExtraJvmArguments: GameSettingsPolicy.JvmArguments(options), TemporaryDirectory: temporary,
+            WindowWidth: options.WindowWidth ?? Snapshot.Settings.GameWindowWidth, WindowHeight: options.WindowHeight ?? Snapshot.Settings.GameWindowHeight,
+            Fullscreen: options.Fullscreen ?? Snapshot.Settings.GameFullscreen, MinimumMemoryMiB: options.LockMemory ? memory : options.MinimumMemoryMiB ?? Snapshot.Settings.MinimumMemoryMiB, CustomInfo: options.CustomInfo ?? Snapshot.Settings.CustomInfo,
+            ExtraGameArguments: GameSettingsPolicy.GameArguments(options.GameArguments)));
     }
     private ProtectedJavaLaunch? ProtectPlan(LaunchPlan original)
     {
@@ -294,10 +299,17 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         await File.WriteAllTextAsync(reportPath, JsonSerializer.Serialize(plan.ToRedactedReport(), ConfigurationStore.JsonOptions), ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
         SetLaunchStage("启动游戏进程");
+        var launchOptions = GameSettingsPolicy.Options(instance, Snapshot.Settings);
+        if (launchOptions.BeforeLaunchExecutable.Length > 0)
+        {
+            var before = await platform.Processes.RunAsync(new(launchOptions.BeforeLaunchExecutable, LaunchPlanBuilder.TokenizeLegacy(launchOptions.BeforeLaunchArguments), instance.GameDirectory, Timeout: TimeSpan.FromSeconds(30), OutputLimitCharacters: 4096), cancellationToken: ct).ConfigureAwait(false);
+            if (before.ExitCode != 0 || before.TimedOut || before.Cancelled) throw new IOException("启动前程序未成功完成，未启动游戏；请检查设置。");
+        }
         var collector = new ProcessLogCollector((error, line) => Log(error ? "GameError" : "Game", line));
         var process = await platform.Processes.StartAsync(new(plan.JavaExecutable, plan.Arguments, plan.WorkingDirectory, plan.EnvironmentOverrides,
             OutputLimitCharacters: 4 * 1024 * 1024, SensitiveInput: protection?.Input,
-            OnStarted: protection is null ? null : pid => gameSessions.Register(instance, pid)), new InlineProgress<ProcessOutput>(collector.Report), CancellationToken.None).ConfigureAwait(false);
+            OnStarted: protection is null ? null : pid => gameSessions.Register(instance, pid),
+            Priority: launchOptions.Priority), new InlineProgress<ProcessOutput>(collector.Report), CancellationToken.None).ConfigureAwait(false);
         var independent = protection is not null && process is IDetachableProcess;
         try
         {
@@ -311,6 +323,9 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
             {
                 var visible = await windowObserver.WaitForGameWindowAsync(process, TimeSpan.FromSeconds(90), ct).ConfigureAwait(false);
                 if (!visible && !process.Completion.IsCompleted) Log("Warning", "游戏进程已启动，暂未确认窗口；可继续操作启动器，游戏日志保存在本机。");
+                var title = launchOptions.WindowTitle;
+                if (visible && !string.IsNullOrEmpty(title) && platform.Processes is IGameWindowCustomization customization)
+                    await customization.SetGameWindowTitleAsync(process, GameSettingsPolicy.Title(title, instance), ct).ConfigureAwait(false);
             }
             ct.ThrowIfCancellationRequested();
             if (process.Completion.IsCompleted) await observer.ConfigureAwait(false);
@@ -547,15 +562,16 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     private AccountProfile FindAccount(string id) => Snapshot.Accounts.FirstOrDefault(a => a.Id == id) ?? throw new KeyNotFoundException("找不到账户。");
     private static string AccountKey(string id) => "account:" + Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(id))).ToLowerInvariant();
     private string ResolveClientId() => AuthenticationClient.ResolveMicrosoftClientId(null, Snapshot.Settings.MicrosoftClientId, build);
-    private IReadOnlyList<DownloadSource> Sources() => DownloadSources.Parse(Snapshot.Settings.DownloadSourcesJson);
+    private IReadOnlyList<DownloadSource> Sources() => EffectiveSources();
     private RuleContext Context(JavaInstallation java) => new(Snapshot.Platform.MinecraftOS, Snapshot.Platform.OSVersion, java.RuntimeArchitecture,
         new Dictionary<string, bool> { ["is_demo_user"] = false, ["has_custom_resolution"] = Snapshot.Settings.GameWindowWidth is not null, ["has_quick_plays_support"] = false });
     private static bool PathEquals(string a, string b) => string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     private void EnsureIsolatedGamePath(string path)
     {
         if (!Path.IsPathFullyQualified(path)) throw new InvalidDataException("实例游戏路径必须为绝对路径。");
+        VerifiedDownloader.RejectLink(path);
         if (!Paths.IsIsolated) return;
-        if (!SafePath.IsWithin(SafePath.Canonical(Paths.DataDirectory), SafePath.Canonical(path)))
+        if (!SafePath.IsWithin(SafePath.Canonical(Paths.DataDirectory), SafePath.Canonical(path)) && !Snapshot.Instances.Any(i => IsExplicitInstanceDirectory(i, path)))
             throw new InvalidDataException("隔离模式的游戏目录不能越出数据根；请先显式重新映射旧路径。");
     }
     private string SafeError(Exception ex) => ex switch

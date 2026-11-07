@@ -10,11 +10,12 @@ public sealed class NetworkOptions
     public ProxySettings Proxy => Capture().Proxy;
     public Aria2Settings Aria2 => Capture().Aria2;
     public ICredentialStore? Credentials { get; set; }
-    public void Update(LauncherSettings settings) => Volatile.Write(ref current, new(settings.Proxy ?? new(), settings.Aria2 ?? new(), Interlocked.Increment(ref revision)));
+    public DownloadBudget Budget { get; } = new();
+    public void Update(LauncherSettings settings) => Volatile.Write(ref current, new(settings.Proxy ?? new(), settings.Aria2 ?? new(), Interlocked.Increment(ref revision), settings.Downloads ?? new()));
     private long revision;
     public NetworkConfiguration Capture() => Volatile.Read(ref current);
 }
-public sealed record NetworkConfiguration(ProxySettings Proxy, Aria2Settings Aria2, long Revision);
+public sealed record NetworkConfiguration(ProxySettings Proxy, Aria2Settings Aria2, long Revision, DownloadBehavior? Downloads = null);
 
 /// <summary>System/Direct/Custom are handled without any legacy Windows registry initialization.</summary>
 public sealed class ConfigurableNetworkHandler(NetworkOptions options, bool allowAutoRedirect = true) : HttpMessageHandler

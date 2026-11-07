@@ -22,13 +22,14 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
         try
         {
             _ = Core.IO.SafePath.Within(paths.LocalDataDirectory, "shou.desktop.v1.json");
-            if (!File.Exists(file)) return new(new(), [], []);
+            if (!File.Exists(file)) return new(new(LaunchOptions: new(AutomaticMemory: true)), [], []);
             try
             {
                 root = JsonNode.Parse(await File.ReadAllTextAsync(file, ct).ConfigureAwait(false)) as JsonObject
                     ?? throw new InvalidDataException("Configuration root is invalid.");
                 if (((int?)root["schemaVersion"] ?? 1) > 1) { canWrite = false; throw new InvalidDataException("Configuration uses a future schema; writing is disabled."); }
                 var settings = root["settings"]?.Deserialize<LauncherSettings>(JsonOptions) ?? new();
+                ValidateSettings(settings);
                 var instances = root["instances"]?.Deserialize<GameInstance[]>(JsonOptions) ?? [];
                 ValidateInstances(instances, settings);
                 return new(settings,
@@ -51,7 +52,7 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
             var next = (JsonObject)root.DeepClone();
             next["schemaVersion"] = 1;
             var settings = root["settings"]?.DeepClone() as JsonObject ?? new JsonObject();
-            foreach (var property in JsonSerializer.SerializeToNode(state.Settings, JsonOptions)!.AsObject()) settings[property.Key] = property.Value?.DeepClone();
+            MergeKnown(settings, JsonSerializer.SerializeToNode(state.Settings, JsonOptions)!.AsObject());
             next["settings"] = settings;
             var oldInstances = (root["instances"] as JsonArray ?? []).OfType<JsonObject>().Where(n => (string?)n["id"] is not null).ToDictionary(n => (string)n["id"]!, StringComparer.Ordinal);
             var mergedInstances = new JsonArray();
@@ -60,8 +61,9 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
                 var node = oldInstances.TryGetValue(instance.Id, out var old) ? (JsonObject)old.DeepClone() : new JsonObject();
                 foreach (var property in JsonSerializer.SerializeToNode(instance, JsonOptions)!.AsObject())
                 {
-                    if (property.Key == "presentation" && property.Value is JsonObject values && node[property.Key] is JsonObject existing)
-                    { foreach (var item in values) existing[item.Key] = item.Value?.DeepClone(); }
+                    if (property.Value is JsonObject values && node[property.Key] is JsonObject existing)
+                    { MergeKnown(existing, values); }
+                    else if (property.Key == "launchOptions" && property.Value is null && node[property.Key] is JsonObject previousOptions && HasUnknownLaunchOptions(previousOptions)) previousOptions["inheritGlobal"] = true;
                     else node[property.Key] = property.Value?.DeepClone();
                 }
                 mergedInstances.Add(node);
@@ -85,7 +87,8 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
                     await JsonSerializer.SerializeAsync(stream, next, JsonOptions, ct).ConfigureAwait(false);
                     await stream.FlushAsync(ct).ConfigureAwait(false);
                 }
-                File.Move(temporary, file, true);
+                if (File.Exists(file)) { Core.Downloads.VerifiedDownloader.RejectLink(file); Core.Downloads.VerifiedDownloader.RejectLink(file + ".bak"); File.Copy(file, file + ".bak", true); }
+                ct.ThrowIfCancellationRequested(); File.Move(temporary, file, true);
             }
             finally { if (created && File.Exists(temporary)) File.Delete(temporary); }
             root = next;
@@ -94,6 +97,9 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
     }
     public static void ValidateSettings(LauncherSettings settings)
     {
+        Minecraft.GameSettingsPolicy.Validate(settings.LaunchOptions ?? new());
+        var download = settings.Downloads ?? new();
+        if (download.MaximumConnections is < 1 or > 64 || download.MaximumKiBPerSecond is < 0 or > 1048576 || !Enum.IsDefined(download.SourcePreference)) throw new ArgumentException("下载并发须为 1–64，限速须为 0–1048576 KiB/s（0 不限速）。");
         foreach (var property in typeof(LauncherSettings).GetProperties())
             if (!GeneratedSettingsSchema.Entries.Contains(property.Name, StringComparer.Ordinal)) throw new InvalidOperationException("Unregistered generated settings key: " + property.Name);
         if (settings.MemoryMiB is < 512 or > 32768) throw new ArgumentException("内存须在512–32768 MiB之间。");
@@ -124,6 +130,8 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
         if (instances.Count > 10000 || instances.Any(i => i is null) || instances.Select(i => i.Id).Distinct(StringComparer.Ordinal).Count() != instances.Count) throw new InvalidDataException("实例数量超限或标识重复。");
         foreach (var instance in instances)
         {
+            if (instance.LaunchOptions is { } options) Minecraft.GameSettingsPolicy.Validate(options);
+            if (instance.Origin is { } origin && (!Path.IsPathFullyQualified(origin.MinecraftRoot) || !Path.IsPathFullyQualified(origin.VersionDirectory) || origin.OriginalVersionId is null || origin.MetadataSha256 is null || origin.MetadataSha256.Length != 64 || !origin.MetadataSha256.All(Uri.IsHexDigit))) throw new InvalidDataException("实例来源记录无效。");
             Core.IO.SafePath.Identifier(instance.Id);
             if (string.IsNullOrWhiteSpace(instance.Name) || instance.Name.Length > 160 || instance.Name.Any(char.IsControl)) throw new InvalidDataException("实例名称无效。");
             if (instance.GameVersionId is { } version) Core.IO.SafePath.Identifier(version);
@@ -133,6 +141,19 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
                 || presentation.Category.Length > 80 || presentation.Category.Any(char.IsControl) || presentation.Description.Length > 4096
                 || presentation.Description.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))) throw new InvalidDataException("实例个性化数据无效。");
         }
+    }
+    private static void MergeKnown(JsonObject target, JsonObject values)
+    {
+        foreach (var property in values)
+        {
+            if (property.Value is JsonObject incoming && target[property.Key] is JsonObject existing) MergeKnown(existing, incoming);
+            else target[property.Key] = property.Value?.DeepClone();
+        }
+    }
+    private static bool HasUnknownLaunchOptions(JsonObject options)
+    {
+        var known = JsonSerializer.SerializeToNode(new GameLaunchOptions(), JsonOptions)!.AsObject();
+        return options.Any(p => !known.ContainsKey(p.Key));
     }
     public async ValueTask DisposeAsync() { await gate.WaitAsync().ConfigureAwait(false); gate.Release(); gate.Dispose(); }
 }

@@ -79,7 +79,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
         var java = JavaExecutable.Trim();
         if ((gameRoot.Length > 0 && !Path.IsPathFullyQualified(gameRoot)) || (java.Length > 0 && !Path.IsPathFullyQualified(java))) { Owner.ShowError("游戏与 Java 路径须为绝对路径；留空使用默认选择。"); return; }
         if (MemoryMiB is < 512 or > 32768 || decimal.Truncate(MemoryMiB) != MemoryMiB) { Owner.ShowError("内存须为 512–32768 MiB 的整数。"); return; }
-        if (!ValidateLaunchDraft()) return;
+        if (!ValidateLaunchDraft() || !ValidateGameOptions()) return;
         if (!string.IsNullOrWhiteSpace(MicrosoftClientId) && !Guid.TryParse(MicrosoftClientId.Trim(), out _)) { Owner.ShowError("Microsoft Client ID 必须是有效 GUID。"); return; }
         try { _ = PCL.Core.Conduit.DownloadSources.Parse(DownloadSourcesJson); }
         catch (Exception ex) when (ex is JsonException or InvalidDataException or ArgumentException) { Owner.ShowError("下载源配置无效：" + UiPrivacy.Redact(ex.Message)); SelectedSection = "manage"; return; }
@@ -102,7 +102,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
                 MicrosoftClientId = string.IsNullOrWhiteSpace(MicrosoftClientId) ? null : MicrosoftClientId.Trim(),
                 GameWindowWidth = UseCustomWindow ? (int)GameWindowWidth : null, GameWindowHeight = UseCustomWindow ? (int)GameWindowHeight : null,
                 GameFullscreen = GameFullscreen, MinimumMemoryMiB = UseMinimumMemory ? (int)MinimumMemoryMiB : null,
-                CustomInfo = string.IsNullOrWhiteSpace(CustomInfo) ? null : CustomInfo.Trim() };
+                CustomInfo = string.IsNullOrWhiteSpace(CustomInfo) ? null : CustomInfo.Trim(), LaunchOptions = BuildGameOptions(), Downloads = BuildDownloadOptions() };
             await Service.SaveSettingsAsync(settings, ct);
             await SavePresentationAsync(ct);
         }, false, proxySecret, ariaSecret);
@@ -127,6 +127,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
             Aria2Enabled = settings.Aria2?.Enabled ?? false; Aria2Endpoint = settings.Aria2?.Endpoint ?? "http://localhost:6800/jsonrpc";
             MicrosoftClientId = settings.MicrosoftClientId ?? ""; ProxySecret = ""; Aria2Secret = "";
             LoadLaunchDraft(settings);
+            LoadGameOptions(settings);
             RefreshSourceEditor(settings.DownloadSourcesJson);
             IsDirty = false; _loaded = true;
         }

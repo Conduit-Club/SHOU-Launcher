@@ -16,6 +16,8 @@
     <PackageReference Include="PlainToolkit.CngProtectedData" Version="2.1.0" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <AvaloniaResource Include="Assets/**" />
+    <Content Include="Assets/AchievementIcons/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/mcgen.txt" />
+    <Content Include="Assets/AchievementIcons/README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/achievement-icons.md" />
   </ItemGroup>
   <ItemGroup Condition="'$(JavaBootstrapJarPath)' != '' and Exists('$(JavaBootstrapJarPath)')">
     <EmbeddedResource Include="$(JavaBootstrapJarPath)" LogicalName="SHOU.Launcher.Desktop.JavaBootstrap.jar" />

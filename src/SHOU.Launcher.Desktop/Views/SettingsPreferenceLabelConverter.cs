@@ -1,5 +1,6 @@
 using System.Globalization;
 using Avalonia.Data.Converters;
+using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Desktop.Views;
 
@@ -8,7 +9,12 @@ public sealed class SettingsPreferenceLabelConverter : IValueConverter
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture) => value?.ToString() switch
     {
         "zh-CN" => "简体中文（中国大陆）", "en-US" => "English (United States)", "system" => "跟随系统语言",
-        "System" => "跟随系统", "Light" => "浅色", "Dark" => "深色", _ => value
+        "System" => "跟随系统", "Light" => "浅色", "Dark" => "深色",
+        "All" => "隔离所有实例", "Modded" => "仅隔离模组实例", "Shared" => "不隔离（共用游戏目录）",
+        "Keep" => "游戏启动后仍保持不变", "Minimize" => "游戏启动后最小化", "Hide" => "游戏启动后隐藏，退出后恢复", "Close" => "游戏启动后关闭启动器",
+        "Normal" => "中（平衡）", "BelowNormal" => "低", "AboveNormal" => "较高", "High" => "高",
+        "JavaDefault" => "Java 默认", "IPv4" => "优先 IPv4", "IPv6" => "优先 IPv6",
+        "Custom" => "使用下方自定义来源顺序", "OfficialFirst" => "优先官方，失败后使用镜像", "MirrorFirst" => "优先镜像，失败后使用官方", _ => value
     };
     public object ConvertBack(object? value, Type targetType, object? parameter, CultureInfo culture) => throw new NotSupportedException();
 }
