@@ -148,6 +148,9 @@ public sealed partial class SettingsPageViewModel
         if (IsLauncherBusy || settingsLifetime.IsCancellationRequested) return; using var cts = CancellationTokenSource.CreateLinkedTokenSource(settingsLifetime.Token); cts.CancelAfter(TimeSpan.FromMinutes(5)); settingsWork = cts; var done = settingsWorkDone = new(TaskCreationOptions.RunContinuationsAsynchronously); workSection = SelectedSection; IsLauncherBusy = true; LauncherFeedback = "";
         try { await work(cts.Token); }
         catch (OperationCanceledException) { LauncherFeedback = "操作已取消或超时。"; }
+        catch (HttpRequestException ex) when (ex.StatusCode is System.Net.HttpStatusCode.Forbidden or System.Net.HttpStatusCode.TooManyRequests)
+        { LauncherFeedback = "服务暂时限制了请求。请稍后重试，或前往项目页面查看。"; }
+        catch (HttpRequestException) { LauncherFeedback = "无法连接服务。请检查网络后重试。"; }
         catch (Exception ex) when (ex is IOException or HttpRequestException or JsonException or ArgumentException or InvalidOperationException or NotSupportedException or UnauthorizedAccessException)
         { LauncherFeedback = UiPrivacy.Redact(ex.Message); }
         finally { settingsWork = null; IsLauncherBusy = false; done.TrySetResult(); if (ReferenceEquals(settingsWorkDone, done)) settingsWorkDone = null; }
@@ -157,6 +160,7 @@ public sealed partial class SettingsPageViewModel
         var generation = ++navigationGeneration;
         if (IsLauncherBusy && workSection != section) { settingsWork?.Cancel(); if (settingsWorkDone is { } pending) await pending.Task; }
         if (generation != navigationGeneration || settingsLifetime.IsCancellationRequested || SelectedSection != section) return;
+        LauncherFeedback = "";
         if (section == "java" && !autoJavaAttempted && JavaInstallations.Count == 0 && DiscoverJavaCommand.CanExecute(null)) await DiscoverJavaCommand.ExecuteAsync(null);
         if (section == "feedback" && !autoFeedbackAttempted && RefreshFeedbackCommand.CanExecute(null)) await RefreshFeedbackCommand.ExecuteAsync(null);
     }

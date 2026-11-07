@@ -2967,5 +2967,8 @@
   "t8bd702c9e6aa6865": "Export launcher settings",
   "tf70b568a3498b652": "Import launcher settings",
   "ta9ce867e2aa99cab": "Export sanitized log archive",
-  "t1744d728d39313fe": "Choose Java executable"
+  "t1744d728d39313fe": "Choose Java executable",
+  "t72eede5bcc7fe4c8": "The service is limiting requests. Try again later or open the project page.",
+  "t35934c2944612350": "Cannot connect to the service. Check your network and try again.",
+  "t1826a485d82ea11b": "Minecraft runtime"
 }

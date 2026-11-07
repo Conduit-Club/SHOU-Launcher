@@ -45,6 +45,9 @@ public sealed class LauncherSettingsUiTests
             var navigation = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "SettingsAppearanceNavigation");
             Assert.Equal("Personalization", navigation.GetVisualDescendants().OfType<TextBlock>().Single().Text);
             Assert.Equal("en-US", UiLocalization.Instance.Locale); Assert.Equal("fr-FR", CultureInfo.CurrentCulture.Name);
+            Directory.CreateDirectory(root.Settings.LogsDirectory); var log = Path.Combine(root.Settings.LogsDirectory, "regional-fixture.log"); File.WriteAllText(log, "controlled fixture");
+            root.Settings.SelectedSection = "logs";
+            Assert.Equal(File.GetLastWriteTime(log).ToString("g", CultureInfo.GetCultureInfo("fr-FR")), root.Settings.LogFiles.Single(f => f.Name == "regional-fixture.log").Modified);
             var profile = new AccountProfile("literal", AccountKind.Offline, "设置", new string('2', 32)); service.Publish(service.Snapshot with { Accounts = [profile], SelectedAccountId = profile.Id });
             Assert.Equal("设置", root.Accounts.SelectedPlayerName);
             using var restarted = new MainWindowViewModel(service, new FakeExternalLauncher()); Assert.Equal("en-US", restarted.Settings.Language); Assert.Equal("fr-FR", restarted.Settings.RegionalFormat);
@@ -78,6 +81,14 @@ public sealed class LauncherSettingsUiTests
         var node = JsonNode.Parse(bytes)!.AsObject(); node["settings"]!["memoryMiB"] = 4096; node["settings"]!["proxy"]!["credentialKey"] = "injected-key";
         root.Settings.ImportSettings(Encoding.UTF8.GetBytes(node.ToJsonString())); Assert.True(root.Settings.IsDirty); Assert.Equal(0, service.SaveCalls); Assert.Equal(4096, root.Settings.MemoryMiB);
         await root.Settings.SaveCommand.ExecuteAsync(null); Assert.Equal("credential-fixture", service.Snapshot.Settings.Proxy!.CredentialKey); Assert.Equal(1, service.SaveCalls);
+    }
+    [AvaloniaFact]
+    public async Task RateLimitProducesActionableFeedbackAndDoesNotFollowTheUserToAnotherSection()
+    {
+        var service = new FakeLauncherService(); using var root = new MainWindowViewModel(service, new FakeExternalLauncher());
+        Assert.False(await root.Settings.RunFileOperationAsync(_ => throw new HttpRequestException("Raw HTTP error must stay out of the UI", null, System.Net.HttpStatusCode.Forbidden)));
+        Assert.Contains("稍后重试", root.Settings.LauncherFeedback); Assert.DoesNotContain("Raw HTTP", root.Settings.LauncherFeedback);
+        root.Settings.SelectedSection = "language"; Assert.Equal("", root.Settings.LauncherFeedback);
     }
     [AvaloniaFact]
     public async Task ClosingWaitsForSettingsCancellationAndRejectsASecondConcurrentExport()

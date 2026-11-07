@@ -151,5 +151,8 @@
   "导出启动器设置": "Export launcher settings",
   "导入启动器设置": "Import launcher settings",
   "导出全部脱敏日志": "Export sanitized log archive",
-  "选择 Java 可执行文件": "Choose Java executable"
+  "选择 Java 可执行文件": "Choose Java executable",
+  "服务暂时限制了请求。请稍后重试，或前往项目页面查看。": "The service is limiting requests. Try again later or open the project page.",
+  "无法连接服务。请检查网络后重试。": "Cannot connect to the service. Check your network and try again.",
+  "Minecraft 运行环境": "Minecraft runtime"
 }

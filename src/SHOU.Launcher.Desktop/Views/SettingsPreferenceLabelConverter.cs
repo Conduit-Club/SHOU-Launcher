@@ -17,6 +17,7 @@ public sealed class SettingsPreferenceLabelConverter : IValueConverter
         "off" => "不提示", "club-updates" => "社团更新日志",
         "X86" => "32 Bit", "X64" => "64 Bit", "Arm64" => "ARM64",
         "configured" => "用户选择", "managed" => "启动器管理", "portable" => "便携目录", "registry" => "注册表", "installed" => "系统安装",
+        "MinecraftRuntime" => "Minecraft 运行环境",
         "All" => "隔离所有实例", "Modded" => "仅隔离模组实例", "Shared" => "不隔离（共用游戏目录）",
         "Keep" => "游戏启动后仍保持不变", "Minimize" => "游戏启动后最小化", "Hide" => "游戏启动后隐藏，退出后恢复", "Close" => "游戏启动后关闭启动器",
         "Normal" => "中（平衡）", "BelowNormal" => "低", "AboveNormal" => "较高", "High" => "高",

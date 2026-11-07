@@ -12,14 +12,15 @@ namespace SHOU.Launcher.Desktop.Localization;
 
 public sealed class UiLocalization : ObservableObject
 {
-    public static UiLocalization Instance { get; } = new();
     private static readonly CultureInfo SystemUi = CultureInfo.CurrentUICulture;
     private static readonly CultureInfo SystemRegion = CultureInfo.CurrentCulture;
+    public static UiLocalization Instance { get; } = new();
     private readonly Dictionary<string, Dictionary<string, string>> catalogs = new(StringComparer.OrdinalIgnoreCase);
     private string locale = "zh-CN";
     private int revision;
     public int Revision => revision;
     public string Locale => locale;
+    public CultureInfo FormattingCulture { get; private set; } = SystemRegion;
     public static string Key(string phrase) => "t" + Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(phrase)))[..16];
     private Dictionary<string, string> Catalog(string code)
     {
@@ -36,7 +37,8 @@ public sealed class UiLocalization : ObservableObject
             : code.StartsWith("zh", StringComparison.OrdinalIgnoreCase) ? "zh-CN" : supported.FirstOrDefault(c => c.StartsWith(code.Split('-')[0] + "-", StringComparison.OrdinalIgnoreCase)) ?? "en-US";
         // Do not pin an AsyncLocal culture in one save callback: it would revert at the await boundary.
         CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo(code);
-        CultureInfo.DefaultThreadCurrentCulture = region == "system" ? SystemRegion : CultureInfo.GetCultureInfo(region);
+        FormattingCulture = region == "system" ? SystemRegion : CultureInfo.GetCultureInfo(region);
+        CultureInfo.DefaultThreadCurrentCulture = FormattingCulture;
         if (locale == code) return; locale = code; revision++; OnPropertyChanged(nameof(Revision)); OnPropertyChanged(nameof(Locale));
     }
     public string Get(string key)
@@ -51,7 +53,7 @@ public sealed class UiLocalization : ObservableObject
         if (phrase is "简体中文（中国大陆）" or "繁體中文（台灣）" or "English (United States)" or "English (United Kingdom)" or "日本語" or "Français" or "Español") return phrase;
         var key = Key(phrase); return Catalog("zh-CN").ContainsKey(key) ? Get(key) : phrase;
     }
-    public string Format(string phrase, params object?[] arguments) => string.Format(CultureInfo.CurrentCulture, Text(phrase), arguments);
+    public string Format(string phrase, params object?[] arguments) => string.Format(FormattingCulture, Text(phrase), arguments);
 }
 
 public sealed class LocExtension(string key) : MarkupExtension
