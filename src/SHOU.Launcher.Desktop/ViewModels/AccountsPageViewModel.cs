@@ -34,6 +34,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
             if (value is null || (!_refreshing && !Owner.CanMutate) || !SetProperty(ref _provider, value)) return;
             Password = "";
             OnPropertyChanged(nameof(IsOffline)); OnPropertyChanged(nameof(IsMicrosoft)); OnPropertyChanged(nameof(IsYggdrasil));
+            OnPropertyChanged(nameof(AddingAccountSummary));
             UpdateChannelAccounts();
             NotifyCommands();
         }
@@ -41,9 +42,22 @@ public sealed partial class AccountsPageViewModel : PageViewModel
     public bool IsOffline => SelectedProvider.Id == "offline";
     public bool IsMicrosoft => SelectedProvider.Id == "microsoft";
     public bool IsYggdrasil => SelectedProvider.AuthenticationServer is not null;
-    public string PlayerName { get => _playerName; set { SetProperty(ref _playerName, value); NotifyCommands(); } }
-    public string Username { get => _username; set { SetProperty(ref _username, value); NotifyCommands(); } }
-    public string Password { get => _password; set { SetProperty(ref _password, value); NotifyCommands(); } }
+    public string PlayerName { get => _playerName; set { SetProperty(ref _playerName, value ?? ""); OnPropertyChanged(nameof(HasNonAsciiPlayerName)); NotifyCommands(); } }
+    public bool HasNonAsciiPlayerName => PlayerName.Any(c => c > 127);
+    private OfflineUuidMode offlineUuidMode;
+    private string customOfflineUuid = "";
+    public bool IsStandardUuid { get => offlineUuidMode == OfflineUuidMode.Standard; set { if (value) SetUuidMode(OfflineUuidMode.Standard); } }
+    public bool IsLegacyUuid { get => offlineUuidMode == OfflineUuidMode.Legacy; set { if (value) SetUuidMode(OfflineUuidMode.Legacy); } }
+    public bool IsCustomUuid { get => offlineUuidMode == OfflineUuidMode.Custom; set { if (value) SetUuidMode(OfflineUuidMode.Custom); } }
+    public string CustomOfflineUuid { get => customOfflineUuid; set { SetProperty(ref customOfflineUuid, value ?? ""); NotifyCommands(); } }
+    public bool SupportsOfflineUuidModes => Service is IOfflineAccountService;
+    private void SetUuidMode(OfflineUuidMode mode)
+    {
+        offlineUuidMode = mode;
+        OnPropertyChanged(nameof(IsStandardUuid)); OnPropertyChanged(nameof(IsLegacyUuid)); OnPropertyChanged(nameof(IsCustomUuid)); NotifyCommands();
+    }
+    public string Username { get => _username; set { SetProperty(ref _username, value ?? ""); NotifyCommands(); } }
+    public string Password { get => _password; set { SetProperty(ref _password, value ?? ""); NotifyCommands(); } }
     public bool ConfirmRemoval { get => _confirmRemoval; set { SetProperty(ref _confirmRemoval, value); NotifyCommands(); } }
     public AccountProfile? SelectedAccount
     {
@@ -87,7 +101,16 @@ public sealed partial class AccountsPageViewModel : PageViewModel
     public AccountsPageViewModel(MainWindowViewModel owner) : base(owner, "账户", "管理离线、Microsoft、MUA 与 LittleSkin 角色。")
     {
         _provider = Providers[0];
-        AddOfflineCommand = AsyncCommand(async () => { if (await Owner.RunAsync("添加离线角色", async ct => { await Service.AddOfflineAccountAsync(PlayerName.Trim(), ct); })) IsAddingAccount = false; }, () => CanEdit && !string.IsNullOrWhiteSpace(PlayerName));
+        AddOfflineCommand = AsyncCommand(async () =>
+        {
+            var name = PlayerName.Trim(); var mode = offlineUuidMode; var custom = CustomOfflineUuid.Trim();
+            if (await Owner.RunAsync("添加离线角色", async ct =>
+            {
+                if (Service is IOfflineAccountService identities) await identities.AddOfflineAccountAsync(name, mode, custom, ct);
+                else if (mode == OfflineUuidMode.Standard) await Service.AddOfflineAccountAsync(name, ct);
+                else throw new InvalidOperationException("当前服务不支持此 UUID 标准。");
+            })) IsAddingAccount = false;
+        }, () => CanEdit && !string.IsNullOrWhiteSpace(PlayerName) && (!IsCustomUuid || (Guid.TryParseExact(CustomOfflineUuid.Trim(), "N", out var id) || Guid.TryParseExact(CustomOfflineUuid.Trim(), "D", out id)) && id != Guid.Empty));
         LoginMicrosoftCommand = AsyncCommand(LoginMicrosoftAsync, () => CanEdit);
         LoginYggdrasilCommand = AsyncCommand(LoginYggdrasilAsync, () => CanEdit && IsYggdrasil && !string.IsNullOrWhiteSpace(Username) && Password.Length > 0);
         OpenVerificationCommand = AsyncCommand(() => Owner.RunControlAsync("打开微软授权页", ct => Owner.ExternalLauncher.OpenUriAsync(_challenge!.VerificationUri, ct)), () => _challenge is { VerificationUri.Scheme: "https" });
@@ -100,7 +123,6 @@ public sealed partial class AccountsPageViewModel : PageViewModel
         }, () => CanEdit && SelectedAccount is not null && ConfirmRemoval);
         InitializeAccountPanel();
         InitializeAccountAppearance();
-        InitializeLegacyImport();
     }
     private async Task LoginMicrosoftAsync()
     {
@@ -189,7 +211,6 @@ public sealed partial class AccountsPageViewModel : PageViewModel
     }
     internal void OnNavigatingAway()
     {
-        ClearLegacyImportChoices();
         CancelAccountAppearanceWork();
         Password = "";
         if (_authenticationActive) Owner.CancelOperationCommand.Execute(null);

@@ -118,9 +118,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             if (ReferenceEquals(value, _selectedPage)) { NotifyNavigation(); if (ReferenceEquals(value, Downloads)) Downloads.OnNavigatedTo(); return; }
             var leavingAccounts = ReferenceEquals(_selectedPage, Accounts) || ReferenceEquals(_selectedPage, Home);
             var leavingDownloads = ReferenceEquals(_selectedPage, Downloads);
+            var leavingTools = ReferenceEquals(_selectedPage, Tools);
             if (!SetProperty(ref _selectedPage, value)) return;
             if (leavingAccounts) Accounts.OnNavigatingAway();
             if (leavingDownloads) Downloads.OnNavigatingAway();
+            if (leavingTools) Tools.OnNavigatingAway();
             NotifyNavigation();
             if (ReferenceEquals(value, Downloads)) Downloads.OnNavigatedTo();
         }
@@ -305,6 +307,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Home.Dispose();
         Instances.Dispose();
         Downloads.Dispose();
+        Tools.Dispose();
         _lifetime.Dispose();
         // Bootstrap owns the service, its processes, pending writes and data lease.
     }

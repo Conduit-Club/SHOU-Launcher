@@ -17,7 +17,7 @@ using ClubServer = SHOU.Launcher.Core.Abstractions.ClubServer;
 namespace SHOU.Launcher.Core;
 
 /// <summary>Production orchestration shared by both desktops. All persisted account DTOs are nonsecret.</summary>
-public sealed partial class LauncherService : ILauncherService, ILocalPackService, ILegacyMicrosoftAccountMigrationService
+public sealed partial class LauncherService : ILauncherService, ILocalPackService, ILegacyMicrosoftAccountMigrationService, IOfflineAccountService
 {
     private readonly PlatformServices platform;
     private readonly HttpClient http;
@@ -390,11 +390,11 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         await PersistCandidateAsync(Snapshot with { Settings = settings }, ct).ConfigureAwait(false);
         network.Update(settings); Set(s => s with { Settings = settings });
     }, cancellationToken);
-    public async Task<AccountProfile> AddOfflineAccountAsync(string playerName, CancellationToken cancellationToken = default)
+    public Task<AccountProfile> AddOfflineAccountAsync(string playerName, CancellationToken cancellationToken = default)
+        => AddOfflineAccountAsync(playerName, OfflineUuidMode.Standard, cancellationToken: cancellationToken);
+    public async Task<AccountProfile> AddOfflineAccountAsync(string playerName, OfflineUuidMode mode, string? customUuid = null, CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(playerName) || playerName.Length is < 3 or > 16 || playerName.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_')) throw new ArgumentException("离线档案名须为3–16位英文字母、数字或下划线。");
-        var bytes = MD5.HashData(Encoding.UTF8.GetBytes("OfflinePlayer:" + playerName)); bytes[6] = (byte)((bytes[6] & 0x0f) | 0x30); bytes[8] = (byte)((bytes[8] & 0x3f) | 0x80);
-        var uuid = Convert.ToHexString(bytes).ToLowerInvariant();
+        var uuid = OfflineIdentity.Create(playerName, mode, customUuid);
         AccountProfile? result = null;
         await ExecuteAsync("Ready", async ct =>
         {

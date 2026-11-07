@@ -21,6 +21,24 @@ public sealed class AccountAppearanceClient(HttpClient http)
     };
     public static AccountAppearance Unread(AccountProfile account) => new(account.Id, AccountSkinModel.Classic, null, [], false, ManagementUri(account),
         "点击“刷新头像”读取此角色的真实皮肤与披风；修改请使用对应官网。");
+    public async Task<AccountTextureImage> ReadPublicMicrosoftSkinAsync(string playerName, CancellationToken ct = default)
+    {
+        if (playerName.Length is < 3 or > 16 || playerName.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '_')) throw new ArgumentException("请输入 3–16 位正版玩家名（英文字母、数字或下划线）。");
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(45)); ct = timeout.Token;
+        using var lookup = await JsonAsync(new("https://api.mojang.com/users/profiles/minecraft/" + playerName), null, ct);
+        if (!Text(lookup.RootElement, "name", 16).Equals(playerName, StringComparison.OrdinalIgnoreCase) || !Guid.TryParseExact(Text(lookup.RootElement, "id", 32), "N", out var id)) throw Invalid("玩家查询返回了不同的角色。");
+        using var session = await JsonAsync(new("https://sessionserver.mojang.com/session/minecraft/profile/" + id.ToString("N")), null, ct);
+        RequireIdentity(session.RootElement, "id", id.ToString("N"));
+        var textures = Array(session.RootElement, "properties", 64).Where(p => Text(p, "name", 128) == "textures").ToArray();
+        if (textures.Length != 1) throw Invalid("此玩家尚未公开皮肤。");
+        byte[] bytes;
+        try { bytes = Convert.FromBase64String(Text(textures[0], "value", MaximumJsonBytes)); }
+        catch (FormatException) { throw Invalid("角色纹理 Base64 无效。"); }
+        if (bytes.Length > MaximumJsonBytes) throw Invalid("角色纹理属性超过上限。");
+        using var payload = ParseJson(bytes); RequireIdentity(payload.RootElement, "profileId", id.ToString("N"));
+        if (!payload.RootElement.TryGetProperty("textures", out var map) || !map.TryGetProperty("SKIN", out var skin)) throw Invalid("此玩家尚未公开皮肤。");
+        return await TextureAsync(OfficialTexture(Text(skin, "url", 2048)), false, new TextureBudget(), ct);
+    }
     public async Task<AccountAppearance> ReadMicrosoftAsync(AccountProfile account, string accessToken, CancellationToken ct = default)
     {
         if (account.Kind != AccountKind.Microsoft || string.IsNullOrWhiteSpace(accessToken)) throw new InvalidOperationException("请先登录此 Microsoft 角色。");

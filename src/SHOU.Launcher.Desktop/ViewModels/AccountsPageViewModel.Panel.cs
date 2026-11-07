@@ -66,7 +66,7 @@ public sealed partial class AccountsPageViewModel
         RequestRemovalCommand = Command(() => { ShowRemoval = true; ConfirmRemoval = false; }, () => CanEdit && SelectedChannelAccount is not null);
         CancelRemovalCommand = Command(() => { ShowRemoval = false; ConfirmRemoval = false; });
         OpenProviderWebsiteCommand = AsyncCommand(() => Owner.RunControlAsync("打开登录渠道官网", ct => Owner.ExternalLauncher.OpenUriAsync(new Uri(SelectedProvider.Id switch
-        { "mua" => "https://skin.mualliance.ltd/", "littleskin" => "https://littleskin.cn/", _ => "https://www.minecraft.net/" }), ct)));
+        { "mua" => "https://skin.mualliance.ltd/", "littleskin" => "https://littleskin.cn/", _ => throw new InvalidOperationException("此渠道没有皮肤站入口。") }), ct)), () => IsYggdrasil);
         _panelReady = true;
     }
 

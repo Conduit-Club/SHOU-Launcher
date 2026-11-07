@@ -33,7 +33,6 @@ public static class PlatformServicesFactory
         public bool SupportsCredentialPersistence => context.OS is LauncherOS.MacOS or LauncherOS.Windows;
         public bool SupportsSystemProxy => context.OS is LauncherOS.MacOS or LauncherOS.Windows;
         public bool SupportsRevealFile => context.OS is LauncherOS.MacOS or LauncherOS.Windows;
-        public IReadOnlyList<string> Limitations => context.OS == LauncherOS.Windows
-            ? ["旧 Windows 账户与历史字段的自动接管尚未完成；现有 UserKey.bin 和账户文件保持原状。"] : [];
+        public IReadOnlyList<string> Limitations => [];
     }
 }

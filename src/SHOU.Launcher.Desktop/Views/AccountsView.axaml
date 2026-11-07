@@ -15,7 +15,7 @@
         <Button Name="MicrosoftChannelButton" Classes="accountChannel" Classes.selected="{Binding IsMicrosoftChannel}" Content="{Binding MicrosoftChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="microsoft" Margin="0,0,3,0" />
         <Button Name="LittleSkinChannelButton" Grid.Column="1" Classes="accountChannel" Classes.selected="{Binding IsLittleSkinChannel}" Content="{Binding LittleSkinChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="littleskin" Margin="3,0,0,0" />
         <Button Name="MuaChannelButton" Grid.Row="1" Classes="accountChannel" Classes.selected="{Binding IsMuaChannel}" Content="{Binding MuaChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="mua" Margin="0,6,3,0" />
-        <Button Name="OfflineChannelButton" Grid.Row="1" Grid.Column="1" Classes="accountChannel" Classes.selected="{Binding IsOfflineChannel}" Content="{Binding OfflineChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="offline" Margin="3,6,0,0" />
+        <Button Name="OfflineChannelButton" Grid.Row="1" Grid.Column="1" Classes="accountChannel" Classes.selected="{Binding IsOfflineChannel}" Content="{Binding OfflineChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="offline" Margin="3,6,0,0" ToolTip.Tip="离线（盗版）角色仅用于无需认证的游戏，不能进入正版或皮肤站认证服务器。建议使用英文字母、数字或下划线，不推荐中文名。" />
       </Grid>
       <ComboBox Name="LoginProviderSelector" IsVisible="False" ItemsSource="{Binding Providers}" SelectedItem="{Binding SelectedProvider}" IsEnabled="{Binding CanEdit}" />
       <Grid ColumnDefinitions="*,40" Margin="0,6,0,0"><TextBlock Name="AccountChannelTitle" Text="{Binding ChannelTitle}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /><Button Grid.Column="1" Content="{Binding AllAccountsButtonLabel}" Command="{Binding ToggleAllAccountsCommand}" Padding="4,1" MinHeight="23" /></Grid>
@@ -55,7 +55,7 @@
           </MenuFlyout></Button.Flyout><local:ClubIcon Kind="shirt" Width="16" Height="16" Foreground="{DynamicResource ClubAccent}" /></Button>
           <Button Name="RefreshAccountButton" Classes="flat" Padding="7" MinWidth="32" Width="32" MinHeight="30" Height="30" AutomationProperties.Name="账户操作" ToolTip.Tip="账户操作"><Button.Flyout><MenuFlyout>
             <MenuItem Header="刷新授权" Command="{Binding RefreshAccountCommand}" />
-            <MenuItem Header="账户官网" Command="{Binding OpenProviderWebsiteCommand}" IsVisible="{Binding !IsOfflineChannel}" />
+            <MenuItem Header="账户官网" Command="{Binding OpenProviderWebsiteCommand}" IsVisible="{Binding IsYggdrasil}" />
           </MenuFlyout></Button.Flyout><local:ClubIcon Kind="pencil" Width="16" Height="16" Foreground="{DynamicResource ClubAccent}" /></Button>
           <Button Name="SelectAccountProfileButton" Classes="flat" Command="{Binding ToggleAllAccountsCommand}" Padding="7" MinWidth="32" Width="32" MinHeight="30" Height="30" AutomationProperties.Name="选择档案" ToolTip.Tip="选择档案"><local:ClubIcon Kind="arrow-right-left" Width="16" Height="16" Foreground="{DynamicResource ClubAccent}" /></Button>
           </StackPanel>
@@ -69,9 +69,11 @@
       <StackPanel Name="AddAccountPanel" IsVisible="{Binding IsAddingAccount}" Spacing="8">
         <TextBlock Text="{Binding AddingAccountSummary}" Classes="accountHint" />
         <StackPanel Name="OfflineAccountForm" IsVisible="{Binding IsOffline}" Spacing="11" Margin="0,10,0,0">
-          <Grid ColumnDefinitions="50,*"><TextBlock Text="玩家 ID" VerticalAlignment="Center"  ToolTip.Tip="采用名称生成的离线 UUID；旧版与自定义 UUID 尚未接入。离线角色不能进入需要认证的服务器。"/><TextBox Name="OfflinePlayerName" Grid.Column="1" Text="{Binding PlayerName}" IsEnabled="{Binding CanEdit}" /></Grid>
+          <Grid ColumnDefinitions="50,*"><TextBlock Text="玩家 ID" VerticalAlignment="Center" ToolTip.Tip="离线角色不能进入需要正版或皮肤站认证的服务器。不推荐使用中文名，部分模组和服务器不兼容。"/><TextBox Name="OfflinePlayerName" Grid.Column="1" Text="{Binding PlayerName}" IsEnabled="{Binding CanEdit}" ToolTip.Tip="建议使用英文字母、数字或下划线；不推荐使用中文名。" /></Grid>
+          <TextBlock Name="OfflineNameWarning" Text="不推荐使用中文名，部分模组和服务器不兼容。" Classes="accountHint" IsVisible="{Binding HasNonAsciiPlayerName}" />
           <TextBlock Text="UUID 标准" FontWeight="SemiBold" HorizontalAlignment="Center" />
-          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12"><RadioButton Content="行业规范" IsChecked="True" IsEnabled="False" /><RadioButton Content="旧版" IsEnabled="False" /><RadioButton Content="自定义" IsEnabled="False" /></StackPanel>
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" IsEnabled="{Binding CanEdit}"><RadioButton Name="StandardOfflineUuid" Content="行业规范" GroupName="OfflineUuid" IsChecked="{Binding IsStandardUuid}" ToolTip.Tip="推荐：生成的 UUID 与 HMCL、BakaXL、Bukkit 等软件一致。名称大小写会影响 UUID。" /><RadioButton Name="LegacyOfflineUuid" Content="旧版" GroupName="OfflineUuid" IsChecked="{Binding IsLegacyUuid}" IsEnabled="{Binding SupportsOfflineUuidModes}" ToolTip.Tip="沿用旧版 PCL 的名称算法，用于保留旧离线角色的存档身份。" /><RadioButton Name="CustomOfflineUuid" Content="自定义" GroupName="OfflineUuid" IsChecked="{Binding IsCustomUuid}" IsEnabled="{Binding SupportsOfflineUuidModes}" ToolTip.Tip="填写已有角色的 UUID；修改 UUID 会改变存档中的角色身份。" /></StackPanel>
+          <TextBox Name="OfflineCustomUuidInput" Text="{Binding CustomOfflineUuid}" IsVisible="{Binding IsCustomUuid}" IsEnabled="{Binding CanEdit}" PlaceholderText="UUID（32 位十六进制，可带连字符）" />
 
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="返回" Command="{Binding EndAddAccountCommand}" /><Button Name="AddOfflineButton" Content="创建" Command="{Binding AddOfflineCommand}" Classes="primary" /></StackPanel>
         </StackPanel>
@@ -79,24 +81,12 @@
           <views:ClubIcon Classes="accountAvatar" Width="42" Height="46" HorizontalAlignment="Center" Kind="user" />
           <Button Name="LoginMicrosoftButton" Classes="primary" Content="开始正版验证" Command="{Binding LoginMicrosoftCommand}" HorizontalAlignment="Center" />
           <TextBlock Text="在微软官网输入设备代码完成授权。" Classes="accountHint" TextAlignment="Center" />
-          <StackPanel Name="LegacyMicrosoftImportPanel" IsVisible="{Binding SupportsLegacyMicrosoftImport}" Spacing="8">
-            <Button Name="ReadLegacyMicrosoftAccountsButton" Content="读取旧版微软账户" Command="{Binding ReadLegacyMicrosoftAccountsCommand}" HorizontalAlignment="Center" />
-            <TextBlock Text="{Binding LegacyImportSummary}" Classes="accountHint" />
-            <StackPanel IsVisible="{Binding HasLegacyMicrosoftAccounts}" Spacing="8">
-              <ComboBox Name="LegacyMicrosoftAccountSelector" ItemsSource="{Binding LegacyMicrosoftAccounts}" SelectedItem="{Binding SelectedLegacyMicrosoftAccount}" IsEnabled="{Binding CanEdit}" PlaceholderText="请选择要导入的账户">
-                <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" /></DataTemplate></ComboBox.ItemTemplate>
-              </ComboBox>
-              <Button Name="ImportLegacyMicrosoftAccountButton" Content="验证并导入所选账户" Command="{Binding ImportLegacyMicrosoftAccountCommand}" HorizontalAlignment="Center" />
-            </StackPanel>
-          </StackPanel>
-          <Button Content="前往 Minecraft 官网" Command="{Binding OpenProviderWebsiteCommand}" HorizontalAlignment="Center" />
           <Button Content="返回" Command="{Binding EndAddAccountCommand}" HorizontalAlignment="Center" />
         </StackPanel>
         <StackPanel Name="YggdrasilAccountForm" IsVisible="{Binding IsYggdrasil}" Spacing="10" Margin="0,20,0,0">
           <Grid ColumnDefinitions="50,*"><TextBlock Text="邮箱" VerticalAlignment="Center" /><TextBox Name="YggdrasilUsername" Grid.Column="1" Text="{Binding Username}" PlaceholderText="邮箱 / 用户名" IsEnabled="{Binding CanEdit}" /></Grid>
           <Grid ColumnDefinitions="50,*"><TextBlock Text="密码" VerticalAlignment="Center" /><TextBox Name="YggdrasilPassword" Grid.Column="1" Text="{Binding Password}" PasswordChar="●" IsEnabled="{Binding CanEdit}" /></Grid>
           <Button Content="前往官网" Command="{Binding OpenProviderWebsiteCommand}" HorizontalAlignment="Center" />
-          <Button Content="使用 OAuth 登录（尚未接入）" IsVisible="{Binding IsMuaChannel}" IsEnabled="False" HorizontalAlignment="Center" FontSize="11" />
           <TextBlock Text="凭据仅提交给当前选择的皮肤站。" Classes="accountHint" TextAlignment="Center" />
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="返回" Command="{Binding EndAddAccountCommand}" /><Button Name="LoginYggdrasilButton" Classes="primary" Content="登录" Command="{Binding LoginYggdrasilCommand}" /></StackPanel>
         </StackPanel>

@@ -98,7 +98,8 @@ public sealed class WpfShellLayoutTests
             Assert.False(Find<Button>(window, "CustomDownloadButton").IsEffectivelyEnabled);
             Find<Expander>(window, "AchievementGenerator").IsExpanded = true;
             Find<Expander>(window, "AvatarGenerator").IsExpanded = true; Pump(window);
-            Assert.Contains("尚未迁移", vm.Tools.ToolboxCapabilityReason);
+            Assert.NotNull(vm.Tools.Toolbox);
+            Assert.True(Find<Border>(window, "ToolCommunityCard").Bounds.Y < Find<Border>(window, "ToolboxActionsCard").Bounds.Y);
             Assert.Empty(sink.Errors);
         }
         finally { window.Close(); Logger.Sink = previousSink; }
