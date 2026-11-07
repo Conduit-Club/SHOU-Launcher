@@ -48,12 +48,12 @@
       </Button>
     </DataTemplate>
     <DataTemplate x:Key="ContentProjectTemplate">
-      <Button Classes="flat" Command="{Binding OpenCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="5,6" MinHeight="64" ToolTip.Tip="{Binding Detail}">
+      <Button Classes="flat contentProjectRow" Command="{Binding OpenCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="5,6" MinHeight="64" ToolTip.Tip="{Binding Detail}">
         <Grid ColumnDefinitions="52,*">
           <Border Width="42" Height="42" CornerRadius="5" Background="{DynamicResource ClubSelection}" ClipToBounds="True" VerticalAlignment="Center"><Grid><TextBlock Text="{Binding Tile}" FontSize="22" Foreground="{DynamicResource ClubSelectionForeground}" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasIcon}"/><Image Source="{Binding Icon}" Stretch="Uniform" IsVisible="{Binding HasIcon}"/></Grid></Border>
           <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
             <TextBlock Text="{Binding Title}" FontSize="14" LineHeight="20" TextTrimming="CharacterEllipsis"/>
-            <Grid ColumnDefinitions="Auto,*"><Border IsVisible="{Binding HasTags}" Background="{DynamicResource ClubSelection}" CornerRadius="2" Padding="3,0" Margin="0,0,6,0" MaxWidth="140"><TextBlock Text="{Binding Tags}" Classes="muted" FontSize="11" LineHeight="16" TextTrimming="CharacterEllipsis"/></Border><TextBlock Grid.Column="1" Text="{Binding Description}" Classes="muted" FontSize="12" LineHeight="18" TextTrimming="CharacterEllipsis"/></Grid>
+            <Grid ColumnDefinitions="Auto,*"><Border IsVisible="{Binding HasTags}" Background="{DynamicResource ClubSelection}" CornerRadius="2" Padding="3,0" Margin="0,0,6,0" MaxWidth="140" VerticalAlignment="Center"><TextBlock Text="{Binding Tags}" Classes="muted" FontSize="11" LineHeight="16" TextTrimming="CharacterEllipsis"/></Border><TextBlock Grid.Column="1" Text="{Binding Description}" Classes="muted" FontSize="12" LineHeight="18" TextTrimming="CharacterEllipsis"/></Grid>
             <Grid ColumnDefinitions="*,100,105,88" ColumnSpacing="6">
               <StackPanel Orientation="Horizontal" Spacing="4" IsVisible="{Binding HasCompatibility}"><views:ClubIcon Kind="list" Width="13" Height="13"/><TextBlock Text="{Binding Compatibility}" Classes="muted" FontSize="11" LineHeight="16" TextTrimming="CharacterEllipsis" MaxWidth="220"/></StackPanel>
               <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="4"><views:ClubIcon Kind="download" Width="13" Height="13"/><TextBlock Text="{Binding Downloads}" Classes="muted" FontSize="11" LineHeight="16"/></StackPanel>
@@ -66,6 +66,8 @@
     </DataTemplate>
   </UserControl.Resources>
   <UserControl.Styles>
+    <Style Selector="Button.contentProjectRow TextBlock.muted"><Setter Property="TextWrapping" Value="NoWrap" /></Style>
+    <Style Selector="Expander.loaderChoice TextBlock.muted"><Setter Property="FontWeight" Value="Normal" /></Style>
     <Style Selector="ListBox.additionalLoaders ListBoxItem"><Setter Property="IsEnabled" Value="{Binding CanInstall}" /><Setter Property="HorizontalContentAlignment" Value="Stretch" /><Setter Property="Padding" Value="6,3" /></Style>
     <Style Selector="ListBox.installerVersions ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="0"/></Style>
     <Style Selector="Expander.loaderChoice"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>

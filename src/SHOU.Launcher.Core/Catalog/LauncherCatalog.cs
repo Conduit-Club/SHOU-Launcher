@@ -74,7 +74,11 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
         var document = await ReadAsync("https://meta.fabricmc.net/v2/versions/loader/" + Uri.EscapeDataString(gameVersion), false, ct, n => n is JsonArray).ConfigureAwait(false);
         var data = document.Data;
         if (data is not JsonArray entries || entries.Count > 5000) throw new InvalidDataException("Fabric目录无效。");
-        return entries.Select(n => new LoaderCatalogVersion(SafePath.Identifier((string?)n?["loader"]?["version"] ?? ""),
+        // Historical +build loader coordinates are not supported by the installation identity policy.
+        // Keep them from invalidating the modern versions returned in the same official response.
+        return entries.Where(n => !System.Text.RegularExpressions.Regex.IsMatch((string?)n?["loader"]?["version"] ?? "",
+            @"\A[0-9]+\.[0-9]+\.[0-9]+\+build\.[0-9]+\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+            .Select(n => new LoaderCatalogVersion(SafePath.Identifier((string?)n?["loader"]?["version"] ?? ""),
             (bool?)n?["loader"]?["stable"] ?? false)).Distinct().ToArray();
     }
     public async Task<IReadOnlyList<ContentProject>> SearchAsync(ContentQuery query, CancellationToken ct = default)

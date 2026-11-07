@@ -15,6 +15,7 @@ public sealed class LoadingGlyph : UserControl
     public LoadingGlyph()
     {
         Width = Height = 48; icon.RenderTransform = rotation;
+        icon.Bind(ClubIcon.ForegroundProperty, new Avalonia.Data.Binding(nameof(Foreground)) { Source = this });
         Content = new Viewbox { Child = icon, Stretch = Stretch.Uniform };
         timer.Tick += (_, _) => { if (IsEffectivelyVisible) rotation.Angle = Math.Sin(++frame * .35) * 22; };
         AttachedToVisualTree += (_, _) => timer.Start();
