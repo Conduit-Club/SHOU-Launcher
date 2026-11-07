@@ -85,9 +85,8 @@
         </StackPanel>
         <StackPanel Name="YggdrasilAccountForm" IsVisible="{Binding IsYggdrasil}" Spacing="10" Margin="0,20,0,0">
           <Grid ColumnDefinitions="50,*"><TextBlock Text="邮箱" VerticalAlignment="Center" /><TextBox Name="YggdrasilUsername" Grid.Column="1" Text="{Binding Username}" PlaceholderText="邮箱 / 用户名" IsEnabled="{Binding CanEdit}" /></Grid>
-          <Grid ColumnDefinitions="50,*"><TextBlock Text="密码" VerticalAlignment="Center" /><TextBox Name="YggdrasilPassword" Grid.Column="1" Text="{Binding Password}" PasswordChar="●" IsEnabled="{Binding CanEdit}" /></Grid>
+          <Grid ColumnDefinitions="50,*"><TextBlock Text="密码" VerticalAlignment="Center" /><TextBox Name="YggdrasilPassword" Grid.Column="1" Text="{Binding Password}" PasswordChar="●" IsEnabled="{Binding CanEdit}" ToolTip.Tip="凭据仅提交给当前选择的皮肤站。" /></Grid>
           <Button Content="前往官网" Command="{Binding OpenProviderWebsiteCommand}" HorizontalAlignment="Center" />
-          <TextBlock Text="凭据仅提交给当前选择的皮肤站。" Classes="accountHint" TextAlignment="Center" />
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="返回" Command="{Binding EndAddAccountCommand}" /><Button Name="LoginYggdrasilButton" Classes="primary" Content="登录" Command="{Binding LoginYggdrasilCommand}" /></StackPanel>
         </StackPanel>
       </StackPanel>

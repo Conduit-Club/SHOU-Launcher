@@ -14,6 +14,7 @@ public sealed class ToolboxViewModel : PageViewModel, IDisposable
     private readonly IToolboxService? tools;
     private readonly CancellationTokenSource lifetime = new();
     private CancellationTokenSource? operation;
+    private TaskCompletionSource? idle;
     private string busyTool = "", actionFeedback = "", downloadFeedback = "", skinFeedback = "", serverFeedback = "", imageFeedback = "", avatarFeedback = "";
     private string downloadUrl = "", downloadDirectory, downloadName = "", playerName = "", serverAddress = "";
     private string itemId = "grass_block", achievementTitle = "Achievement get!", achievementLine1 = "Hello Minecraft", achievementLine2 = "";
@@ -55,8 +56,11 @@ public sealed class ToolboxViewModel : PageViewModel, IDisposable
             if (name.IndexOfAny(['/', '\\', ':']) >= 0 || name is "." or "..") throw new ArgumentException("文件名不能包含路径或目录。");
             var destination = Path.Combine(DownloadDirectory.Trim(), name);
             DownloadFeedback = "正在下载…";
-            var progress = new DispatchProgress<TransferProgress>(p => Owner.Dispatch(() => DownloadFeedback = p.TotalBytes is { } size
-                ? $"正在下载：{p.BytesReceived / 1048576d:F1} / {size / 1048576d:F1} MiB" : $"正在下载：{p.BytesReceived / 1048576d:F1} MiB"));
+            var progress = new DispatchProgress<TransferProgress>(p => Owner.Dispatch(() =>
+            {
+                if (ct.IsCancellationRequested || operation is null || operation.Token != ct) return;
+                DownloadFeedback = p.TotalBytes is { } size ? $"正在下载：{p.BytesReceived / 1048576d:F1} / {size / 1048576d:F1} MiB" : $"正在下载：{p.BytesReceived / 1048576d:F1} MiB";
+            }));
             await tools!.DownloadToolFileAsync(source, destination, progress, ct); DownloadFeedback = "已保存：" + DownloadName.Trim();
         }), () => CanUseTools && Uri.TryCreate(DownloadUrl.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && Path.IsPathFullyQualified(DownloadDirectory) && DownloadName.Trim().Length > 0);
         OpenDownloadDirectoryCommand = AsyncCommand(() => RunAsync("download", async ct =>
@@ -154,11 +158,13 @@ public sealed class ToolboxViewModel : PageViewModel, IDisposable
     private async Task RunAsync(string tool, Func<CancellationToken, Task> action)
     {
         if (IsBusy || !CanEdit || lifetime.IsCancellationRequested) return;
-        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token); operation = cancellation; busyTool = tool; NotifyBusy();
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(lifetime.Token);
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); idle = completion;
+        operation = cancellation; busyTool = tool; NotifyBusy();
         try { await action(cancellation.Token); }
         catch (OperationCanceledException) { Feedback(tool, cancellation.IsCancellationRequested ? "已取消，可重新操作。" : "操作超时，请重试。"); }
         catch (Exception ex) { Feedback(tool, UiPrivacy.Redact(ex is System.Net.Http.HttpRequestException ? "无法连接服务，请稍后重试。" : ex.Message)); }
-        finally { operation = null; busyTool = ""; NotifyBusy(); }
+        finally { operation = null; busyTool = ""; NotifyBusy(); idle = null; completion.TrySetResult(); }
     }
     private void Feedback(string tool, string value)
     { switch (tool) { case "download": DownloadFeedback = value; break; case "skin": SkinFeedback = value; break; case "server": ServerFeedback = value; break; case "image": ImageFeedback = value; break; case "avatar": AvatarFeedback = value; break; default: ActionFeedback = value; break; } }
@@ -167,5 +173,6 @@ public sealed class ToolboxViewModel : PageViewModel, IDisposable
     public override void Refresh(LauncherSnapshot snapshot) { base.Refresh(snapshot); OnPropertyChanged(nameof(CanUseTools)); OnPropertyChanged(nameof(HasRunningGame)); }
     public override void NotifyCommands() { base.NotifyCommands(); OnPropertyChanged(nameof(CanUseTools)); }
     public void Cancel() => operation?.Cancel();
+    public Task CancelAndWaitAsync() { var pending = idle?.Task ?? Task.CompletedTask; Cancel(); return pending; }
     public void Dispose() { lifetime.Cancel(); lifetime.Dispose(); achievementPreview?.Dispose(); avatarPreview?.Dispose(); }
 }

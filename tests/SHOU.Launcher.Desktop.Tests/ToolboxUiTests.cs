@@ -26,6 +26,32 @@ public sealed class ToolboxUiTests
         Assert.False(tools.IsBusy); Assert.Contains("已取消", tools.DownloadFeedback); Assert.Equal("fixture.bin", tools.DownloadName);
     }
     [AvaloniaFact]
+    public async Task LateTransferCallbacksCannotReplaceSuccessOrCancellationFeedback()
+    {
+        var service = new ToolService(); using var vm = new MainWindowViewModel(service, new FakeExternalLauncher());
+        var tools = vm.Tools.Toolbox; tools.DownloadUrl = "https://example.invalid/fixture.bin";
+        await tools.DownloadCommand.ExecuteAsync(null); var success = tools.DownloadFeedback;
+        service.LastProgress!.Report(new("fixture", "Downloading", 42, 100)); Dispatcher.UIThread.RunJobs(); Assert.Equal(success, tools.DownloadFeedback);
+        service.DownloadBehavior = ct => Task.Delay(Timeout.Infinite, ct);
+        var work = tools.DownloadCommand.ExecuteAsync(null); var prior = service.LastProgress!; tools.CancelCommand.Execute(null); await work;
+        var cancelled = tools.DownloadFeedback; prior.Report(new("fixture", "Downloading", 99, 100)); Dispatcher.UIThread.RunJobs(); Assert.Equal(cancelled, tools.DownloadFeedback);
+    }
+    [AvaloniaFact]
+    public async Task ClosingWaitsForCancelledToolCleanupBeforeDestroyingTheWindow()
+    {
+        var cleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); CancellationToken received = default;
+        var service = new ToolService { DownloadBehavior = async ct => { received = ct; try { await Task.Delay(Timeout.Infinite, ct); } finally { await cleanup.Task; } } };
+        using var vm = new MainWindowViewModel(service, new FakeExternalLauncher()); var window = new MainWindow { DataContext = vm }; window.Show();
+        try
+        {
+            vm.Tools.Toolbox.DownloadUrl = "https://example.invalid/fixture.bin"; var work = vm.Tools.Toolbox.DownloadCommand.ExecuteAsync(null);
+            window.Close(); Assert.True(received.IsCancellationRequested); Assert.True(window.IsVisible);
+            cleanup.SetResult(); await work; Dispatcher.UIThread.RunJobs(); await Task.Yield(); Dispatcher.UIThread.RunJobs();
+            Assert.False(window.IsVisible);
+        }
+        finally { cleanup.TrySetResult(); window.Close(); }
+    }
+    [AvaloniaFact]
     public async Task ToolCommandsUseServicesAndCleanupRequiresReviewedConfirmation()
     {
         var service = new ToolService();
@@ -71,9 +97,10 @@ public sealed class ToolboxUiTests
     private sealed class ToolService : FakeLauncherService, IToolboxService, IOfflineAccountService
     {
         public Func<CancellationToken, Task>? DownloadBehavior { get; set; }
+        public IProgress<TransferProgress>? LastProgress { get; private set; }
         public bool Moved { get; private set; }
         public OfflineUuidMode LastUuidMode { get; private set; }
-        public Task DownloadToolFileAsync(Uri source, string destination, IProgress<TransferProgress>? progress = null, CancellationToken cancellationToken = default) => DownloadBehavior?.Invoke(cancellationToken) ?? Task.CompletedTask;
+        public Task DownloadToolFileAsync(Uri source, string destination, IProgress<TransferProgress>? progress = null, CancellationToken cancellationToken = default) { LastProgress = progress; return DownloadBehavior?.Invoke(cancellationToken) ?? Task.CompletedTask; }
         public Task<AccountTextureImage> DownloadPublicSkinAsync(string playerName, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<ClubServer> QueryToolServerAsync(string address, CancellationToken cancellationToken = default) => Task.FromResult(new ClubServer("tool", "Server", address, "在线", 12));
         public Task<GameLogCleanupPlan> ScanGameLogsAsync(CancellationToken cancellationToken = default) => Task.FromResult(new GameLogCleanupPlan("fixture", [new("fixture", "logs/old.log", 4, new string('a', 64))]));
