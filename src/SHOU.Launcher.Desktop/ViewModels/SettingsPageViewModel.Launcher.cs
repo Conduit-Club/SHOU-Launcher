@@ -20,7 +20,6 @@ public sealed partial class SettingsPageViewModel
     private int navigationGeneration;
     private bool settingsBusy;
     private string launcherFeedback = "";
-    private string downloadedUpdate = "";
     private string feedbackQuery = "";
     private IReadOnlyList<LauncherFeedback> allFeedback = [];
     private IReadOnlyList<HistoricalLauncherLog> historicalLogs = [];
@@ -58,7 +57,6 @@ public sealed partial class SettingsPageViewModel
     public decimal LogLineLimit { get => launcherOptions.LogLineLimit; set => Behavior((int)value, p => p.LogLineLimit, (p, v) => p with { LogLineLimit = v }); }
     public bool DisableHardwareAcceleration { get => launcherOptions.DisableHardwareAcceleration; set => Behavior(value, p => p.DisableHardwareAcceleration, (p, v) => p with { DisableHardwareAcceleration = v }); }
     public bool UseDnsOverHttps { get => launcherOptions.UseDnsOverHttps; set => Behavior(value, p => p.UseDnsOverHttps, (p, v) => p with { UseDnsOverHttps = v }); }
-    public bool CheckUpdatesOnStartup { get => launcherOptions.CheckUpdatesOnStartup; set => Behavior(value, p => p.CheckUpdatesOnStartup, (p, v) => p with { CheckUpdatesOnStartup = v }); }
     public IReadOnlyList<string> TitleModes { get; } = ["default", "none", "text", "image"];
     public IReadOnlyList<string> HomeSources { get; } = ["default", "local", "remote"];
     public IReadOnlyList<string> AccentChoices { get; } = ["default", "garnet", "blue", "jade"];
@@ -75,8 +73,7 @@ public sealed partial class SettingsPageViewModel
     public string HistoricalLogsSummary => historicalLogs.Count == 0 ? "没有可清理的历史日志。" : $"可回收 {historicalLogs.Count} 个超过七天的历史日志；当前日志保留。";
     public bool HasHistoricalLogPreview => historicalLogs.Count > 0 || Directory.Exists(lastLogRecycle);
     public AsyncRelayCommand CheckUpdatesCommand { get; private set; } = null!;
-    public AsyncRelayCommand DownloadUpdateCommand { get; private set; } = null!;
-    public AsyncRelayCommand OpenDownloadedUpdateCommand { get; private set; } = null!;
+    public AsyncRelayCommand OpenSelectedReleaseCommand { get; private set; } = null!;
     public AsyncRelayCommand RefreshFeedbackCommand { get; private set; } = null!;
     public AsyncRelayCommand<LauncherFeedback> OpenFeedbackItemCommand { get; private set; } = null!;
     public AsyncRelayCommand ScanHistoricalLogsCommand { get; private set; } = null!;
@@ -109,11 +106,9 @@ public sealed partial class SettingsPageViewModel
             if (Service is not ILauncherInformationService info) throw new NotSupportedException("当前服务不支持版本检查。");
             var releases = await info.CheckLauncherReleasesAsync(ct); ct.ThrowIfCancellationRequested(); Releases.Clear(); foreach (var release in releases) Releases.Add(release);
             SelectedRelease = Releases.FirstOrDefault(r => !r.Prerelease) ?? Releases.FirstOrDefault();
-            LauncherFeedback = releases.Count == 0 ? "没有已发布版本。" : SelectedRelease?.Package is null ? "已读取发行版本；暂无当前平台的可校验跨平台更新包。" : "已读取可用发行版本。";
+            LauncherFeedback = releases.Count == 0 ? "没有已发布版本。" : "最新发布：" + SelectedRelease?.Tag;
         }), () => !IsLauncherBusy);
-        DownloadUpdateCommand = AsyncCommand(() => RunSettingsWork(async ct =>
-        { downloadedUpdate = await ((ILauncherInformationService)Service).DownloadLauncherUpdateAsync(SelectedRelease!.Package!, ct); LauncherFeedback = "更新包下载并校验完成。"; NotifyCommands(); }), () => !IsLauncherBusy && Service is ILauncherInformationService && SelectedRelease?.Package is not null);
-        OpenDownloadedUpdateCommand = AsyncCommand(() => Owner.RunControlAsync("打开更新包目录", ct => Owner.ExternalLauncher.RevealFileAsync(downloadedUpdate, ct)), () => File.Exists(downloadedUpdate));
+        OpenSelectedReleaseCommand = AsyncCommand(() => Owner.RunControlAsync("打开发行下载页", ct => Owner.ExternalLauncher.OpenUriAsync(SelectedRelease!.Page, ct)), () => SelectedRelease is not null);
         RefreshFeedbackCommand = AsyncCommand(() => RunSettingsWork(async ct =>
         { autoFeedbackAttempted = true; var found = await ((ILauncherInformationService)Service).GetLauncherFeedbackAsync(ct); ct.ThrowIfCancellationRequested(); allFeedback = found; FilterFeedback(); LauncherFeedback = FeedbackItems.Count == 0 ? "没有匹配的反馈。" : ""; }), () => !IsLauncherBusy && Service is ILauncherInformationService);
         OpenFeedbackItemCommand = new(item => item is null ? Task.CompletedTask : Owner.RunControlAsync("打开反馈", ct => Owner.ExternalLauncher.OpenUriAsync(item.Page, ct)));
@@ -171,7 +166,7 @@ public sealed partial class SettingsPageViewModel
     }
     public async Task CancelAndWaitAsync() { var pending = settingsWorkDone?.Task; settingsWork?.Cancel(); if (pending is not null) await pending; }
     private void LoadLauncherOptions(LauncherSettings settings)
-    { launcherOptions = settings.Launcher ?? new(); foreach (var name in new[] { nameof(RegionalFormat), nameof(LogLineLimit), nameof(DisableHardwareAcceleration), nameof(UseDnsOverHttps), nameof(CheckUpdatesOnStartup) }) OnPropertyChanged(name); }
+    { launcherOptions = settings.Launcher ?? new(); foreach (var name in new[] { nameof(RegionalFormat), nameof(LogLineLimit), nameof(DisableHardwareAcceleration), nameof(UseDnsOverHttps) }) OnPropertyChanged(name); }
     private void LoadAppearanceOptions(SettingsPresentationPreferences preferences)
     { appearanceOptions = preferences; foreach (var name in new[] { nameof(LockWindowSize), nameof(ShowStartupLogo), nameof(ShowLaunchTips), nameof(NotifyClubUpdates), nameof(AdvancedMaterial), nameof(SelectedFont), nameof(LightAccent), nameof(DarkAccent), nameof(TitleMode), nameof(CustomTitleText), nameof(CustomTitleImage), nameof(HomeSource), nameof(HomeLocation), nameof(IsCustomHome), nameof(IsImageTitle), nameof(IsTextTitle), nameof(HideDownloads), nameof(HideTools), nameof(BackgroundSummary) }) OnPropertyChanged(name); }
     private SettingsPresentationPreferences BuildPresentation() => appearanceOptions with { ShowClubIntroduction = ShowClubIntroduction, ShowClubServers = ShowClubServers, RotateHomeBackground = RotateHomeBackground, WindowOpacity = WindowOpacity, LastClubNotice = _savedPresentation.LastClubNotice };

@@ -1,5 +1,10 @@
 namespace SHOU.Launcher.Core.Abstractions;
 
+public interface IServerLaunchService
+{
+    Task LaunchToServerAsync(string instanceId, string address, CancellationToken cancellationToken = default);
+}
+
 public interface IInstanceDirectoryService
 {
     Task<string> GetInstanceDirectoryAsync(string instanceId, string? contentKind = null, bool createMissing = false, CancellationToken cancellationToken = default);

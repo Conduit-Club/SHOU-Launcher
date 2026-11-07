@@ -22,11 +22,11 @@ public partial class MainWindow : Window
         Opened += async (_, _) => { if (DataContext is MainWindowViewModel vm) await vm.InitializeAsync(); };
         Closing += async (_, e) =>
         {
-            if (DataContext is not MainWindowViewModel vm || !vm.Tools.Toolbox.IsBusy && !vm.Settings.IsLauncherBusy) return;
+            if (DataContext is not MainWindowViewModel vm || !vm.Tools.Toolbox.IsBusy && !vm.Settings.IsLauncherBusy && !vm.Instances.IsComponentBusy) return;
             e.Cancel = true;
             if (waitingForTools) return;
             waitingForTools = true;
-            try { await Task.WhenAll(vm.Tools.Toolbox.CancelAndWaitAsync(), vm.Settings.CancelAndWaitAsync()); }
+            try { await Task.WhenAll(vm.Tools.Toolbox.CancelAndWaitAsync(), vm.Settings.CancelAndWaitAsync(), vm.Instances.CancelComponentWorkAsync()); }
             finally { waitingForTools = false; }
             Close();
         };

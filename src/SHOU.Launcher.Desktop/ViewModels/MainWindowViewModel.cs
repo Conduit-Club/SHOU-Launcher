@@ -168,7 +168,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool CanMutate => !_disposed && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
     public bool CanReadRemote => !_disposed && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
     public bool HasRunningGame => !_disposed && (Snapshot.State == "Running" || Snapshot.GameProcessId is not null);
-    public bool ShowOperationStatus => IsBusy && (!IsHomeLaunching || !ReferenceEquals(SelectedPage, Home));
+    private int inlineOperations;
+    public bool ShowOperationStatus => inlineOperations == 0 && IsBusy && (!IsHomeLaunching || !ReferenceEquals(SelectedPage, Home));
+    public async Task<bool> RunInlineAsync(string label, Func<CancellationToken, Task> action)
+    {
+        inlineOperations++; OnPropertyChanged(nameof(ShowOperationStatus));
+        try { return await RunAsync(label, action); }
+        finally { inlineOperations--; OnPropertyChanged(nameof(ShowOperationStatus)); }
+    }
     public Thickness OperationInset => new(ReferenceEquals(SelectedPage, Downloads) ? Downloads.ShowCategorySidebar ? 180 : 0
         : ReferenceEquals(SelectedPage, Settings) || ReferenceEquals(SelectedPage, Tools) ? 135
         : ReferenceEquals(SelectedPage, Instances) ? Instances.IsSelection ? 175 : 150

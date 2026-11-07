@@ -15,7 +15,7 @@ public sealed class CandidateCapabilityTests
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
 
     [AvaloniaFact]
-    public void ServerDestinationKeepsLaunchDisabledForEveryAccountKind()
+    public async Task ServerDestinationIsPassedToSharedLaunchForEveryAccountKind()
     {
         var fake = new FakeLauncherService();
         using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
@@ -29,15 +29,16 @@ public sealed class CandidateCapabilityTests
                 vm.SelectedPage = vm.Home; Pump(window);
                 var selector = Find<ListBox>(window, "ServerSelector");
                 selector.SelectedItem = vm.Home.Servers.Single(s => s.Id == "smp"); Pump(window);
-                Assert.Contains("自动入服暂不可用", vm.Home.DestinationSummary);
-                Assert.False(vm.Instances.LaunchCommand.CanExecute(null));
+                Assert.Contains("启动后前往", vm.Home.DestinationSummary);
+                Assert.True(vm.Instances.LaunchCommand.CanExecute(null));
                 vm.Instances.ShowInstanceSettingsCommand.Execute(null); Pump(window);
-                Assert.False(Find<Button>(window, "LaunchGameButton").IsEffectivelyEnabled);
-                Assert.Contains("自动入服暂不可用", vm.Instances.LaunchPrerequisite);
-                Assert.Null(fake.LastLaunchServerId);
+                Assert.True(Find<Button>(window, "LaunchGameButton").IsEffectivelyEnabled);
+                await vm.Instances.LaunchCommand.ExecuteAsync(null); Pump(window);
+                Assert.Equal("smp", fake.LastLaunchServerId);
+                fake.Publish(fake.Snapshot with { State = "Ready", GameProcessId = null }); Pump(window);
                 vm.Home.SelectedServer = vm.Home.Servers.Single(s => s.Id == "none"); Pump(window);
                 Assert.True(vm.Instances.LaunchCommand.CanExecute(null));
-                Assert.True(Find<Button>(window, "LaunchGameButton").IsEffectivelyEnabled);
+                Assert.True(Find<Button>(window, "HomeLaunchButton").IsEffectivelyEnabled);
             }
         }
         finally { window.Close(); }

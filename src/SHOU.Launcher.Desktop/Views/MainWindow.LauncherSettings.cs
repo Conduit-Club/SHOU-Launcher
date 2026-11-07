@@ -32,7 +32,6 @@ public partial class MainWindow
             if (startupPreferencesApplied || launcherSettingsOwner is not { } vm) return; startupPreferencesApplied = true;
             var p = vm.Settings.SavedPresentation;
             if (p.ShowStartupLogo) { this.FindControl<Border>("StartupLogoOverlay")!.IsVisible = true; await Task.Delay(700); this.FindControl<Border>("StartupLogoOverlay")!.IsVisible = false; }
-            if (vm.Snapshot.Settings.Launcher?.CheckUpdatesOnStartup == true) _ = vm.Settings.CheckUpdatesCommand.ExecuteAsync(null);
             if (p.NotifyClubUpdates) await CheckStartupClubNotice(vm);
         };
     }

@@ -55,10 +55,6 @@ try {
         $archive = Join-Path $output ($identity.ArchiveStem + '.zip')
         $hash = (Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash.ToLowerInvariant()
         "$hash  $([IO.Path]::GetFileName($archive))" | Set-Content -LiteralPath "$archive.sha256" -Encoding ascii
-        $releaseManifest = [ordered]@{ format='SHOU-Desktop-Release-v1'; product='SHOU.Launcher.Desktop'; runtime=$RuntimeIdentifier;
-            sourceSha=$info.source_sha; selfContained=$true; avalonia=$info.avalonia;
-            package=[ordered]@{name=[IO.Path]::GetFileName($archive);bytes=(Get-Item -LiteralPath $archive).Length;sha256=$hash} }
-        $releaseManifest | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath (Join-Path $output ("SHOU-Launcher-$RuntimeIdentifier-release.json")) -Encoding utf8NoBOM
         $finalOwner = if ($RuntimeIdentifier -eq 'osx-arm64') { Join-Path $output 'SHOU Launcher.app/Contents/MacOS/SHOU.Launcher.Core.dll' } else { Join-Path $output 'SHOU Launcher/SHOU.Launcher.Core.dll' }
         if ((Get-FileHash $owner).Hash -ne (Get-FileHash $finalOwner).Hash) { throw 'Final package configuration owner mismatch.' }
         $null = & (Join-Path $PSScriptRoot 'Assert-ClientCredentials.ps1') -AssemblyPath $finalOwner

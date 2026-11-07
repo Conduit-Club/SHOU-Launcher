@@ -117,7 +117,8 @@ public sealed partial class InstancesPageViewModel
     public bool IsServerDraftDirty => _worldDraft.ServerDirty;
     public bool HasServerConflict => _worldDraft.ServerConflict;
     public string ServerDraftStatus => _worldDraft.ServerConflict ? "服务器文件已有变化或保存未完成，当前草稿仍保留；请核对后显式放弃并重新读取。" : _worldDraft.ServerDirty ? "有未保存的服务器修改；仅点击“保存服务器”后写入文件。" : "当前没有未保存的服务器修改。";
-    public string ServerListStatus => _worldDraft.ServersPhase switch { WorldReadPhase.Unread => "尚未读取当前实例的服务器列表。", WorldReadPhase.Loading => "正在读取 servers.dat…", WorldReadPhase.Error => "读取失败；原文件保持不变。", _ => InstanceServerRows.Count == 0 ? "此实例尚无服务器，可添加到草稿后显式保存。" : $"服务器（{InstanceServerRows.Count}）；在线状态与快捷连接尚未接入。" };
+    public string ServerListStatus => _worldDraft.ServersPhase switch { WorldReadPhase.Unread => "尚未读取当前实例的服务器列表。", WorldReadPhase.Loading => "正在读取 servers.dat…", WorldReadPhase.Error => "读取失败；原文件保持不变。", _ => InstanceServerRows.Count == 0 ? "此实例尚无服务器，可添加到草稿后显式保存。" : $"服务器（{InstanceServerRows.Count}）；可直接启动当前实例并连接已保存的服务器。" };
+    public AsyncRelayCommand<InstanceServerDraftViewModel> ConnectInstanceServerCommand { get; private set; } = null!;
     public bool IsServerEditorOpen => IsInstanceServersPage && _worldDraft.EditorOpen;
     public bool IsEditingExistingServer => _worldDraft.EditingServer is not null;
     public string ServerEditorTitle => _worldDraft.EditingServer is null ? "添加服务器" : "修改服务器";
@@ -147,6 +148,16 @@ public sealed partial class InstancesPageViewModel
     public void InitializeWorldWorkspace()
     {
         if (_worldWorkspaceReady) return;
+        ConnectInstanceServerCommand = new(async row =>
+        {
+            if (row is null || SelectedInstance is not { } instance || Service is not IServerLaunchService service) return;
+            var destination = row.Address;
+            await Owner.RunLaunchAsync(instance, async ct =>
+            {
+                if (!instance.Installed) await Service.InstallInstanceAsync(instance.Id, ct);
+                ct.ThrowIfCancellationRequested(); await service.LaunchToServerAsync(instance.Id, destination, ct);
+            });
+        }, row => row is not null && CanLaunch() && !IsServerDraftDirty && !IsServerEditorOpen && Service is IServerLaunchService);
         RefreshWorldsCommand = AsyncCommand(RefreshWorldsAsync, () => WorldWorkspaceCanRead);
         RefreshWorldDatapacksCommand = AsyncCommand(RefreshWorldPacksAsync, () => WorldWorkspaceCanRead && SelectedWorldRow is { HasError: false });
         ShowWorldInformationCommand = Command(() => { _worldDraft.WorldRoute = "info"; NotifyWorldPresentation(); }, () => SelectedWorldRow is { HasError: false });
@@ -214,7 +225,7 @@ public sealed partial class InstancesPageViewModel
     private void NotifyWorldCommands()
     {
         if (!_worldWorkspaceReady) return;
-        foreach (var command in new IRelayCommand[] { RefreshWorldsCommand, RefreshWorldDatapacksCommand, ShowWorldInformationCommand, ShowWorldDatapacksCommand, BackFromWorldCommand, OpenWorldSavesDirectoryCommand, OpenWorldDirectoryCommand, OpenWorldDatapacksDirectoryCommand, SelectAllWorldDatapacksCommand, ClearWorldDatapackSelectionCommand, RefreshInstanceServersCommand, DiscardInstanceServersCommand, SaveInstanceServersCommand, AddInstanceServerCommand, EditInstanceServerCommand, RemoveInstanceServerCommand, ApplyInstanceServerDraftCommand, CancelInstanceServerEditorCommand }) command.NotifyCanExecuteChanged();
+        foreach (var command in new IRelayCommand[] { ConnectInstanceServerCommand, RefreshWorldsCommand, RefreshWorldDatapacksCommand, ShowWorldInformationCommand, ShowWorldDatapacksCommand, BackFromWorldCommand, OpenWorldSavesDirectoryCommand, OpenWorldDirectoryCommand, OpenWorldDatapacksDirectoryCommand, SelectAllWorldDatapacksCommand, ClearWorldDatapackSelectionCommand, RefreshInstanceServersCommand, DiscardInstanceServersCommand, SaveInstanceServersCommand, AddInstanceServerCommand, EditInstanceServerCommand, RemoveInstanceServerCommand, ApplyInstanceServerDraftCommand, CancelInstanceServerEditorCommand }) command.NotifyCanExecuteChanged();
     }
     private void FilterWorldRows(InstanceWorldDraft? target = null)
     {

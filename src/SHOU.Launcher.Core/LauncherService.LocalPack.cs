@@ -38,14 +38,16 @@ public sealed partial class LauncherService
             var result = await ImportModrinthPackAsync(new(request.ArchivePath, request.ExpectedSha256, request.InstanceName, request.OptionalClientFiles), cancellationToken).ConfigureAwait(false);
             return new(result.Instance, result.InstalledFiles, read.Inspection.Warnings, result);
         }
-        if (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge) throw new NotSupportedException(read.Inspection.CapabilityReason ?? "此格式尚未支持导入。");
+        var isShou = read.Inspection.Format == LocalPackFormat.ShouExport && read.Inspection.CanImport;
+        if (!isShou && (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge)) throw new NotSupportedException(read.Inspection.CapabilityReason ?? "此格式尚未支持导入。");
         if (request.OptionalClientFiles is { Count: > 0 }) throw new NotSupportedException("本轮 CurseForge ZIP 仅导入 required 文件；可选文件不接受额外路径选择。");
-        if (!localPackPlans.TryGetValue(request.ExpectedSha256, out var plan))
+        LocalPackPlan? plan = isShou ? new([], read.Inspection.Warnings) : null;
+        if (!isShou && !localPackPlans.TryGetValue(request.ExpectedSha256, out plan))
         {
             var inspection = await InspectLocalPackAsync(request.ArchivePath, cancellationToken).ConfigureAwait(false);
             if (!inspection.CanImport || !localPackPlans.TryGetValue(request.ExpectedSha256, out plan)) throw new InvalidOperationException(inspection.CapabilityReason ?? "整合包文件尚未全部核实。");
         }
-        var capturedPlan = plan; LocalPackImportResult? imported = null;
+        var capturedPlan = plan!; LocalPackImportResult? imported = null;
         await ExecuteAsync("Installing", async ct =>
         {
             var root = Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory; EnsureIsolatedGamePath(root); VerifiedDownloader.RejectLink(root); Directory.CreateDirectory(root);
@@ -56,7 +58,8 @@ public sealed partial class LauncherService
             {
                 await RunContentTransferAsync("local-pack:" + Guid.NewGuid().ToString("N"), token => ImportLocalPackAsync(request, token), async token =>
                 {
-                    var inspection = await new LocalPackArchive().StageCurseForgeAsync(request.ArchivePath, request.ExpectedSha256, stage, capturedPlan.Files,
+                    var inspection = isShou ? await ShouPackArchive.StageAsync(request.ArchivePath, request.ExpectedSha256, stage, token).ConfigureAwait(false)
+                        : await new LocalPackArchive().StageCurseForgeAsync(request.ArchivePath, request.ExpectedSha256, stage, capturedPlan.Files,
                         (file, path, transferToken) => resolver.DownloadAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), transferToken), token).ConfigureAwait(false);
                     var profile = inspection.Loader == "fabric" ? await new FabricMetadataProvider(http, Paths.CacheDirectory, Sources).CacheProfileAsync(inspection.GameVersion, inspection.LoaderVersion!, token).ConfigureAwait(false) : inspection.GameVersion;
                     var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination, Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);

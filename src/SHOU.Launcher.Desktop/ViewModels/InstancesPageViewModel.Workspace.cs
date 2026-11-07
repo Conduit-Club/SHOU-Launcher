@@ -55,6 +55,7 @@ public sealed partial class InstancesPageViewModel
             ActivateWorldWorkspace(value.Key);
             _pendingContentRefresh = IsFileSection;
             ScheduleContentRefresh();
+            ScheduleComponentRefresh();
         }
     }
     public bool IsOverview => !IsSelection && SelectedSection?.Key == "overview";
@@ -155,6 +156,7 @@ public sealed partial class InstancesPageViewModel
             _instanceDraftDirty = false;
         }
         NotifyWorkspace();
+        ScheduleComponentRefresh();
     }
     private void FilterInstances()
     {

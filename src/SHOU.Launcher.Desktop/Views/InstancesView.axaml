@@ -100,7 +100,17 @@
               <TextBlock Text="{Binding RuntimeDraftSummary}" Classes="muted" LineHeight="16" FontSize="11"/>
             </StackPanel></Border>
           </StackPanel>
-          <StackPanel IsVisible="{Binding IsModify}" Spacing="14"><Border Classes="card"><StackPanel Spacing="10"><TextBlock Text="{loc:Loc tdda9d19277377e4f}" Classes="sectionTitle" ToolTip.Tip="{Binding CapabilityReason}"/><Button Content="{loc:Loc ta7d8b0fac0530c5d}" Command="{Binding InstallCommand}"/><Button Content="{loc:Loc t6cc6d10d1c2de003}" Command="{Binding Root.ShowDownloadsCommand}"/></StackPanel></Border></StackPanel>
+          <StackPanel IsVisible="{Binding IsModify}" Spacing="14">
+            <Border Classes="card"><StackPanel Spacing="12">
+              <Grid ColumnDefinitions="*,Auto"><TextBlock Text="实例组件" Classes="sectionTitle"/><views:LoadingGlyph Grid.Column="1" IsVisible="{Binding IsComponentBusy}" Width="28" Height="28" Foreground="{DynamicResource ClubAccent}"/></Grid>
+              <Grid ColumnDefinitions="80,*"><TextBlock Text="加载器" VerticalAlignment="Center"/><ComboBox Name="ComponentLoaderChoice" Grid.Column="1" ItemsSource="{Binding ComponentLoaderChoices}" SelectedItem="{Binding ComponentLoader}" IsEnabled="{Binding !IsComponentBusy}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
+              <Grid ColumnDefinitions="80,*" IsVisible="{Binding ComponentNeedsVersion}"><TextBlock Text="版本" VerticalAlignment="Center"/><ComboBox Name="ComponentVersionChoice" Grid.Column="1" ItemsSource="{Binding ComponentVersions}" SelectedItem="{Binding ComponentVersion}" IsEnabled="{Binding !IsComponentBusy}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Version}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
+              <CheckBox Name="ConfirmComponentChange" Content="确认修改所选实例的加载器" IsChecked="{Binding ConfirmComponentChange}" IsEnabled="{Binding !IsComponentBusy}" ToolTip.Tip="保留模组和资源文件。请先确认它们与新的加载器版本兼容。"/>
+              <WrapPanel><Button Name="ChangeInstanceComponentButton" Content="应用修改" Command="{Binding ChangeInstanceComponentCommand}" Margin="0,0,8,0"/><Button Content="刷新" Command="{Binding RefreshComponentVersionsCommand}" Margin="0,0,8,0"/><Button Content="取消" Command="{Binding CancelComponentWorkCommand}" IsVisible="{Binding IsComponentBusy}"/></WrapPanel>
+              <TextBlock Text="{Binding ComponentFeedback}" TextWrapping="Wrap"/>
+            </StackPanel></Border>
+            <Border Classes="card"><Button Content="{loc:Loc ta7d8b0fac0530c5d}" Command="{Binding InstallCommand}"/></Border>
+          </StackPanel>
           <StackPanel IsVisible="{Binding IsExport}" Spacing="14"><Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="{loc:Loc ta5f60f01968f6b61}" Classes="sectionTitle" ToolTip.Tip="{loc:Loc t544148aa438ca527}"/><TextBlock Text="{loc:Loc te68f1ccd9cd2cd8d}" FontWeight="SemiBold"/>
             <CheckBox Content="{loc:Loc t83d2e0abb1be9fda}" IsChecked="{Binding IncludeWorlds}"/><Button Name="ExportInstanceButton" Content="{loc:Loc t88da633ca77352d5}" Command="{Binding ExportInstanceCommand}"/>
           </StackPanel></Border><Border Classes="card"><StackPanel Spacing="12"><TextBlock Text="{loc:Loc tdc4c94a1a3ea2d5e}" Classes="sectionTitle" ToolTip.Tip="{loc:Loc t58a5ad2bda3e2f92}"/>

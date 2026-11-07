@@ -1,5 +1,10 @@
 namespace SHOU.Launcher.Core.Abstractions;
 
+public interface IInstanceComponentService
+{
+    Task<GameInstance> ChangeInstanceLoaderAsync(string instanceId, string loader, string? loaderVersion, CancellationToken cancellationToken = default);
+}
+
 public sealed record LoaderVersionChoice(string Loader, string Version, bool Stable, string? Detail = null, bool CanInstall = true);
 public interface ILoaderInstanceService
 {

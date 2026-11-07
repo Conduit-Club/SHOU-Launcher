@@ -22,7 +22,7 @@ public sealed record LauncherSettings(string? GameRoot = null, string? JavaExecu
 public sealed record GameInstance(string Id, string Name, string VersionId, string GameDirectory,
     string? JavaExecutable = null, int? MemoryMiB = null, string Loader = "vanilla", string? LoaderVersion = null,
     bool Installed = false, string? GameVersionId = null, InstancePresentation? Presentation = null,
-    GameLaunchOptions? LaunchOptions = null, ExternalInstanceOrigin? Origin = null);
+    GameLaunchOptions? LaunchOptions = null, ExternalInstanceOrigin? Origin = null, bool RuntimeProfileOverride = false);
 public sealed record InstancePresentation(string Icon = "auto", string Category = "auto", string Description = "",
     bool Favorite = false, long LaunchCount = 0);
 public enum AccountKind { Offline, Microsoft, Yggdrasil }

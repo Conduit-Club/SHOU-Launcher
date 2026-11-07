@@ -11,6 +11,28 @@ namespace SHOU.Launcher.Core.Tests;
 [TestClass]
 public sealed class LaunchPlanTests
 {
+    [TestMethod, DataRow("windows"), DataRow("osx")]
+    public void QuickConnectUsesDeclaredMinecraftArgumentsAndKeepsCredentialsRedacted(string os)
+    {
+        var input = Inputs(os); var args = input.Version.Metadata["arguments"]!["game"]!.AsArray();
+        args.Add(new JsonObject { ["rules"] = new JsonArray(new JsonObject { ["action"] = "allow", ["features"] = new JsonObject { ["is_quick_play_multiplayer"] = true } }), ["value"] = new JsonArray("--quickPlayMultiplayer", "${quickPlayMultiplayer}") });
+        var plan = LaunchPlanBuilder.Build(input with { ServerAddress = "smp.shoumc.com" });
+        var index = plan.Arguments.ToList().IndexOf("--quickPlayMultiplayer");
+        Assert.IsTrue(index >= 0); Assert.AreEqual("smp.shoumc.com", plan.Arguments[index + 1]); Assert.IsFalse(plan.Arguments.Contains("--server"));
+        Assert.IsFalse(JsonSerializer.Serialize(plan.ToRedactedReport()).Contains("fake_sensitive_token", StringComparison.Ordinal));
+        Assert.IsFalse(LaunchPlanBuilder.Build(input).Arguments.Contains("--quickPlayMultiplayer"));
+    }
+    [TestMethod]
+    public void LegacyQuickConnectUsesSeparateHostAndPortAndRejectsConflictingDestinations()
+    {
+        var input = Inputs("windows") with { ServerAddress = "[::1]:30000" };
+        var plan = LaunchPlanBuilder.Build(input); var argv = plan.Arguments.ToList();
+        Assert.AreEqual("::1", argv[argv.IndexOf("--server") + 1]); Assert.AreEqual("30000", argv[argv.IndexOf("--port") + 1]);
+        Assert.ThrowsExactly<ArgumentException>(() => LaunchPlanBuilder.Build(input with { ExtraGameArguments = ["--quickPlaySingleplayer", "world"] }));
+    }
+    [TestMethod, DataRow("https://example.com"), DataRow("host name"), DataRow("user@host"), DataRow("host:0"), DataRow("host:65536"), DataRow("host?token=secret"), DataRow("::1")]
+    public void QuickConnectRejectsAddressesThatCouldChangeLaunchSemantics(string address)
+        => Assert.ThrowsExactly<ArgumentException>(() => ServerLaunchPolicy.Parse(address));
     private static JsonObject Metadata() => JsonNode.Parse("""
         {"id":"1.21.1","type":"release","mainClass":"net.minecraft.client.main.Main","javaVersion":{"majorVersion":21,"component":"java-runtime-delta"},
         "libraries":[

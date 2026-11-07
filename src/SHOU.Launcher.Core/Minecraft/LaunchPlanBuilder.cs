@@ -14,12 +14,13 @@ public sealed record LaunchInputs(ResolvedVersion Version, JavaInstallation Java
     string NativesDirectory, string ClientJar, string AssetIndexId, int MemoryMiB,
     IReadOnlyList<string>? LegacyExtractions = null, IReadOnlyList<string>? ExtraJvmArguments = null, string? TemporaryDirectory = null,
     int? WindowWidth = null, int? WindowHeight = null, bool Fullscreen = false, int? MinimumMemoryMiB = null, string? CustomInfo = null,
-    IReadOnlyList<string>? ExtraGameArguments = null);
+    IReadOnlyList<string>? ExtraGameArguments = null, string? ServerAddress = null);
 
 public static class LaunchPlanBuilder
 {
     public static LaunchPlan Build(LaunchInputs input)
     {
+        input = ServerLaunchPolicy.Configure(input);
         if (!input.Java.IsUsable) throw new InvalidOperationException("Selected Java did not pass probe.");
         if (input.Java.MajorVersion != input.Version.RequiredJavaMajor) throw new InvalidOperationException($"Version metadata requires Java {input.Version.RequiredJavaMajor}; selected Java is {input.Java.MajorVersion}.");
         if (input.Context.JavaArchitecture != input.Java.RuntimeArchitecture) throw new InvalidOperationException("Native rule architecture differs from actual selected Java.");
@@ -44,7 +45,9 @@ public static class LaunchPlanBuilder
             ["natives_directory"] = Path.GetFullPath(input.NativesDirectory), ["library_directory"] = Path.GetFullPath(input.LibrariesDirectory),
             ["classpath"] = string.Join(input.Context.ClasspathSeparator, classpath), ["classpath_separator"] = input.Context.ClasspathSeparator,
             ["launcher_name"] = "SHOU-Launcher", ["launcher_version"] = "1.5.0", ["clientid"] = input.Identity.ClientId ?? "",
-            ["auth_xuid"] = input.Identity.Xuid ?? "", ["resolution_width"] = (input.WindowWidth ?? 960).ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["auth_xuid"] = input.Identity.Xuid ?? "", ["quickPlayPath"] = Path.Combine(input.TemporaryDirectory ?? input.GameDirectory, "quick-play.json"),
+            ["quickPlayMultiplayer"] = input.ServerAddress ?? "", ["quickPlaySingleplayer"] = "", ["quickPlayRealms"] = "",
+            ["resolution_width"] = (input.WindowWidth ?? 960).ToString(System.Globalization.CultureInfo.InvariantCulture),
             ["resolution_height"] = (input.WindowHeight ?? 600).ToString(System.Globalization.CultureInfo.InvariantCulture)
         };
         string Expand(string argument) => Regex.Replace(argument, @"\$\{([^}]+)\}", match => values.TryGetValue(match.Groups[1].Value, out var value)

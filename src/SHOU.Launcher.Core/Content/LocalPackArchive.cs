@@ -41,8 +41,9 @@ public sealed class LocalPackArchive
         }
         if (marker == "shou-instance.json")
         {
+            if (root.GetProperty("schemaVersion").GetInt32() == 2) return await ShouPackArchive.ReadAsync(archive, root, sha256, null, ct).ConfigureAwait(false);
             if (root.GetProperty("schemaVersion").GetInt32() != 1) throw new InvalidDataException("SHOU 导出格式版本不受支持。");
-            archive.Verify(); return Blocked(LocalPackFormat.ShouExport, Text(root, "Name"), sha256, "已识别 SHOU 实例导出；本轮未实现其反向导入，不会当作其他包格式安装。");
+            archive.Verify(); return Blocked(LocalPackFormat.ShouExport, Text(root, "Name"), sha256, "已识别 SHOU 实例导出；历史 v1 缺少精确文件校验清单，请使用新版重新导出。");
         }
         if (Text(root, "manifestType") != "minecraftModpack" || root.GetProperty("manifestVersion").GetInt32() != 1) throw new InvalidDataException("manifest.json 不是支持的 CurseForge Minecraft 整合包清单。");
         var minecraft = root.GetProperty("minecraft"); var gameVersion = IO.SafePath.Identifier(Text(minecraft, "version")); var name = Text(root, "name");

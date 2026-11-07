@@ -74,71 +74,8 @@ public static class InstanceWorkspace
         var target = SafePath.Within(instance.GameDirectory, next);
         File.Move(source, target, false);
     }
-    public static async Task<string> ExportAsync(GameInstance instance, string outputDirectory, bool includeWorlds, CancellationToken ct)
-    {
-        RejectLiteralLink(instance.GameDirectory, true);
-        var root = SafePath.Canonical(instance.GameDirectory);
-        var files = new List<(string Full, string Relative, long Size)>();
-        foreach (var folderName in new[] { "mods", "resourcepacks", "shaderpacks", "config", "schematics", "saves" })
-        {
-            if (folderName == "saves" && !includeWorlds) continue;
-            RejectLiteralLink(Path.Combine(root, folderName), true);
-            var folder = SafePath.Within(root, folderName);
-            if (!System.IO.Directory.Exists(folder)) continue;
-            void Visit(string current, string prefix, int depth)
-            {
-                ct.ThrowIfCancellationRequested();
-                if (depth > 24) throw new IOException("实例文件夹嵌套过深。");
-                foreach (var item in new DirectoryInfo(current).EnumerateFileSystemInfos())
-                {
-                    if (item.LinkTarget is not null || (item.Attributes & FileAttributes.ReparsePoint) != 0) continue;
-                    var relative = prefix + "/" + item.Name;
-                    var safe = SafePath.Within(root, relative);
-                    if (item is DirectoryInfo) Visit(safe, relative, depth + 1);
-                    else files.Add((safe, relative, ((FileInfo)item).Length));
-                    if (files.Count > 20000) throw new IOException("导出文件数量超过限制。");
-                }
-            }
-            Visit(folder, folderName, 0);
-        }
-        foreach (var name in new[] { "options.txt", "servers.dat" })
-        {
-            RejectLiteralLink(Path.Combine(root, name), false);
-            var path = SafePath.Within(root, name); var info = new FileInfo(path);
-            if (info.Exists && info.LinkTarget is null) files.Add((path, name, info.Length));
-        }
-        var total = files.Sum(f => f.Size);
-        if (total > 2L * 1024 * 1024 * 1024) throw new IOException("导出内容超过2 GiB，请减少导出范围。");
-        System.IO.Directory.CreateDirectory(outputDirectory);
-        var destination = SafePath.Within(outputDirectory, "SHOU-" + SafePath.Identifier(instance.Id) + "-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss") + ".zip");
-        var temp = SafePath.Within(outputDirectory, ".export-" + Guid.NewGuid().ToString("N"));
-        try
-        {
-            await using (var stream = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, true))
-            {
-                using var zip = new ZipArchive(stream, ZipArchiveMode.Create, true);
-                foreach (var item in files)
-                {
-                    ct.ThrowIfCancellationRequested();
-                    RejectLiteralLink(Path.Combine(root, item.Relative.Split('/')[0]), item.Relative.Contains('/'));
-                    RejectLiteralLink(Path.Combine(root, item.Relative), false);
-                    if (!string.Equals(SafePath.Within(root, item.Relative), item.Full, StringComparison.Ordinal) || new FileInfo(item.Full).LinkTarget is not null)
-                        throw new IOException("导出期间实例路径发生变化。");
-                    var entry = zip.CreateEntry(item.Relative, CompressionLevel.Fastest);
-                    await using var output = entry.Open();
-                    await using var input = new FileStream(item.Full, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true);
-                    if (input.Length != item.Size) throw new IOException("导出期间文件发生变化。");
-                    await input.CopyToAsync(output, ct).ConfigureAwait(false);
-                }
-                var manifest = zip.CreateEntry("shou-instance.json");
-                await using var metadata = manifest.Open();
-                await JsonSerializer.SerializeAsync(metadata, new { schemaVersion = 1, instance.Name, instance.VersionId,
-                    instance.Loader, instance.LoaderVersion, instance.MemoryMiB, exportedAt = DateTimeOffset.UtcNow }, cancellationToken: ct).ConfigureAwait(false);
-            }
-            File.Move(temp, destination, false); return destination;
-        }
-        finally { if (File.Exists(temp)) File.Delete(temp); }
-    }
+    public static Task<string> ExportAsync(GameInstance instance, string outputDirectory, bool includeWorlds, CancellationToken ct)
+        => Content.ShouPackArchive.ExportAsync(instance, outputDirectory, includeWorlds, ct);
     private static void RejectLiteralLink(string path, bool directory)
     {
         FileSystemInfo info = directory ? new DirectoryInfo(path) : new FileInfo(path);

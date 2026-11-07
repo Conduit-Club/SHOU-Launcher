@@ -160,36 +160,39 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     }
     public Task InstallInstanceAsync(string instanceId, CancellationToken cancellationToken = default) => ExecuteAsync("Installing", async ct =>
     { _ = await PrepareInstanceAsync(FindInstance(instanceId), ct).ConfigureAwait(false); }, cancellationToken);
-    private async Task<(InstalledGame Game, JavaInstallation Java)> PrepareInstanceAsync(GameInstance instance, CancellationToken ct)
+    private async Task<(InstalledGame Game, JavaInstallation Java)> PrepareInstanceAsync(GameInstance instance, CancellationToken ct, bool publishInstalled = true)
     {
         EnsureInstanceNotRunning(instance);
         SetLaunchStage("检查游戏文件");
         using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var ownership = downloadOwners.Begin(instance.Id); installCancellation = cancellation;
-        try { return await PrepareInstanceCoreAsync(instance, cancellation.Token).ConfigureAwait(false); }
+        try { return await PrepareInstanceCoreAsync(instance, cancellation.Token, publishInstalled).ConfigureAwait(false); }
         finally { downloadOwners.End(ownership); installCancellation = null; }
     }
-    private async Task<(InstalledGame Game, JavaInstallation Java)> PrepareInstanceCoreAsync(GameInstance instance, CancellationToken ct)
+    private async Task<(InstalledGame Game, JavaInstallation Java)> PrepareInstanceCoreAsync(GameInstance instance, CancellationToken ct, bool publishInstalled)
     {
         EnsureIsolatedGamePath(instance.GameDirectory);
         if (instance.Loader is not ("vanilla" or "fabric" or "quilt" or "forge" or "neoforge")) throw new PlatformNotSupportedException("当前预览尚未实现此loader的processor链。");
         if (instance.Loader != "vanilla") _ = Instances.InstanceIdentity.GameVersion(instance);
         var resolver = new VersionMetadataResolver(http, downloader, Paths.CacheDirectory, Sources);
-        if (instance.Origin is null && instance.Loader is "forge" or "neoforge")
+        if ((instance.Origin is null || instance.RuntimeProfileOverride) && instance.Loader is "forge" or "neoforge")
         {
             var vanilla = await resolver.ResolveAsync(Instances.InstanceIdentity.GameVersion(instance), ct).ConfigureAwait(false);
             var processorJava = await SelectInstanceJavaAsync(instance, vanilla, ct).ConfigureAwait(false);
             await OfficialLoaders.EnsureInstalledAsync(instance, vanilla, processorJava, Context(processorJava), new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
         }
-        var version = instance.Origin is { } origin ? await Instances.ExistingInstanceReader.ResolveAsync(origin, instance.VersionId, Instances.InstanceIdentity.GameVersion(instance), ct).ConfigureAwait(false) : await resolver.ResolveAsync(instance.VersionId, ct).ConfigureAwait(false);
+        var version = instance.Origin is { } origin && !instance.RuntimeProfileOverride ? await Instances.ExistingInstanceReader.ResolveAsync(origin, instance.VersionId, Instances.InstanceIdentity.GameVersion(instance), ct).ConfigureAwait(false) : await resolver.ResolveAsync(instance.VersionId, ct).ConfigureAwait(false);
         ValidateLoaderProfile(instance, version);
         var java = await SelectInstanceJavaAsync(instance, version, ct).ConfigureAwait(false);
         var context = Context(java);
         var gameFiles = await new MinecraftInstaller(http, downloader, Paths.CacheDirectory, Sources).InstallAsync(version, context,
             instance.GameDirectory, new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
-        var installedInstances = Snapshot.Instances.Select(i => i.Id == instance.Id ? i with { Installed = true } : i).ToArray();
-        await PersistCandidateAsync(Snapshot with { Instances = installedInstances }, ct).ConfigureAwait(false);
-        Set(s => s with { Instances = installedInstances });
+        if (publishInstalled)
+        {
+            var installedInstances = Snapshot.Instances.Select(i => i.Id == instance.Id ? i with { Installed = true } : i).ToArray();
+            await PersistCandidateAsync(Snapshot with { Instances = installedInstances }, ct).ConfigureAwait(false);
+            Set(s => s with { Instances = installedInstances });
+        }
         return (gameFiles, java);
     }
     private async Task<JavaInstallation> SelectInstanceJavaAsync(GameInstance instance, ResolvedVersion version, CancellationToken ct)
@@ -233,7 +236,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         }, cancellationToken).ConfigureAwait(false);
         return plan!;
     }
-    private async Task<LaunchPlan> PlanAsync(GameInstance instance, InstalledGame installed, JavaInstallation java, CancellationToken ct)
+    private async Task<LaunchPlan> PlanAsync(GameInstance instance, InstalledGame installed, JavaInstallation java, CancellationToken ct, string? serverAddress = null)
     {
         SetLaunchStage("验证账户");
         var account = Snapshot.Accounts.FirstOrDefault(a => a.Id == Snapshot.SelectedAccountId) ?? throw new InvalidOperationException("请先选择账户或添加本地离线测试档案。");
@@ -270,7 +273,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
             installed.Assets.Id, memory, installed.LegacyExtractions, ExtraJvmArguments: GameSettingsPolicy.JvmArguments(options), TemporaryDirectory: temporary,
             WindowWidth: options.WindowWidth ?? Snapshot.Settings.GameWindowWidth, WindowHeight: options.WindowHeight ?? Snapshot.Settings.GameWindowHeight,
             Fullscreen: options.Fullscreen ?? Snapshot.Settings.GameFullscreen, MinimumMemoryMiB: options.LockMemory ? memory : options.MinimumMemoryMiB ?? Snapshot.Settings.MinimumMemoryMiB, CustomInfo: options.CustomInfo ?? Snapshot.Settings.CustomInfo,
-            ExtraGameArguments: GameSettingsPolicy.GameArguments(options.GameArguments)));
+            ExtraGameArguments: GameSettingsPolicy.GameArguments(options.GameArguments), ServerAddress: serverAddress));
     }
     private ProtectedJavaLaunch? ProtectPlan(LaunchPlan original)
     {
@@ -278,15 +281,22 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         var token = Snapshot.SelectedAccountId is { } id && sessions.TryGetValue(id, out var session) ? session.AccessToken : null;
         return ProtectedJavaLaunch.Prepare(original, javaBootstrap, Snapshot.Platform.MinecraftOS == "windows" ? ';' : ':', token);
     }
-    public Task LaunchAsync(string instanceId, string serverId = "none", CancellationToken cancellationToken = default) => ExecuteAsync("Launching", async ct =>
+    public Task LaunchAsync(string instanceId, string serverId = "none", CancellationToken cancellationToken = default) => ExecuteAsync("Launching", ct =>
     {
-        if (serverId != "none") throw new PlatformNotSupportedException("自动入服尚待连接验收，请先选择“只启动游戏”，进入游戏后使用多人游戏连接服务器。");
+        string? destination = null;
+        if (serverId != "none") destination = Snapshot.Servers.FirstOrDefault(s => s.Id == serverId)?.Address
+            ?? throw new ArgumentException("所选社团服务器不存在，请重新选择。");
+        return LaunchCoreAsync(instanceId, destination, ct);
+    }, cancellationToken);
+    private async Task LaunchCoreAsync(string instanceId, string? serverAddress, CancellationToken ct)
+    {
+        if (serverAddress is not null) serverAddress = ServerLaunchPolicy.Parse(serverAddress).Address;
         var instance = FindInstance(instanceId);
         EnsureInstanceNotRunning(instance);
         var account = Snapshot.Accounts.FirstOrDefault(a => a.Id == Snapshot.SelectedAccountId);
         Set(s => s with { LaunchActivity = new(instance.Id, instance.Name, "准备游戏", account?.Kind == AccountKind.Microsoft ? "微软正版验证" : account?.Kind == AccountKind.Yggdrasil ? "外置账户验证" : "离线角色") });
         var prepared = await PrepareInstanceAsync(instance, ct).ConfigureAwait(false);
-        var original = await PlanAsync(instance, prepared.Game, prepared.Java, ct).ConfigureAwait(false);
+        var original = await PlanAsync(instance, prepared.Game, prepared.Java, ct, serverAddress).ConfigureAwait(false);
         // The verified Java bootstrap owns output after handoff, including when the launcher exits.
         if (javaBootstrap is not null)
         {
@@ -336,7 +346,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         catch { await process.StopAsync().ConfigureAwait(false); await process.DisposeAsync().ConfigureAwait(false); games.TryRemove(instanceId, out _); RefreshGameSessions(); throw; }
         Log("Info", "已启动本次Java游戏进程，PID=" + process.ProcessId + "；主菜单仍需独立真实观察。");
         await RecordInstanceLaunchAsync(instanceId).ConfigureAwait(false);
-    }, cancellationToken);
+    }
     private async Task ObserveGameAsync(string instanceId, IManagedProcess process, ProcessLogCollector collector)
     {
         try

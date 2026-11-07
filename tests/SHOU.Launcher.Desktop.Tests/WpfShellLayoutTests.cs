@@ -64,7 +64,7 @@ public sealed class WpfShellLayoutTests
             await vm.Home.RefreshServersCommand.ExecuteAsync(null); Pump(window);
             Assert.Equal("7", vm.Home.OnlinePlayerSummary);
             Find<ListBox>(window, "ServerSelector").SelectedItem = vm.Home.Servers.Single(s => s.Id == "smp"); Pump(window);
-            Assert.False(Find<Button>(window, "HomeLaunchButton").IsEffectivelyEnabled);
+            Assert.True(Find<Button>(window, "HomeLaunchButton").IsEffectivelyEnabled);
             vm.Home.SetPresentation(false, false, false, 0.6); Pump(window);
             Assert.False(Find<ListBox>(window, "ServerSelector").IsEffectivelyVisible);
             Assert.Equal(0.6, window.Opacity);

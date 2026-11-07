@@ -272,7 +272,7 @@ public sealed class LauncherUiTests
     }
 
     [AvaloniaFact]
-    public void UnrelatedProgressPreservesServerSelectionAndOfflineSafetyGate()
+    public void UnrelatedProgressPreservesServerSelectionAndQuickConnect()
     {
         var fake = new FakeLauncherService();
         using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
@@ -280,11 +280,11 @@ public sealed class LauncherUiTests
         try
         {
             Find<ListBox>(window, "ServerSelector").SelectedItem = vm.Home.Servers.Single(s => s.Id == "smp"); Pump(window);
-            Assert.False(vm.Instances.LaunchCommand.CanExecute(null));
+            Assert.True(vm.Instances.LaunchCommand.CanExecute(null));
             fake.Publish(fake.Snapshot with { Downloads = [new("progress", "后台资源", "Downloading", 1, 10)] }); Pump(window);
             Assert.Equal("smp", vm.Home.SelectedServerId);
             Assert.Equal("smp", ((ServerChoice)Find<ListBox>(window, "ServerSelector").SelectedItem!).Id);
-            Assert.False(vm.Instances.LaunchCommand.CanExecute(null));
+            Assert.True(vm.Instances.LaunchCommand.CanExecute(null));
         }
         finally { window.Close(); }
     }

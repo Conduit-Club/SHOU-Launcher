@@ -62,7 +62,7 @@ public sealed class LauncherSettingsUiTests
         try
         {
             root.Settings.LockWindowSize = true; root.Settings.LightAccent = "garnet"; root.Settings.TitleMode = "text"; root.Settings.CustomTitleText = "R16 shell fixture";
-            root.Settings.LogLineLimit = 150; root.Settings.DisableHardwareAcceleration = true; root.Settings.UseDnsOverHttps = true; root.Settings.CheckUpdatesOnStartup = true;
+            root.Settings.LogLineLimit = 150; root.Settings.DisableHardwareAcceleration = true; root.Settings.UseDnsOverHttps = true;
             await root.Settings.SaveCommand.ExecuteAsync(null); Dispatcher.UIThread.RunJobs();
             Assert.False(window.CanResize); Assert.False(window.CanMaximize); Assert.Equal("R16 shell fixture", window.FindControl<TextBlock>("WindowBrandTitle")!.Text);
             var saved = new SettingsPresentationStore(service.Paths.DataDirectory).Load(); Assert.True(saved.LockWindowSize); Assert.Equal("garnet", saved.LightAccent);

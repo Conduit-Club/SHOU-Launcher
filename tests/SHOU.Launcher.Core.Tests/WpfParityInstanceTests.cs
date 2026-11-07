@@ -13,7 +13,7 @@ public sealed class WpfParityInstanceTests
     {
         var root = TestFiles.Root(); var game = Path.Combine(root, "game"); Directory.CreateDirectory(game);
         var source = Path.Combine(root, "fixture mod.jar"); await File.WriteAllTextAsync(source, "test-only archive bytes");
-        var instance = new GameInstance("fixture", "可移植实例", "1.21.1", game, Loader: "fabric");
+        var instance = new GameInstance("fixture", "可移植实例", "fabric-loader-0.16.14-1.21.1", game, Loader: "fabric", LoaderVersion: "0.16.14", GameVersionId: "1.21.1");
         await InstanceWorkspace.ImportAsync(instance, "mods", source, default);
         var mod = InstanceWorkspace.List(instance, "mods").Single(); Assert.IsTrue(mod.Enabled);
         InstanceWorkspace.ToggleMod(instance, mod.RelativePath, false);
