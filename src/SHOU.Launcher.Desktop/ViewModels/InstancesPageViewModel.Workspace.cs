@@ -64,7 +64,7 @@ public sealed partial class InstancesPageViewModel
     public bool IsExport => !IsSelection && SelectedSection?.Key == "export";
     public bool IsFileSection => !IsSelection && SelectedSection?.Key is "screenshots" or "mods" or "resourcepacks" or "shaders" or "schematics";
     public bool IsOtherSection => !IsSelection && !IsOverview && !IsInstanceSettings && !IsModify && !IsExport && !IsFileSection && SelectedSection?.Key is not ("worlds" or "servers");
-    public bool ModsUnsupported => SelectedSection?.Key == "mods" && SelectedInstance?.Loader == "vanilla";
+    public bool ModsUnsupported => SelectedSection?.Key == "mods" && SelectedInstance is { } instance && !InstanceIdentity.SupportsModDirectory(instance.Loader);
     public bool IsContentEmpty => ContentEntries.Count == 0;
     public bool CanImportContent => IsFileSection && SelectedSection.Key != "worlds" && !ModsUnsupported && CanEdit && !IsSelectedInstanceRunning && Service is IInstanceWorkspaceService;
     public string SectionTitle => SelectedSection?.Title ?? "实例";
@@ -161,7 +161,7 @@ public sealed partial class InstancesPageViewModel
     private void FilterInstances()
     {
         var query = SearchText.Trim();
-        var rows = Instances.Where(i => (!FavoritesOnly || i.Presentation?.Favorite == true) && (query.Length == 0 || (i.Name + " " + i.VersionId + " " + i.Loader + " " + i.Presentation?.Description + " " + i.Presentation?.Category).Contains(query, StringComparison.OrdinalIgnoreCase))).ToArray();
+        var rows = Instances.Where(i => (SelectedGameFolder?.Path is not { } folder || SameFolder(FolderOf(i), folder)) && (InstanceCategoryFilter == "隐藏" || CategoryOf(i) != "隐藏") && (InstanceCategoryFilter == "全部分类" || CategoryOf(i) == InstanceCategoryFilter) && (!FavoritesOnly || i.Presentation?.Favorite == true) && (query.Length == 0 || (i.Name + " " + DisplayGameVersion(i) + " " + i.VersionId + " " + i.Loader + " " + i.Presentation?.Description + " " + i.Presentation?.Category).Contains(query, StringComparison.OrdinalIgnoreCase))).OrderByDescending(i => i.Presentation?.Favorite == true).ThenBy(i => i.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
         if (!FilteredInstances.SequenceEqual(rows))
         {
             FilteredInstances.Clear(); foreach (var row in rows) FilteredInstances.Add(row);

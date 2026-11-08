@@ -180,6 +180,7 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         try
         {
             if (!Instances.SequenceEqual(snapshot.Instances)) { Instances.Clear(); foreach (var item in snapshot.Instances) Instances.Add(item); }
+            RefreshFolders();
             // Populate the bound list before selecting a newly published instance; otherwise ListBox writes null back.
             FilterInstances();
             SelectedInstance = Instances.FirstOrDefault(i => i.Id == snapshot.SelectedInstanceId);

@@ -33,7 +33,7 @@ public static class InstanceWorkspace
     public static bool Accepts(string kind, string name)
     {
         var extension = Path.GetExtension(name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) ? name[..^9] : name).ToLowerInvariant();
-        return kind switch { "mods" => extension == ".jar", "screenshots" => extension is ".png" or ".jpg" or ".jpeg",
+        return kind switch { "mods" => extension is ".jar" or ".litemod", "screenshots" => extension is ".png" or ".jpg" or ".jpeg",
             "resourcepacks" or "shaders" => extension == ".zip", "schematics" => extension is ".litematic" or ".schematic" or ".schem" or ".nbt", _ => false };
     }
     public static async Task ImportAsync(GameInstance instance, string kind, string source, CancellationToken ct)
@@ -42,7 +42,7 @@ public static class InstanceWorkspace
         var input = new FileInfo(source);
         if (!input.Exists || input.LinkTarget is not null || !Accepts(kind, input.Name)) throw new InvalidDataException("此文件不能导入所选类别。");
         if (input.Length > 512L * 1024 * 1024) throw new InvalidDataException("单个导入文件超过512 MiB限制。");
-        if (kind == "mods" && instance.Loader == "vanilla") throw new InvalidOperationException("原版实例无法加载模组，请先选择已安装加载器的实例。");
+        if (kind == "mods" && (!InstanceIdentity.SupportsModDirectory(instance.Loader) || input.Name.EndsWith(".litemod", StringComparison.OrdinalIgnoreCase) && instance.Loader != "liteloader")) throw new InvalidOperationException("此实例的加载器不支持该模组目录或文件类型，未导入。");
         var folder = Folder(instance.GameDirectory, kind); System.IO.Directory.CreateDirectory(folder);
         var target = SafePath.Within(folder, input.Name);
         if (File.Exists(target)) throw new IOException("同名文件已存在，原文件保留。");

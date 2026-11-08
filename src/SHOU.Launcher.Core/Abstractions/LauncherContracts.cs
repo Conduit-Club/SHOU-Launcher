@@ -24,7 +24,7 @@ public sealed record GameInstance(string Id, string Name, string VersionId, stri
     bool Installed = false, string? GameVersionId = null, InstancePresentation? Presentation = null,
     GameLaunchOptions? LaunchOptions = null, ExternalInstanceOrigin? Origin = null, bool RuntimeProfileOverride = false);
 public sealed record InstancePresentation(string Icon = "auto", string Category = "auto", string Description = "",
-    bool Favorite = false, long LaunchCount = 0);
+    bool Favorite = false, long LaunchCount = 0, string? IconImageSha256 = null);
 public enum AccountKind { Offline, Microsoft, Yggdrasil }
 public sealed record AccountProfile(string Id, AccountKind Kind, string DisplayName, string PlayerUuid,
     string? AuthenticationServer = null, bool Persisted = false, string Status = "本地档案",

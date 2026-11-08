@@ -14,6 +14,20 @@ namespace SHOU.Launcher.Desktop.Views;
 
 public partial class InstancesView
 {
+    private async void PickInstanceIcon_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not InstancesPageViewModel { SelectedInstance: { } instance } vm || !vm.CanEdit || TopLevel.GetTopLevel(this) is not Window owner) return;
+        try
+        {
+            var files = await owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "选择实例图标", AllowMultiple = false, FileTypeFilter = [new FilePickerFileType("图片") { Patterns = ["*.png", "*.jpg", "*.jpeg", "*.webp", "*.bmp"] }] });
+            if (files.Count == 0 || vm.SelectedInstance?.Id != instance.Id) return;
+            var path = files[0].TryGetLocalPath() ?? throw new IOException("请选择本机图片。");
+            var source = await Task.Run(() => InstanceIconCropModel.ReadImage(path));
+            if (vm.SelectedInstance?.Id != instance.Id) return;
+            await new InstanceIconCropWindow(source, bytes => vm.SaveCroppedInstanceIconAsync(instance.Id, bytes), () => vm.Root.CancelOperationCommand.Execute(null), () => vm.Root.ErrorMessage).ShowDialog(owner);
+        }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
     private async void PickExistingFolder_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not InstancesPageViewModel vm || !vm.CanEdit || vm.IsFolderBusy) return;

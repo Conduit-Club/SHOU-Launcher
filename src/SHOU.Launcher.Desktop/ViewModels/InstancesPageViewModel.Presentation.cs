@@ -13,7 +13,7 @@ public sealed partial class InstancesPageViewModel
     private string _presentationCategory = "自动", _presentationDescription = "";
     private string? _presentationInstanceId;
     private bool _presentationDirty, _presentationRefreshing, _descriptionEditorOpen, _presentationFavorite;
-    public IReadOnlyList<InstanceIconChoice> InstanceIcons { get; } = [new("auto", "自动"), new("minecraft", "Minecraft"), new("fabric", "Fabric"), new("quilt", "Quilt"), new("forge", "Forge"), new("neoforge", "NeoForge")];
+    public IReadOnlyList<InstanceIconChoice> InstanceIcons { get; } = [new("auto", "自动"), new("custom", "自定义图片"), new("minecraft", "Minecraft"), new("fabric", "Fabric"), new("quilt", "Quilt"), new("forge", "Forge"), new("neoforge", "NeoForge"), new("cleanroom", "Cleanroom"), new("legacyfabric", "Legacy Fabric"), new("optifine", "OptiFine"), new("labymod", "LabyMod"), new("liteloader", "LiteLoader"), new("grasspath", "草径"), new("cobblestone", "圆石"), new("commandblock", "命令方块"), new("redstonelamp", "红石灯"), new("goldblock", "金块"), new("redstoneblock", "红石块")];
     public ObservableCollection<string> InstanceCategories { get; } = ["自动", "常用", "整合包", "测试"];
     public InstanceIconChoice PresentationIcon { get => _presentationIcon; set { if (value is not null && SetProperty(ref _presentationIcon, value) && !_presentationRefreshing) PresentationChanged(); } }
     public string PresentationCategory { get => _presentationCategory; set { if (SetProperty(ref _presentationCategory, value ?? "自动") && !_presentationRefreshing) PresentationChanged(); } }

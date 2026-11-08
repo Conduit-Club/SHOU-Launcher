@@ -11,6 +11,11 @@ public sealed partial class InstancesPageViewModel
     private bool folderBusy;
     public ExistingInstanceCandidate? ExistingCandidate { get => existingCandidate; set { SetProperty(ref existingCandidate, value); NotifyCommands(); } }
     public bool HasExistingCandidates => ExistingCandidates.Count > 0;
+    public ObservableCollection<ExistingInstanceIssue> ExistingIssues { get; } = [];
+    public bool HasExistingIssues => ExistingIssues.Count > 0;
+    public bool CanBatchAttach => Service is IExistingInstanceBatchService;
+    public string AttachAllCaption => $"接入全部（{ExistingCandidates.Count}）";
+    public AsyncRelayCommand AttachAllExistingCommand { get; private set; } = null!;
     public bool IsFolderBusy { get => folderBusy; private set { SetProperty(ref folderBusy, value); NotifyCommands(); } }
     public AsyncRelayCommand AttachExistingCommand { get; private set; } = null!;
     public RelayCommand DismissExistingCommand { get; private set; } = null!;
@@ -19,6 +24,22 @@ public sealed partial class InstancesPageViewModel
     {
         ManageGameDirectoryCommand = Command(() => { Owner.Settings.SelectedSection = "manage"; Owner.ShowSettingsCommand.Execute(null); });
         DismissExistingCommand = Command(() => { ExistingCandidates.Clear(); ExistingCandidate = null; OnPropertyChanged(nameof(HasExistingCandidates)); });
+        AttachAllExistingCommand = AsyncCommand(async () =>
+        {
+            var candidates = ExistingCandidates.ToArray(); IsFolderBusy = true;
+            try
+            {
+                await Owner.RunControlAsync("接入实例目录", async ct =>
+                {
+                    var attached = await ((IExistingInstanceBatchService)Service).AttachExistingInstancesAsync(candidates, ct);
+                    ExistingCandidates.Clear(); ExistingCandidate = null; OnPropertyChanged(nameof(HasExistingCandidates));
+                    SearchText = ""; FavoritesOnly = false; InstanceCategoryFilter = "全部分类";
+                    SelectedGameFolder = GameFolders.FirstOrDefault(f => SameFolder(f.Path, candidates[0].Origin.MinecraftRoot)) ?? GameFolders.First();
+                    Feedback = $"已接入 {attached.Count} 个实例。";
+                });
+            }
+            finally { IsFolderBusy = false; }
+        }, () => CanEdit && !IsFolderBusy && HasExistingCandidates && CanBatchAttach);
         AttachExistingCommand = AsyncCommand(async () =>
         {
             var candidate = ExistingCandidate!; IsFolderBusy = true;
@@ -42,10 +63,12 @@ public sealed partial class InstancesPageViewModel
         {
             await Owner.RunControlAsync("读取实例目录", async ct =>
             {
-                var candidates = await existing.InspectInstanceFolderAsync(folder, ct);
+                ExistingInstanceInspection inspected = existing is IExistingInstanceBatchService batch ? await batch.InspectInstanceFolderDetailedAsync(folder, ct) : new(await existing.InspectInstanceFolderAsync(folder, ct), []);
+                var candidates = inspected.Candidates.Where(c => !Owner.Snapshot.Instances.Any(i => i.Origin is { } origin && SameFolder(origin.VersionDirectory, c.Origin.VersionDirectory))).ToArray();
                 ExistingCandidates.Clear(); foreach (var candidate in candidates) ExistingCandidates.Add(candidate);
+                ExistingIssues.Clear(); foreach (var issue in inspected.Issues) ExistingIssues.Add(issue); OnPropertyChanged(nameof(HasExistingIssues)); OnPropertyChanged(nameof(AttachAllCaption));
                 ExistingCandidate = ExistingCandidates.FirstOrDefault(); OnPropertyChanged(nameof(HasExistingCandidates));
-                Feedback = candidates.Count == 0 ? "所选目录中没有有效的 Minecraft 实例。" : "";
+                Feedback = candidates.Length == 0 ? inspected.Candidates.Count > 0 ? "所选目录中的实例已接入。" : "所选目录中没有有效的 Minecraft 实例。" : "";
             });
         }
         finally { IsFolderBusy = false; }

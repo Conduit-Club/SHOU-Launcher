@@ -92,5 +92,5 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
     public static bool Compatible(ContentRelease release, string kind, string gameVersion, string loader) =>
         release.GameVersions.Contains(gameVersion, StringComparer.Ordinal) &&
         (kind == "datapack" || release.Environment is not ("server_only" or "server_only_client_optional" or "dedicated_server_only")) &&
-        (kind != "mod" || loader != "vanilla" && release.Loaders.Contains(loader, StringComparer.OrdinalIgnoreCase));
+        (kind != "mod" || Instances.InstanceIdentity.SupportsModDirectory(loader) && release.Loaders.Contains(loader, StringComparer.OrdinalIgnoreCase));
 }

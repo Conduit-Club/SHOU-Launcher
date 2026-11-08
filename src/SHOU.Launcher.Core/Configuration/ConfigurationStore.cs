@@ -140,6 +140,7 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
             if (instance.GameVersionId is { } version) Core.IO.SafePath.Identifier(version);
             if (instance.MemoryMiB is < 512 or > 32768 || settings.MinimumMemoryMiB > (instance.MemoryMiB ?? settings.MemoryMiB)) throw new InvalidDataException("实例内存设置无效。");
             if (instance.Presentation is not { } presentation) continue;
+            if (presentation.IconImageSha256 is { } image && (image.Length != 64 || !image.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f'))) throw new InvalidDataException("实例图标身份无效。");
             if (presentation.Icon is null || presentation.Category is null || presentation.Description is null || presentation.LaunchCount < 0 || presentation.Icon.Length > 80 || presentation.Icon.Any(char.IsControl)
                 || presentation.Category.Length > 80 || presentation.Category.Any(char.IsControl) || presentation.Description.Length > 4096
                 || presentation.Description.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))) throw new InvalidDataException("实例个性化数据无效。");

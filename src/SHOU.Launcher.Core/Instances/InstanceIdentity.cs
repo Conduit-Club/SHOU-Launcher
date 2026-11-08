@@ -5,6 +5,7 @@ namespace SHOU.Launcher.Core.Instances;
 
 public static class InstanceIdentity
 {
+    public static bool SupportsModDirectory(string loader) => loader is "fabric" or "legacyfabric" or "quilt" or "forge" or "neoforge" or "cleanroom" or "liteloader";
     public static string GameVersion(GameInstance instance)
     {
         if (!string.IsNullOrWhiteSpace(instance.GameVersionId)) return SafePath.Identifier(instance.GameVersionId);

@@ -20,7 +20,14 @@ public interface IGameSettingsService { MemoryStatus? ReadMemoryStatus(); }
 public interface IGameWindowCustomization { Task SetGameWindowTitleAsync(IManagedProcess process, string title, CancellationToken cancellationToken); }
 public sealed record ExternalInstanceOrigin(string MinecraftRoot, string VersionDirectory, string OriginalVersionId, string MetadataSha256);
 public sealed record ExistingInstanceCandidate(string Name, string VersionId, string GameVersion, string Loader,
-    string? LoaderVersion, string GameDirectory, ExternalInstanceOrigin Origin);
+    string? LoaderVersion, string GameDirectory, ExternalInstanceOrigin Origin, InstancePresentation? Presentation = null);
+public sealed record ExistingInstanceIssue(string Name, string Reason);
+public sealed record ExistingInstanceInspection(IReadOnlyList<ExistingInstanceCandidate> Candidates, IReadOnlyList<ExistingInstanceIssue> Issues);
+public interface IExistingInstanceBatchService
+{
+    Task<ExistingInstanceInspection> InspectInstanceFolderDetailedAsync(string folder, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<GameInstance>> AttachExistingInstancesAsync(IReadOnlyList<ExistingInstanceCandidate> candidates, CancellationToken cancellationToken = default);
+}
 public interface IExistingInstanceService
 {
     Task<IReadOnlyList<ExistingInstanceCandidate>> InspectInstanceFolderAsync(string folder, CancellationToken cancellationToken = default);

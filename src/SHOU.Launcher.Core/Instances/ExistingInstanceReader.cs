@@ -16,6 +16,12 @@ public static class ExistingInstanceReader
     }
     public static async Task<IReadOnlyList<ExistingInstanceCandidate>> InspectAsync(string selected, CancellationToken ct = default)
     {
+        var result = await InspectDetailedAsync(selected, ct);
+        if (result.Candidates.Count == 0 && result.Issues.Count > 0) throw new InvalidDataException(result.Issues[0].Reason);
+        return result.Candidates;
+    }
+    public static async Task<ExistingInstanceInspection> InspectDetailedAsync(string selected, CancellationToken ct = default)
+    {
         if (!Path.IsPathFullyQualified(selected)) throw new ArgumentException("请选择完整的实例或 Minecraft 目录路径。");
         selected = Path.TrimEndingDirectorySeparator(Path.GetFullPath(selected)); VerifiedDownloader.RejectLink(selected);
         if (!Directory.Exists(selected)) throw new DirectoryNotFoundException("所选目录不存在。");
@@ -24,33 +30,58 @@ public static class ExistingInstanceReader
         var ownJson = Literal(selected, Path.GetFileName(selected) + ".json");
         var folders = File.Exists(ownJson) ? new[] { selected } : Directory.EnumerateDirectories(versions).Take(1001).ToArray();
         if (folders.Length > 1000) throw new IOException("实例目录超过 1000 个，请选择具体实例。");
-        List<ExistingInstanceCandidate> candidates = [];
+        List<ExistingInstanceCandidate> candidates = []; List<ExistingInstanceIssue> issues = [];
         foreach (var folder in folders)
         {
-            ct.ThrowIfCancellationRequested(); VerifiedDownloader.RejectLink(folder);
-            var name = Path.GetFileName(folder); var jsonPath = Literal(folder, name + ".json");
-            if (!File.Exists(jsonPath)) continue;
+            ct.ThrowIfCancellationRequested();
+            var name = Path.GetFileName(folder);
+            try
+            {
+            VerifiedDownloader.RejectLink(folder);
+            var jsonPath = Literal(folder, name + ".json"); if (!File.Exists(jsonPath)) continue;
             var metadata = await ReadAsync(jsonPath, ct);
             if (metadata["mainClass"] is null && metadata["inheritsFrom"] is null) continue;
             var parent = Directory.GetParent(folder)!;
-            var root = parent.Name == "versions" ? parent.Parent!.FullName : Directory.GetParent(versions)?.FullName ?? versions;
-            var game = (string?)metadata["clientVersion"] ?? (string?)metadata["inheritsFrom"] ?? (string?)metadata["id"] ?? name;
-            var libraryNames = (metadata["libraries"] as JsonArray ?? []).Select(n => (string?)n?["name"] ?? "").ToArray();
-            var loader = libraryNames.Any(n => n.StartsWith("net.fabricmc:fabric-loader:", StringComparison.Ordinal)) ? "fabric"
-                : libraryNames.Any(n => n.StartsWith("org.quiltmc:quilt-loader:", StringComparison.Ordinal)) ? "quilt"
-                : libraryNames.Any(n => n.StartsWith("net.neoforged:neoforge:", StringComparison.Ordinal)) ? "neoforge"
-                : libraryNames.Any(n => n.StartsWith("net.minecraftforge:forge:", StringComparison.Ordinal)) ? "forge" : "vanilla";
-            var prefix = loader switch { "fabric" => "net.fabricmc:fabric-loader:", "quilt" => "org.quiltmc:quilt-loader:", "forge" => "net.minecraftforge:forge:", "neoforge" => "net.neoforged:neoforge:", _ => "\0" };
-            var loaderVersion = libraryNames.FirstOrDefault(n => n.StartsWith(prefix, StringComparison.Ordinal))?[prefix.Length..];
+            var root = parent.Name == "versions" ? parent.Parent!.FullName : folder;
             var digest = await HashAsync(jsonPath, ct);
             var origin = new ExternalInstanceOrigin(root, folder, name, digest);
+            var localIdentity = "local-" + Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(Path.GetFullPath(folder) + "\0" + digest)))[..24];
+            var resolved = await ResolveAsync(origin, localIdentity, "local", ct);
+            metadata = resolved.Metadata;
+            var game = IO.SafePath.Identifier((string?)metadata["clientVersion"] ?? resolved.InheritanceChain[0]);
+            var libraryNames = (metadata["libraries"] as JsonArray ?? []).Select(n => (string?)n?["name"] ?? "").ToArray();
+            var coordinates = new[] { ("legacyfabric", "net.legacyfabric:fabric-loader:"), ("fabric", "net.fabricmc:fabric-loader:"), ("quilt", "org.quiltmc:quilt-loader:"), ("neoforge", "net.neoforged:neoforge:"), ("cleanroom", "com.cleanroommc:cleanroom:"), ("forge", "net.minecraftforge:forge:"), ("liteloader", "com.mumfrey:liteloader:"), ("labymod", "net.labymod:labymod:"), ("optifine", "optifine:OptiFine:") };
+            var detected = coordinates.FirstOrDefault(p => libraryNames.Any(n => n.StartsWith(p.Item2, StringComparison.Ordinal)));
+            var loader = detected.Item1 ?? "vanilla"; var prefix = detected.Item2 ?? "\0";
+            var loaderVersion = libraryNames.FirstOrDefault(n => n.StartsWith(prefix, StringComparison.Ordinal))?[prefix.Length..];
+            loaderVersion = loaderVersion?.Split(':')[0];
+            // Modern Forge profiles put the loader identity in public FML arguments instead of a forge library.
+            if (loader == "vanilla" && (string?)metadata["mainClass"] is "cpw.mods.bootstraplauncher.BootstrapLauncher" or "cpw.mods.modlauncher.Launcher" or "net.minecraftforge.bootstrap.ForgeBootstrap")
+            {
+                var arguments = metadata["arguments"]?["game"] as JsonArray ?? [];
+                string? Flag(string key)
+                {
+                    var positions = Enumerable.Range(0, Math.Max(0, arguments.Count - 1)).Where(i => arguments[i] is JsonValue v && v.TryGetValue<string>(out var text) && text == key).ToArray();
+                    if (positions.Length > 1) throw new InvalidDataException("FML 实例身份重复，请检查原版本信息。");
+                    return positions.Length == 1 && arguments[positions[0] + 1] is JsonValue value && value.TryGetValue<string>(out var result) ? result : null;
+                }
+                var neo = Flag("--fml.neoForgeVersion"); var forge = Flag("--fml.forgeVersion");
+                if (neo is null && forge is null || neo is not null && forge is not null) throw new InvalidDataException("无法核实 FML 实例的加载器身份。");
+                if (Flag("--fml.mcVersion") is { } declaredGame && declaredGame != game) throw new InvalidDataException("FML 实例的游戏版本不一致。");
+                loader = neo is null ? "forge" : "neoforge"; loaderVersion = IO.SafePath.Identifier(neo ?? forge!);
+            }
+            if (loader is "forge" or "optifine" && loaderVersion?.StartsWith(game + "-", StringComparison.Ordinal) == true) loaderVersion = loaderVersion[(game.Length + 1)..];
             // Mod/config-bearing profiles are isolated; plain profiles use the selected Minecraft root.
-            var isolated = new[] { "mods", "config", "saves", "options.txt" }.Any(n => Directory.Exists(Path.Combine(folder, n)) || File.Exists(Path.Combine(folder, n)));
-            var candidate = new ExistingInstanceCandidate(name, "local-" + digest[..24], game, loader, loaderVersion, isolated ? folder : root, origin);
-            _ = await ResolveAsync(candidate.Origin, candidate.VersionId, candidate.GameVersion, ct);
+            var isolated = loader != "vanilla" || new[] { "mods", "config", "saves", "options.txt" }.Any(n => Directory.Exists(Path.Combine(folder, n)) || File.Exists(Path.Combine(folder, n)));
+            var fallback = loader != "vanilla" ? loader : (string?)metadata["type"] switch { "snapshot" => "commandblock", "old_alpha" or "old_beta" => "cobblestone", _ => "auto" };
+            var presentation = await LegacyInstancePresentation.ReadAsync(folder, fallback, ct);
+            var candidate = new ExistingInstanceCandidate(name.Length > 160 ? name[..160] : name, localIdentity, game, loader, loaderVersion, isolated ? folder : root, origin, presentation);
             candidates.Add(candidate);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidDataException or ArgumentException or System.Text.Json.JsonException or InvalidOperationException)
+            { issues.Add(new(name, "实例元数据或继承链无法核实（" + ex.GetType().Name + "），原目录保持不变。")); }
         }
-        return candidates;
+        return new(candidates, issues);
     }
     public static async Task<ResolvedVersion> ResolveAsync(ExternalInstanceOrigin origin, string versionId, string gameVersion, CancellationToken ct)
     {

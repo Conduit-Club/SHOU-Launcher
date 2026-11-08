@@ -10,7 +10,9 @@ public static class AccountAppearancePng
 {
     public const int MaximumPngBytes = 2 * 1024 * 1024;
     private static ReadOnlySpan<byte> Signature => [137, 80, 78, 71, 13, 10, 26, 10];
-    public static AccountTextureImage Decode(ReadOnlyMemory<byte> input, bool cape = false)
+    public static AccountTextureImage Decode(ReadOnlyMemory<byte> input, bool cape = false) => DecodeCore(input, cape, false);
+    public static AccountTextureImage DecodeIcon(ReadOnlyMemory<byte> input) => DecodeCore(input, false, true);
+    private static AccountTextureImage DecodeCore(ReadOnlyMemory<byte> input, bool cape, bool icon)
     {
         if (input.Length is < 45 or > MaximumPngBytes || !input.Span.StartsWith(Signature)) throw Invalid("请选择有效的 PNG 纹理（最大 2 MiB）。");
         var png = input.ToArray(); var span = png.AsSpan(); var offset = 8; var chunks = 0;
@@ -31,7 +33,7 @@ public static class AccountAppearancePng
             {
                 if (chunks != 1 || size != 13) throw Invalid("PNG 首部无效。");
                 var w = BinaryPrimitives.ReadUInt32BigEndian(body); var h = BinaryPrimitives.ReadUInt32BigEndian(body[4..]);
-                if (cape ? w is < 64 or > 1024 || (w & (w - 1)) != 0 || h != w / 2 : w != 64 || h is not (32 or 64))
+                if (icon ? w is < 1 or > 2048 || h is < 1 or > 2048 : cape ? w is < 64 or > 1024 || (w & (w - 1)) != 0 || h != w / 2 : w != 64 || h is not (32 or 64))
                     throw Invalid(cape ? "披风须为 64×32 至 1024×512 的二倍宽 PNG。" : "Java 皮肤须为 64×64 或 64×32 PNG。");
                 width = (int)w; height = (int)h; depth = body[8]; type = body[9]; interlace = body[12];
                 if (body[10] != 0 || body[11] != 0 || interlace > 1 || !ValidDepth(type, depth)) throw Invalid("PNG 颜色、压缩或交错格式无效。");
@@ -56,6 +58,14 @@ public static class AccountAppearancePng
                 if (size != 0 || !sawData || offset + 12 != span.Length) throw Invalid("PNG 结束块无效。");
                 ended = true; break;
             }
+            // Icons use the PNG default image of an APNG. Animation payloads are CRC checked but never inflated.
+            // Skin/cape validation remains static-only. A partial first frame cannot stand in for the canvas.
+            else if (icon && tag.SequenceEqual("acTL"u8))
+            { if (sawData || size != 8 || BinaryPrimitives.ReadUInt32BigEndian(body) is 0 or > 4096) throw Invalid("PNG 动画声明无效。"); }
+            else if (icon && tag.SequenceEqual("fcTL"u8))
+            { if (size != 26 || !sawData && (BinaryPrimitives.ReadUInt32BigEndian(body[4..]) != width || BinaryPrimitives.ReadUInt32BigEndian(body[8..]) != height || BinaryPrimitives.ReadUInt32BigEndian(body[12..]) != 0 || BinaryPrimitives.ReadUInt32BigEndian(body[16..]) != 0)) throw Invalid("PNG 默认图像不是完整画布。"); }
+            else if (icon && tag.SequenceEqual("fdAT"u8))
+            { if (!sawData || size < 4) throw Invalid("PNG 动画数据顺序无效。"); }
             else if ((tag[0] & 32) == 0 || tag.SequenceEqual("acTL"u8) || tag.SequenceEqual("fcTL"u8) || tag.SequenceEqual("fdAT"u8)) throw Invalid("不支持此 PNG 扩展或动画纹理。");
             offset += size + 12;
         }

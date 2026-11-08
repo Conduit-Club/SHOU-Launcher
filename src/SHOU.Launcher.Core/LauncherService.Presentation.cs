@@ -6,10 +6,11 @@ public sealed partial class LauncherService : IInstancePresentationService
 {
     public Task UpdateInstancePresentationAsync(string instanceId, InstancePresentationEdit edit, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     {
-        if (edit.Icon is not ("auto" or "minecraft" or "fabric" or "quilt" or "forge" or "neoforge")) throw new ArgumentException("未知实例图标。");
+        if (!Instances.InstanceIconImages.Builtins.Contains(edit.Icon) && edit.Icon != "custom") throw new ArgumentException("未知实例图标。");
         if (string.IsNullOrWhiteSpace(edit.Category) || edit.Category.Length > 80 || edit.Category.Any(char.IsControl)) throw new ArgumentException("分类须为1–80字的单行文字。");
         if (edit.Description.Length > 4096 || edit.Description.Any(c => char.IsControl(c) && c is not ('\r' or '\n' or '\t'))) throw new ArgumentException("实例描述最多4096字，不能包含控制字符。");
         var instance = FindInstance(instanceId); var previous = instance.Presentation ?? new();
+        if (edit.Icon == "custom" && previous.IconImageSha256 is null) throw new InvalidOperationException("请先选择图片并裁剪图标。");
         var updated = instance with { Presentation = previous with { Icon = edit.Icon, Category = edit.Category.Trim(), Description = edit.Description, Favorite = edit.Favorite } };
         var candidate = Snapshot with { Instances = Snapshot.Instances.Select(i => i.Id == instanceId ? updated : i).ToArray() };
         await PersistCandidateAsync(candidate, ct).ConfigureAwait(false);
