@@ -43,6 +43,8 @@ public sealed class WorldContentInstallationUiTests
             }
             await vm.ConfirmWorldContentInstallCommand.ExecuteAsync(null); Pump(window);
             Assert.Equal(1, service.Installs); Assert.False(vm.HasWorldContentPreview); Assert.Contains("已安装到", vm.WorldContentStatus);
+            await vm.OpenProjectAsync(new("other-project", "other-map", "another public resource", "", "", 1, kind == "datapack" ? "world" : "datapack", null, new("https://modrinth.com/project/other")));
+            Assert.Empty(vm.WorldContentStatus); Assert.False(vm.HasWorldContentPreview);
         }
         finally { window.Close(); }
     }

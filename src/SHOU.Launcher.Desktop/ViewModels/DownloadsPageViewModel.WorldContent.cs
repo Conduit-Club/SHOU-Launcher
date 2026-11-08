@@ -11,6 +11,7 @@ public sealed partial class DownloadsPageViewModel
     private WorldContentPreview? _worldPreview;
     private string _worldFolder = "", _worldInstallStatus = "";
     private string? _loadedWorldInstance;
+    private string? _worldStatusProject;
     private int _worldReadRevision, _worldPreviewRevision;
     private CancellationTokenSource? _worldRead;
     public bool ShowWorldContentInstall => IsResourceDetail && SelectedProject?.Kind is "datapack" or "world";
@@ -82,6 +83,7 @@ public sealed partial class DownloadsPageViewModel
     }
     private void NotifyWorldContentPage()
     {
+        if (_worldStatusProject != SelectedProject?.Id) { _worldStatusProject = SelectedProject?.Id; WorldContentStatus = ""; }
         InvalidateWorldPreview();
         foreach (var name in new[] { nameof(ShowWorldContentInstall), nameof(IsDatapackInstall), nameof(IsWorldDownloadInstall) }) OnPropertyChanged(name);
         if (IsWorldDownloadInstall && string.IsNullOrWhiteSpace(NewWorldDirectoryName)) NewWorldDirectoryName = SelectedProject?.Slug ?? "";
