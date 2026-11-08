@@ -62,7 +62,8 @@ public static class ContentInstallFiles
         }
     }
     public static async Task<ContentInstallResult> InstallAsync(GameInstance instance, ContentInstallPlan plan,
-        Func<ContentFile, string, CancellationToken, Task> download, CancellationToken ct = default)
+        Func<ContentFile, string, CancellationToken, Task> download, CancellationToken ct = default,
+        Func<bool, CancellationToken, Task>? validateTarget = null)
     {
         if (plan.InstanceId != instance.Id || plan.Files.Count is 0 or > ContentInstallPlanner.MaximumProjects || plan.Files.Select(f => PathKey(f.RelativePath)).Distinct(StringComparer.Ordinal).Count() != plan.Files.Count) throw new InvalidDataException("安装计划身份、文件数量或路径冲突无效。");
         VerifiedDownloader.RejectLink(instance.GameDirectory);
@@ -73,6 +74,7 @@ public static class ContentInstallFiles
         var stage = Literal(instance.GameDirectory, ".shou-content-stage-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(stage);
         var added = new List<ContentInstallFile>(); var completed = new List<ContentInstalledFile>(); var committed = false;
+        var createdParents = new HashSet<string>();
         try
         {
             foreach (var file in plan.Files)
@@ -86,6 +88,7 @@ public static class ContentInstallFiles
                 completed.Add(new(file.ProjectId, file.ReleaseId, file.Kind, file.RelativePath, file.File.Sha1, sha512, file.File.Size, file.File.Uri.AbsoluteUri));
             }
             await CheckConflictsAsync(instance.GameDirectory, plan.Files, ct).ConfigureAwait(false);
+            if (validateTarget is not null) await validateTarget(false, ct).ConfigureAwait(false);
             var merged = previous.Files.Where(f => completed.All(n => PathKey(n.RelativePath) != PathKey(f.RelativePath))).Concat(completed).ToArray();
             if (merged.Length > 4096) throw new InvalidDataException("实例安装清单超过4096条限制。");
             var nextManifest = Literal(stage, ManifestName);
@@ -93,11 +96,14 @@ public static class ContentInstallFiles
             foreach (var file in plan.Files)
             {
                 ct.ThrowIfCancellationRequested(); var target = Literal(instance.GameDirectory, file.RelativePath);
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!); target = Literal(instance.GameDirectory, file.RelativePath);
+                var parent = Path.GetDirectoryName(target)!;
+                if (!Directory.Exists(parent)) { Directory.CreateDirectory(parent); createdParents.Add(parent); }
+                target = Literal(instance.GameDirectory, file.RelativePath);
                 if (File.Exists(target)) { if (!await MatchesAsync(target, file.File.Sha1, file.File.Size, ct).ConfigureAwait(false)) throw new IOException("目标在安装时改变，已停止。"); continue; }
                 File.Move(Literal(stage, file.RelativePath), target, false); added.Add(file);
             }
             ct.ThrowIfCancellationRequested(); _ = Literal(instance.GameDirectory, ManifestName);
+            if (validateTarget is not null) await validateTarget(true, ct).ConfigureAwait(false);
             var current = File.Exists(manifestPath) ? await File.ReadAllBytesAsync(manifestPath, ct).ConfigureAwait(false) : null;
             if (!(previousBytes is null ? current is null : current is not null && previousBytes.AsSpan().SequenceEqual(current))) throw new IOException("安装清单已被其他操作改变，已回滚新增文件。");
             ct.ThrowIfCancellationRequested(); _ = Literal(instance.GameDirectory, ManifestName);
@@ -112,6 +118,8 @@ public static class ContentInstallFiles
                 if (await MatchesAsync(target, file.File.Sha1, file.File.Size, CancellationToken.None).ConfigureAwait(false)) File.Delete(target);
             }
             VerifiedDownloader.RejectLink(stage); if (Directory.Exists(stage)) Directory.Delete(stage, true);
+            if (!committed) foreach (var parent in createdParents.OrderByDescending(p => p.Length))
+            { VerifiedDownloader.RejectLink(parent); if (Directory.Exists(parent) && !Directory.EnumerateFileSystemEntries(parent).Any()) Directory.Delete(parent, false); }
         }
     }
 }

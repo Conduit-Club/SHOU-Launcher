@@ -10,6 +10,11 @@ public sealed partial class LauncherService : IInstanceWorldService
         if (!string.Equals(Snapshot.SelectedInstanceId, instanceId, StringComparison.Ordinal)) throw new InvalidOperationException("Select this isolated instance before accessing its world files.");
         var instance = FindInstance(instanceId); EnsureIsolatedGamePath(instance.GameDirectory);
         if (mutate) EnsureInstanceNotRunning(instance);
+        return WorldStore(instance);
+    }
+    private InstanceWorldStore WorldStore(GameInstance instance)
+    {
+        EnsureIsolatedGamePath(instance.GameDirectory);
         var boundary = Paths.DataDirectory;
         if (IsExplicitInstanceDirectory(instance, instance.GameDirectory))
             boundary = Path.GetDirectoryName(Path.GetFullPath(instance.GameDirectory)) ?? throw new IOException("实例目录不能是磁盘根目录。");

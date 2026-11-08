@@ -7,8 +7,10 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
 {
     public const int MaximumProjects = 64, MaximumDepth = 16;
     public const long MaximumTotalBytes = 2L * 1024 * 1024 * 1024;
-    public async Task<ContentInstallPlan> PlanAsync(GameInstance instance, string gameVersion, ContentInstallRequest request, CancellationToken ct = default)
+    public async Task<ContentInstallPlan> PlanAsync(GameInstance instance, string gameVersion, ContentInstallRequest request, CancellationToken ct = default, bool worldDatapacks = false)
     {
+        if (request.Kind == "datapack" && !worldDatapacks) throw new NotSupportedException("数据包须明确选择存档目标。");
+        if (worldDatapacks && request.Kind != "datapack") throw new InvalidDataException("存档安装只接受数据包。");
         if (instance.Id != request.InstanceId) throw new InvalidDataException("安装实例身份不一致。");
         SafePath.Identifier(request.ProjectId); SafePath.Identifier(request.ReleaseId); SafePath.Identifier(gameVersion);
         var files = new List<ContentInstallFile>(); var warnings = new List<string>();
@@ -29,17 +31,20 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
                 return;
             }
             var project = await dependencies.GetContentProjectAsync(projectId, ct).ConfigureAwait(false);
+            // Modrinth v2 represents dual mod/datapack projects as "mod"; require the selected release's datapack identity.
+            if (worldDatapacks && project.Kind == "mod" && release.Loaders.Contains("datapack", StringComparer.Ordinal)) project = project with { Kind = "datapack" };
             if (project.Id != projectId || (depth == 0 && project.Kind != request.Kind)) throw new InvalidDataException("资源类型或项目身份已改变，请重新选择。");
-            var folder = Folder(project.Kind);
-            if (!Compatible(release, project.Kind, gameVersion, instance.Loader) || project.ClientSide == "unsupported" ||
-                release.Environment is "server_only" or "server_only_client_optional" or "dedicated_server_only")
+            if (worldDatapacks && project.Kind != "datapack") throw new NotSupportedException("数据包的 required 依赖须为数据包；其它类型请先明确安装。");
+            var folder = worldDatapacks ? "datapacks" : Folder(project.Kind);
+            if (!Compatible(release, project.Kind, gameVersion, instance.Loader) || !worldDatapacks && (project.ClientSide == "unsupported" ||
+                release.Environment is "server_only" or "server_only_client_optional" or "dedicated_server_only"))
                 throw new InvalidDataException("所选资源或required依赖不适用于此客户端实例的游戏版本/加载器。");
             var selected = explicitFile is not null ? release.Files.SingleOrDefault(f => f.FileName == explicitFile)
                 : release.Files.Count(f => f.Primary) == 1 ? release.Files.Single(f => f.Primary) : release.Files.Count == 1 ? release.Files[0] : null;
             if (selected is null) throw new InvalidDataException("资源文件不明确，请选择具体文件；依赖须提供唯一主文件。");
             ContentInstallFiles.ValidateFile(selected);
             if (project.Kind == "mod" && !selected.FileName.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ||
-                project.Kind is "resourcepack" or "shader" && !selected.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
+                project.Kind is "resourcepack" or "shader" or "datapack" && !selected.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
                 throw new InvalidDataException("此类型资源的文件扩展名不受支持。");
             total = checked(total + selected.Size); if (total > MaximumTotalBytes) throw new InvalidDataException("资源与required依赖总大小超过2 GiB限制。");
             active.Add(projectId);
@@ -54,8 +59,9 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
                 {
                     SafePath.Identifier(childId);
                     var childProject = await dependencies.GetContentProjectAsync(childId, ct).ConfigureAwait(false);
-                    var choices = await catalog.GetContentReleasesAsync(childId, gameVersion, childProject.Kind == "mod" ? instance.Loader : null, ct).ConfigureAwait(false);
-                    child = choices.Where(r => Compatible(r, childProject.Kind, gameVersion, instance.Loader))
+                    var dependencyLoader = worldDatapacks ? childId.StartsWith("cf-", StringComparison.Ordinal) ? null : "datapack" : childProject.Kind == "mod" ? instance.Loader : null;
+                    var choices = await catalog.GetContentReleasesAsync(childId, gameVersion, dependencyLoader, ct).ConfigureAwait(false);
+                    child = choices.Where(r => Compatible(r, worldDatapacks ? "datapack" : childProject.Kind, gameVersion, instance.Loader))
                         .OrderByDescending(r => r.Published).FirstOrDefault() ?? throw new InvalidDataException("required依赖没有兼容此实例的版本。");
                 }
                 else throw new NotSupportedException("required外部文件依赖缺少可验证的项目/版本身份，需要手动处理。");
@@ -85,6 +91,6 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
     public static string Folder(string kind) => kind switch { "mod" => "mods", "resourcepack" => "resourcepacks", "shader" => "shaderpacks", _ => throw new NotSupportedException("首批实例资源安装支持模组、资源包与光影包；数据包须选择具体存档。") };
     public static bool Compatible(ContentRelease release, string kind, string gameVersion, string loader) =>
         release.GameVersions.Contains(gameVersion, StringComparer.Ordinal) &&
-        release.Environment is not ("server_only" or "server_only_client_optional" or "dedicated_server_only") &&
+        (kind == "datapack" || release.Environment is not ("server_only" or "server_only_client_optional" or "dedicated_server_only")) &&
         (kind != "mod" || loader != "vanilla" && release.Loaders.Contains(loader, StringComparer.OrdinalIgnoreCase));
 }

@@ -125,21 +125,24 @@ public sealed class ContentFileRowViewModel
     public AsyncRelayCommand DownloadCommand { get; }
     public AsyncRelayCommand InstallCommand { get; }
     public bool ShowInstallButton { get; }
+    public string InstallCaption { get; }
     public ContentFileRowViewModel(DownloadsPageViewModel owner, ContentFile file, ContentRelease? release = null)
     {
         File = file;
         DownloadCommand = new(() => owner.DownloadFileAsync(file), () => owner.CanEdit && owner.CatalogAvailable);
-        InstallCommand = new(() => owner.InstallResourceAsync(release!, file), () => owner.CanInstallResource(release));
-        ShowInstallButton = owner.ShowResourceInstall;
+        InstallCommand = new(() => owner.InstallResourceAsync(release!, file), () => owner.CanInstallResource(release) &&
+            (!owner.ShowWorldContentInstall || file.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)));
+        ShowInstallButton = owner.ShowResourceInstall || owner.ShowWorldContentInstall;
+        InstallCaption = owner.ShowWorldContentInstall ? "预检安装" : Localization.UiLocalization.Instance.Get("t8624c13ae5d21b79");
     }
 }
-public sealed record ContentReleaseRowViewModel(ContentRelease Release, IReadOnlyList<ContentFileRowViewModel> Files)
+public sealed record ContentReleaseRowViewModel(ContentRelease Release, IReadOnlyList<ContentFileRowViewModel> Files, bool WorldContent = false)
 {
     public string Notice => Release.Notice ?? "";
     public bool HasNotice => !string.IsNullOrWhiteSpace(Release.Notice);
     public string Name => Release.Name;
     public string Detail => $"{Release.Version} · {Release.Published.LocalDateTime:yyyy/M/d HH:mm}" +
-        (Release.Environment is "server_only" or "server_only_client_optional" or "dedicated_server_only" ? " · 服务器专用，客户端不支持安装" : "");
+        (!WorldContent && Release.Environment is "server_only" or "server_only_client_optional" or "dedicated_server_only" ? " · 服务器专用，客户端不支持安装" : "");
 }
 public sealed record ContentReleaseGroupViewModel(string Header, IReadOnlyList<ContentReleaseRowViewModel> Releases);
 
@@ -522,13 +525,15 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         if (_selectedProject is null) return;
         var projectId = _selectedProject.Id; var revision = _requestRevision;
         var game = NullIfBlank(GameVersionFilter); var loader = LoaderFilter == "任意" ? null : LoaderFilter.ToLowerInvariant();
+        if (_selectedProject.Kind == "world") loader = null;
+        else if (_selectedProject.Kind == "datapack") loader = projectId.StartsWith("cf-", StringComparison.Ordinal) ? null : "datapack";
         await QueryAsync("读取资源文件", revision, async ct =>
         {
             var releases = await _catalog!.GetContentReleasesAsync(projectId, game, loader, ct); ct.ThrowIfCancellationRequested();
             if (revision != _requestRevision) return;
             ReleaseGroups.Clear();
             foreach (var group in releases.OrderByDescending(r => r.Published).GroupBy(r => string.Join(" / ", r.Loaders) + " " + (r.GameVersions.Count > 3 ? $"{r.GameVersions[0]} 等 {r.GameVersions.Count} 个版本" : string.Join(" / ", r.GameVersions))))
-                ReleaseGroups.Add(new(group.Key.Trim(), group.Select(r => new ContentReleaseRowViewModel(r, r.Files.OrderByDescending(f => f.Primary).Select(f => new ContentFileRowViewModel(this, f, r)).ToArray())).ToArray()));
+                ReleaseGroups.Add(new(group.Key.Trim(), group.Select(r => new ContentReleaseRowViewModel(r, r.Files.OrderByDescending(f => f.Primary).Select(f => new ContentFileRowViewModel(this, f, r)).ToArray(), ShowWorldContentInstall)).ToArray()));
             SetRequestStatus(releases.Count == 0 ? "没有匹配当前版本与加载器的文件。" : $"已读取 {releases.Count} 个资源版本。", releases.Count == 0);
             OnPropertyChanged(nameof(HasReleases)); NotifyCommands();
         });
@@ -589,6 +594,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     }
     public void Dispose()
     {
+        _worldRead?.Cancel(); _worldRead?.Dispose();
         if (_disposed) return;
         _disposed = true; ++_requestRevision; CancelBrowseReads(); _imageLifetime.Cancel();
         ClearProjectRows(Projects); ClearProjectRows(FavoriteProjects);
@@ -624,6 +630,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         foreach (var row in Projects.Concat(FavoriteProjects)) row.OpenCommand.NotifyCanExecuteChanged();
         foreach (var file in ReleaseGroups.SelectMany(g => g.Releases).SelectMany(r => r.Files)) { file.DownloadCommand.NotifyCanExecuteChanged(); file.InstallCommand.NotifyCanExecuteChanged(); }
         ImportLocalPackCommand?.NotifyCanExecuteChanged(); ReadCachedPackCommand?.NotifyCanExecuteChanged();
+        ConfirmWorldContentInstallCommand?.NotifyCanExecuteChanged(); CancelWorldContentPreviewCommand?.NotifyCanExecuteChanged(); RefreshWorldContentTargetsCommand?.NotifyCanExecuteChanged();
         foreach (var loader in AdditionalLoaders) loader.NotifyState();
         base.NotifyCommands(); OnPropertyChanged(nameof(CanQuery));
         TryStartCatalogRequest(); TryStartSearchRequest();

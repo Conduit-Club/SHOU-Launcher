@@ -144,7 +144,7 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
         var id = SafePath.Identifier((string?)n["id"] ?? "");
         var slug = SafePath.Identifier((string?)n["slug"] ?? id);
         var kind = (string?)n["project_type"] ?? "";
-        if (kind is not ("mod" or "modpack" or "resourcepack" or "shader")) throw new InvalidDataException("未知资源类型。");
+        if (kind is not ("mod" or "modpack" or "resourcepack" or "shader" or "datapack")) throw new InvalidDataException("未知资源类型。");
         return new(id, slug, (string?)n["title"] ?? id, (string?)n["description"] ?? "", "", (long?)n["downloads"] ?? 0,
             kind, (string?)n["icon_url"], new Uri("https://modrinth.com/" + kind + "/" + slug), (string?)n["client_side"] ?? "unknown");
     }

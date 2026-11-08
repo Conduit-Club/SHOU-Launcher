@@ -35,7 +35,7 @@ public sealed partial class DownloadsPageViewModel
     public ContentTargetChoice? SelectedInstallTarget
     {
         get => _installTarget;
-        set { if (value is null && _updatingTargets) return; if (SetProperty(ref _installTarget, value)) NotifyCommands(); }
+        set { if (value is null && _updatingTargets) return; if (SetProperty(ref _installTarget, value)) { InvalidateWorldPreview(); RefreshWorldTargets(); NotifyCommands(); } }
     }
     public bool ShowResourceInstall => IsResourceDetail && SelectedProject?.Kind is "mod" or "resourcepack" or "shader";
     public bool ShowPackImport => IsSearchPage && SelectedCategory.Id == "modpack" || IsResourceDetail && SelectedProject?.Kind == "modpack";
@@ -59,6 +59,7 @@ public sealed partial class DownloadsPageViewModel
     {
         _contentInstall = installation ?? Service as IContentInstallationService; _packs = packs ?? Service as IModrinthPackService;
         _localPacks = localPacks ?? Service as ILocalPackService;
+        InitializeWorldContentInstallation();
         if (_contentInstall is null) ResourceInstallStatus = "当前后端未提供实例资源安装能力；文件仍可明确下载到缓存。";
         ImportLocalPackCommand = AsyncCommand(ImportLocalPackAsync, () => CanEdit && PackServiceAvailable && CanImportLocalPack && !string.IsNullOrWhiteSpace(PackInstanceName) && PackInstanceName.Length <= 80);
         ReadCachedPackCommand = AsyncCommand(() => ReadLocalPackAsync(LastDownloadPath), () => CanEdit && PackServiceAvailable && HasDownloadedFile &&
@@ -87,12 +88,13 @@ public sealed partial class DownloadsPageViewModel
             _installTarget = ContentInstallTargets.FirstOrDefault(c => c.Instance.Id == selectedId);
         }
         finally { _updatingTargets = false; }
-        OnPropertyChanged(nameof(SelectedInstallTarget)); NotifyCommands();
+        OnPropertyChanged(nameof(SelectedInstallTarget)); RefreshWorldTargets(); NotifyCommands();
     }
-    internal bool CanInstallResource(ContentRelease? release) => CanEdit && _contentInstall is not null && ShowResourceInstall &&
+    internal bool CanInstallResource(ContentRelease? release) => ShowWorldContentInstall ? CanPreviewWorldResource(release) : CanEdit && _contentInstall is not null && ShowResourceInstall &&
         release is not null && _installTarget is { } target && ContentInstallPlanner.Compatible(release, SelectedProject!.Kind, target.GameVersion, target.Instance.Loader);
     internal async Task InstallResourceAsync(ContentRelease release, ContentFile file)
     {
+        if (ShowWorldContentInstall) { await PreviewWorldResourceAsync(release, file); return; }
         if (!CanInstallResource(release) || SelectedProject is not { } project || SelectedInstallTarget is not { } target) return;
         var request = new ContentInstallRequest(target.Instance.Id, project.Id, release.Id, file.FileName, project.Kind);
         var revision = _requestRevision; ContentInstallResult? installed = null;
@@ -158,6 +160,7 @@ public sealed partial class DownloadsPageViewModel
     }
     private void NotifyContentInstallationPage()
     {
+        NotifyWorldContentPage();
         OnPropertyChanged(nameof(ShowResourceInstall)); OnPropertyChanged(nameof(ShowPackImport));
     }
     private void ResetResourceInstallStatus() => ResourceInstallStatus = _contentInstall is null

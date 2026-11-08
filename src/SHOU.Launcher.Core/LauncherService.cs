@@ -48,9 +48,10 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     public LauncherService(PlatformServices platform, HttpClient http, IVerifiedDownloader downloader,
         NetworkOptions network, BuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null,
         JavaBootstrapArtifact? javaBootstrap = null, IJavaTrustService? javaTrust = null, Content.CurseForgePackResolver? localPackResolver = null,
-        HttpClient? publicInformationHttp = null)
+        HttpClient? publicInformationHttp = null, IContentDependencyCatalogService? worldContentCatalog = null)
     {
         this.platform = platform; this.http = http; this.downloader = downloader; this.network = network;
+        this.worldContentCatalog = worldContentCatalog;
         informationHttp = publicInformationHttp ?? new(new InformationRedirectHandler(new ConfigurableNetworkHandler(network, false))) { Timeout = TimeSpan.FromMinutes(5) };
         ownsInformationHttp = publicInformationHttp is null;
         gameCatalogCache = new(platform.Paths.CacheDirectory);
