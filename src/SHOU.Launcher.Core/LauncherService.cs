@@ -284,14 +284,28 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         var temporary = SafePath.Within(Paths.TempDirectory, "game-" + SafePath.Identifier(instance.Id));
         Directory.CreateDirectory(temporary);
         var options = GameSettingsPolicy.Options(instance, Snapshot.Settings);
+        var extraJvm = GameSettingsPolicy.JvmArguments(options).ToList();
+        if (options.DebugLogging)
+        {
+            var debugFile = SafePath.Within(Paths.CacheDirectory, "launch-config/debug-log4j2.xml");
+            Directory.CreateDirectory(Path.GetDirectoryName(debugFile)!); Downloads.VerifiedDownloader.RejectLink(debugFile);
+            const string xml = "<?xml version=\"1.0\" encoding=\"UTF-8\"?><Configuration status=\"WARN\"><Appenders><Console name=\"Console\" target=\"SYSTEM_OUT\"><PatternLayout pattern=\"[%d{HH:mm:ss}] [%t/%level]: %msg%n\"/></Console></Appenders><Loggers><Root level=\"debug\"><AppenderRef ref=\"Console\"/></Root></Loggers></Configuration>";
+            await Instances.LaunchScript.SaveAsync(debugFile, xml, true, false, ct);
+            extraJvm.Add("-Dlog4j.configurationFile=" + debugFile);
+        }
+        if (Snapshot.Platform.OS == LauncherOS.Windows)
+        {
+            var sibling = Path.Combine(Path.GetDirectoryName(java.ExecutablePath)!, options.UseConsoleJava ? "java.exe" : "javaw.exe");
+            if (File.Exists(sibling)) { Downloads.VerifiedDownloader.RejectLink(sibling); java = java with { ExecutablePath = sibling }; }
+        }
         var memory = GameSettingsPolicy.MemoryMiB(instance, Snapshot.Settings, ReadMemoryStatus(), java.RuntimeArchitecture);
         var launchContext = Context(java) with { Features = new Dictionary<string, bool> { ["is_demo_user"] = false, ["has_custom_resolution"] = options.WindowWidth is not null || Snapshot.Settings.GameWindowWidth is not null, ["has_quick_plays_support"] = false } };
         return LaunchPlanBuilder.Build(new(installed.Version, java, launchContext, identity, instance.GameDirectory,
             installed.LibrariesDirectory, installed.AssetsDirectory, installed.NativesDirectory, installed.ClientJar,
-            installed.Assets.Id, memory, installed.LegacyExtractions, ExtraJvmArguments: GameSettingsPolicy.JvmArguments(options), TemporaryDirectory: temporary,
+            installed.Assets.Id, memory, installed.LegacyExtractions, ExtraJvmArguments: extraJvm, TemporaryDirectory: temporary,
             WindowWidth: options.WindowWidth ?? Snapshot.Settings.GameWindowWidth, WindowHeight: options.WindowHeight ?? Snapshot.Settings.GameWindowHeight,
             Fullscreen: options.Fullscreen ?? Snapshot.Settings.GameFullscreen, MinimumMemoryMiB: options.LockMemory ? memory : options.MinimumMemoryMiB ?? Snapshot.Settings.MinimumMemoryMiB, CustomInfo: options.CustomInfo ?? Snapshot.Settings.CustomInfo,
-            ExtraGameArguments: GameSettingsPolicy.GameArguments(options.GameArguments), ServerAddress: serverAddress));
+            ExtraGameArguments: GameSettingsPolicy.GameArguments(options.GameArguments), ServerAddress: serverAddress, ClasspathPrepend: GameSettingsPolicy.Classpath(options.ClasspathPrepend)));
     }
     private ProtectedJavaLaunch? ProtectPlan(LaunchPlan original)
     {
@@ -417,11 +431,12 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     public Task SaveSettingsAsync(LauncherSettings settings, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     {
         ConfigurationStore.ValidateSettings(settings);
-        if (settings.MinimumMemoryMiB is { } initial && Snapshot.Instances.FirstOrDefault(i => (i.MemoryMiB ?? settings.MemoryMiB) < initial) is { } conflict)
+        if (Snapshot.Instances.FirstOrDefault(i => (i.MemoryMiB ?? settings.MemoryMiB) < (GameSettingsPolicy.Options(i, settings).MinimumMemoryMiB ?? settings.MinimumMemoryMiB)) is { } conflict)
             throw new ArgumentException($"初始内存不能高于实例“{conflict.Name}”的最大内存，请先修改该实例或降低初始内存。");
         if (settings.GameRoot is { Length: > 0 } gameRoot) EnsureIsolatedGamePath(gameRoot);
-        await PersistCandidateAsync(Snapshot with { Settings = settings }, ct).ConfigureAwait(false);
-        network.Update(settings); Set(s => s with { Settings = settings });
+        var instances = Snapshot.Instances.Select(i => i.Directories is { Mode: InstanceDirectoryMode.FollowGlobal } directories ? RebindDirectory(i, directories, settings) : i).ToArray();
+        await PersistCandidateAsync(Snapshot with { Settings = settings, Instances = instances }, ct).ConfigureAwait(false);
+        network.Update(settings); Set(s => s with { Settings = settings, Instances = instances });
     }, cancellationToken);
     public Task SaveConnectionSecretAsync(string kind, string secret, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     {

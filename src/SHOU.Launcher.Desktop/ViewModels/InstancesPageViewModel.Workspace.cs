@@ -178,11 +178,13 @@ public sealed partial class InstancesPageViewModel
     }
     private async Task SaveInstanceEditAsync()
     {
+        if (DirectoryWillChange && !DirectoryChangeConfirmed) { Owner.ShowError("请确认切换游戏目录；原目录文件不会移动或合并。"); return; }
+        if (!UseGlobalLaunchOptions && InstanceInitialMemory && (InstanceInitialMemoryMiB != decimal.Truncate(InstanceInitialMemoryMiB) || InstanceInitialMemoryMiB is < 512 or > 32768)) { Owner.ShowError("初始内存须为 512–32768 MiB 的整数。"); return; }
         if (!UseGlobalLaunchOptions && InstanceCustomWindow && (InstanceWindowWidth != decimal.Truncate(InstanceWindowWidth) || InstanceWindowHeight != decimal.Truncate(InstanceWindowHeight) || InstanceWindowWidth is < 320 or > 16384 || InstanceWindowHeight is < 320 or > 16384))
         { Owner.ShowError("窗口宽高须为 320–16384 的整数。"); return; }
         if (!UseGlobalMemory && (decimal.Truncate(InstanceMemoryMiB) != InstanceMemoryMiB || InstanceMemoryMiB is < 512 or > 32768))
         { Owner.ShowError("实例内存须为512–32768 MiB的整数。"); return; }
-        var edit = new InstanceEdit(EditName.Trim(), UseGlobalJava ? null : InstanceJavaExecutable.Trim(), UseGlobalMemory ? null : (int)InstanceMemoryMiB, BuildInstanceLaunchOptions());
+        var edit = new InstanceEdit(EditName.Trim(), UseGlobalJava ? null : InstanceJavaExecutable.Trim(), UseGlobalMemory ? null : (int)InstanceMemoryMiB, BuildInstanceLaunchOptions(), DirectoryMode, DirectoryChangeConfirmed);
         if (await Owner.RunAsync("保存实例设置", ct => ((IInstanceWorkspaceService)Service).UpdateInstanceAsync(SelectedInstance!.Id, edit, ct)))
         { _instanceDraftDirty = false; RefreshWorkspaceSnapshot(Service.Snapshot); Feedback = "实例设置已保存。"; }
     }
@@ -215,7 +217,7 @@ public sealed partial class InstancesPageViewModel
     public Task OpenInstanceFolderAsync(string? kind) => Owner.RunControlAsync("打开实例文件夹", async ct =>
     {
         if (Service is not IInstanceDirectoryService directories) throw new NotSupportedException("此服务没有实例目录适配器。");
-        var folder = await directories.GetInstanceDirectoryAsync(SelectedInstance!.Id, kind, kind is not null, ct);
+        var folder = await directories.GetInstanceDirectoryAsync(SelectedInstance!.Id, kind, true, ct);
         await Owner.ExternalLauncher.OpenDirectoryAsync(folder, ct);
     });
     private async Task ExportAsync()

@@ -10,7 +10,19 @@ public sealed record GameLaunchOptions(bool AutomaticMemory = false, InstanceIso
     GameIpPreference IpPreference = GameIpPreference.JavaDefault, string WindowTitle = "", string JvmArguments = "",
     bool LockMemory = false, int? WindowWidth = null, int? WindowHeight = null, bool? Fullscreen = null,
     int? MinimumMemoryMiB = null, string? CustomInfo = null, string GameArguments = "",
-    string BeforeLaunchExecutable = "", string BeforeLaunchArguments = "", bool InheritGlobal = false);
+    string BeforeLaunchExecutable = "", string BeforeLaunchArguments = "", bool InheritGlobal = false,
+    string ClasspathPrepend = "", bool UseConsoleJava = false, bool DebugLogging = false);
+public enum InstanceDirectoryMode { Current, FollowGlobal, Isolated, Shared }
+public sealed record InstanceDirectories(InstanceDirectoryMode Mode, string IsolatedDirectory, string SharedDirectory);
+public interface ILaunchScriptService
+{
+    Task ExportLaunchScriptAsync(string instanceId, string executable, string destination, bool overwrite = false, CancellationToken cancellationToken = default);
+}
+public sealed record LegacyInstanceSettings(GameLaunchOptions Options, InstanceDirectoryMode? DirectoryMode, IReadOnlyList<string> Warnings);
+public interface ILegacyInstanceSettingsService
+{
+    Task<LegacyInstanceSettings> ReadLegacyInstanceSettingsAsync(string instanceId, CancellationToken cancellationToken = default);
+}
 public sealed record DownloadBehavior(int MaximumConnections = 8, int MaximumKiBPerSecond = 0,
     bool HttpsOnly = false, DownloadSourcePreference SourcePreference = DownloadSourcePreference.Custom,
     bool PreferOfficialCatalog = true, bool SelectInstalledInstance = true);

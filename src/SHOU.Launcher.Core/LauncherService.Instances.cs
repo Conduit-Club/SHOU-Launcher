@@ -53,12 +53,23 @@ public sealed partial class LauncherService : IInstanceWorkspaceService, IInstan
     {
         if (string.IsNullOrWhiteSpace(edit.Name) || edit.Name.Length > 160 || edit.Name.Any(char.IsControl)) throw new ArgumentException("实例名称须为1–160字的单行文字。");
         if (edit.JavaExecutable is { Length: > 0 } java && !Path.IsPathFullyQualified(java)) throw new ArgumentException("Java路径须为绝对路径。");
-        if (edit.MemoryMiB is < 512 or > 32768 || edit.MemoryMiB is { } memory && Snapshot.Settings.MinimumMemoryMiB > memory)
+        if (edit.MemoryMiB is < 512 or > 32768)
             throw new ArgumentException("实例最大内存须为512–32768 MiB且不小于初始内存。");
         var instance = FindInstance(instanceId);
         EnsureInstanceNotRunning(instance);
+        if (instance.Origin is { } origin && (edit.DirectoryMode is not null || edit.LaunchOptions != instance.LaunchOptions)) _ = await ExistingInstanceReader.ResolveAsync(origin, instance.VersionId, InstanceIdentity.GameVersion(instance), ct);
         if (edit.LaunchOptions is { } options) Minecraft.GameSettingsPolicy.Validate(options);
+        if (edit.LaunchOptions is { InheritGlobal: false } localOptions) _ = Minecraft.GameSettingsPolicy.Classpath(localOptions.ClasspathPrepend);
+        var effectiveMinimum = Minecraft.GameSettingsPolicy.Options(instance with { LaunchOptions = edit.LaunchOptions }, Snapshot.Settings).MinimumMemoryMiB ?? Snapshot.Settings.MinimumMemoryMiB;
+        if (effectiveMinimum > (edit.MemoryMiB ?? Snapshot.Settings.MemoryMiB)) throw new ArgumentException("实例最大内存不能低于其有效初始内存。");
         var next = instance with { Name = edit.Name.Trim(), JavaExecutable = string.IsNullOrWhiteSpace(edit.JavaExecutable) ? null : edit.JavaExecutable, MemoryMiB = edit.MemoryMiB, LaunchOptions = edit.LaunchOptions };
+        if (edit.DirectoryMode is { } directoryMode)
+        {
+            var directories = InstanceDirectoryPolicy.Describe(instance, Paths) with { Mode = directoryMode };
+            var target = InstanceDirectoryPolicy.Resolve(instance, directories, Snapshot.Settings);
+            if (!PathEquals(target, instance.GameDirectory) && !edit.ConfirmDirectoryChange) throw new InvalidOperationException("请确认切换游戏目录；原目录文件不会移动或合并。");
+            next = RebindDirectory(next, directories, Snapshot.Settings);
+        }
         var candidate = Snapshot with { Instances = Snapshot.Instances.Select(i => i.Id == instanceId ? next : i).ToArray() };
         await PersistCandidateAsync(candidate, ct).ConfigureAwait(false); Set(_ => candidate);
     }, cancellationToken);

@@ -74,7 +74,7 @@ public static partial class Bootstrap
     private static void ValidateArguments()
     {
         var switches = new HashSet<string>(["--diagnostics","--smoke-test","--prepare-minecraft","--launch-minecraft","--official-downloads","--inspect-java-trust","--derive-java-trust"], StringComparer.Ordinal);
-        var valued = new HashSet<string>(["--data-dir","--result-file","--run-id","--exit-after","--java-path","--version","--loader","--loader-version","--offline-profile","--dry-run-launch","--credential-smoke"], StringComparer.Ordinal);
+        var valued = new HashSet<string>(["--data-dir","--result-file","--run-id","--exit-after","--java-path","--version","--loader","--loader-version","--offline-profile","--launch-instance","--dry-run-launch","--credential-smoke"], StringComparer.Ordinal);
         for (var i = 0; i < Arguments.Length; i++)
         {
             var option = Arguments[i];

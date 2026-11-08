@@ -45,8 +45,9 @@ public sealed partial class SettingsPageViewModel
     public double UsedMemoryPercent => systemMemory is { TotalBytes: > 0 } m ? 100d * (m.TotalBytes - m.AvailableBytes) / m.TotalBytes : 0;
     public int EffectiveMemoryMiB => GameSettingsPolicy.MemoryMiB(new("preview", "preview", "preview", Service.Paths.InstancesDirectory), Owner.Snapshot.Settings with { MemoryMiB = (int)MemoryMiB, MinimumMemoryMiB = UseMinimumMemory ? (int)MinimumMemoryMiB : null, LaunchOptions = BuildGameOptions() }, systemMemory);
     public decimal DisplayMemoryMiB { get => AutomaticMemory ? EffectiveMemoryMiB : MemoryMiB; set { if (!AutomaticMemory) MemoryMiB = value; } }
-    private GameLaunchOptions BuildGameOptions() => new(AutomaticMemory, Isolation, Visibility, Priority, IpPreference, GameTitle.Trim(), JvmArguments.Trim(), LockMemory,
-        GameArguments: GameArguments.Trim(), BeforeLaunchExecutable: BeforeLaunchExecutable.Trim(), BeforeLaunchArguments: BeforeLaunchArguments.Trim());
+    private GameLaunchOptions BuildGameOptions() => (Owner.Snapshot.Settings.LaunchOptions ?? new()) with
+    { AutomaticMemory = AutomaticMemory, Isolation = Isolation, Visibility = Visibility, Priority = Priority, IpPreference = IpPreference, WindowTitle = GameTitle.Trim(), JvmArguments = JvmArguments.Trim(), LockMemory = LockMemory,
+      GameArguments = GameArguments.Trim(), BeforeLaunchExecutable = BeforeLaunchExecutable.Trim(), BeforeLaunchArguments = BeforeLaunchArguments.Trim() };
     private DownloadBehavior BuildDownloadOptions() => new((int)MaximumConnections, (int)MaximumKiBPerSecond, HttpsOnly, SourcePreference, PreferOfficialCatalog, SelectInstalledInstance);
     private void LoadGameOptions(LauncherSettings settings)
     {

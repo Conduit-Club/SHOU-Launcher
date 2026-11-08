@@ -10,7 +10,8 @@ public interface IInstanceDirectoryService
     Task<string> GetInstanceDirectoryAsync(string instanceId, string? contentKind = null, bool createMissing = false, CancellationToken cancellationToken = default);
 }
 
-public sealed record InstanceEdit(string Name, string? JavaExecutable, int? MemoryMiB, GameLaunchOptions? LaunchOptions = null);
+public sealed record InstanceEdit(string Name, string? JavaExecutable, int? MemoryMiB, GameLaunchOptions? LaunchOptions = null,
+    InstanceDirectoryMode? DirectoryMode = null, bool ConfirmDirectoryChange = false);
 public sealed record InstanceContentEntry(string Name, string RelativePath, string FullPath, string Kind,
     long Bytes, DateTimeOffset Modified, bool Enabled = true, bool Directory = false);
 public interface IInstanceWorkspaceService

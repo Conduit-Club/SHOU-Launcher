@@ -14,7 +14,7 @@ public sealed record LaunchInputs(ResolvedVersion Version, JavaInstallation Java
     string NativesDirectory, string ClientJar, string AssetIndexId, int MemoryMiB,
     IReadOnlyList<string>? LegacyExtractions = null, IReadOnlyList<string>? ExtraJvmArguments = null, string? TemporaryDirectory = null,
     int? WindowWidth = null, int? WindowHeight = null, bool Fullscreen = false, int? MinimumMemoryMiB = null, string? CustomInfo = null,
-    IReadOnlyList<string>? ExtraGameArguments = null, string? ServerAddress = null);
+    IReadOnlyList<string>? ExtraGameArguments = null, string? ServerAddress = null, IReadOnlyList<string>? ClasspathPrepend = null);
 
 public static class LaunchPlanBuilder
 {
@@ -32,7 +32,7 @@ public static class LaunchPlanBuilder
         if (input.CustomInfo is { } info && (info.Length > 256 || info.Any(char.IsControl)))
             throw new ArgumentException("Custom information must be single-line and bounded.", nameof(input.CustomInfo));
         var resolved = LibraryResolver.Resolve(input.Version.Metadata, input.Context);
-        var classpath = resolved.ClasspathRelativePaths.Select(p => SafePath.Within(input.LibrariesDirectory, p)).Append(Path.GetFullPath(input.ClientJar)).ToArray();
+        var classpath = (input.ClasspathPrepend ?? []).Concat(resolved.ClasspathRelativePaths.Select(p => SafePath.Within(input.LibrariesDirectory, p))).Append(Path.GetFullPath(input.ClientJar)).ToArray();
         var mainClass = (string?)input.Version.Metadata["mainClass"] ?? throw new InvalidDataException("Version mainClass is missing.");
         var values = new Dictionary<string, string>(StringComparer.Ordinal)
         {

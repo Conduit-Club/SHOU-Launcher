@@ -14,6 +14,21 @@ namespace SHOU.Launcher.Desktop.Views;
 
 public partial class InstancesView
 {
+    private async void ReadLegacySettings_Click(object? sender, RoutedEventArgs e)
+    { if (DataContext is InstancesPageViewModel vm) await vm.ReadLegacySettingsAsync(); }
+    private async void ExportLaunchScript_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not InstancesPageViewModel { SelectedInstance: { } instance } vm || !vm.CanEdit) return;
+        try
+        {
+            var provider = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境无法选择保存位置。");
+            var extension = OperatingSystem.IsWindows() ? "cmd" : "command";
+            using var file = await provider.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "导出启动脚本", SuggestedFileName = "SHOU-" + instance.Id + "." + extension, DefaultExtension = extension, FileTypeChoices = [new FilePickerFileType("启动脚本") { Patterns = ["*." + extension] }] });
+            if (file?.TryGetLocalPath() is { } path && vm.SelectedInstance?.Id == instance.Id)
+                await vm.ExportScriptAsync(Environment.ProcessPath ?? throw new IOException("无法确定启动器程序位置。"), path, File.Exists(path));
+        }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
     private async void PickInstanceIcon_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not InstancesPageViewModel { SelectedInstance: { } instance } vm || !vm.CanEdit || TopLevel.GetTopLevel(this) is not Window owner) return;

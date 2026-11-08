@@ -133,12 +133,17 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
         if (instances.Count > 10000 || instances.Any(i => i is null) || instances.Select(i => i.Id).Distinct(StringComparer.Ordinal).Count() != instances.Count) throw new InvalidDataException("实例数量超限或标识重复。");
         foreach (var instance in instances)
         {
+            if (instance.Directories is { } directories)
+            {
+                _ = Instances.InstanceDirectoryPolicy.Resolve(instance, directories, settings);
+                if (instance.Origin is { } source && (!PathEquals(directories.IsolatedDirectory, source.VersionDirectory) || !PathEquals(directories.SharedDirectory, source.MinecraftRoot))) throw new InvalidDataException("实例隔离目录与来源不一致。");
+            }
             if (instance.LaunchOptions is { } options) Minecraft.GameSettingsPolicy.Validate(options);
             if (instance.Origin is { } origin && (!Path.IsPathFullyQualified(origin.MinecraftRoot) || !Path.IsPathFullyQualified(origin.VersionDirectory) || origin.OriginalVersionId is null || origin.MetadataSha256 is null || origin.MetadataSha256.Length != 64 || !origin.MetadataSha256.All(Uri.IsHexDigit))) throw new InvalidDataException("实例来源记录无效。");
             Core.IO.SafePath.Identifier(instance.Id);
             if (string.IsNullOrWhiteSpace(instance.Name) || instance.Name.Length > 160 || instance.Name.Any(char.IsControl)) throw new InvalidDataException("实例名称无效。");
             if (instance.GameVersionId is { } version) Core.IO.SafePath.Identifier(version);
-            if (instance.MemoryMiB is < 512 or > 32768 || settings.MinimumMemoryMiB > (instance.MemoryMiB ?? settings.MemoryMiB)) throw new InvalidDataException("实例内存设置无效。");
+            if (instance.MemoryMiB is < 512 or > 32768 || (Minecraft.GameSettingsPolicy.Options(instance, settings).MinimumMemoryMiB ?? settings.MinimumMemoryMiB) > (instance.MemoryMiB ?? settings.MemoryMiB)) throw new InvalidDataException("实例内存设置无效。");
             if (instance.Presentation is not { } presentation) continue;
             if (presentation.IconImageSha256 is { } image && (image.Length != 64 || !image.All(c => c is >= '0' and <= '9' or >= 'a' and <= 'f'))) throw new InvalidDataException("实例图标身份无效。");
             if (presentation.Icon is null || presentation.Category is null || presentation.Description is null || presentation.LaunchCount < 0 || presentation.Icon.Length > 80 || presentation.Icon.Any(char.IsControl)
@@ -154,6 +159,7 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
             else target[property.Key] = property.Value?.DeepClone();
         }
     }
+    private static bool PathEquals(string a, string b) => string.Equals(Path.TrimEndingDirectorySeparator(Path.GetFullPath(a)), Path.TrimEndingDirectorySeparator(Path.GetFullPath(b)), OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
     private static bool HasUnknownLaunchOptions(JsonObject options)
     {
         var known = JsonSerializer.SerializeToNode(new GameLaunchOptions(), JsonOptions)!.AsObject();

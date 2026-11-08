@@ -72,6 +72,17 @@ public sealed class LaunchPlanTests
         var separator = new RuleContext("windows", "10.0", RuntimeArchitecture.X64).ClasspathSeparator;
         Assert.AreEqual(";", separator);
     }
+    [TestMethod, DataRow("windows"), DataRow("osx")]
+    public void ExplicitLocalClasspathPrecedesTrustedLibrariesWithoutChangingMainClassOrCredentialRedaction(string os)
+    {
+        var input = Inputs(os); var extra = Path.Combine(input.GameDirectory, "本机 library.jar");
+        var baseline = LaunchPlanBuilder.Build(input); var plan = LaunchPlanBuilder.Build(input with { ClasspathPrepend = [extra] });
+        CollectionAssert.AreEqual(new[] { extra }.Concat(baseline.ClasspathEntries).ToArray(), plan.ClasspathEntries.ToArray());
+        var argv = plan.Arguments.ToList(); var separator = input.Context.ClasspathSeparator;
+        Assert.AreEqual(string.Join(separator, plan.ClasspathEntries), argv[argv.IndexOf("-cp") + 1]);
+        CollectionAssert.Contains(argv, "net.minecraft.client.main.Main");
+        Assert.IsFalse(JsonSerializer.Serialize(plan.ToRedactedReport()).Contains("fake_sensitive_token", StringComparison.Ordinal));
+    }
     [TestMethod] public void UnknownJvmSecretsNeverEnterAnySerializedPlanReport()
     {
         var plan = LaunchPlanBuilder.Build(Inputs() with { ExtraJvmArguments = ["-Dhttp.proxyPassword=fake-extra-password"] });

@@ -73,6 +73,8 @@ public static class ExistingInstanceReader
             if (loader is "forge" or "optifine" && loaderVersion?.StartsWith(game + "-", StringComparison.Ordinal) == true) loaderVersion = loaderVersion[(game.Length + 1)..];
             // Mod/config-bearing profiles are isolated; plain profiles use the selected Minecraft root.
             var isolated = loader != "vanilla" || new[] { "mods", "config", "saves", "options.txt" }.Any(n => Directory.Exists(Path.Combine(folder, n)) || File.Exists(Path.Combine(folder, n)));
+            var legacyMode = LegacyLaunchSettings.Isolation(await LegacyLaunchSettings.ReadAsync(folder, ct));
+            if (legacyMode is InstanceDirectoryMode.Isolated or InstanceDirectoryMode.Shared) isolated = legacyMode == InstanceDirectoryMode.Isolated;
             var fallback = loader != "vanilla" ? loader : (string?)metadata["type"] switch { "snapshot" => "commandblock", "old_alpha" or "old_beta" => "cobblestone", _ => "auto" };
             var presentation = await LegacyInstancePresentation.ReadAsync(folder, fallback, ct);
             var candidate = new ExistingInstanceCandidate(name.Length > 160 ? name[..160] : name, localIdentity, game, loader, loaderVersion, isolated ? folder : root, origin, presentation);

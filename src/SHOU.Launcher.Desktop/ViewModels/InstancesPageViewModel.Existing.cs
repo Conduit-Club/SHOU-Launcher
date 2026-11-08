@@ -99,11 +99,13 @@ public sealed partial class InstancesPageViewModel
     {
         UseGlobalLaunchOptions = instance.LaunchOptions is null or { InheritGlobal: true };
         var options = SHOU.Launcher.Core.Minecraft.GameSettingsPolicy.Options(instance, settings);
+        LoadAdvanced(instance, options);
         InstancePriority = options.Priority; InstanceIpPreference = options.IpPreference; InstanceVisibility = options.Visibility; InstanceWindowTitle = options.WindowTitle; InstanceJvmArguments = options.JvmArguments; InstanceLockMemory = options.LockMemory;
         InstanceCustomWindow = options.WindowWidth.HasValue; InstanceWindowWidth = options.WindowWidth ?? settings.GameWindowWidth ?? 854; InstanceWindowHeight = options.WindowHeight ?? settings.GameWindowHeight ?? 480;
         InstanceFullscreen = options.Fullscreen ?? settings.GameFullscreen; InstanceCustomInfo = options.CustomInfo ?? settings.CustomInfo ?? ""; InstanceGameArguments = options.GameArguments;
     }
     private GameLaunchOptions? BuildInstanceLaunchOptions() => UseGlobalLaunchOptions ? null : (SelectedInstance?.LaunchOptions ?? Owner.Snapshot.Settings.LaunchOptions ?? new()) with
     { InheritGlobal = false, Priority = InstancePriority, IpPreference = InstanceIpPreference, Visibility = InstanceVisibility, WindowTitle = InstanceWindowTitle.Trim(), JvmArguments = InstanceJvmArguments.Trim(), LockMemory = InstanceLockMemory,
-      WindowWidth = InstanceCustomWindow ? (int)InstanceWindowWidth : null, WindowHeight = InstanceCustomWindow ? (int)InstanceWindowHeight : null, Fullscreen = InstanceFullscreen, CustomInfo = InstanceCustomInfo.Trim(), GameArguments = InstanceGameArguments.Trim() };
+      WindowWidth = InstanceCustomWindow ? (int)InstanceWindowWidth : null, WindowHeight = InstanceCustomWindow ? (int)InstanceWindowHeight : null, Fullscreen = InstanceFullscreen, CustomInfo = InstanceCustomInfo.Trim(), GameArguments = InstanceGameArguments.Trim(),
+      ClasspathPrepend = InstanceClasspath.Trim(), BeforeLaunchExecutable = InstanceBeforeExecutable.Trim(), BeforeLaunchArguments = InstanceBeforeArguments.Trim(), UseConsoleJava = InstanceConsoleJava, DebugLogging = InstanceDebugLogging, MinimumMemoryMiB = InstanceInitialMemory ? (int)InstanceInitialMemoryMiB : null };
 }

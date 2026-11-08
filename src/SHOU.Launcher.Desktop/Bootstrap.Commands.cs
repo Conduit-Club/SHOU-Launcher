@@ -15,6 +15,13 @@ public static partial class Bootstrap
         var timeoutSeconds = int.TryParse(ArgumentValue("--exit-after"), out var value) ? value : 1800;
         using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
         var ct = deadline.Token;
+        if (ArgumentValue("--launch-instance") is { } requested)
+        {
+            if (!launcher.Snapshot.Instances.Any(i => i.Id == requested)) { WriteCommandReport(new { status = "FAIL", message = "脚本对应的实例不存在，请打开启动器重新导出。" }); return 2; }
+            if (!launcher.Snapshot.Accounts.Any(a => a.Id == launcher.Snapshot.SelectedAccountId)) { WriteCommandReport(new { status = "FAIL", message = "请先打开启动器登录并选择账户，再运行脚本。" }); return 3; }
+            await SavedInstanceLaunch.RunAsync(launcher, requested, ct).ConfigureAwait(false);
+            return 0;
+        }
         if (Arguments.Contains("--inspect-java-trust", StringComparer.Ordinal))
         {
             var source = ArgumentValue("--java-path") ?? throw new ArgumentException("Java trust validation requires an explicit Java path.");

@@ -23,6 +23,7 @@ public sealed partial class LauncherService : IInstanceComponentService
             else if (Loaders.PortableVendorInstaller.Supports(loader)) profile = await CacheVendorProfileAsync(loader, game, loaderVersion!, ct).ConfigureAwait(false);
             var candidate = instance with { VersionId = profile, GameVersionId = game, Loader = loader, LoaderVersion = loader == "vanilla" ? null : loaderVersion,
                 RuntimeProfileOverride = instance.Origin is not null, Installed = false };
+            if (candidate.Directories is { Mode: InstanceDirectoryMode.FollowGlobal } directories) candidate = RebindDirectory(candidate, directories, Snapshot.Settings);
             // Preparation writes verified shared caches; the selected instance identity changes only after success.
             await PrepareInstanceAsync(candidate, ct, publishInstalled: false).ConfigureAwait(false);
             ct.ThrowIfCancellationRequested(); EnsureInstanceNotRunning(instance);
