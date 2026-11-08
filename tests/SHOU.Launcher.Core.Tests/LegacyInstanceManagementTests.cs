@@ -113,19 +113,31 @@ public sealed class LegacyInstanceManagementTests
         var hash = f.Service.Snapshot.Instances.Single().Presentation!.IconImageSha256!;
         await f.Service.UpdateInstancePresentationAsync(instance.Id, new("auto", "auto", "", false)); CollectionAssert.AreEqual(old!, (await f.Service.ReadInstanceIconAsync(instance.Id))!);
         await f.Service.UpdateInstancePresentationAsync(instance.Id, new("custom", "auto", "", false)); CollectionAssert.AreEqual(image!, (await f.Service.ReadInstanceIconAsync(instance.Id))!);
-        Assert.IsTrue(File.Exists(Path.Combine(f.Platform.Paths.ResourcesDirectory, "instance-icons", hash + ".png"))); Assert.IsTrue(File.Exists(f.Config + ".bak"));
+        Assert.IsTrue(File.Exists(Path.Combine(f.Platform.Paths.LocalDataDirectory, "instance-icons", hash + ".png"))); Assert.IsTrue(File.Exists(f.Config + ".bak"));
         await using var store = new Configuration.ConfigurationStore(f.Platform.Paths); Assert.AreEqual(hash, (await store.LoadAsync()).Instances.Single().Presentation!.IconImageSha256);
-        CollectionAssert.AreEqual(before, Files(root)); Assert.IsFalse(Directory.EnumerateFiles(f.Platform.Paths.ResourcesDirectory, "*.tmp-*", SearchOption.AllDirectories).Any()); Assert.AreEqual(0, f.Guard.Calls);
+        CollectionAssert.AreEqual(before, Files(root)); Assert.IsFalse(Directory.EnumerateFiles(f.Platform.Paths.LocalDataDirectory, "*.tmp-*", SearchOption.AllDirectories).Any()); Assert.AreEqual(0, f.Guard.Calls);
     }
     [TestMethod, DataRow("cancel"), DataRow("save-failure"), DataRow("nonsquare"), DataRow("crc")]
     public async Task FailedOrCancelledCustomIconKeepsPreviousChoiceAndCleansNewFiles(string scenario)
     {
         await using var f = await Fixture.Create(); var instance = await f.Service.CreateInstanceAsync("fixture", "1.21.1"); await f.Service.SaveInstanceIconAsync(instance.Id, Solid(256, 256, 1, 2, 3));
-        var prior = f.Service.Snapshot.Instances.Single().Presentation; var files = Files(f.Platform.Paths.ResourcesDirectory); var png = scenario == "nonsquare" ? Solid(256, 128, 4, 5, 6) : Solid(256, 256, 4, 5, 6); if (scenario == "crc") png[^1] ^= 1;
+        var prior = f.Service.Snapshot.Instances.Single().Presentation; var files = Files(Path.Combine(f.Platform.Paths.LocalDataDirectory, "instance-icons")); var png = scenario == "nonsquare" ? Solid(256, 128, 4, 5, 6) : Solid(256, 256, 4, 5, 6); if (scenario == "crc") png[^1] ^= 1;
         using var cts = new CancellationTokenSource(); if (scenario == "cancel") cts.Cancel();
         if (scenario == "save-failure") { File.Move(f.Config, f.Config + ".held"); Directory.CreateDirectory(f.Config); }
-        try { await Reject(() => f.Service.SaveInstanceIconAsync(instance.Id, png, cts.Token)); Assert.AreEqual(prior, f.Service.Snapshot.Instances.Single().Presentation); CollectionAssert.AreEqual(files, Files(f.Platform.Paths.ResourcesDirectory)); }
+        try { await Reject(() => f.Service.SaveInstanceIconAsync(instance.Id, png, cts.Token)); Assert.AreEqual(prior, f.Service.Snapshot.Instances.Single().Presentation); CollectionAssert.AreEqual(files, Files(Path.Combine(f.Platform.Paths.LocalDataDirectory, "instance-icons"))); }
         finally { if (scenario == "save-failure") { Directory.Delete(f.Config); File.Move(f.Config + ".held", f.Config); } }
+    }
+    [TestMethod]
+    public async Task CustomArtworkBelongsToDataRootAndSurvivesChangingExecutableDirectory()
+    {
+        var firstExecutable = Path.Combine(TestFiles.Root(), "read-only-app"); var secondExecutable = Path.Combine(TestFiles.Root(), "replacement-app");
+        await using var f = await Fixture.Create(firstExecutable); var instance = await f.Service.CreateInstanceAsync("portable icon", "1.21.1");
+        await f.Service.SaveInstanceIconAsync(instance.Id, Solid(256, 256, 17, 31, 47)); Assert.IsFalse(Directory.Exists(firstExecutable));
+        using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("No network"))); var downloader = new VerifiedDownloader(http);
+        var moved = f.Platform with { Paths = new AppPaths(new(f.Platform.Paths.DataDirectory), f.Platform.Info.Context, executableDirectory: secondExecutable) };
+        await using var reopened = new LauncherService(moved, http, downloader, new NetworkOptions()); await reopened.InitializeAsync();
+        var png = await reopened.ReadInstanceIconAsync(instance.Id); Assert.AreEqual((byte)47, AccountAppearancePng.DecodeIcon(png!).Rgba.Span[2]); Assert.IsFalse(Directory.Exists(secondExecutable));
+        Assert.IsTrue(Directory.Exists(Path.Combine(f.Platform.Paths.LocalDataDirectory, "instance-icons"))); Assert.AreEqual(0, f.Guard.Calls);
     }
     [TestMethod]
     public void CropPositionZoomAndTransparentEdgesProduceExactSquarePixels()
@@ -158,10 +170,10 @@ public sealed class LegacyInstanceManagementTests
     {
         public PlatformServices Platform = null!; public LauncherService Service = null!; public NoGame Guard = new(); private HttpClient http = null!; private ProcessRunner runner = null!;
         public string Config => Path.Combine(Platform.Paths.LocalDataDirectory, "shou.desktop.v1.json");
-        public static async Task<Fixture> Create()
+        public static async Task<Fixture> Create(string? executableDirectory = null)
         {
             var f = new Fixture(); f.http = new(new ScriptedHttpHandler(_ => throw new AssertFailedException("No download expected"))); var downloader = new VerifiedDownloader(f.http);
-            var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); f.runner = (ProcessRunner)platform.Processes; f.Platform = platform with { Processes = f.Guard };
+            var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); f.runner = (ProcessRunner)platform.Processes; f.Platform = platform with { Processes = f.Guard, Paths = new AppPaths(new(platform.Paths.DataDirectory), platform.Info.Context, executableDirectory: executableDirectory) };
             f.Service = new(f.Platform, f.http, downloader, new NetworkOptions()); await f.Service.InitializeAsync(); await f.Service.SaveSettingsAsync(f.Service.Snapshot.Settings); return f;
         }
         public async ValueTask DisposeAsync() { await Service.DisposeAsync(); await runner.DisposeAsync(); http.Dispose(); }

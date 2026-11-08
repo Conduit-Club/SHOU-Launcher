@@ -16,9 +16,9 @@ public sealed partial class LauncherService : IInstanceArtworkService
         if (presentation.Icon is not ("auto" or "custom")) return null;
         if (presentation.Icon == "custom" && presentation.IconImageSha256 is { } hash)
         {
-            VerifiedDownloader.RejectLink(Paths.ResourcesDirectory);
-            var path = SafePath.Within(Paths.ResourcesDirectory, "instance-icons/" + hash + ".png");
-            var bytes = await WorldContentArchive.ReadFileAsync(Paths.ResourcesDirectory, path, AccountAppearancePng.MaximumPngBytes, cancellationToken);
+            VerifiedDownloader.RejectLink(Paths.LocalDataDirectory);
+            var path = SafePath.Within(Paths.LocalDataDirectory, "instance-icons/" + hash + ".png");
+            var bytes = await WorldContentArchive.ReadFileAsync(Paths.LocalDataDirectory, path, AccountAppearancePng.MaximumPngBytes, cancellationToken);
             if (Convert.ToHexStringLower(SHA256.HashData(bytes)) != hash) throw new InvalidDataException("实例图标校验失败。");
             _ = AccountAppearancePng.DecodeIcon(bytes); return bytes;
         }
@@ -37,15 +37,15 @@ public sealed partial class LauncherService : IInstanceArtworkService
             if (pixels.Width != 256 || pixels.Height != 256) throw new InvalidDataException("请先裁剪成 256×256 的 PNG 图标。");
             var bytes = Tools.ToolImages.EncodeRgba(256, 256, pixels.Rgba.Span); ct.ThrowIfCancellationRequested();
             var hash = Convert.ToHexStringLower(SHA256.HashData(bytes)); var instance = FindInstance(instanceId);
-            VerifiedDownloader.RejectLink(Paths.ResourcesDirectory);
-            var path = SafePath.Within(Paths.ResourcesDirectory, "instance-icons/" + hash + ".png"); var stage = path + ".tmp-" + Guid.NewGuid().ToString("N"); var created = false; var committed = false; var staged = false;
+            VerifiedDownloader.RejectLink(Paths.LocalDataDirectory);
+            var path = SafePath.Within(Paths.LocalDataDirectory, "instance-icons/" + hash + ".png"); var stage = path + ".tmp-" + Guid.NewGuid().ToString("N"); var created = false; var committed = false; var staged = false;
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
             VerifiedDownloader.RejectLink(Path.GetDirectoryName(path)!);
             try
             {
                 if (File.Exists(path))
                 {
-                    var previous = await WorldContentArchive.ReadFileAsync(Paths.ResourcesDirectory, path, AccountAppearancePng.MaximumPngBytes, ct);
+                    var previous = await WorldContentArchive.ReadFileAsync(Paths.LocalDataDirectory, path, AccountAppearancePng.MaximumPngBytes, ct);
                     if (!previous.AsSpan().SequenceEqual(bytes)) throw new IOException("已有图标缓存与内容身份不符。");
                 }
                 else
@@ -62,7 +62,7 @@ public sealed partial class LauncherService : IInstanceArtworkService
                 if (staged) { VerifiedDownloader.RejectLink(stage); if (File.Exists(stage)) File.Delete(stage); }
                 if (created && !committed && File.Exists(path))
                 {
-                    var current = await WorldContentArchive.ReadFileAsync(Paths.ResourcesDirectory, path, AccountAppearancePng.MaximumPngBytes, CancellationToken.None);
+                    var current = await WorldContentArchive.ReadFileAsync(Paths.LocalDataDirectory, path, AccountAppearancePng.MaximumPngBytes, CancellationToken.None);
                     if (Convert.ToHexStringLower(SHA256.HashData(current)) == hash) File.Delete(path);
                 }
             }

@@ -3,7 +3,10 @@ using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
-public sealed record InstanceFolderChoice(string Title, string? Path);
+public sealed record InstanceFolderChoice(string Title, string? Path)
+{
+    public bool HasPath => !string.IsNullOrEmpty(Path);
+}
 public sealed partial class InstancesPageViewModel
 {
     public IInstanceArtworkService? ArtworkService => Service as IInstanceArtworkService;

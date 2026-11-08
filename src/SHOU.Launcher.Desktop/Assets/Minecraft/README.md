@@ -15,6 +15,9 @@ R13：从同一独立图片目录复用 Cleanroom、LabyMod、Egg，仅用于安
 - Cleanroom.png SHA-256: `7dd52eab31b09327333ea06a7adfe95426e21400002955e659d82fa50ebc0271`
 - LabyMod.png SHA-256: `44d9b755652e17ba1ee0ee450692c9c1524800769b55858e205027392fc473c4`
 - Egg.png SHA-256: `ff7a4a47c643055087c903a20e293c472cdce9e4fa45cf6293c7412a8dff3554`
+
+R20：从同一独立图片目录复用以下实例图标，素材归属沿用上文；不读取旧 WPF 视图或样式。
+
 - NeoForge.png SHA-256: `62517cda8453e91bc1f0aba1d65e0753b63cd5e8c7e533553c7508bb75d76a6e`
 - GrassPath.png SHA-256: `aebf8ce46cb065e01cbc881ac719e7f5b7df2fe6b7cbce6bbbd7e6fb27957fed`
 - CobbleStone.png SHA-256: `718c6cca154325d7d53f45770a298f8c555114db40baffcb02ba3f1bdd080398`
