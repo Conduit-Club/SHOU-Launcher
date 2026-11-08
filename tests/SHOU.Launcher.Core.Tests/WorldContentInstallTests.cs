@@ -180,6 +180,17 @@ public sealed class WorldContentInstallTests
         else { var preview = await f.Service.PreviewWorldContentAsync(f.Request("map", "world", "new")); await f.Service.InstallWorldContentAsync(preview.Id); }
         Assert.IsFalse(Directory.EnumerateDirectories(f.Platform.Paths.TempDirectory, "world-inspect-*").Any());
     }
+    [TestMethod]
+    public async Task WorldGameplayResourcesNamedTokenAreNotMistakenForLauncherCredentials()
+    {
+        await using var f = await Fixture.Create();
+        f.Catalog.Add("map", ZipBytes(new() { ["level.dat"] = Level(f.Version, f.DataVersion, "map"),
+            ["datapacks/game/pack.mcmeta"] = Encoding.UTF8.GetBytes("{\"pack\":{\"pack_format\":48}}"),
+            ["datapacks/game/data/test/function/token.mcfunction"] = Encoding.UTF8.GetBytes("say token") }), kind: "world");
+        var preview = await f.Service.PreviewWorldContentAsync(f.Request("map", "world", "new"));
+        await f.Service.InstallWorldContentAsync(preview.Id);
+        Assert.AreEqual("say token", await File.ReadAllTextAsync(Path.Combine(f.Instance.GameDirectory, "saves/new/datapacks/game/data/test/function/token.mcfunction")));
+    }
     private static async Task Reject(Func<Task> action)
     { try { await action(); Assert.Fail("Unsafe or interrupted installation unexpectedly succeeded"); } catch (Exception ex) when (ex is IOException or InvalidDataException or NotSupportedException or OperationCanceledException or AggregateException or JsonException) { } }
     private static string[] Files(string root) => Directory.GetFiles(root, "*", SearchOption.AllDirectories).Order().Select(p => Path.GetRelativePath(root, p) + ":" + Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes(p)))).ToArray();

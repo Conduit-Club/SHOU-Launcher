@@ -173,7 +173,8 @@ internal static class WorldContentArchive
     {
         ModrinthPackArchive.SafeRelative(path);
         var parts = path.Split('/');
-        if (parts.Any(p => p.StartsWith('.') || p.Contains("credential", StringComparison.OrdinalIgnoreCase) || p.Contains("password", StringComparison.OrdinalIgnoreCase) || p.Contains("token", StringComparison.OrdinalIgnoreCase) || p.StartsWith("launcher_", StringComparison.OrdinalIgnoreCase))
+        if (parts.Any(p => p.StartsWith('.')) || parts[0].StartsWith("launcher_", StringComparison.OrdinalIgnoreCase) ||
+            parts[0].ToLowerInvariant() is "accounts" or "accounts.json" or "credentials" or "credentials.json" or "tokens.json" or "passwords.json"
             || Path.GetExtension(path).ToLowerInvariant() is ".exe" or ".dll" or ".so" or ".dylib" or ".ps1" or ".bat" or ".cmd" or ".sh" or ".jar" or ".key" or ".pem" or ".pfx") throw new InvalidDataException("世界 ZIP 含非存档或敏感文件：" + path);
     }
     internal static async Task ExtractWorldAsync(string path, string stage, InspectedWorld expected, string expectedSha256, CancellationToken ct)
