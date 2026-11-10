@@ -145,6 +145,18 @@ public sealed class WpfWorldEditingUiTests
         Assert.True(f.Root.IsBusy); Assert.False(f.Root.ShowOperationStatus);
         pending.SetResult([]); await read; Assert.False(f.Root.IsBusy); Assert.False(f.Root.ShowOperationStatus);
     }
+    [AvaloniaFact]
+    public async Task DownloadShortcutWithUnsynchronizedTargetsStaysOnWorldPageAndShowsError()
+    {
+        using var f = new Fixture(); await f.OpenDetailsAsync(); await f.Vm.ShowWorldDatapacksCommand.ExecuteAsync(null); Pump(f.Window);
+        f.Root.Downloads.Refresh(f.Service.Snapshot with { Instances = [] });
+        Click(f.Window, "DownloadWorldDatapacksButton");
+        Assert.Same(f.Vm, f.Root.SelectedPage); Assert.Contains("目标实例已经改变", f.Root.ErrorMessage);
+        Assert.Equal("one", f.Service.Snapshot.SelectedInstanceId);
+        f.Root.Downloads.Refresh(f.Service.Snapshot); Click(f.Window, "DownloadWorldDatapacksButton");
+        Assert.Same(f.Root.Downloads, f.Root.SelectedPage); Assert.Equal("datapack", f.Root.Downloads.SelectedCategory.Id);
+        Assert.Equal("one", f.Root.Downloads.SelectedInstallTarget?.Instance.Id);
+    }
     private sealed class Fixture : IDisposable
     {
         public WorldEditUiService Service { get; } = new();
@@ -188,7 +200,7 @@ public sealed class WpfWorldEditingUiTests
         public void Log(LogEventLevel level, string area, object? source, string template) { if (IsEnabled(level, area)) Errors.Add(template); }
         public void Log(LogEventLevel level, string area, object? source, string template, params object?[] values) { if (IsEnabled(level, area)) Errors.Add(template + " " + string.Join(" | ", values)); }
     }
-    private sealed class WorldEditUiService : ILauncherService, IInstanceWorldService, IInstanceWorldEditService, IWorldDatapackTrashService
+    private sealed class WorldEditUiService : ILauncherService, IInstanceWorldService, IInstanceWorldEditService, IWorldDatapackTrashService, IWorldContentInstallationService
     {
         public FakeLauncherService Base { get; } = new();
         public IAppPaths Paths => Base.Paths;
@@ -198,6 +210,9 @@ public sealed class WpfWorldEditingUiTests
         public event EventHandler<LauncherLog>? LogReceived { add => Base.LogReceived += value; remove => Base.LogReceived -= value; }
         public int EditReads, MetadataSaves, DatapackSaves;
         public int Recycles, Restores;
+        public Task<IReadOnlyList<WorldContentTarget>> GetWorldContentTargetsAsync(string instanceId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<WorldContentTarget>>([]);
+        public Task<WorldContentPreview> PreviewWorldContentAsync(WorldContentRequest request, CancellationToken cancellationToken = default) => throw new InvalidOperationException("This world navigation fixture must not install content.");
+        public Task<WorldContentResult> InstallWorldContentAsync(string previewId, CancellationToken cancellationToken = default) => throw new InvalidOperationException("This world navigation fixture must not install content.");
         public Func<string, string, CancellationToken, Task<IReadOnlyList<WorldDatapackTrashEntry>>>? TrashRead;
         public Task<IReadOnlyList<WorldDatapackTrashEntry>> GetWorldDatapackTrashAsync(string id, string world, CancellationToken ct = default) => TrashRead?.Invoke(id, world, ct) ?? Store(id).GetDatapackTrashAsync(world, ct);
         public Task RecycleWorldDatapacksAsync(string id, string world, string revision, IReadOnlyList<WorldDatapackSelection> packs, CancellationToken ct = default) { Recycles++; return Store(id).RecycleDatapacksAsync(world, revision, packs, ct); }

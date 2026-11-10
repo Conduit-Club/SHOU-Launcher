@@ -42,8 +42,12 @@ public sealed partial class InstancesPageViewModel
     private void OpenWorldDownloadBrowser(bool datapack)
     {
         if (SelectedInstance is not { } instance) return;
-        Owner.Downloads.OpenWorldContentBrowser(instance, datapack ? SelectedWorldRow?.DirectoryName : null);
-        Owner.SelectedPage = Owner.Downloads;
+        try
+        {
+            Owner.Downloads.OpenWorldContentBrowser(instance, datapack ? SelectedWorldRow?.DirectoryName : null);
+            Owner.SelectedPage = Owner.Downloads;
+        }
+        catch (InvalidOperationException ex) { Owner.ShowError(UiPrivacy.Redact(ex.Message)); }
     }
     public async Task<bool> ImportClipboardWorldDatapackAsync(IReadOnlyList<string> localFiles, string instanceId, string worldDirectory, string gameDirectory)
     {
