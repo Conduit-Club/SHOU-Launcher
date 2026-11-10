@@ -110,7 +110,7 @@ public partial class InstanceWorldsView : UserControl
     private void Workspace_KeyDown(object? sender, KeyEventArgs args)
     {
         if (args.Key == Key.Escape && DataContext is InstancesPageViewModel { IsServerEditorOpen: true } vm) { vm.CancelInstanceServerEditorCommand.Execute(null); args.Handled = true; }
-        else if (args.Key == Key.Escape && DataContext is InstancesPageViewModel manager && (manager.IsDatapackOrderOpen || manager.IsDatapackUpdateOpen)) { manager.CancelDatapackManagementCommand.Execute(null); args.Handled = true; }
+        else if (args.Key == Key.Escape && DataContext is InstancesPageViewModel manager && (manager.IsDatapackOrderOpen || manager.IsDatapackUpdateOpen || manager.IsDatapackBackupsOpen)) { manager.CancelDatapackManagementCommand.Execute(null); args.Handled = true; }
         else if (args.Key == Key.Escape && DataContext is InstancesPageViewModel { IsLocalWorldImportOpen: true } worlds) { worlds.CancelLocalWorldImportCommand.Execute(null); args.Handled = true; }
     }
 }

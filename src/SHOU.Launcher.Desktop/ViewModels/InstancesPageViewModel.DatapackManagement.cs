@@ -23,7 +23,7 @@ public sealed partial class InstancesPageViewModel
     public bool IsDatapackOrderOpen => _packOrderOpen;
     public bool IsDatapackUpdateOpen => _packUpdateOpen;
     public bool IsDatapackManagementBusy => _packManagementBusy;
-    public bool ShowDatapackManagementStatus => _packOrderOpen || _packUpdateOpen || _packManagementBusy || _packManagementFeedback.Length > 0;
+    public bool ShowDatapackManagementStatus => _packOrderOpen || _packUpdateOpen || _packBackupsOpen || _packManagementBusy || _packManagementFeedback.Length > 0;
     public bool IsDatapackOrderDirty => _packOrder is not null && !_packOrder.Items.SequenceEqual(DatapackOrderItems);
     public bool HasDatapackUpdatePreview => _packUpdatePreview is not null;
     public bool HasDatapackUpdateChoices => DatapackUpdateChoices.Count > 0;
@@ -56,14 +56,17 @@ public sealed partial class InstancesPageViewModel
             if (_packManagementBusy && Owner.CancelOperationCommand.CanExecute(null)) Owner.CancelOperationCommand.Execute(null);
             ClearDatapackManagement(); NotifyWorldEditingCommands();
         });
+        InitializeDatapackBackups();
     }
     private void ClearDatapackManagement()
     {
         InvalidateDatapackUpdate(); _packOrder = null; _packOrderOpen = _packUpdateOpen = false;
         DatapackOrderItems.Clear(); _selectedPackOrder = null; _packUpdateOptions = null; _packUpdateChoice = null; _updatePackId = null; _packManagementFeedback = "";
+        ClearDatapackBackups();
     }
     private void InvalidateDatapackUpdate()
     {
+        InvalidateDatapackRestore();
         ++_packManagementRevision; var previous = _packUpdatePreview; _packUpdatePreview = null;
         if (previous is not null) DiscardDatapackPreview(previous.Id);
     }
@@ -165,5 +168,6 @@ public sealed partial class InstancesPageViewModel
         OnPropertyChanged(nameof(CanImportWorldDatapack)); OnPropertyChanged(nameof(CanEditWorldMetadata)); OnPropertyChanged(nameof(CanEditWorldDifficulty));
         foreach (var name in new[] { nameof(IsDatapackOrderOpen), nameof(IsDatapackUpdateOpen), nameof(IsDatapackManagementBusy), nameof(ShowDatapackManagementStatus), nameof(IsDatapackOrderDirty), nameof(HasDatapackUpdatePreview), nameof(HasDatapackUpdateChoices), nameof(DatapackManagementFeedback), nameof(DatapackOrderWarnings), nameof(DatapackUpdateOrigin), nameof(DatapackUpdateSummary), nameof(DatapackUpdateChoices), nameof(SelectedDatapackOrderItem), nameof(SelectedDatapackUpdateChoice), nameof(CanChooseLocalDatapackUpdate) }) OnPropertyChanged(name);
         foreach (var command in new IRelayCommand[] { ReadDatapackOrderCommand, MoveDatapackOrderUpCommand, MoveDatapackOrderDownCommand, SaveDatapackOrderCommand, CancelDatapackManagementCommand, ReadDatapackUpdatesCommand, PreviewDatapackUpdateCommand, ConfirmDatapackUpdateCommand }) command.NotifyCanExecuteChanged();
+        NotifyDatapackBackups();
     }
 }

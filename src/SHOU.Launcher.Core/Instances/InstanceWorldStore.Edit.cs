@@ -90,6 +90,10 @@ public sealed partial class InstanceWorldStore
     private async Task<EditableWorld> ReadEditableWorldAsync(string world, CancellationToken ct)
     {
         var bytes = await ReadOptionalAsync(WorldChild(world, "level.dat"), nbtLimits.MaxInputBytes, ct) ?? throw new InvalidDataException("世界缺少 level.dat。");
+        return ParseEditableWorld(bytes, ct);
+    }
+    private EditableWorld ParseEditableWorld(byte[] bytes, CancellationToken ct)
+    {
         var document = BoundedNbt.Read(bytes, nbtLimits, ct); var data = document.Root.Find("Data");
         if (data is not { Type: NbtType.Compound }) throw new InvalidDataException("世界缺少 Java Data compound。");
         var version = data.Find("Version"); if (version is not null && version.Type != NbtType.Compound) throw new InvalidDataException("世界版本字段类型无效。");

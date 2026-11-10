@@ -66,8 +66,14 @@ public sealed partial class InstanceWorldStore
                     _ = await WorldContentArchive.DatapackAsync(target, state.Format, ct);
                 }
                 await SaveTrashFileAsync(backup, "level.before", world.Bytes, ct);
+                await SaveTrashFileAsync(backup, "level.after", nextLevel, ct);
                 if (state.Manifest is not null) await SaveTrashFileAsync(backup, "manifest.before", state.Manifest, ct);
-                await SaveTrashFileAsync(backup, "receipt.json", JsonSerializer.SerializeToUtf8Bytes(new { Format = 1, World = worldDirectoryName, OriginalRevision = state.Revision, Files = replacements.Select(r => new { r.OldName, r.NewName, r.Sha256, r.Enable }).ToArray() }), ct);
+                if (nextManifest is not null) await SaveTrashFileAsync(backup, "manifest.after", nextManifest, ct);
+                var resultingPacks = state.Packs.Values.Where(p => !old.ContainsKey(p.Name)).Concat(replacements.Select(r => new ManagedDatapack(r.NewName, false, r.Sha256, [])));
+                var journal = new DatapackUpdateJournal(2, worldDirectoryName, DateTimeOffset.UtcNow, state.Revision,
+                    DatapackWorkspaceRevision(nextLevel, nextManifest, resultingPacks), Revision(world.Bytes), Revision(nextLevel), Revision(state.Manifest), Revision(nextManifest),
+                    replacements.Select(r => new DatapackUpdateJournalFile(r.OldName, r.NewName, r.Sha256, r.OldName is { } name ? old[name].Hash : null, r.OldName is { } previous && old[previous].Directory, r.Enable)).ToArray());
+                await SaveTrashFileAsync(backup, "receipt.json", JsonSerializer.SerializeToUtf8Bytes(journal), ct);
                 var latest = await ReadDatapackWorkspaceAsync(worldDirectoryName, ct); if (latest.Revision != expectedRevision) throw new IOException("数据包在准备期间改变，未替换原文件。");
                 foreach (var (name, pack) in old)
                 {
@@ -87,6 +93,7 @@ public sealed partial class InstanceWorldStore
                 await VerifyMetadata(ct);
                 if (!SameBytes(world.Bytes, nextLevel)) await AtomicWriteAsync(levelPath, nextLevel, world.Bytes, ct);
                 if (!SameBytes(state.Manifest, nextManifest)) await AtomicWriteAsync(manifestPath, nextManifest!, state.Manifest, ct);
+                if ((await ReadDatapackWorkspaceAsync(worldDirectoryName, ct)).Revision != journal.AfterRevision) throw new IOException("更新发布后的文件或元数据发生变化。");
                 ct.ThrowIfCancellationRequested(); await SaveTrashFileAsync(backup, "complete", [], ct);
                 return new(Revision(nextLevel), backup);
             }

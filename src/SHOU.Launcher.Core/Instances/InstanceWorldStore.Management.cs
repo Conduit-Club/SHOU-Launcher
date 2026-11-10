@@ -47,19 +47,24 @@ public sealed partial class InstanceWorldStore
         if (world.Enabled is null || world.Disabled is null) throw new InvalidDataException("存档缺少明确的数据包启停列表，未猜测状态。");
         var manifest = await ReadOptionalAsync(WorldChild(worldDirectoryName, ContentInstallFiles.ManifestName), 4 * 1024 * 1024, ct);
         var packs = new Dictionary<string, ManagedDatapack>(StringComparer.Ordinal); var names = new HashSet<string>(); long total = 0;
-        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256); hash.AppendData(SHA256.HashData(world.Bytes));
-        if (manifest is not null) hash.AppendData(SHA256.HashData(manifest));
         foreach (var file in await GetDatapacksAsync(worldDirectoryName, ct))
         {
             if (!names.Add(ContentInstallFiles.PathKey(file.Name))) throw new IOException("已有数据包存在大小写或 Unicode 重名。");
             var pack = await FingerprintManagedPackAsync(WorldChild(worldDirectoryName, "datapacks/" + Leaf(file.Name)), ct);
             total += pack.Guards.Where(g => !g.Final.Directory).Sum(g => g.Final.Size);
             if (total > 256L * 1024 * 1024) throw new IOException("已有数据包总读取超过 256 MiB。");
-            packs.Add(pack.Name, pack); hash.AppendData(Encoding.UTF8.GetBytes(pack.Name + "\0" + pack.Hash));
+            packs.Add(pack.Name, pack);
         }
         foreach (var pack in packs.Values) foreach (var guard in pack.Guards) guard.Verify();
         if (Revision(await ReadOptionalAsync(WorldChild(worldDirectoryName, "level.dat"), nbtLimits.MaxInputBytes, ct)) != Revision(world.Bytes) || Revision(await ReadOptionalAsync(WorldChild(worldDirectoryName, ContentInstallFiles.ManifestName), 4 * 1024 * 1024, ct)) != Revision(manifest)) throw new IOException("存档或安装清单在读取期间改变。");
-        return new(Convert.ToHexStringLower(hash.GetHashAndReset()), Revision(world.Bytes), Revision(manifest), manifest, world.Version!, world.DataVersion!.Value, format, world.Enabled, world.Disabled, packs);
+        return new(DatapackWorkspaceRevision(world.Bytes, manifest, packs.Values), Revision(world.Bytes), Revision(manifest), manifest, world.Version!, world.DataVersion!.Value, format, world.Enabled, world.Disabled, packs);
+    }
+    private static string DatapackWorkspaceRevision(byte[] level, byte[]? manifest, IEnumerable<ManagedDatapack> packs)
+    {
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256); hash.AppendData(SHA256.HashData(level));
+        if (manifest is not null) hash.AppendData(SHA256.HashData(manifest));
+        foreach (var pack in packs.OrderBy(p => p.Name, StringComparer.Ordinal)) hash.AppendData(Encoding.UTF8.GetBytes(pack.Name + "\0" + pack.Hash));
+        return Convert.ToHexStringLower(hash.GetHashAndReset());
     }
     private async Task<InspectedDatapack> InspectManagedPackAsync(string world, ManagedDatapack pack, DataPackFormat format, CancellationToken ct)
     {
