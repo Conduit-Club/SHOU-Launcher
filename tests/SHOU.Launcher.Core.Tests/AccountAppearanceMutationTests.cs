@@ -138,4 +138,3 @@ public sealed partial class AccountAppearanceTests
         Assert.AreEqual(0, server.Writes); Assert.IsFalse(Directory.EnumerateFiles(root, "*.tmp", SearchOption.AllDirectories).Any());
     }
 }
-

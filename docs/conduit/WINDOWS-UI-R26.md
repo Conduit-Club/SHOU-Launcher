@@ -39,9 +39,11 @@
 ## 验证记录
 
 - SDK 10.0.403，Avalonia 12.1.5，Release；第一轮 Windows Desktop 构建成功。
-- Core 首轮：652 通过、16 沿用平台跳过、0 失败。之后补充 5xx 未知结果分类和输入大小前置检查，最终回归结果待补。
+- Core 首轮与最终完整回归均为 **652 通过、16 沿用平台跳过、0 失败**。最终包含 5xx 未知结果分类和输入大小前置检查，构建 0 警告/0 错误；首轮新增测试的 3 个过时 DataTestMethod 警告已消除。
 - Desktop 首轮：226 通过、1 失败、0 跳过。失败为旧 `ClosingWindowFinishesProfileWaitAndLeavesHostServiceOwnershipIntact` 在取消认证完成后立即检查订阅数，早于新增关闭等待的后续步骤；改为有界等待实际窗口关闭，继续检查挑战结束、订阅清零及服务归属。首失败 TRX/日志保留；R2 完整重跑 **228 通过、0 跳过、0 失败**（补入实例草稿关闭验证），构建 0 警告/0 错误。
 - Computer Use：窗口控件可读，截图 `FrameArrived timed out`，点击 `coordinate input geometry is unavailable`；按既有授权尝试 Windows 备用接口，检测到 LockApp 后立即停止输入，已请求解锁。没有点击真实账户授权或外观写入。
+
+锁屏输入处理遵循本会话的 [Computer Use 技能](D:/DevCache/Codex/plugins/cache/openai-bundled/computer-use/26.1027.51404/skills/computer-use/SKILL.md)所引用 guidance.md：“If the Windows desktop is locked, stop immediately and ask the user to unlock the desktop.” 同时继续不依赖桌面的构建、测试和交付检查。
 
 ## 源码、候选与证据
 
