@@ -73,7 +73,9 @@ public sealed partial class InstanceWorldStore
                 var journal = new DatapackUpdateJournal(2, worldDirectoryName, DateTimeOffset.UtcNow, state.Revision,
                     DatapackWorkspaceRevision(nextLevel, nextManifest, resultingPacks), Revision(world.Bytes), Revision(nextLevel), Revision(state.Manifest), Revision(nextManifest),
                     replacements.Select(r => new DatapackUpdateJournalFile(r.OldName, r.NewName, r.Sha256, r.OldName is { } name ? old[name].Hash : null, r.OldName is { } previous && old[previous].Directory, r.Enable)).ToArray());
-                await SaveTrashFileAsync(backup, "receipt.json", JsonSerializer.SerializeToUtf8Bytes(journal), ct);
+                var journalBytes = JsonSerializer.SerializeToUtf8Bytes(journal);
+                if (journalBytes.Length > DatapackJournalLimit) throw new InvalidDataException("更新备份收据超过读取预算，请减少本次更新项目。");
+                await SaveTrashFileAsync(backup, "receipt.json", journalBytes, ct);
                 var latest = await ReadDatapackWorkspaceAsync(worldDirectoryName, ct); if (latest.Revision != expectedRevision) throw new IOException("数据包在准备期间改变，未替换原文件。");
                 foreach (var (name, pack) in old)
                 {

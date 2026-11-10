@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json.Nodes;
+using System.Text.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SHOU.Launcher.Core.Abstractions;
 
@@ -106,5 +107,15 @@ public sealed partial class WorldContentInstallTests
         await f.Service.SelectInstanceAsync(f.Instance.Id); await f.Service.DiscardWorldDatapackRestoreAsync(preview.Id);
         await Assert.ThrowsAsync<InvalidOperationException>(() => f.Service.RestoreWorldDatapackBackupAsync(preview.Id));
         CollectionAssert.AreEqual(files, ActivePayloadFiles(f)); CollectionAssert.AreEqual(level, File.ReadAllBytes(f.Level));
+    }
+    [TestMethod]
+    public async Task BackupListingAcceptsBoundedReceiptWithSixtyFourLongChineseFileNames()
+    {
+        await using var f = await Fixture.Create(); await PackListsAsync(f, ["vanilla"]);
+        var directory = Path.Combine(f.World, ".shou-backups/datapack-updates", Guid.NewGuid().ToString("N")); Directory.CreateDirectory(directory);
+        var hash = new string('a', 64); var files = Enumerable.Range(0, 64).Select(i => new { OldName = new string('旧', 200) + i + ".zip", NewName = new string('新', 190) + i + ".zip", Sha256 = hash, OldHash = hash, OldDirectory = false, Enable = false }).ToArray();
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(new { Format = 2, World = "现有世界", Created = DateTimeOffset.UtcNow, OriginalRevision = hash, AfterRevision = hash, LevelBefore = hash, LevelAfter = hash, ManifestBefore = "missing", ManifestAfter = "missing", Files = files });
+        Assert.IsTrue(bytes.Length > 65536 && bytes.Length < 256 * 1024); await File.WriteAllBytesAsync(Path.Combine(directory, "receipt.json"), bytes);
+        var entry = (await f.Service.GetWorldDatapackBackupsAsync(f.Instance.Id, "现有世界")).Single(); Assert.HasCount(64, entry.Names); Assert.IsFalse(entry.CanRestore); Assert.IsFalse(entry.Status.Contains("损坏"));
     }
 }

@@ -14,13 +14,14 @@ internal sealed record DatapackRestoreState(string Revision, string WorkspaceRev
 
 public sealed partial class InstanceWorldStore
 {
+    private const int DatapackJournalLimit = 256 * 1024;
     private string DatapackBackupRoot(string world) => WorldChild(world, ".shou-backups/datapack-updates");
     private string DatapackBackupPath(string world, string id) => Path.Combine(DatapackBackupRoot(world), TrashId(id));
     public string GetDatapackBackupDirectory(string world, string id)
     { var path = DatapackBackupPath(world, id); var guard = Capture(path); if (!guard.Final.Directory) throw new IOException("备份目录不存在。"); guard.Verify(); return path; }
     private async Task<(DatapackUpdateJournal Journal, byte[] Bytes)> ReadDatapackJournalAsync(string world, string directory, CancellationToken ct)
     {
-        var bytes = await ReadOptionalAsync(Path.Combine(directory, "receipt.json"), 65536, ct) ?? throw new IOException("更新备份缺少收据。");
+        var bytes = await ReadOptionalAsync(Path.Combine(directory, "receipt.json"), DatapackJournalLimit, ct) ?? throw new IOException("更新备份缺少收据。");
         using var json = JsonDocument.Parse(bytes, new() { MaxDepth = 16 });
         if (json.RootElement.GetProperty("Format").GetInt32() != 2) throw new NotSupportedException("旧版备份缺少完整恢复快照，仅保留供手动核对。");
         var journal = JsonSerializer.Deserialize<DatapackUpdateJournal>(bytes, new JsonSerializerOptions { MaxDepth = 16 }) ?? throw new InvalidDataException("更新备份收据无效。");
