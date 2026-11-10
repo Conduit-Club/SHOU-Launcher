@@ -35,10 +35,10 @@ public sealed partial class AccountsPageViewModel
     private AccountAppearance? accountAppearance;
     private AccountCapeAppearance? selectedPreviewCape;
     private AccountAppearanceDialogPage appearanceDialogPage;
-    private AccountSkinModelChoice localSkinModel = new(SkinModel.Classic, "经典模型（4 像素手臂）");
+    private AccountSkinModelChoice localSkinModel = new(SkinModel.Classic, "经典（4 像素）");
     public ObservableCollection<AccountAppearanceRow> AppearanceAccountRows { get; } = [];
     public ObservableCollection<AccountCapeAppearance> AccountCapes { get; } = [];
-    public IReadOnlyList<AccountSkinModelChoice> SkinModelChoices { get; } = [new(SkinModel.Classic, "经典模型（4 像素手臂）"), new(SkinModel.Slim, "纤细模型（3 像素手臂）")];
+    public IReadOnlyList<AccountSkinModelChoice> SkinModelChoices { get; } = [new(SkinModel.Classic, "经典（4 像素）"), new(SkinModel.Slim, "纤细（3 像素）")];
     public AccountAppearanceRow? SelectedAppearanceAccountRow
     {
         get => AppearanceAccountRows.FirstOrDefault(row => row.Profile.Id == SelectedAccount?.Id);
