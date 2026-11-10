@@ -96,6 +96,7 @@ public sealed partial class InstancesPageViewModel
         if (!worldEditingReady) return;
         foreach (var command in new IRelayCommand[] { RefreshWorldEditCommand, DiscardWorldSettingsCommand, SaveWorldSettingsCommand, EnableWorldDatapacksCommand, DisableWorldDatapacksCommand }) command.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanEnableSelectedDatapacks)); OnPropertyChanged(nameof(CanDisableSelectedDatapacks));
+        NotifyWorldActions();
     }
     private void ScheduleUnreadWorldEditing()
     {
@@ -112,11 +113,11 @@ public sealed partial class InstancesPageViewModel
         if (!WorldCanReadEdits || SelectedInstance is not { } instance || SelectedWorldRow is not { } world || CurrentWorldSettings.Phase == WorldReadPhase.Loading || !discard && IsWorldSettingsDirty) return;
         var key = WorldSettingsKey; var draft = CurrentWorldSettings; var previousPhase = draft.Phase;
         draft.Phase = WorldReadPhase.Loading; NotifyWorldEditing(); WorldEditState? result = null; var cancelled = false;
-        var completed = await Owner.RunAsync("读取存档设置", async ct =>
+        var completed = await Owner.RunInlineAsync("读取存档设置", async ct =>
         {
             try { result = await ((IInstanceWorldEditService)Service).GetWorldEditStateAsync(instance.Id, world.DirectoryName, ct); ct.ThrowIfCancellationRequested(); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { cancelled = true; throw; }
-        }, true);
+        });
         if (completed && result is not null)
         {
             draft.State = result; draft.AllowCommands = result.Values.AllowCommands ?? false; draft.Difficulty = result.Values.Difficulty ?? 2; draft.DifficultyLocked = result.Values.DifficultyLocked ?? false;

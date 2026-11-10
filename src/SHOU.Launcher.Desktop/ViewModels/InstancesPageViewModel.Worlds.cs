@@ -177,7 +177,7 @@ public sealed partial class InstancesPageViewModel
         CancelInstanceServerEditorCommand = Command(() => { _worldDraft.EditorOpen = false; NotifyWorldPresentation(); });
         foreach (var command in new[] { RefreshWorldsCommand, RefreshInstanceServersCommand, RefreshWorldDatapacksCommand })
             command.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(AsyncRelayCommand.IsRunning) && !command.IsRunning) ScheduleUnreadWorldSection(); };
-        _worldWorkspaceReady = true; InitializeWorldEditing(); NotifyWorldWorkspace();
+        _worldWorkspaceReady = true; InitializeWorldEditing(); InitializeWorldActions(); NotifyWorldWorkspace();
     }
     public void ActivateWorldWorkspace(string sectionKey)
     {
@@ -203,6 +203,7 @@ public sealed partial class InstancesPageViewModel
         foreach (var name in new[] { nameof(IsWorldWorkspaceSection), nameof(IsWorldListPage), nameof(IsWorldDetails), nameof(IsWorldInformationPage), nameof(IsWorldDatapacksPage), nameof(IsInstanceServersPage), nameof(WorldWorkspaceCanRead), nameof(WorldWorkspaceCanWrite), nameof(WorldWorkspaceCapability), nameof(WorldContextTitle), nameof(WorldWorkspaceFeedback), nameof(WorldRows), nameof(WorldSearchText), nameof(WorldCountSummary), nameof(WorldListStatus), nameof(ShowWorldListStatus), nameof(SelectedWorldRow), nameof(WorldDetailName), nameof(WorldDetailVersion), nameof(WorldDetailLastPlayed), nameof(WorldSeedText), nameof(HasWorldSeed), nameof(WorldGameModeText), nameof(WorldHardcoreText), nameof(DatapackRows), nameof(SelectedDatapacks), nameof(DatapackSearchText), nameof(DatapackCountSummary), nameof(DatapackSelectionSummary), nameof(HasSelectedDatapacks), nameof(DatapackListStatus), nameof(CanImportWorldDatapack), nameof(InstanceServerRows), nameof(SelectedInstanceServer), nameof(IsServerDraftDirty), nameof(HasServerConflict), nameof(ServerDraftStatus), nameof(ServerListStatus), nameof(IsServerEditorOpen), nameof(ServerEditorTitle), nameof(ServerNameDraft), nameof(ServerAddressDraft), nameof(ServerBackupPath), nameof(HasServerBackup) }) OnPropertyChanged(name);
         NotifyWorldCommands();
         NotifyWorldEditing();
+        NotifyWorldActions();
         ScheduleUnreadWorldSection();
     }
     private void ScheduleUnreadWorldSection()
@@ -272,7 +273,7 @@ public sealed partial class InstancesPageViewModel
     {
         if (!WorldWorkspaceCanRead || SelectedInstance is not { } instance || SelectedWorldRow is not { HasError: false } world) return;
         EnsurePackDraft(); var packs = CurrentWorldPacks; packs.Phase = WorldReadPhase.Loading; NotifyWorldPresentation(); IReadOnlyList<WorldDatapackFile>? rows = null;
-        var completed = await Owner.RunAsync("读取世界数据包", async ct => rows = await ((IInstanceWorldService)Service).GetWorldDatapacksAsync(instance.Id, world.DirectoryName, ct), true);
+        var completed = await Owner.RunInlineAsync("读取世界数据包", async ct => rows = await ((IInstanceWorldService)Service).GetWorldDatapacksAsync(instance.Id, world.DirectoryName, ct));
         if (completed && rows is not null) FillPacks(packs, rows); else packs.Phase = WorldReadPhase.Error;
         if (ReferenceEquals(CurrentWorldPacks, packs)) NotifyWorldPresentation();
         if (completed && ReferenceEquals(CurrentWorldPacks, packs) && Service is IInstanceWorldEditService && !IsWorldSettingsDirty) await ReadWorldEditStateAsync(false);

@@ -14,6 +14,24 @@ public sealed partial class DownloadsPageViewModel
     private string? _worldStatusProject;
     private int _worldReadRevision, _worldPreviewRevision;
     private CancellationTokenSource? _worldRead;
+    private (string Instance, string GameDirectory, string World)? _worldBrowserContext;
+    public void OpenWorldContentBrowser(GameInstance instance, string? worldDirectoryName = null)
+    {
+        var target = ContentInstallTargets.FirstOrDefault(t => t.Instance.Id == instance.Id && t.Instance.GameDirectory == instance.GameDirectory)
+            ?? throw new InvalidOperationException("目标实例已经改变，请重新选择。");
+        _worldBrowserContext = null; _worldRead?.Cancel(); ++_worldReadRevision; _loadedWorldInstance = null;
+        WorldContentTargets.Clear(); SelectedWorldContentTarget = null; SelectedInstallTarget = target;
+        if (worldDirectoryName is not null) _worldBrowserContext = (instance.Id, instance.GameDirectory, worldDirectoryName);
+        _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
+        SelectCategory(worldDirectoryName is null ? "world" : "datapack");
+    }
+    private void WorldInstallTargetChanged()
+    {
+        if (_worldBrowserContext is { } context && (SelectedInstallTarget?.Instance.Id != context.Instance || SelectedInstallTarget.Instance.GameDirectory != context.GameDirectory)) _worldBrowserContext = null;
+        _worldRead?.Cancel(); ++_worldReadRevision; _loadedWorldInstance = null;
+        WorldContentTargets.Clear(); SelectedWorldContentTarget = null;
+        InvalidateWorldPreview(); RefreshWorldTargets();
+    }
     public bool ShowWorldContentInstall => IsResourceDetail && SelectedProject?.Kind is "datapack" or "world";
     public bool IsDatapackInstall => ShowWorldContentInstall && SelectedProject?.Kind == "datapack";
     public bool IsWorldDownloadInstall => ShowWorldContentInstall && SelectedProject?.Kind == "world";
@@ -50,6 +68,12 @@ public sealed partial class DownloadsPageViewModel
             var worlds = await _worldContent.GetWorldContentTargetsAsync(target.Instance.Id, token);
             if (revision != _worldReadRevision || _disposed || !IsDatapackInstall || SelectedInstallTarget?.Instance.Id != target.Instance.Id) return;
             foreach (var world in worlds) WorldContentTargets.Add(world);
+            if (_worldBrowserContext is { } context && target.Instance.Id == context.Instance && target.Instance.GameDirectory == context.GameDirectory)
+            {
+                SelectedWorldContentTarget = worlds.FirstOrDefault(w => w.DirectoryName == context.World && w.Error is null);
+                _worldBrowserContext = null;
+                if (SelectedWorldContentTarget is null) WorldContentStatus = "此前选择的存档已不可用，请重新选择目标。";
+            }
             if (worlds.Count == 0) WorldContentStatus = "此实例没有可选存档。";
             else if (WorldContentStatus.StartsWith("此实例没有", StringComparison.Ordinal) || WorldContentStatus.StartsWith("读取存档失败", StringComparison.Ordinal)) WorldContentStatus = "";
         }

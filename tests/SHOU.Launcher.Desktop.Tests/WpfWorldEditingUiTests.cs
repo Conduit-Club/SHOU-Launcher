@@ -101,6 +101,50 @@ public sealed class WpfWorldEditingUiTests
         }
         finally { Logger.Sink = previous; }
     }
+    [AvaloniaFact]
+    public async Task ActualRecycleControlsRequireConfirmationAndRestoreAfterReopeningViewModel()
+    {
+        using var f = new Fixture(); await f.OpenDetailsAsync(); await f.Vm.ShowWorldDatapacksCommand.ExecuteAsync(null); Pump(f.Window);
+        var packPath = Path.Combine(Path.GetDirectoryName(f.LevelOne)!, "datapacks/fixture.zip"); var bytes = File.ReadAllBytes(packPath); var level = File.ReadAllBytes(f.LevelOne);
+        f.Vm.SelectedDatapacks.Add(f.Vm.DatapackRows.Single()); Pump(f.Window);
+        Click(f.Window, "RecycleWorldDatapacksButton"); Assert.True(f.Vm.HasWorldPackRemovalConfirmation); Assert.True(File.Exists(packPath)); Assert.Equal(0, f.Service.Recycles);
+        Assert.True(Find<Border>(f.Window, "WorldPackRemovalConfirmation").IsEffectivelyVisible);
+        f.Vm.CancelRecycleWorldDatapacksCommand.Execute(null); Assert.False(f.Vm.HasWorldPackRemovalConfirmation); Assert.Equal(level, File.ReadAllBytes(f.LevelOne));
+        Click(f.Window, "RecycleWorldDatapacksButton"); await f.Vm.ConfirmRecycleWorldDatapacksCommand.ExecuteAsync(null); Pump(f.Window);
+        Assert.Equal(1, f.Service.Recycles); Assert.False(File.Exists(packPath)); Assert.Empty(f.Vm.DatapackRows);
+        using var reopened = new MainWindowViewModel(f.Service, new FakeExternalLauncher()); var vm = reopened.Instances;
+        reopened.SelectedPage = vm; vm.InitializeWorldWorkspace(); vm.NotifyWorldWorkspace(); vm.ShowInstanceSettingsCommand.Execute(null); vm.ActivateWorldWorkspace("worlds");
+        Dispatcher.UIThread.RunJobs(); if (vm.RefreshWorldsCommand.ExecutionTask is { } read) await read;
+        vm.WorldRows.Single().OpenCommand.Execute(null); Dispatcher.UIThread.RunJobs(); if (vm.RefreshWorldEditCommand.ExecutionTask is { } edits) await edits;
+        await vm.ShowWorldDatapacksCommand.ExecuteAsync(null); await vm.RefreshWorldDatapackTrashCommand.ExecuteAsync(null);
+        vm.SelectedWorldDatapackTrash = vm.WorldDatapackTrash.Single(); Assert.True(vm.RestoreWorldDatapacksCommand.CanExecute(null));
+        await vm.RestoreWorldDatapacksCommand.ExecuteAsync(null);
+        Assert.Equal(1, f.Service.Restores); Assert.Equal(bytes, File.ReadAllBytes(packPath)); Assert.Equal(level, File.ReadAllBytes(f.LevelOne)); Assert.Single(vm.DatapackRows);
+        Assert.Equal(f.LevelTwoBytes, File.ReadAllBytes(f.LevelTwo)); Assert.Empty(vm.WorldDatapackTrash);
+    }
+    [AvaloniaFact]
+    public async Task ClipboardImportValidatesSingleLocalZipAndCapturedTargetBeforeWriting()
+    {
+        using var f = new Fixture(); await f.OpenDetailsAsync(); await f.Vm.ShowWorldDatapacksCommand.ExecuteAsync(null);
+        var input = Path.Combine(f.Service.Paths.DataDirectory, "clipboard-local-" + Guid.NewGuid().ToString("N") + ".zip");
+        File.Copy(Path.Combine(Path.GetDirectoryName(f.LevelOne)!, "datapacks/fixture.zip"), input);
+        var before = File.ReadAllBytes(f.LevelOne); var game = f.Vm.SelectedInstance!.GameDirectory;
+        Assert.False(await f.Vm.ImportClipboardWorldDatapackAsync([input, input], "one", "world", game));
+        Assert.False(await f.Vm.ImportClipboardWorldDatapackAsync(["https://example.com/pack.zip"], "one", "world", game));
+        Assert.False(await f.Vm.ImportClipboardWorldDatapackAsync([input], "two", "world", game));
+        Assert.Single(f.Vm.DatapackRows);
+        Assert.True(await f.Vm.ImportClipboardWorldDatapackAsync([input], "one", "world", game));
+        Assert.Equal(2, f.Vm.DatapackRows.Count); Assert.Equal(before, File.ReadAllBytes(f.LevelOne)); Assert.Equal(f.LevelTwoBytes, File.ReadAllBytes(f.LevelTwo));
+    }
+    [AvaloniaFact]
+    public async Task DelayedTrashReadDoesNotAddBottomOperationBar()
+    {
+        using var f = new Fixture(); await f.OpenDetailsAsync(); await f.Vm.ShowWorldDatapacksCommand.ExecuteAsync(null);
+        var pending = new TaskCompletionSource<IReadOnlyList<WorldDatapackTrashEntry>>(); f.Service.TrashRead = (_, _, _) => pending.Task;
+        var read = f.Vm.RefreshWorldDatapackTrashCommand.ExecuteAsync(null);
+        Assert.True(f.Root.IsBusy); Assert.False(f.Root.ShowOperationStatus);
+        pending.SetResult([]); await read; Assert.False(f.Root.IsBusy); Assert.False(f.Root.ShowOperationStatus);
+    }
     private sealed class Fixture : IDisposable
     {
         public WorldEditUiService Service { get; } = new();
@@ -144,7 +188,7 @@ public sealed class WpfWorldEditingUiTests
         public void Log(LogEventLevel level, string area, object? source, string template) { if (IsEnabled(level, area)) Errors.Add(template); }
         public void Log(LogEventLevel level, string area, object? source, string template, params object?[] values) { if (IsEnabled(level, area)) Errors.Add(template + " " + string.Join(" | ", values)); }
     }
-    private sealed class WorldEditUiService : ILauncherService, IInstanceWorldService, IInstanceWorldEditService
+    private sealed class WorldEditUiService : ILauncherService, IInstanceWorldService, IInstanceWorldEditService, IWorldDatapackTrashService
     {
         public FakeLauncherService Base { get; } = new();
         public IAppPaths Paths => Base.Paths;
@@ -153,6 +197,11 @@ public sealed class WpfWorldEditingUiTests
         public event EventHandler<LauncherSnapshot>? SnapshotChanged { add => Base.SnapshotChanged += value; remove => Base.SnapshotChanged -= value; }
         public event EventHandler<LauncherLog>? LogReceived { add => Base.LogReceived += value; remove => Base.LogReceived -= value; }
         public int EditReads, MetadataSaves, DatapackSaves;
+        public int Recycles, Restores;
+        public Func<string, string, CancellationToken, Task<IReadOnlyList<WorldDatapackTrashEntry>>>? TrashRead;
+        public Task<IReadOnlyList<WorldDatapackTrashEntry>> GetWorldDatapackTrashAsync(string id, string world, CancellationToken ct = default) => TrashRead?.Invoke(id, world, ct) ?? Store(id).GetDatapackTrashAsync(world, ct);
+        public Task RecycleWorldDatapacksAsync(string id, string world, string revision, IReadOnlyList<WorldDatapackSelection> packs, CancellationToken ct = default) { Recycles++; return Store(id).RecycleDatapacksAsync(world, revision, packs, ct); }
+        public Task RestoreWorldDatapacksAsync(string id, string world, string trashId, CancellationToken ct = default) { Restores++; return Store(id).RestoreDatapacksAsync(world, trashId, ct); }
         public Func<string, string, CancellationToken, Task<WorldEditState>>? EditRead;
         public InstanceWorldStore Store(string id) { Assert.Equal(Snapshot.SelectedInstanceId, id); return new(Paths.DataDirectory, Snapshot.Instances.Single(i => i.Id == id).GameDirectory); }
         public Task<WorldEditState> GetWorldEditStateAsync(string id, string world, CancellationToken ct = default) { EditReads++; return EditRead?.Invoke(id, world, ct) ?? Store(id).GetEditStateAsync(world, ct); }

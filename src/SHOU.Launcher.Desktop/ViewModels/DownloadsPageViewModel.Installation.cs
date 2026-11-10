@@ -35,7 +35,7 @@ public sealed partial class DownloadsPageViewModel
     public ContentTargetChoice? SelectedInstallTarget
     {
         get => _installTarget;
-        set { if (value is null && _updatingTargets) return; if (SetProperty(ref _installTarget, value)) { InvalidateWorldPreview(); RefreshWorldTargets(); NotifyCommands(); } }
+        set { if (value is null && _updatingTargets) return; if (SetProperty(ref _installTarget, value)) { WorldInstallTargetChanged(); NotifyCommands(); } }
     }
     public bool ShowResourceInstall => IsResourceDetail && SelectedProject?.Kind is "mod" or "resourcepack" or "shader";
     public bool ShowPackImport => IsSearchPage && SelectedCategory.Id == "modpack" || IsResourceDetail && SelectedProject?.Kind == "modpack";
@@ -74,6 +74,7 @@ public sealed partial class DownloadsPageViewModel
             try { choices.Add(new(instance, InstanceIdentity.GameVersion(instance))); }
             catch (Exception ex) when (ex is InvalidDataException or ArgumentException) { }
         }
+        var previousTarget = _installTarget;
         var selectedId = _installTarget?.Instance.Id ?? snapshot.SelectedInstanceId;
         _updatingTargets = true;
         try
@@ -88,7 +89,10 @@ public sealed partial class DownloadsPageViewModel
             _installTarget = ContentInstallTargets.FirstOrDefault(c => c.Instance.Id == selectedId);
         }
         finally { _updatingTargets = false; }
-        OnPropertyChanged(nameof(SelectedInstallTarget)); RefreshWorldTargets(); NotifyCommands();
+        OnPropertyChanged(nameof(SelectedInstallTarget));
+        if (previousTarget?.Instance.Id != _installTarget?.Instance.Id || previousTarget?.Instance.GameDirectory != _installTarget?.Instance.GameDirectory) WorldInstallTargetChanged();
+        else RefreshWorldTargets();
+        NotifyCommands();
     }
     internal bool CanInstallResource(ContentRelease? release) => ShowWorldContentInstall ? CanPreviewWorldResource(release) : CanEdit && _contentInstall is not null && ShowResourceInstall &&
         release is not null && _installTarget is { } target && ContentInstallPlanner.Compatible(release, SelectedProject!.Kind, target.GameVersion, target.Instance.Loader);

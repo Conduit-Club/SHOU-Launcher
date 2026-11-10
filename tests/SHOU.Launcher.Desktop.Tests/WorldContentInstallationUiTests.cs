@@ -74,10 +74,53 @@ public sealed class WorldContentInstallationUiTests
         Assert.True(files.Single(f => f.Name.EndsWith(".zip")).InstallCommand.CanExecute(null));
         Assert.False(files.Single(f => f.Name.EndsWith(".jar")).InstallCommand.CanExecute(null));
     }
+    [AvaloniaFact]
+    public async Task WorldBrowserShortcutPreservesExplicitTargetAndDoesNotChangeHomeSelection()
+    {
+        var service = new Service(); using var owner = new MainWindowViewModel(service, new FakeExternalLauncher()); var vm = owner.Downloads; vm.Refresh(service.Snapshot);
+        var instance = service.Snapshot.Instances.First(); var home = service.Snapshot.SelectedInstanceId;
+        vm.OpenWorldContentBrowser(instance, "world-b"); Assert.Equal("datapack", vm.SelectedCategory.Id); Assert.False(vm.IsResourceDetail);
+        await vm.OpenProjectAsync(new("project", "pack", "resource", "", "", 1, "datapack", null, new("https://modrinth.com/datapack/project")));
+        Assert.Equal("world-b", vm.SelectedWorldContentTarget?.DirectoryName); Assert.Equal(home, service.Snapshot.SelectedInstanceId);
+        Assert.Equal(instance.Id, vm.SelectedInstallTarget?.Instance.Id);
+        vm.OpenWorldContentBrowser(instance); Assert.Equal("world", vm.SelectedCategory.Id); Assert.False(vm.IsResourceDetail); Assert.Null(vm.SelectedWorldContentTarget);
+        vm.OpenWorldContentBrowser(instance, "missing-world");
+        await vm.OpenProjectAsync(new("project", "pack", "resource", "", "", 1, "datapack", null, new("https://modrinth.com/datapack/project")));
+        Assert.Null(vm.SelectedWorldContentTarget); Assert.Contains("不可用", vm.WorldContentStatus);
+    }
+    [AvaloniaFact]
+    public async Task LateWorldReadCannotReapplyShortcutAfterInstanceChanges()
+    {
+        var service = new Service(); var first = service.Snapshot.Instances.First(); var second = first with { Id = "second", GameDirectory = first.GameDirectory + "-second" };
+        service.Publish(service.Snapshot with { Instances = [first, second] });
+        using var owner = new MainWindowViewModel(service, new FakeExternalLauncher()); var vm = owner.Downloads; vm.Refresh(service.Snapshot);
+        var late = new TaskCompletionSource<IReadOnlyList<WorldContentTarget>>(); service.WorldRead = (id, _) => id == first.Id ? late.Task : Task.FromResult<IReadOnlyList<WorldContentTarget>>([new("world-b", "second world", "1.21.1", 3955)]);
+        vm.OpenWorldContentBrowser(first, "world-b");
+        await vm.OpenProjectAsync(new("project", "pack", "resource", "", "", 1, "datapack", null, new("https://modrinth.com/datapack/project")));
+        vm.SelectedInstallTarget = vm.ContentInstallTargets.Single(t => t.Instance.Id == second.Id);
+        Assert.Null(vm.SelectedWorldContentTarget);
+        late.SetResult([new("world-b", "old world", "1.21.1", 3955)]); Dispatcher.UIThread.RunJobs();
+        Assert.Null(vm.SelectedWorldContentTarget); Assert.Equal("second world", vm.WorldContentTargets.Single().Name);
+    }
+    [AvaloniaFact]
+    public async Task ReboundInstanceDirectoryInvalidatesWorldSelectionAndLateResults()
+    {
+        var service = new Service(); using var owner = new MainWindowViewModel(service, new FakeExternalLauncher()); var vm = owner.Downloads; vm.Refresh(service.Snapshot);
+        var instance = service.Snapshot.Instances.First(); vm.OpenWorldContentBrowser(instance, "world-b");
+        await vm.OpenProjectAsync(new("project", "pack", "resource", "", "", 1, "datapack", null, new("https://modrinth.com/datapack/project")));
+        Assert.Equal("world-b", vm.SelectedWorldContentTarget?.DirectoryName);
+        var late = new TaskCompletionSource<IReadOnlyList<WorldContentTarget>>(); service.WorldRead = (_, _) => late.Task;
+        service.Publish(service.Snapshot with { Instances = [instance with { GameDirectory = instance.GameDirectory + "-moved" }] }); vm.Refresh(service.Snapshot);
+        Assert.Null(vm.SelectedWorldContentTarget); Assert.Empty(vm.WorldContentTargets);
+        late.SetResult([new("new-world", "new directory", "1.21.1", 3955)]); Dispatcher.UIThread.RunJobs();
+        Assert.Null(vm.SelectedWorldContentTarget); Assert.Equal("new-world", vm.WorldContentTargets.Single().DirectoryName);
+        Assert.False(vm.HasWorldContentPreview);
+    }
     private sealed class Service : FakeLauncherService, IWorldContentInstallationService, ILauncherCatalogService
     {
         public int Previews, Installs; public bool FailCommit, MixedFiles; public string? LastLoader; public WorldContentRequest? LastRequest;
-        public Task<IReadOnlyList<WorldContentTarget>> GetWorldContentTargetsAsync(string instanceId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<WorldContentTarget>>([new("world-a", "世界甲", "1.21.1", 3955), new("world-b", "世界乙", "1.21.1", 3955)]);
+        public Func<string, CancellationToken, Task<IReadOnlyList<WorldContentTarget>>>? WorldRead;
+        public Task<IReadOnlyList<WorldContentTarget>> GetWorldContentTargetsAsync(string instanceId, CancellationToken cancellationToken = default) => WorldRead?.Invoke(instanceId, cancellationToken) ?? Task.FromResult<IReadOnlyList<WorldContentTarget>>([new("world-a", "世界甲", "1.21.1", 3955), new("world-b", "世界乙", "1.21.1", 3955)]);
         public Task<WorldContentPreview> PreviewWorldContentAsync(WorldContentRequest request, CancellationToken cancellationToken = default)
         { Previews++; LastRequest = request; return Task.FromResult(new WorldContentPreview("preview-" + Previews, request.Kind, "明确实例", request.WorldDirectoryName, "1.21.1", ["public.zip"], [])); }
         public Task<WorldContentResult> InstallWorldContentAsync(string previewId, CancellationToken cancellationToken = default)

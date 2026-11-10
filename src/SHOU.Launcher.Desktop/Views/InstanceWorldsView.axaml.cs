@@ -48,6 +48,18 @@ public partial class InstanceWorldsView : UserControl
         }
         catch (Exception ex) { vm.Root.ShowError(UiPrivacy.Redact(ex.Message)); }
     }
+    private async void PasteWorldDatapack_Click(object? sender, RoutedEventArgs args)
+    {
+        if (DataContext is not InstancesPageViewModel { CanImportWorldDatapack: true } vm || vm.SelectedInstance is not { } instance || vm.SelectedWorldRow is not { } world) return;
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。");
+            var files = await clipboard.TryGetFilesAsync();
+            var paths = files?.Select(f => f.TryGetLocalPath() ?? "").ToArray() ?? [];
+            await vm.ImportClipboardWorldDatapackAsync(paths, instance.Id, world.DirectoryName, instance.GameDirectory);
+        }
+        catch (Exception ex) { vm.Root.ShowError(UiPrivacy.Redact(ex.Message)); }
+    }
     private void EditInstanceServer_Click(object? sender, RoutedEventArgs args)
     {
         if (DataContext is not InstancesPageViewModel vm || sender is not Button { Tag: InstanceServerDraftViewModel row }) return;

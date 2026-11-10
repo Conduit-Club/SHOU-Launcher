@@ -366,6 +366,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
 
     public void SelectCategory(string id)
     {
+        if (id != "datapack") _worldBrowserContext = null;
         var selected = Categories.FirstOrDefault(c => c.Id == id);
         if (selected is null) return;
         if (!ReferenceEquals(_selectedCategory, selected))
