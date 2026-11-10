@@ -34,7 +34,34 @@
 
 ## 源码、候选及证据
 
-开发从 `features/windows-parity` 的 `9b21c1cd` 续作；开始前已 fetch，本地与远端相同，不合并 dev/main。原工作树改动及上轮旧 todo stash 不动。最终提交、候选 SHA-256、测试计数及磁盘记录在收尾后补入本节。
+开发从 `features/windows-parity` 的 `9b21c1cd` 续作；开始前已 fetch，本地与远端相同，不合并 dev/main。原工作树 AGENTS 修改、旧参考资料及上轮旧 todo `stash@{0}`（`530819e1`）保持。
+
+- `4fe707259f9e0a5c5d4f0ec9dce055e0930e8ec3`：存档下载入口、文件剪贴板与可恢复数据包回收。
+- `3146197b8f8271c9391fdabe6b036e893762df80`：未同步下载目标的异常处理与按钮回归；最终候选源码。
+- Core 全回归时 HEAD 仍为 `9b21c1cd`，测试对应未提交的完整工作树修改，随后形成 `4fe70725`。最终 Desktop 全回归时 HEAD 为 `4fe70725`，包含随后形成 `3146197b` 的导航修复；两提交间 Core 无差异。最终文档提交只补验收记录，不修改产品代码。
+
+| 项目 | 结果 |
+| --- | --- |
+| SDK / UI | .NET SDK 10.0.403 / Avalonia 12.1.5，项目隔离工具与依赖 |
+| 最终 Core | 573 通过 / 16 显式跳过 / 0 失败，总计 589 |
+| 最终 Desktop | 200 通过 / 0 跳过 / 0 失败 |
+| Windows | win-x64，自包含 Release，干净源码 `3146197b8f8271c9391fdabe6b036e893762df80`，未签名本地候选 |
+| ZIP 大小 / 内容 | 81,631,565 字节，268 文件逐项 SHA-256 与包目录一致；EXE/CoreCLR/Skia/HarfBuzz 均 AMD64 |
+| Mac | 同源码 osx-arm64 Release 交叉构建成功，入口为 Mach-O ARM64；没有生成或签名 `.app`，没有原生运行 |
+| 原生窗口 / 游戏 / 登录 | 本轮未新增原生窗口证据，未启动 Minecraft，未进行账户登录；R17/R21 证据仍为历史范围 |
+
+Windows 最终候选（相对本工作树）：
+`artifacts/windows-main-20261105/dist/r22-final-win-rc2/Desktop/Release/win-x64/default/SHOU-Launcher-win-x64-v1.5.0-dev.g3146197b.zip`
+
+SHA-256：`7b6ee1a37ab9297802ed3f655796ea7ce7dee7556385cee9927b49518d67b2c5`。
+
+首份 `4fe70725` 候选与全部首次失败记录保留；最终只交付上面的 RC2。ZIP 未含 `.env`、账户/凭据缓存、日志、脚本或应用内更新清单；Client ID/CF API 配置仅由既有受控编译入口核验，值不输出。
+
+非敏感验收包：`artifacts/windows-main-20261105/dist/r22-evidence/SHOU-R22-validation-evidence.zip`，725,592 字节、41 项，包含控制器记录、日志、TRX、首次失败、文件哈希与预算核验，0 张原生截图；不含存档备份、游戏载荷或账号文件。Git 传源码；跨机器复制候选/证据时仍应使用 SMB 并核对 SHA-256。
+
+证据包 SHA-256：`ee111083e403c23f0213141c13f4dbdbf9447e45ac84ae4ba388b4f6091a0fa6`。
+
+收尾记录：归档前任务目录 30.571 GiB，加私有验收目录正增长 2.000 GiB，共 32.571 GiB；额外证据包约 0.7 MiB，仍低于 35 GiB，磁盘可用 249.629 GiB。只清理完成任务的 bin/obj/publish-desktop，候选、源数据、TRX 和首次失败保留；重任务 owner 为 0，本轮隔离 SDK 的一个空闲 MSBuild 节点已停止。MSTest 的 Counters.notExecuted 写为 0，汇总按实际 UnitTestResult 的 16 个 NotExecuted 计数，该聚合断言的首轮错误亦保留。
 
 ## Mac 侧原生补验清单
 
