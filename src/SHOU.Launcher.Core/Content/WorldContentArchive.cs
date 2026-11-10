@@ -11,7 +11,7 @@ internal readonly record struct DataPackFormat(int Major, int Minor) : IComparab
 }
 internal sealed record PackResource(string Hash, bool MergeableTag, int Priority = 0);
 internal sealed record InspectedDatapack(string Revision, IReadOnlyDictionary<string, PackResource> Resources, long ExpandedBytes);
-internal sealed record InspectedWorld(string Prefix, int DataVersion, string Version, IReadOnlyList<string> Files);
+internal sealed record InspectedWorld(string Prefix, int DataVersion, string Version, IReadOnlyList<string> Files, string? Name = null);
 
 internal static class WorldContentArchive
 {
@@ -154,20 +154,22 @@ internal static class WorldContentArchive
         if (WorldFileIdentity.FromHandle(input.SafeFileHandle) != guard.Final) throw new IOException("文件身份改变。");
         var bytes = new byte[checked((int)guard.Final.Size)]; await input.ReadExactlyAsync(bytes, ct); guard.Verify(); return bytes;
     }
-    internal static async Task<InspectedWorld> WorldAsync(string path, CancellationToken ct)
+    private static bool FinderMetadata(string path) => path.Split('/')[^1] == ".DS_Store" || path.StartsWith("__MACOSX/", StringComparison.Ordinal) && path.Split('/')[^1].StartsWith("._", StringComparison.Ordinal);
+    internal static async Task<InspectedWorld> WorldAsync(string path, CancellationToken ct, bool allowFinderMetadata = false)
     {
         using var zip = PackArchiveReader.Open(path);
-        var levels = zip.Zip.Entries.Where(e => e.FullName == "level.dat" || e.FullName.EndsWith("/level.dat", StringComparison.Ordinal)).ToArray();
+        var entries = zip.Zip.Entries.Where(e => !allowFinderMetadata || !FinderMetadata(e.FullName)).ToArray();
+        var levels = entries.Where(e => e.FullName == "level.dat" || e.FullName.EndsWith("/level.dat", StringComparison.Ordinal)).ToArray();
         if (levels.Length != 1) throw new InvalidDataException("世界 ZIP 必须包含唯一 Java level.dat。");
         var prefix = levels[0].FullName[..^"level.dat".Length];
-        var files = zip.Zip.Entries.Where(e => !e.FullName.EndsWith('/')).Select(e => e.FullName).ToArray();
+        var files = entries.Where(e => !e.FullName.EndsWith('/')).Select(e => e.FullName).ToArray();
         if (files.Any(p => !p.StartsWith(prefix, StringComparison.Ordinal))) throw new InvalidDataException("世界 ZIP 混有存档目录外的文件。");
         var bytes = await PackArchiveReader.ReadEntryAsync(levels[0], new NbtLimits().MaxInputBytes, ct);
         var data = BoundedNbt.Read(bytes, cancellationToken: ct).Root.Find("Data") ?? throw new InvalidDataException("不是 Java 世界。");
         var version = data.Find("Version")?.Find("Name"); var number = data.Find("DataVersion");
         if (version is not { Type: NbtType.String } || number is not { Type: NbtType.Int }) throw new InvalidDataException("世界版本身份缺失，未猜测兼容性。");
         foreach (var file in files) ValidateWorldPath(file[prefix.Length..]);
-        zip.Verify(); return new(prefix, (int)number.Value, (string)version.Value, files.Select(p => p[prefix.Length..]).Where(p => p != "session.lock").ToArray());
+        zip.Verify(); return new(prefix, (int)number.Value, (string)version.Value, files.Select(p => p[prefix.Length..]).Where(p => p != "session.lock").ToArray(), data.Find("LevelName") is { Type: NbtType.String } name ? (string)name.Value : null);
     }
     private static void ValidateWorldPath(string path)
     {

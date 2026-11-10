@@ -13,7 +13,7 @@ using SHOU.Launcher.Desktop.Platform;
 namespace SHOU.Launcher.Core.Tests;
 
 [TestClass]
-public sealed class WorldContentInstallTests
+public sealed partial class WorldContentInstallTests
 {
     [TestMethod]
     public async Task ProjectOnlyDualModDatapackDependencyQueriesDatapackVariantForVanillaWorld()

@@ -302,8 +302,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private void CancelCurrentOperation()
     {
         var operation = _operation;
+        var token = operation?.Token ?? new CancellationToken(true);
         operation?.Cancel();
-        Accounts.CancelAuthenticationState(operation?.Token ?? new CancellationToken(true));
+        Accounts.CancelAuthenticationState(token);
         NotifyState();
     }
     public void Dispose()

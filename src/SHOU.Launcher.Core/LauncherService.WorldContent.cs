@@ -20,7 +20,7 @@ public sealed partial class LauncherService : IWorldContentInstallationService
     private sealed record WorldDownloadPlan(WorldContentPreview Preview, WorldContentRequest Request, GameInstance Instance,
         WorldGameIdentity Game, ContentInstallPlan? Datapacks, InspectedWorld? World, IReadOnlyDictionary<string, string> Archives,
         IReadOnlyDictionary<string, string> ArchiveHashes,
-        string Revision, WorldPathSnapshot TargetGuard, IReadOnlySet<string> NewPacks, DateTimeOffset Created);
+        string Revision, WorldPathSnapshot TargetGuard, IReadOnlySet<string> NewPacks, DateTimeOffset Created, LocalWorldSource? LocalSource = null);
     private sealed record WorldPackSnapshot(string Revision, IReadOnlyDictionary<string, InspectedDatapack> Packs);
     private Task WorldContentOperationAsync(string identity, Func<CancellationToken, Task> retry, Func<CancellationToken, Task> action, CancellationToken ct) =>
         ExecuteAsync("Installing", token => RunContentTransferAsync("world-content:" + identity, retry, action, token), ct);
@@ -172,6 +172,7 @@ public sealed partial class LauncherService : IWorldContentInstallationService
         {
             var instance = ContentTarget(plan.Request.InstanceId, true);
             if (instance.GameDirectory != plan.Instance.GameDirectory || InstanceIdentity.GameVersion(instance) != plan.Game.Version) throw new IOException("目标实例已改变，请重新预检。");
+            await VerifyLocalWorldSourceAsync(plan, ct);
             var root = ContentInstallFiles.Literal(instance.GameDirectory, "saves/" + plan.Request.WorldDirectoryName);
             if (plan.Datapacks is { } packs)
             {
@@ -202,7 +203,11 @@ public sealed partial class LauncherService : IWorldContentInstallationService
                     var archive = plan.Archives["world"]; using (var zip = PackArchiveReader.Open(archive)) if (await zip.Sha256Async(ct) != plan.Revision) throw new IOException("世界 ZIP 自预检后改变。");
                     Directory.CreateDirectory(stage); await WorldContentArchive.ExtractWorldAsync(archive, stage, plan.World!, plan.Revision, ct);
                     await WorldContentArchive.ValidateBundledWorldPacksAsync(stage, plan.Game.PackFormat, ct);
-                    await File.WriteAllTextAsync(ContentInstallFiles.Literal(stage, ".shou-world-source.json"), JsonSerializer.Serialize(new { plan.Request.ProjectId, plan.Request.ReleaseId, plan.Request.FileName, Sha256 = plan.Revision }), ct);
+                    var sourceRecord = plan.LocalSource is null
+                        ? JsonSerializer.Serialize(new { plan.Request.ProjectId, plan.Request.ReleaseId, plan.Request.FileName, Sha256 = plan.Revision })
+                        : JsonSerializer.Serialize(new { Kind = "local-world", plan.Request.FileName, Sha256 = plan.Revision, GameVersion = plan.Game.Version });
+                    await File.WriteAllTextAsync(ContentInstallFiles.Literal(stage, ".shou-world-source.json"), sourceRecord, ct);
+                    await VerifyLocalWorldSourceAsync(plan, ct);
                     ct.ThrowIfCancellationRequested(); plan.TargetGuard.VerifyExistingNodes(); EnsureInstanceNotRunning(instance); RequireMissingWorld(instance, plan.Request.WorldDirectoryName);
                     if (!Directory.Exists(saves)) { Directory.CreateDirectory(saves); createdSaves = true; }
                     _ = ContentInstallFiles.Literal(instance.GameDirectory, "saves");

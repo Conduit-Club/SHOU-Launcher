@@ -14,7 +14,7 @@ using Xunit;
 
 namespace SHOU.Launcher.Desktop.Tests;
 
-public sealed class WpfWorldEditingUiTests
+public sealed partial class WpfWorldEditingUiTests
 {
     private static void Pump(Window window) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
@@ -200,7 +200,7 @@ public sealed class WpfWorldEditingUiTests
         public void Log(LogEventLevel level, string area, object? source, string template) { if (IsEnabled(level, area)) Errors.Add(template); }
         public void Log(LogEventLevel level, string area, object? source, string template, params object?[] values) { if (IsEnabled(level, area)) Errors.Add(template + " " + string.Join(" | ", values)); }
     }
-    private sealed class WorldEditUiService : ILauncherService, IInstanceWorldService, IInstanceWorldEditService, IWorldDatapackTrashService, IWorldContentInstallationService
+    private sealed class WorldEditUiService : ILauncherService, IInstanceWorldService, IInstanceWorldEditService, IWorldDatapackTrashService, IWorldContentInstallationService, ILocalWorldImportService
     {
         public FakeLauncherService Base { get; } = new();
         public IAppPaths Paths => Base.Paths;
@@ -210,6 +210,18 @@ public sealed class WpfWorldEditingUiTests
         public event EventHandler<LauncherLog>? LogReceived { add => Base.LogReceived += value; remove => Base.LogReceived -= value; }
         public int EditReads, MetadataSaves, DatapackSaves;
         public int Recycles, Restores;
+        public int LocalPreviews, LocalImports;
+        public List<string> DiscardedLocalPreviews { get; } = [];
+        public LocalWorldImportRequest? LastLocalRequest;
+        public Func<LocalWorldImportRequest, CancellationToken, Task<LocalWorldImportPreview>>? LocalPreview;
+        public Func<string, CancellationToken, Task<WorldContentResult>>? LocalImport;
+        public Task<LocalWorldImportPreview> PreviewLocalWorldImportAsync(LocalWorldImportRequest request, CancellationToken ct = default)
+        {
+            LocalPreviews++; LastLocalRequest = request;
+            return LocalPreview?.Invoke(request, ct) ?? Task.FromResult(new LocalWorldImportPreview(new("local-" + LocalPreviews, "world", "Fixture instance", request.WorldDirectoryName, "1.21.1", ["level.dat", "region/r.0.0.mca"], []), "Local fixture world", Path.GetFileName(request.ArchivePath), new string('a', 64)));
+        }
+        public Task<WorldContentResult> ImportLocalWorldAsync(string previewId, CancellationToken ct = default) { LocalImports++; return LocalImport?.Invoke(previewId, ct) ?? Task.FromResult(new WorldContentResult(LastLocalRequest!.InstanceId, LastLocalRequest.WorldDirectoryName, 2, "/controlled")); }
+        public Task DiscardLocalWorldImportAsync(string previewId, CancellationToken ct = default) { DiscardedLocalPreviews.Add(previewId); return Task.CompletedTask; }
         public Task<IReadOnlyList<WorldContentTarget>> GetWorldContentTargetsAsync(string instanceId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<WorldContentTarget>>([]);
         public Task<WorldContentPreview> PreviewWorldContentAsync(WorldContentRequest request, CancellationToken cancellationToken = default) => throw new InvalidOperationException("This world navigation fixture must not install content.");
         public Task<WorldContentResult> InstallWorldContentAsync(string previewId, CancellationToken cancellationToken = default) => throw new InvalidOperationException("This world navigation fixture must not install content.");

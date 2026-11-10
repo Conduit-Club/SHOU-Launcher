@@ -60,6 +60,29 @@ public partial class InstanceWorldsView : UserControl
         }
         catch (Exception ex) { vm.Root.ShowError(UiPrivacy.Redact(ex.Message)); }
     }
+    private async void ImportLocalWorld_Click(object? sender, RoutedEventArgs args)
+    {
+        if (DataContext is not InstancesPageViewModel { CanSelectLocalWorldArchive: true } vm || vm.SelectedInstance is not { } instance) return;
+        try
+        {
+            var storage = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境无法打开文件选择器。");
+            var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "选择本地 Java 世界 ZIP", AllowMultiple = false, FileTypeFilter = [new FilePickerFileType("Java 世界 ZIP") { Patterns = ["*.zip"] }] });
+            if (files.Count == 0) return;
+            vm.SelectLocalWorldArchive([files[0].TryGetLocalPath() ?? ""], instance.Id, instance.GameDirectory);
+        }
+        catch (Exception ex) { vm.Root.ShowError(UiPrivacy.Redact(ex.Message)); }
+    }
+    private async void PasteLocalWorld_Click(object? sender, RoutedEventArgs args)
+    {
+        if (DataContext is not InstancesPageViewModel { CanSelectLocalWorldArchive: true } vm || vm.SelectedInstance is not { } instance) return;
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。");
+            var files = await clipboard.TryGetFilesAsync();
+            vm.SelectLocalWorldArchive(files?.Select(f => f.TryGetLocalPath() ?? "").ToArray() ?? [], instance.Id, instance.GameDirectory);
+        }
+        catch (Exception ex) { vm.Root.ShowError(UiPrivacy.Redact(ex.Message)); }
+    }
     private void EditInstanceServer_Click(object? sender, RoutedEventArgs args)
     {
         if (DataContext is not InstancesPageViewModel vm || sender is not Button { Tag: InstanceServerDraftViewModel row }) return;
@@ -75,5 +98,6 @@ public partial class InstanceWorldsView : UserControl
     private void Workspace_KeyDown(object? sender, KeyEventArgs args)
     {
         if (args.Key == Key.Escape && DataContext is InstancesPageViewModel { IsServerEditorOpen: true } vm) { vm.CancelInstanceServerEditorCommand.Execute(null); args.Handled = true; }
+        else if (args.Key == Key.Escape && DataContext is InstancesPageViewModel { IsLocalWorldImportOpen: true } worlds) { worlds.CancelLocalWorldImportCommand.Execute(null); args.Handled = true; }
     }
 }

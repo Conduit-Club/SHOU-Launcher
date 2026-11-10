@@ -177,7 +177,7 @@ public sealed partial class InstancesPageViewModel
         CancelInstanceServerEditorCommand = Command(() => { _worldDraft.EditorOpen = false; NotifyWorldPresentation(); });
         foreach (var command in new[] { RefreshWorldsCommand, RefreshInstanceServersCommand, RefreshWorldDatapacksCommand })
             command.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(AsyncRelayCommand.IsRunning) && !command.IsRunning) ScheduleUnreadWorldSection(); };
-        _worldWorkspaceReady = true; InitializeWorldEditing(); InitializeWorldActions(); NotifyWorldWorkspace();
+        _worldWorkspaceReady = true; InitializeWorldEditing(); InitializeWorldActions(); InitializeLocalWorldImport(); NotifyWorldWorkspace();
     }
     public void ActivateWorldWorkspace(string sectionKey)
     {
@@ -204,6 +204,7 @@ public sealed partial class InstancesPageViewModel
         NotifyWorldCommands();
         NotifyWorldEditing();
         NotifyWorldActions();
+        NotifyLocalWorldImport();
         ScheduleUnreadWorldSection();
     }
     private void ScheduleUnreadWorldSection()
@@ -238,7 +239,7 @@ public sealed partial class InstancesPageViewModel
     {
         if (!WorldWorkspaceCanRead || SelectedInstance is not { } instance) return;
         var draft = _worldDraft; draft.WorldsPhase = WorldReadPhase.Loading; NotifyWorldPresentation(); IReadOnlyList<InstanceWorldSummary>? rows = null;
-        var completed = await Owner.RunAsync("读取实例存档", async ct => rows = await ((IInstanceWorldService)Service).GetInstanceWorldsAsync(instance.Id, ct), true);
+        var completed = await Owner.RunInlineAsync("读取实例存档", async ct => rows = await ((IInstanceWorldService)Service).GetInstanceWorldsAsync(instance.Id, ct));
         if (completed && rows is not null)
         {
             var selected = draft.SelectedWorld?.DirectoryName; draft.Worlds.Clear();
