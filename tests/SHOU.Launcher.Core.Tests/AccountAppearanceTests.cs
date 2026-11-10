@@ -12,7 +12,7 @@ using SHOU.Launcher.Desktop.Platform;
 namespace SHOU.Launcher.Core.Tests;
 
 [TestClass]
-public sealed class AccountAppearanceTests
+public sealed partial class AccountAppearanceTests
 {
     private const string Uuid = "11111111222233334444555555555555";
     private static AccountProfile Offline(string id = "offline:fixture") => new(id, AccountKind.Offline, "外观夹具", Uuid);

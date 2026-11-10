@@ -45,6 +45,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private CancellationTokenSource? _operation;
     private bool _executing;
+    private bool closing;
+    private TaskCompletionSource? operationCompletion;
     private bool _disposed;
     private bool _initialized;
     private string?[] _sensitiveValues = [];
@@ -165,8 +167,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         "Authenticating" => "正在验证账户", "Error" => "操作失败，可修正后重试", _ => _operationLabel
     };
     public bool IsBusy => _executing || Snapshot.State is "Installing" or "Launching" or "Authenticating";
-    public bool CanMutate => !_disposed && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
-    public bool CanReadRemote => !_disposed && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
+    public bool CanMutate => !_disposed && !closing && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
+    public bool CanReadRemote => !_disposed && !closing && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
     public bool HasRunningGame => !_disposed && (Snapshot.State == "Running" || Snapshot.GameProcessId is not null);
     private int inlineOperations;
     public bool ShowOperationStatus => inlineOperations == 0 && IsBusy && (!IsHomeLaunching || !ReferenceEquals(SelectedPage, Home));
@@ -200,6 +202,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (!(allowWhileRunning ? CanReadRemote : CanMutate)) return false;
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         _operation = operation;
+        var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); operationCompletion = completion;
         _sensitiveValues = sensitiveValues;
         _executing = true;
         _operationLabel = label;
@@ -228,7 +231,20 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             _operation = null;
             if (!_disposed) ApplySnapshot(Service.Snapshot);
             _sensitiveValues = [];
+            completion.TrySetResult();
         }
+    }
+
+    public async Task CancelAndWaitForCloseAsync()
+    {
+        closing = true;
+        var pending = operationCompletion?.Task ?? Task.CompletedTask;
+        CancelCurrentOperation();
+        try
+        {
+            await Task.WhenAll(pending, Tools.Toolbox.CancelAndWaitAsync(), Settings.CancelAndWaitAsync(), Instances.CancelComponentWorkAsync()).WaitAsync(TimeSpan.FromSeconds(30));
+        }
+        finally { closing = false; NotifyState(); }
     }
 
     public async Task RunControlAsync(string label, Func<CancellationToken, Task> action)

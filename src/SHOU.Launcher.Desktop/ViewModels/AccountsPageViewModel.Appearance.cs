@@ -10,7 +10,7 @@ namespace SHOU.Launcher.Desktop.ViewModels;
 
 public sealed record AccountSkinModelChoice(AccountSkinModel Value, string Name);
 public sealed record AccountSkinSelectionTarget(string AccountId, string Identity, long Generation, AccountSkinModel Model);
-public enum AccountAppearanceDialogPage { Preview, LocalSkin, Capes }
+public enum AccountAppearanceDialogPage { Preview, LocalSkin, OnlineSkin, Capes }
 public sealed class AccountAppearanceRow(AccountProfile profile) : ObservableObject
 {
     public AccountProfile Profile { get; private set; } = profile;
@@ -44,7 +44,7 @@ public sealed partial class AccountsPageViewModel
         get => AppearanceAccountRows.FirstOrDefault(row => row.Profile.Id == SelectedAccount?.Id);
         set { if (value is not null) SelectedAccount = value.Profile; }
     }
-    public AccountSkinModelChoice SelectedLocalSkinModel { get => localSkinModel; set { if (value is not null) SetProperty(ref localSkinModel, value); } }
+    public AccountSkinModelChoice SelectedLocalSkinModel { get => localSkinModel; set { if (value is not null && SetProperty(ref localSkinModel, value)) NotifyOnlineAppearance(); } }
     public AccountTextureImage? AccountSkin => accountAppearance?.Skin;
     public AccountSkinModel AccountSkinModel => accountAppearance?.Model ?? SkinModel.Classic;
     public bool HasAccountSkin => AccountSkin is not null;
@@ -63,14 +63,15 @@ public sealed partial class AccountsPageViewModel
     public bool ShowSkinOuterLayer { get => showSkinOuterLayer; set => SetProperty(ref showSkinOuterLayer, value); }
     public bool ShowPreviewCape { get => showPreviewCape; set => SetProperty(ref showPreviewCape, value); }
     public AccountCapeAppearance? SelectedPreviewCape
-    { get => selectedPreviewCape; set { if (SetProperty(ref selectedPreviewCape, value)) OnPropertyChanged(nameof(PreviewCapeTexture)); } }
+    { get => selectedPreviewCape; set { if (SetProperty(ref selectedPreviewCape, value)) { OnPropertyChanged(nameof(PreviewCapeTexture)); NotifyOnlineAppearance(); } } }
     public AccountTextureImage? PreviewCapeTexture => SelectedPreviewCape?.Texture;
     public bool IsAccountAppearanceDialogOpen => appearanceDialogOpen;
     public bool IsAccountPreviewPage => appearanceDialogPage == AccountAppearanceDialogPage.Preview;
     public bool IsLocalSkinPage => appearanceDialogPage == AccountAppearanceDialogPage.LocalSkin;
+    public bool IsOnlineSkinPage => appearanceDialogPage == AccountAppearanceDialogPage.OnlineSkin;
     public bool IsAccountCapePage => appearanceDialogPage == AccountAppearanceDialogPage.Capes;
-    public string AccountAppearanceDialogTitle => appearanceDialogPage switch { AccountAppearanceDialogPage.LocalSkin => "本地离线皮肤", AccountAppearanceDialogPage.Capes => "角色披风", _ => "3D 皮肤与披风" };
-    public string AccountCapeSummary => SelectedChannelAccount?.Kind == AccountKind.Yggdrasil ? "公开纹理仅提供当前披风；其他披风请在对应官网查看。" : SelectedChannelAccount?.Kind == AccountKind.Offline ? "离线角色没有在线披风列表。" : $"已读取 {AccountCapes.Count} 件披风；选中仅改变预览，穿戴请前往官网。";
+    public string AccountAppearanceDialogTitle => appearanceDialogPage switch { AccountAppearanceDialogPage.LocalSkin => "本地离线皮肤", AccountAppearanceDialogPage.OnlineSkin => "修改在线皮肤", AccountAppearanceDialogPage.Capes => "角色披风", _ => "3D 皮肤与披风" };
+    public string AccountCapeSummary => SelectedChannelAccount?.Kind == AccountKind.Yggdrasil ? "公开纹理仅提供当前披风；其他披风请在对应官网查看。" : SelectedChannelAccount?.Kind == AccountKind.Offline ? "离线角色没有在线披风列表。" : $"已读取 {AccountCapes.Count} 件披风；选中后可预览，点击穿戴才会更新角色。";
     public AsyncRelayCommand RefreshAppearanceCommand { get; private set; } = null!;
     public AsyncRelayCommand OpenAppearanceWebsiteCommand { get; private set; } = null!;
     public RelayCommand CloseAppearanceCommand { get; private set; } = null!;
@@ -88,6 +89,7 @@ public sealed partial class AccountsPageViewModel
         }, () => CanOpenAppearanceWebsite);
         CloseAppearanceCommand = Command(CloseAccountAppearance);
         CancelAppearanceReadCommand = Command(() => appearanceReadCancellation?.Cancel(), () => appearanceBusy);
+        InitializeOnlineAppearance();
         appearanceReady = true;
     }
     private static string AppearanceIdentity(AccountProfile account) => account.Id + "\n" + account.Kind + "\n" + account.PlayerUuid + "\n" + account.AuthenticationServer
@@ -109,6 +111,7 @@ public sealed partial class AccountsPageViewModel
         if (appearanceIdentity == identity) { OnPropertyChanged(nameof(AccountAppearancePlayer)); NotifyAccountAppearanceCommands(); return; }
         ++appearanceGeneration; appearanceReadCancellation?.Cancel(); appearanceReadCancellation = null;
         appearanceIdentity = identity; appearanceRead = false; appearanceBusy = false; appearancePickerActive = false;
+        onlineSkinDraft = null; onlineWriteNeedsRefresh = false;
         CloseAccountAppearance(); appearanceMessage = ""; accountAppearance = identity is null ? null : appearanceCache.GetValueOrDefault(identity);
         UpdateAccountAppearance(accountAppearance); ScheduleUnreadAccountAppearance();
     }
@@ -133,6 +136,7 @@ public sealed partial class AccountsPageViewModel
                 result = await appearanceService.GetAccountAppearanceAsync(account.Id, true, cancellation.Token);
             if (cancellation.IsCancellationRequested || !IsCurrentAppearance(identity, generation) || result.AccountId != account.Id) return;
             CacheAppearance(identity, result); appearanceRead = true; appearanceMessage = result.Skin is null ? account.Kind == AccountKind.Offline ? "尚未选择本地皮肤。" : result.IsRemote ? "服务未返回当前皮肤。" : "点击“刷新头像”读取在线外观。" : refreshRemote ? "外观已刷新" : "";
+            if (refreshRemote && result.IsRemote) onlineWriteNeedsRefresh = false;
             UpdateAccountAppearance(result);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { if (IsCurrentAppearance(identity, generation)) { appearanceRead = true; appearanceMessage = "读取已取消，已有外观保留。"; } }
@@ -179,7 +183,7 @@ public sealed partial class AccountsPageViewModel
     }
     public bool OpenAccountAppearance(AccountAppearanceDialogPage page)
     {
-        if (SelectedChannelAccount is null || page == AccountAppearanceDialogPage.Preview && !CanPreviewAccountSkin || page == AccountAppearanceDialogPage.LocalSkin && SelectedChannelAccount.Kind != AccountKind.Offline) return false;
+        if (SelectedChannelAccount is null || page == AccountAppearanceDialogPage.Preview && !CanPreviewAccountSkin || page == AccountAppearanceDialogPage.LocalSkin && SelectedChannelAccount.Kind != AccountKind.Offline || page == AccountAppearanceDialogPage.OnlineSkin && !SupportsOnlineAppearance) return false;
         appearanceDialogPage = page; appearanceDialogOpen = true; NotifyAppearancePresentation(); return true;
     }
     public void CloseAccountAppearance()
@@ -195,12 +199,14 @@ public sealed partial class AccountsPageViewModel
     private bool IsAppearancePageActive => ReferenceEquals(Owner.SelectedPage, Owner.Home) || ReferenceEquals(Owner.SelectedPage, this);
     private void NotifyAppearancePresentation()
     {
+        NotifyOnlineAppearance();
         foreach (var property in new[] { nameof(AccountSkin), nameof(AccountSkinModel), nameof(HasAccountSkin), nameof(HasAccountCapes), nameof(IsAccountAppearanceBusy), nameof(AccountAppearanceStatus), nameof(HasAccountAppearanceMessage), nameof(AccountAppearanceCapability), nameof(AccountAppearanceSummary), nameof(AccountAppearancePlayer), nameof(CanChooseLocalSkin), nameof(CanSaveSkinPng), nameof(CanOpenAppearanceWebsite), nameof(CanPreviewAccountSkin), nameof(IsAccountAppearanceDialogOpen), nameof(IsAccountPreviewPage), nameof(IsLocalSkinPage), nameof(IsAccountCapePage), nameof(AccountAppearanceDialogTitle), nameof(AccountCapeSummary) }) OnPropertyChanged(property);
         NotifyAccountAppearanceCommands();
     }
     private void NotifyAccountAppearanceCommands()
     {
         if (!appearanceReady) return;
+        NotifyOnlineAppearance();
         OnPropertyChanged(nameof(CanChooseLocalSkin)); OnPropertyChanged(nameof(CanSaveSkinPng));
         RefreshAppearanceCommand.NotifyCanExecuteChanged(); OpenAppearanceWebsiteCommand.NotifyCanExecuteChanged(); CancelAppearanceReadCommand.NotifyCanExecuteChanged(); ScheduleUnreadAccountAppearance();
     }

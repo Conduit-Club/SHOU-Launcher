@@ -8,7 +8,7 @@ using SHOU.Launcher.Core.IO;
 namespace SHOU.Launcher.Core.Authentication;
 
 /// <summary>One atomic, account-bound local appearance record. Reuses the world store's tested path/handle identities.</summary>
-public sealed class AccountAppearanceStore
+public sealed partial class AccountAppearanceStore
 {
     private const int MaximumRecordBytes = AccountAppearancePng.MaximumPngBytes * 4 / 3 + 8192;
     private readonly string root;

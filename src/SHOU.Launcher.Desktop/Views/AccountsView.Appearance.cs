@@ -19,6 +19,7 @@ public partial class AccountsView
     {
         if (DataContext is not AccountsPageViewModel vm) return;
         if (vm.SelectedChannelAccount?.Kind == AccountKind.Offline) ShowAppearance(AccountAppearanceDialogPage.LocalSkin);
+        else if (vm.SupportsOnlineAppearance) ShowAppearance(AccountAppearanceDialogPage.OnlineSkin);
         else if (vm.OpenAppearanceWebsiteCommand.CanExecute(null)) vm.OpenAppearanceWebsiteCommand.Execute(null);
     }
     private async void SaveAccountSkin_Click(object? sender, RoutedEventArgs e)

@@ -19,7 +19,7 @@ using Xunit;
 
 namespace SHOU.Launcher.Desktop.Tests;
 
-public sealed class AccountAppearanceUiTests
+public sealed partial class AccountAppearanceUiTests
 {
     [AvaloniaFact]
     public async Task RefreshedCredentialsRetryFailedPortraitAndUnrelatedProgressDoesNotRefetch()
@@ -137,7 +137,7 @@ public sealed class AccountAppearanceUiTests
         OpenMenu(fixture.Window); Menu(fixture.Window, "ChangeAccountCapeMenuItem").RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent)); Find<Button>(fixture.Window, "AccountSkinMenuButton").Flyout!.Hide(); Pump(fixture.Window);
         var list = Find<ListBox>(fixture.Window, "AccountCapeList"); Assert.Equal(2, list.ItemCount); list.SelectedItem = fixture.Vm.AccountCapes[1]; Pump(fixture.Window);
         Assert.Equal("cape-B", fixture.Vm.SelectedPreviewCape!.Id); Assert.True(fixture.Vm.AccountCapes[0].IsActive); Assert.False(fixture.Vm.AccountCapes[1].IsActive);
-        Assert.Contains("仅改变预览", fixture.Vm.AccountCapeSummary); Click(fixture.Window, "ManageAccountCapeWebsiteButton");
+        Assert.Contains("点击穿戴", fixture.Vm.AccountCapeSummary); Click(fixture.Window, "ManageAccountCapeWebsiteButton");
         Assert.Equal("https://www.minecraft.net/en-us/msaprofile/mygames/editskin", fixture.External.OpenedUris.Single().AbsoluteUri); Assert.Equal(0, service.SaveCalls);
     }
     [AvaloniaFact]
@@ -204,8 +204,10 @@ public sealed class AccountAppearanceUiTests
         using var compressed = new MemoryStream(); using (var z = new ZLibStream(compressed, CompressionLevel.SmallestSize, true)) z.Write(raw.ToArray()); Chunk("IDAT", compressed.ToArray()); Chunk("IEND", []); return png.ToArray();
         void Chunk(string tag, byte[] bytes) { var length = new byte[4]; BinaryPrimitives.WriteInt32BigEndian(length, bytes.Length); png.Write(length); var data = Encoding.ASCII.GetBytes(tag).Concat(bytes).ToArray(); png.Write(data); var crc = uint.MaxValue; foreach (var b in data) { crc ^= b; for (var bit = 0; bit < 8; bit++) crc = crc >> 1 ^ ((crc & 1) * 0xedb88320u); } BinaryPrimitives.WriteUInt32BigEndian(length, ~crc); png.Write(length); }
     }
-    private sealed class AppearanceUiService : ILauncherService, IAccountAppearanceService
+    private sealed class AppearanceUiService : ILauncherService, IAccountAppearanceService, IAccountAppearanceMutationService
     {
+        public Func<string, AccountAppearanceChange, CancellationToken, Task<AccountAppearanceWriteResult>>? Write;
+        public Task<AccountAppearanceWriteResult> ChangeAccountAppearanceAsync(string id, AccountAppearanceChange change, CancellationToken ct = default) => Write?.Invoke(id, change, ct) ?? throw new InvalidOperationException("Explicit appearance mutation fixture required.");
         public FakeLauncherService Base { get; } = new();
         public IAppPaths Paths { get; } = new AppearancePaths();
         public AccountAppearanceStore Store { get; }

@@ -5,9 +5,30 @@ using SHOU.Launcher.Core.Downloads;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService : IAccountAppearanceService
+public sealed partial class LauncherService : IAccountAppearanceService, IAccountAppearanceMutationService
 {
     private readonly ConcurrentDictionary<string, AccountAppearance> accountAppearances = new(StringComparer.Ordinal);
+    public async Task<AccountAppearanceWriteResult> ChangeAccountAppearanceAsync(string accountId, AccountAppearanceChange change, CancellationToken cancellationToken = default)
+    {
+        if (change.Png.Length > AccountAppearancePng.MaximumPngBytes) throw new InvalidDataException("皮肤 PNG 超过 2 MiB 上限。");
+        change = change with { Png = change.Png.ToArray() }; AccountAppearanceWriteResult? result = null; string? backup = null;
+        await ExecuteAsync("Ready", async ct =>
+        {
+            var account = FindAccount(accountId);
+            if (Snapshot.SelectedAccountId != accountId) throw new InvalidOperationException("当前角色已改变，请重新选择外观。");
+            if (account.Kind != AccountKind.Microsoft || !sessions.TryGetValue(accountId, out var session) || !AccountIdentity.Matches(account, session.Profile))
+                throw new InvalidOperationException("请先登录此 Microsoft 角色。");
+            using var client = new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false));
+            result = await new AccountAppearanceClient(client).ChangeMicrosoftAsync(account, session.AccessToken, change, async (current, token) =>
+            {
+                if (Snapshot.SelectedAccountId != accountId || !AccountIdentity.Matches(FindAccount(accountId), account)) throw new InvalidOperationException("当前角色已改变，未发送在线修改。");
+                backup = await new AccountAppearanceStore(Paths.LocalDataDirectory).BackupOnlineAsync(account, current, token).ConfigureAwait(false);
+            }, ct).ConfigureAwait(false);
+            accountAppearances.TryRemove(accountId, out _);
+            if (result.Appearance is { } verified && AccountIdentity.Matches(FindAccount(accountId), account)) accountAppearances[accountId] = verified;
+        }, cancellationToken).ConfigureAwait(false);
+        return result! with { BackupDirectory = backup is null ? null : Path.GetDirectoryName(backup) };
+    }
     public async Task<AccountAppearance> GetAccountAppearanceAsync(string accountId, bool refreshRemote = false, CancellationToken cancellationToken = default)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(false); var account = FindAccount(accountId);

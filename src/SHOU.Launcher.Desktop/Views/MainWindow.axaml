@@ -58,6 +58,11 @@
         </Border>
       </Border>
       <Border Name="StartupLogoOverlay" Grid.RowSpan="3" IsVisible="False" Background="{DynamicResource ClubSurface}"><Image Source="avares://SHOU.Launcher.Desktop/Assets/Conduit/club-logo.png" Width="96" Height="96" HorizontalAlignment="Center" VerticalAlignment="Center" /></Border>
+      <Border Name="WindowCloseOverlay" Grid.RowSpan="3" IsVisible="False" Background="#66000000" KeyDown="ClosePrompt_KeyDown" KeyboardNavigation.TabNavigation="Cycle">
+        <Border Background="{DynamicResource ClubSurface}" CornerRadius="9" Padding="24" Margin="28" MaxWidth="520" HorizontalAlignment="Center" VerticalAlignment="Center">
+          <StackPanel Spacing="18"><TextBlock Text="关闭启动器" FontSize="21" FontWeight="Bold" /><TextBlock Name="WindowClosePrompt" TextWrapping="Wrap" /><WrapPanel Orientation="Horizontal"><Button Name="SaveSettingsAndCloseButton" Content="保存并关闭" Click="SaveSettingsAndClose_Click" Margin="0,0,8,8" /><Button Name="DiscardAndCloseButton" Content="放弃草稿并关闭" Click="DiscardAndClose_Click" Margin="0,0,8,8" /><Button Name="CancelWindowCloseButton" Content="返回" Click="CancelWindowClose_Click" Margin="0,0,0,8" /></WrapPanel></StackPanel>
+        </Border>
+      </Border>
     </Grid>
   </Border>
 </Window>

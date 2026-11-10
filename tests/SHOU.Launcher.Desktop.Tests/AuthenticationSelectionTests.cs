@@ -120,6 +120,9 @@ public sealed class AuthenticationSelectionTests
         var challenge = await AwaitChallenge(window, vm);
         window.Close();
         await AwaitLogin(vm);
+        // The window now waits for the cancelled operation to settle before disposing its UI subscriptions.
+        for (var i = 0; i < 100 && window.IsVisible; i++) { Pump(window); await Task.Delay(10); }
+        Assert.False(window.IsVisible);
         Assert.False(challenge.IsPending); Assert.Equal(0, fake.OutstandingProfileSelections);
         Assert.Equal(0, fake.DisposeCalls); Assert.Equal(0, fake.SnapshotSubscribers); Assert.Equal(0, fake.LogSubscribers);
     }

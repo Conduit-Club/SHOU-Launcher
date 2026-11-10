@@ -8,7 +8,7 @@ using SHOU.Launcher.Core.Abstractions;
 namespace SHOU.Launcher.Core.Authentication;
 
 /// <summary>Only profile GETs and anonymous texture GETs. The caller supplies a client with redirects disabled.</summary>
-public sealed class AccountAppearanceClient(HttpClient http)
+public sealed partial class AccountAppearanceClient(HttpClient http)
 {
     private const int MaximumJsonBytes = 256 * 1024, MaximumTextures = 64, MaximumTotalPngBytes = 8 * 1024 * 1024;
     private static readonly UTF8Encoding StrictUtf8 = new(false, true);
@@ -59,7 +59,7 @@ public sealed class AccountAppearanceClient(HttpClient http)
             result.Add(new(id, Text(cape, "alias", 128, false) is { Length: > 0 } name ? name : "披风 " + id[..8], Text(cape, "state", 32) == "ACTIVE", texture));
         }
         if (result.Count(c => c.IsActive) > 1) throw Invalid("角色返回多个启用的披风。");
-        return new(account.Id, model, skin, result, false, ManagementUri(account), "已读取 Minecraft 官方档案；皮肤上传与披风切换请前往官网。", true);
+        return new(account.Id, model, skin, result, false, ManagementUri(account), "Minecraft 官方角色，可上传皮肤或穿戴已有披风。", true);
     }
     public async Task<AccountAppearance> ReadYggdrasilAsync(AccountProfile account, CancellationToken ct = default)
     {
