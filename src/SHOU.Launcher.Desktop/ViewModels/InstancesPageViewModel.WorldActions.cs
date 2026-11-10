@@ -35,9 +35,9 @@ public sealed partial class InstancesPageViewModel
             NotifyWorldActions();
         }, () => CanRecyclePacks);
         CancelRecycleWorldDatapacksCommand = Command(() => { _packRemoval = null; NotifyWorldActions(); });
-        ConfirmRecycleWorldDatapacksCommand = AsyncCommand(RecycleSelectedWorldDatapacksAsync, () => WorldWorkspaceCanWrite && IsWorldDatapacksPage && !IsWorldSettingsDirty && HasWorldPackRemovalConfirmation);
+        ConfirmRecycleWorldDatapacksCommand = AsyncCommand(RecycleSelectedWorldDatapacksAsync, () => WorldWorkspaceCanWrite && IsWorldDatapacksPage && !IsDatapackOrderDirty && !IsWorldSettingsDirty && HasWorldPackRemovalConfirmation);
         RefreshWorldDatapackTrashCommand = AsyncCommand(ReadWorldDatapackTrashAsync, () => WorldWorkspaceCanRead && IsWorldDatapacksPage && Service is IWorldDatapackTrashService);
-        RestoreWorldDatapacksCommand = AsyncCommand(RestoreSelectedWorldDatapacksAsync, () => WorldWorkspaceCanWrite && IsWorldDatapacksPage && !IsWorldSettingsDirty && SelectedWorldDatapackTrash is { CanRestore: true } && _trashWorldKey == WorldSettingsKey);
+        RestoreWorldDatapacksCommand = AsyncCommand(RestoreSelectedWorldDatapacksAsync, () => WorldWorkspaceCanWrite && IsWorldDatapacksPage && !IsDatapackOrderDirty && !IsWorldSettingsDirty && SelectedWorldDatapackTrash is { CanRestore: true } && _trashWorldKey == WorldSettingsKey);
     }
     private void OpenWorldDownloadBrowser(bool datapack)
     {

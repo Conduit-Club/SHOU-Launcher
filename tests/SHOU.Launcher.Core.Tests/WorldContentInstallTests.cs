@@ -220,10 +220,17 @@ public sealed partial class WorldContentInstallTests
             projects[id] = new(id, id, id, "", "", 1, kind, null, new("https://modrinth.com/datapack/" + id), ClientSide: "unsupported");
             releases[id] = new(id, id, "1", DateTimeOffset.UnixEpoch, [game], kind == "mod" ? ["fabric"] : kind == "world" ? [] : ["datapack"], [file], dependencies, id, "server_only");
         }
+        public bool FailVersionLists;
+        public void AddVersion(string project, string release, byte[] bytes, IReadOnlyList<ContentDependency>? dependencies = null, string? name = null)
+        {
+            var file = new ContentFile(name ?? release + ".zip", new("https://cdn.modrinth.com/data/" + release + "/" + (name ?? release + ".zip")), Convert.ToHexStringLower(SHA1.HashData(bytes)), bytes.Length, true);
+            Files[release] = file; handler.Bytes[file.Uri.AbsoluteUri] = bytes;
+            releases[release] = new(release, release, release, DateTimeOffset.UnixEpoch.AddDays(releases.Count + 1), [game], ["datapack"], [file], dependencies, project, "server_only");
+        }
         public Task<ContentProject> GetContentProjectAsync(string id, CancellationToken cancellationToken = default) => Task.FromResult(projects[id]);
         public Task<ContentRelease> GetContentReleaseAsync(string id, CancellationToken cancellationToken = default) => Task.FromResult(releases[id]);
         public Task<IReadOnlyList<ContentRelease>> GetContentReleasesAsync(string projectId, string? gameVersion = null, string? loader = null, CancellationToken cancellationToken = default)
-        { LastLoader = loader; return Task.FromResult<IReadOnlyList<ContentRelease>>(loader == "datapack" ? [releases[projectId]] : []); }
+        { LastLoader = loader; if (FailVersionLists) throw new HttpRequestException("controlled version listing failure"); return Task.FromResult<IReadOnlyList<ContentRelease>>(loader is null or "datapack" ? releases.Values.Where(r => r.ProjectId == projectId).ToArray() : []); }
         public Task<GameCatalog> GetGameCatalogAsync(CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<LoaderCatalogVersion>> GetFabricCatalogAsync(string gameVersion, CancellationToken cancellationToken = default) => throw new NotSupportedException();
         public Task<IReadOnlyList<ContentProject>> SearchContentAsync(ContentQuery query, CancellationToken cancellationToken = default) => throw new NotSupportedException();
@@ -251,6 +258,11 @@ public sealed partial class WorldContentInstallTests
             f.Instance = await f.Service.CreateInstanceAsync("目标实例 中文", f.Version); Directory.CreateDirectory(f.World); Directory.CreateDirectory(f.OtherWorld);
             await File.WriteAllBytesAsync(f.Level, WorldContentInstallTests.Level(f.Version, f.DataVersion, "target")); await File.WriteAllBytesAsync(Path.Combine(f.OtherWorld, "level.dat"), WorldContentInstallTests.Level(f.Version, f.DataVersion, "other"));
             return f;
+        }
+        public async Task RestartServiceAsync()
+        {
+            await Service.DisposeAsync(); Service = new(Platform, http, new VerifiedDownloader(http), new(), worldContentCatalog: Catalog);
+            await Service.InitializeAsync();
         }
         public async ValueTask DisposeAsync() { await Service.DisposeAsync(); lease.Dispose(); await ((ProcessRunner)Platform.Processes).DisposeAsync(); http.Dispose(); }
     }

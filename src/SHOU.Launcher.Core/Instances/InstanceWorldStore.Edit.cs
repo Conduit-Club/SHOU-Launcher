@@ -29,13 +29,13 @@ public sealed partial class InstanceWorldStore
             {
                 var info = await InspectPackAsync(worldDirectoryName, file, budget, ct);
                 packs.Add(new(file, id, info.Revision, enabled, info.Description, info.Format,
-                    canToggle && info.ToggleSafe, !canToggle ? "此世界的版本或 DataPacks 状态尚未验证。" : info.Capability));
+                    canToggle && info.ToggleSafe, !canToggle ? "此世界的启停写入版本或列表尚未验证。" : info.Capability));
             }
             catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException or UnauthorizedAccessException or ArgumentException)
             { packs.Add(new(file, id, "", enabled, "", null, false, "无法安全读取此数据包（" + ex.GetType().Name + "）；启停已禁用。")); }
         }
         return new(Revision(world.Bytes), world.DataVersion, world.Version, world.Values, packs, world.CanEdit, canToggle,
-            !world.KnownVersion ? "存档写入仅验证 Java 1.21.1（3955）；其他版本只读。" : !world.CanEdit ? "存档设置字段不完整，设置保存已禁用；原文件保留。" : SupportedEditCapability);
+            !world.KnownVersion ? "世界元数据与启停写入仅验证 Java 1.21.1（3955）；更新/排序使用独立管理入口。" : !world.CanEdit ? "存档设置字段不完整，设置保存已禁用；原文件保留。" : SupportedEditCapability);
     }
     public async Task<WorldEditReceipt> SaveMetadataAsync(string worldDirectoryName, string expectedRevision, WorldMetadataEdit edit, CancellationToken ct = default)
     {

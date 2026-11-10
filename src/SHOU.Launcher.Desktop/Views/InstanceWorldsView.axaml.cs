@@ -83,6 +83,18 @@ public partial class InstanceWorldsView : UserControl
         }
         catch (Exception ex) { vm.Root.ShowError(UiPrivacy.Redact(ex.Message)); }
     }
+    private async void ChooseDatapackReplacement_Click(object? sender, RoutedEventArgs args)
+    {
+        if (DataContext is not InstancesPageViewModel { CanChooseLocalDatapackUpdate: true, DatapackUpdateContext: { } context, DatapackUpdatePackId: { } packId } vm) return;
+        try
+        {
+            var storage = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境无法打开文件选择器。");
+            var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "选择替换用的数据包 ZIP", AllowMultiple = false, FileTypeFilter = [new FilePickerFileType("数据包 ZIP") { Patterns = ["*.zip"] }] });
+            if (files.Count == 0) return;
+            await vm.PreviewLocalDatapackUpdateAsync(files[0].TryGetLocalPath() ?? "", context, packId);
+        }
+        catch (Exception ex) { vm.Root.ShowError(UiPrivacy.Redact(ex.Message)); }
+    }
     private void EditInstanceServer_Click(object? sender, RoutedEventArgs args)
     {
         if (DataContext is not InstancesPageViewModel vm || sender is not Button { Tag: InstanceServerDraftViewModel row }) return;
@@ -98,6 +110,7 @@ public partial class InstanceWorldsView : UserControl
     private void Workspace_KeyDown(object? sender, KeyEventArgs args)
     {
         if (args.Key == Key.Escape && DataContext is InstancesPageViewModel { IsServerEditorOpen: true } vm) { vm.CancelInstanceServerEditorCommand.Execute(null); args.Handled = true; }
+        else if (args.Key == Key.Escape && DataContext is InstancesPageViewModel manager && (manager.IsDatapackOrderOpen || manager.IsDatapackUpdateOpen)) { manager.CancelDatapackManagementCommand.Execute(null); args.Handled = true; }
         else if (args.Key == Key.Escape && DataContext is InstancesPageViewModel { IsLocalWorldImportOpen: true } worlds) { worlds.CancelLocalWorldImportCommand.Execute(null); args.Handled = true; }
     }
 }

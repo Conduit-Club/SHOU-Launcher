@@ -45,7 +45,7 @@ public sealed partial class InstancesPageViewModel
     public bool IsWorldSettingsDirty => CurrentWorldSettings.Dirty;
     public bool HasWorldSettingsConflict => CurrentWorldSettings.Conflict;
     public bool ShowWorldSettingsSaveActions => IsWorldSettingsDirty || HasWorldSettingsConflict;
-    public bool CanEditWorldMetadata => worldEditingReady && WorldWorkspaceCanWrite && CurrentWorldSettings is { Phase: WorldReadPhase.Ready, Conflict: false, State.CanEditMetadata: true };
+    public bool CanEditWorldMetadata => worldEditingReady && WorldWorkspaceCanWrite && !IsDatapackOrderDirty && CurrentWorldSettings is { Phase: WorldReadPhase.Ready, Conflict: false, State.CanEditMetadata: true };
     public bool CanEditWorldDifficulty => CanEditWorldMetadata && !WorldDifficultyLocked && SelectedWorldRow?.Summary.Hardcore != true;
     public string WorldSettingsStatus => Service is not IInstanceWorldEditService ? "当前服务未提供世界设置与启停写入。"
         : CurrentWorldSettings.Conflict ? "文件已有变化或保存未完成；草稿保留，请核对后显式放弃并重新读取。"
@@ -57,7 +57,7 @@ public sealed partial class InstancesPageViewModel
     public string WorldRuntimeText => CurrentWorldSettings.State?.Values.WorldTicks is >= 0 and var ticks ? $"{ticks / 72000:N0} 小时 {(ticks / 1200) % 60:N0} 分 {(ticks / 20) % 60:N0} 秒（世界运行时间）" : "未知";
     public bool CanEnableSelectedDatapacks => CanChangeSelectedPacks && CurrentWorldPacks.Selected.Any(row => row.Details?.Enabled != true);
     public bool CanDisableSelectedDatapacks => CanChangeSelectedPacks && CurrentWorldPacks.Selected.Any(row => row.Details?.Enabled != false);
-    private bool CanChangeSelectedPacks => worldEditingReady && IsWorldDatapacksPage && WorldWorkspaceCanWrite && CurrentWorldSettings is { Phase: WorldReadPhase.Ready, Conflict: false, State.CanToggleDatapacks: true }
+    private bool CanChangeSelectedPacks => worldEditingReady && IsWorldDatapacksPage && WorldWorkspaceCanWrite && !IsDatapackOrderDirty && CurrentWorldSettings is { Phase: WorldReadPhase.Ready, Conflict: false, State.CanToggleDatapacks: true }
         && CurrentWorldPacks.Selected.Count > 0 && CurrentWorldPacks.Selected.All(row => row.Details is { CanToggle: true, ContentRevision.Length: > 0 });
     public AsyncRelayCommand RefreshWorldEditCommand { get; private set; } = null!;
     public AsyncRelayCommand DiscardWorldSettingsCommand { get; private set; } = null!;
@@ -97,6 +97,7 @@ public sealed partial class InstancesPageViewModel
         foreach (var command in new IRelayCommand[] { RefreshWorldEditCommand, DiscardWorldSettingsCommand, SaveWorldSettingsCommand, EnableWorldDatapacksCommand, DisableWorldDatapacksCommand }) command.NotifyCanExecuteChanged();
         OnPropertyChanged(nameof(CanEnableSelectedDatapacks)); OnPropertyChanged(nameof(CanDisableSelectedDatapacks));
         NotifyWorldActions();
+        NotifyDatapackManagement();
     }
     private void ScheduleUnreadWorldEditing()
     {

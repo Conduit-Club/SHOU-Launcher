@@ -200,7 +200,7 @@ public sealed partial class WpfWorldEditingUiTests
         public void Log(LogEventLevel level, string area, object? source, string template) { if (IsEnabled(level, area)) Errors.Add(template); }
         public void Log(LogEventLevel level, string area, object? source, string template, params object?[] values) { if (IsEnabled(level, area)) Errors.Add(template + " " + string.Join(" | ", values)); }
     }
-    private sealed class WorldEditUiService : ILauncherService, IInstanceWorldService, IInstanceWorldEditService, IWorldDatapackTrashService, IWorldContentInstallationService, ILocalWorldImportService
+    private sealed partial class WorldEditUiService : ILauncherService, IInstanceWorldService, IInstanceWorldEditService, IWorldDatapackTrashService, IWorldContentInstallationService, ILocalWorldImportService, IWorldDatapackManagementService
     {
         public FakeLauncherService Base { get; } = new();
         public IAppPaths Paths => Base.Paths;

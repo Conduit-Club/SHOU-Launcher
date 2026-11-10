@@ -7,8 +7,9 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
 {
     public const int MaximumProjects = 64, MaximumDepth = 16;
     public const long MaximumTotalBytes = 2L * 1024 * 1024 * 1024;
-    public async Task<ContentInstallPlan> PlanAsync(GameInstance instance, string gameVersion, ContentInstallRequest request, CancellationToken ct = default, bool worldDatapacks = false)
+    public async Task<ContentInstallPlan> PlanAsync(GameInstance instance, string gameVersion, ContentInstallRequest request, CancellationToken ct = default, bool worldDatapacks = false, bool updatingDatapacks = false)
     {
+        if (updatingDatapacks && !worldDatapacks) throw new InvalidOperationException("替换模式仅用于显式存档数据包更新预检。");
         if (request.Kind == "datapack" && !worldDatapacks) throw new NotSupportedException("数据包须明确选择存档目标。");
         if (worldDatapacks && request.Kind != "datapack") throw new InvalidDataException("存档安装只接受数据包。");
         if (instance.Id != request.InstanceId) throw new InvalidDataException("安装实例身份不一致。");
@@ -79,10 +80,11 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
         var installed = await ContentInstallFiles.ReadManifestAsync(instance, ct).ConfigureAwait(false);
         foreach (var item in installed.Files)
         {
-            if (files.Any(f => f.ProjectId == item.ProjectId && f.ReleaseId != item.ReleaseId) || incompatibilities.Any(d => Matches(item.ProjectId, item.ReleaseId, d)))
+            if ((!updatingDatapacks || files.All(f => f.ProjectId != item.ProjectId)) && (files.Any(f => f.ProjectId == item.ProjectId && f.ReleaseId != item.ReleaseId) || incompatibilities.Any(d => Matches(item.ProjectId, item.ReleaseId, d))))
                 throw new InvalidDataException("安装清单存在其他版本或不兼容资源，请先显式处理旧文件。");
         }
-        await ContentInstallFiles.CheckConflictsAsync(instance.GameDirectory, files, ct).ConfigureAwait(false);
+        IReadOnlyList<ContentInstallFile> checkedFiles = updatingDatapacks ? files.Where(f => !installed.Files.Any(old => old.RelativePath == f.RelativePath && files.Any(next => next.ProjectId == old.ProjectId))).ToArray() : files;
+        await ContentInstallFiles.CheckConflictsAsync(instance.GameDirectory, checkedFiles, ct).ConfigureAwait(false);
         if (request.Kind == "shader") warnings.Add("文件装入shaderpacks；启用光影仍需实例具备相应渲染模组。");
         return new(instance.Id, gameVersion, instance.Loader, files, warnings.Distinct().ToArray());
     }
