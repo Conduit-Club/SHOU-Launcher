@@ -157,8 +157,7 @@ public sealed partial class WorldContentInstallTests
         f.Catalog.AddVersion("main", "v2", ZipBytes(new() { ["pack.mcmeta"] = Encoding.UTF8.GetBytes("{\"pack\":{\"pack_format\":48}}"), ["data/test/function/main.mcfunction"] = bytes }));
         var preview = await f.Service.PreviewWorldDatapackUpdateAsync(await UpdateRequestAsync(f, "main.zip", "v2"));
         var before = ActivePayloadFiles(f); var level = File.ReadAllBytes(f.Level); var manifest = File.ReadAllBytes(PackManifest(f)); using var cts = new CancellationTokenSource(); var reached = new TaskCompletionSource();
-        using var watcher = new FileSystemWatcher(f.World, "main.zip") { IncludeSubdirectories = true };
-        watcher.Created += (_, e) => { if (e.FullPath.Contains(Path.DirectorySeparatorChar + "payload" + Path.DirectorySeparatorChar, StringComparison.Ordinal)) { reached.TrySetResult(); cts.Cancel(); } }; watcher.EnableRaisingEvents = true;
+        using var checkpoint = SHOU.Launcher.Core.IO.FileTransactionCheckpoint.Observe(phase => { if (phase == "update-original-moved") { reached.TrySetResult(); cts.Cancel(); } });
         await Assert.ThrowsAsync<OperationCanceledException>(() => f.Service.ApplyWorldDatapackUpdateAsync(preview.Id, cts.Token)); await reached.Task.WaitAsync(TimeSpan.FromSeconds(5));
         CollectionAssert.AreEqual(before, ActivePayloadFiles(f)); CollectionAssert.AreEqual(level, File.ReadAllBytes(f.Level)); CollectionAssert.AreEqual(manifest, File.ReadAllBytes(PackManifest(f)));
         Assert.IsFalse(Directory.EnumerateDirectories(f.World, ".shou-datapack-update-*").Any());

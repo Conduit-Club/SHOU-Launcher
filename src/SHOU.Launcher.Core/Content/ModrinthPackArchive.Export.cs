@@ -52,13 +52,26 @@ public sealed partial class ModrinthPackArchive
         foreach (var file in manifest.Files)
         {
             ct.ThrowIfCancellationRequested(); AllowedPath(file.RelativePath);
+            if (options.BundleInstalledFiles) AddFile(file.RelativePath);
+            if (local.ContainsKey(Key(file.RelativePath))) continue;
             var full = ContentInstallFiles.Literal(instance.GameDirectory, file.RelativePath);
             if (!await ContentInstallFiles.MatchesAsync(full, file.Sha1, file.Size, ct).ConfigureAwait(false)) throw new IOException("安装清单内的文件已改变，拒绝导出旧哈希：" + file.RelativePath);
             await using (var input = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true))
                 if (!Convert.ToHexStringLower(await SHA512.HashDataAsync(input, ct).ConfigureAwait(false)).Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new IOException("安装清单的SHA-512与实际文件不一致。");
-            if (options.BundleInstalledFiles) AddFile(file.RelativePath);
-            else if (file.DownloadUrl is { } url && !local.ContainsKey(Key(file.RelativePath))) remote.Add(new(file.RelativePath, file.Sha1, file.Sha512, file.Size, [url], file.Client, file.Server));
+            if (file.DownloadUrl is { } url && !local.ContainsKey(Key(file.RelativePath))) remote.Add(new(file.RelativePath, file.Sha1, file.Sha512, file.Size, [url], file.Client, file.Server));
             else if (!local.ContainsKey(Key(file.RelativePath))) throw new InvalidOperationException("此实例含本地覆盖文件，请明确选入导出路径或启用打包已安装文件：" + file.RelativePath);
+        }
+        var localHashes = new Dictionary<string, (long Size, string Sha1, string Sha512)>(StringComparer.Ordinal);
+        long currentOverrideBytes = 0;
+        foreach (var relative in local.Values)
+        {
+            await using var input = new FileStream(ContentInstallFiles.Literal(instance.GameDirectory, relative), FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
+            if (input.Length > MaximumOverrideFileBytes) throw new IOException("导出文件超过128 MiB限制。");
+            var length = input.Length;
+            if ((currentOverrideBytes = checked(currentOverrideBytes + length)) > MaximumOverrideBytes) throw new IOException("导出覆盖文件超过512 MiB限制。");
+            var sha1 = Convert.ToHexStringLower(await SHA1.HashDataAsync(input, ct)); input.Position = 0;
+            var sha512 = Convert.ToHexStringLower(await SHA512.HashDataAsync(input, ct));
+            localHashes.Add(Key(relative), (length, sha1, sha512));
         }
         if (remote.Count > MaximumFiles || remote.Sum(f => f.Size) > MaximumDownloadBytes) throw new IOException("导出下载清单超过数量或总大小限制。");
         Directory.CreateDirectory(exportDirectory); VerifiedDownloader.RejectLink(exportDirectory);
@@ -75,7 +88,7 @@ public sealed partial class ModrinthPackArchive
                         ct.ThrowIfCancellationRequested(); var full = ContentInstallFiles.Literal(instance.GameDirectory, relative);
                         var entry = zip.CreateEntry("client-overrides/" + relative, CompressionLevel.Optimal);
                         await using var input = new FileStream(full, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
-                        var length = input.Length; if (length > MaximumOverrideFileBytes) throw new IOException("导出文件在读取前超过大小限制。");
+                        var expected = localHashes[Key(relative)]; var length = input.Length; if (length != expected.Size || length > MaximumOverrideFileBytes) throw new IOException("导出文件在读取前超过大小限制。");
                         await using var target = entry.Open();
                         using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1); using var sha512 = IncrementalHash.CreateHash(HashAlgorithmName.SHA512);
                         var buffer = new byte[131072]; long copied = 0;
@@ -87,8 +100,7 @@ public sealed partial class ModrinthPackArchive
                             await target.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
                         }
                         if (copied != length) throw new IOException("导出文件在读取时改变大小。");
-                        var recorded = manifest.Files.FirstOrDefault(f => Key(f.RelativePath) == Key(relative));
-                        if (recorded is not null && (Convert.ToHexStringLower(sha1.GetHashAndReset()) != recorded.Sha1.ToLowerInvariant() || Convert.ToHexStringLower(sha512.GetHashAndReset()) != recorded.Sha512.ToLowerInvariant()))
+                        if (Convert.ToHexStringLower(sha1.GetHashAndReset()) != expected.Sha1 || Convert.ToHexStringLower(sha512.GetHashAndReset()) != expected.Sha512)
                             throw new IOException("打包文件在读取时改变，未生成整合包。");
                     }
                     var dependencies = new Dictionary<string, string> { ["minecraft"] = gameVersion };

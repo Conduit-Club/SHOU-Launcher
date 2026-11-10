@@ -33,6 +33,14 @@ public sealed class InstanceAdvancedTests
         await using var f = await Fixture.Create(); var i = await f.Service.CreateInstanceAsync("fixture", "1.21.1"); var before = await File.ReadAllBytesAsync(f.Config); var target = InstanceDirectoryPolicy.Describe(i, f.Platform.Paths).SharedDirectory;
         using var cancel = new CancellationTokenSource(); if (scenario == "cancel") cancel.Cancel(); if (scenario == "file") await File.WriteAllTextAsync(target, "external");
         using var held = scenario == "locked" ? new FileStream(f.Config, FileMode.Open, FileAccess.Read, FileShare.Read) : null;
+        if (scenario == "locked" && !OperatingSystem.IsWindows())
+        {
+            // Unix permits atomic replacement while the old inode remains open.
+            await f.Service.UpdateInstanceAsync(i.Id, new(i.Name, null, null, DirectoryMode: InstanceDirectoryMode.Shared, ConfirmDirectoryChange: true));
+            Assert.AreEqual(target, f.Service.Snapshot.Instances.Single().GameDirectory);
+            CollectionAssert.AreEqual(before, await File.ReadAllBytesAsync(f.Config + ".bak"));
+            using var old = new MemoryStream(); await held!.CopyToAsync(old); CollectionAssert.AreEqual(before, old.ToArray()); return;
+        }
         await Reject(() => f.Service.UpdateInstanceAsync(i.Id, new(i.Name, null, null, DirectoryMode: InstanceDirectoryMode.Shared, ConfirmDirectoryChange: true), cancel.Token));
         CollectionAssert.AreEqual(before, await File.ReadAllBytesAsync(f.Config)); Assert.AreEqual(i.GameDirectory, f.Service.Snapshot.Instances.Single().GameDirectory); if (scenario == "file") Assert.AreEqual("external", await File.ReadAllTextAsync(target)); Assert.IsFalse(Directory.Exists(target));
     }
@@ -92,7 +100,25 @@ public sealed class InstanceAdvancedTests
     public async Task ScriptFailureRetainsOriginalAndCleansStages(string scenario)
     {
         var root=TestFiles.Root();var path=Path.Combine(root,"launch.cmd");await File.WriteAllTextAsync(path,"original");await File.WriteAllTextAsync(path+".bak","prior-backup");using var cts=new CancellationTokenSource();if(scenario=="cancel")cts.Cancel();using var held=scenario=="cancel"?null:new FileStream(scenario=="locked"?path:path+".bak",FileMode.Open,FileAccess.Read,FileShare.Read);
+        if (scenario != "cancel" && !OperatingSystem.IsWindows())
+        {
+            await LaunchScript.SaveAsync(path,"new",true,false,cts.Token);
+            Assert.AreEqual("new",await File.ReadAllTextAsync(path)); Assert.AreEqual("original",await File.ReadAllTextAsync(path+".bak"));
+            using var reader = new StreamReader(held!); Assert.AreEqual(scenario == "locked" ? "original" : "prior-backup", await reader.ReadToEndAsync());
+            Assert.IsFalse(Directory.GetFiles(root,"*.tmp-*").Any()); return;
+        }
         await Reject(()=>LaunchScript.SaveAsync(path,"new",true,false,cts.Token));Assert.AreEqual("original",await File.ReadAllTextAsync(path));Assert.IsFalse(Directory.GetFiles(root,"*.tmp-*").Any());
+    }
+    [TestMethod]
+    public async Task BlockedBackupPublicationPreservesConfigurationAndScriptOnEveryPlatform()
+    {
+        await using var f = await Fixture.Create(); var i = await f.Service.CreateInstanceAsync("fixture", "1.21.1");
+        var before = await File.ReadAllBytesAsync(f.Config); File.Delete(f.Config + ".bak"); Directory.CreateDirectory(f.Config + ".bak");
+        await Reject(() => f.Service.UpdateInstanceAsync(i.Id, new(i.Name, null, null, DirectoryMode: InstanceDirectoryMode.Shared, ConfirmDirectoryChange: true)));
+        CollectionAssert.AreEqual(before, await File.ReadAllBytesAsync(f.Config)); Assert.AreEqual(i.GameDirectory, f.Service.Snapshot.Instances.Single().GameDirectory);
+        var path = Path.Combine(TestFiles.Root(), "launch.command"); await File.WriteAllTextAsync(path, "original"); Directory.CreateDirectory(path + ".bak");
+        await Reject(() => LaunchScript.SaveAsync(path, "new", true, false, default));
+        Assert.AreEqual("original", await File.ReadAllTextAsync(path)); Assert.HasCount(0, Directory.GetFiles(Path.GetDirectoryName(path)!, "*.tmp-*"));
     }
     [TestMethod]
     public void ProductionMacScriptKeepsDefaultCredentialScopeInsteadOfTurningItIntoAnIsolatedRoot()

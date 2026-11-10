@@ -1,5 +1,48 @@
 # 双端完善清单
 
+## Mac R27 修复与扩展验收（2026-11-11）
+
+- [x] 修复上轮 7 项原生回归失败：Unix 打开句柄与原子替换契约、可移植的备份发布失败回滚、明确移动阶段的取消测试、独立 Java 会话完成证据、平台绝对路径测试。Core 666 通过 / 5 显式跳过 / 0 失败；Desktop 228 通过 / 0 失败；原生扩展验收随后回填。
+- [x] 修复 MRpack 明确选入的配置在游玩后被改写而无法导出；按当前内容生成覆盖文件并核对规划/写入哈希及大小，未选入的远端文件仍严格按旧清单核验。新增两种本地选入方式的导出再导入回归。
+- [x] 数据包启用/禁用成功后清除过期导入反馈并通知绑定，补导入→启用及反馈刷新的控件回归。
+- [ ] 本轮新 Mac 候选的真实导出、世界 ZIP/剪贴板、数据包更新/备份/顺序、实例设置与窗口代表用例待验。
+- [ ] 作者官方 XPlus Fabric 1.21.1 v6.1.3 MRpack 已核实来源，下载、原生导入及开玩待验。
+- [ ] FTB StoneBlock 4 的软件内搜索、版本/安装与可运行性待验；不拿外部解包冒充软件内下载。
+
+<!-- MAC-R26-20261110:BEGIN -->
+## macOS 原生复验（2026-11-10，已完成本轮验收）
+
+检出分支：features/windows-parity，源码 e6354d9a65914cee8fa9c48411a4868aea58a108。用户在本次任务明确要求“导入整合包，然后立马解析开玩”，本节在隔离测试数据下验证游戏启动；不沿用历史 SMP 授权，不操作真实在线外观。实现代码不修改，失败留待下一轮修复。
+
+- [x] M26-B01：Mac arm64 依赖恢复、Core/Desktop 编译和自包含 .app 打包完成；干净 detached 源码、ZIP 解包、codesign --verify --deep --strict 通过。
+- [ ] M26-T01（P1）：Core 原生回归 657 通过 / 6 失败 / 5 显式跳过。InstanceAdvancedTests 的目录保存 locked、脚本 locked/backup-locked 三例在 Mac 得到 Unexpected success；测试依赖 Windows FileShare/替换锁语义，需明确 Unix 契约并采用确定性故障注入，不能直接把当前结果称作实际写盘失败回滚缺陷。复验时同时核对目标/备份原字节与配置发布状态。
+- [ ] M26-T02（P1）：数据包回收 CancellationAfterPayloadMoveRollsBackFilesAndBothMetadataFiles 与数据包更新 DatapackUpdateCancelledAfterOriginalWasMovedRestoresOriginalAndMetadata 在 Mac 未触发预期取消异常；两例以 FileSystemWatcher.Created 捕获 payload 移动后取消。需区分 macOS 事件投递时序和业务取消检查缺口，改用可控提交屏障并验证 payload、level.dat、清单完整回滚。
+- [ ] M26-T03（P1）：JavaBootstrapProcessTests.SessionOutputIsRedactedAndContinuesAfterLauncherOwnerCloses 在 Mac 对 Process.GetProcessById 得到的已退出进程读 ExitCode 抛 InvalidOperationException（Process was not started by this object）。需采用跨平台退出结果/会话收据验证，并保留启动器关闭后游戏存活及日志脱敏断言；实际游戏独立会话另做原生测试。
+- [ ] M26-T04（P2）：Desktop 原生回归 227 通过 / 1 失败。GameSettingsUiTests.ExistingFolderPreviewRequiresSelectionAndInstanceOverridesSurviveRenameAndGlobalChanges 使用硬编码 C:/fixture folder，Mac 在 InstanceDirectoryPolicy.Resolve 抛“实例目录策略无效”。改为平台有效的隔离绝对路径，保留已有目录预检、独立参数、重命名和全局变化不覆盖断言；原生对应流程另验。
+- [ ] M26-T05（P3）：Java bootstrap 编译出现三条 Java 8 source/target 过时选项提示；C# 构建仍为 0 警告/0 错误。核对用 --release 8 等方式保持目标 class52，避免只隐藏真实编译问题。
+- [x] M26-N01：Computer Use 已验证首页、社团状态查询、双源整合包目录和原生选择器。Fabulously Optimized 6.5 MRpack 本轮导入新实例，113 项清单大小与 SHA-1/SHA-512 全部相符；首次点击启动自动补齐基础文件，实际观察 Minecraft 1.21.1/Fabric 主菜单、Mod Menu 和真实世界渲染，并保存世界、从 Quit Game 正常退出。
+- [x] M26-N02：游戏运行时正常关闭启动器（exit0），游戏继续存活并可操作；重开同候选识别运行中实例并阻止重复启动，游戏正常退出后按钮恢复。此原生行为通过不抵消 M26-T03 自动化测试失败。
+- [x] M26-N03：真实新世界的难度通过界面由普通改为简单、保存及重新读取；独立解压 NBT 核对 Difficulty 从 2 变为 1，写前 level.dat 备份保留。格式 48 数据包经原生选择器导入、启用、回收及恢复，恢复后文件与启用状态均在。
+- [ ] M26-U01（P2）：正常游玩后无法导出 MRpack。复现：导入 FO 6.5 MRpack→首次开玩→正常退出→实例导出→导出 .mrpack；报“安装清单内的文件已改变，拒绝导出旧哈希：config/crash_assistant/crash_assistant_localization_overrides/it_it.json”。同时勾选现有 config 与本机文件仍失败。ModrinthPackArchive.Export.cs 在生成覆盖文件前强制全清单旧哈希匹配；应为已经明确选入的修改配置提供基于当前字节的新覆盖内容，保持远端清单校验，不能直接放松哈希检查或导出旧哈希。验收需含真实启动会自动更新配置的整合包。
+- [ ] M26-U02（P2）：存档列表“快捷游玩”按钮实际禁用，提示“按世界快速游玩尚未接入”。补齐明确世界目标的启动与回退；目前只能先开实例再从 Minecraft 选择世界。
+- [ ] M26-U03（P3）：数据包导入后再启用成功，页底仍同时显示“尚未修改世界启停状态”和“启用状态已保存”。成功写盘后刷新/替换过时的导入反馈，避免互相矛盾。
+- [x] M26-N04：FO 6.5 CurseForge ZIP 经 Finder 真实跨窗口拖入→解析→独立新实例导入（113 文件、48 模组 JAR、3 资源包，实际文件大小与清单哈希全部相符）→首次单击启动补齐游戏与 Fabric→实际主菜单→Quit Game 正常退出 code=0。两种格式均在本轮新建实例测试，未沿用前轮游戏结果。
+- [x] M26-N05：Mac 原生 PNG 选择/取消、离线皮肤保存、原生另存、3D 预览/Esc 与重启回读通过；取消时外观文件不变，另存结果与输入 SHA-256 相同。仅使用隔离测试离线角色，未改真实在线外观。
+- [x] M26-N06：关闭设置草稿的返回、Esc、保存并关闭、放弃并关闭及再次启动均通过；保存前备份与原配置字节相同，放弃后保存文件哈希不变。四次受监视候选均正常关闭 exit0，无超时；临时设置值已恢复。
+- [x] M26-N07：Java 发现和证书只读检查、创建核验独立修复副本、设为默认及恢复原默认均通过；补齐副本缺少的 16 项阻止记录，原 java/cacerts/blocked.certs 哈希不变。
+- [x] M26-N08：缓存和游戏旧日志的只读整理预览、自定义 HTTPS 下载及键盘焦点导航通过；下载文件与 e6354d9a 的 README 字节相同。没有执行缓存清理或移动旧日志。
+- [x] M26-N09：Mac 原生 zoom 放大/还原、用户拖动缩小至 881×561 点（声明下限 880×560），首页主要导航、账户、实例选择和启动入口可见。未把此代表用例当作完整跨屏/DPI/无障碍验收。
+- [ ] M26-U04（P3）：CF ZIP 从确认到完成耗时数分钟，界面仅显示“正在校验文件并导入独立新实例”，缺少当前文件、已完成数、下载量与失败/重试状态。补齐可解释的阶段和进度，保留取消及原子导入边界。
+- [ ] M26-G01（P2，平台能力缺口）：Mac 的游戏标题设置禁用，提示“当前原生标题适配仅在 Windows 提供”。若需与 Windows 同步该功能，应接入明确范围的 Mac 原生适配并验证，不把禁用状态称为已移植。
+- [ ] M26-R01（待验）：真实 Microsoft 登录/凭据与在线皮肤披风、LittleSkin/MUA 真实认证/入服未测；需明确测试角色与写入目标。本轮只操作隔离离线角色，不沿用历史服务器授权。
+- [ ] M26-R02（待验）：更广加载器/Java 8/17/25、老版本和更多整合包兼容性、独立模组增删更新/依赖弹窗、世界 ZIP/剪贴板导入、数据包在线更新/排序/更新备份恢复、已有目录切换/高级参数/脚本的完整原生矩阵仍待补；不得由一个 Fabric 包推断全部兼容。当前任务空间接近 35 GiB 预算，扩矩阵前需先归档或回收可重建产物。
+- [ ] M26-R03（待验）：原生最小化/全屏、完整 DPI/跨屏/VoiceOver/键盘与 SMB 中断矩阵未覆盖；现有 Windows 历史结果保留，不能替代 Mac。
+
+收尾记录：CUA 在最终关闭后的 getAXState 中短暂重开同候选的默认空白窗口，已立即正常关闭；未登录、导入或保存设置。默认数据根仅观察到锁文件、启动日志和 Java bootstrap 缓存更新时间变化，未删除这些文件。后续关闭后使用不启动应用的清单/进程观察；原生辅助脚本授权目标现已停用。全部测试游戏与候选已退出。
+
+证据根：.shou-dev/reports/macos-r26-20261110/；完整 Core/Desktop TRX 和首失败分别在 validation/core、validation/desktop，构建候选见 candidate.json。此处不改动下方 Windows 历史勾选，也不把交叉构建代替 Mac 原生验收。
+<!-- MAC-R26-20261110:END -->
+
 完成并经过对应验证后，将 `- [ ]` 改为 `- [x]`。部分完成或只通过构建不勾选。最新记录见 [R26 在线外观、选择器和窗口关闭](docs/conduit/WINDOWS-UI-R26.md)，前轮 [R25 数据包更新备份恢复](docs/conduit/WINDOWS-UI-R25.md)、[R24 更新与加载顺序](docs/conduit/WINDOWS-UI-R24.md)、[R23 本地世界导入](docs/conduit/WINDOWS-UI-R23.md)、[R22 存档入口与数据包回收](docs/conduit/WINDOWS-UI-R22.md)、[R21 高级设置、隔离与脚本](docs/conduit/WINDOWS-UI-R21.md)，报告开头列出尚未接齐功能；前轮见 [R20 实例管理与图标](docs/conduit/WINDOWS-UI-R20.md)、[R19 数据包与世界](docs/conduit/WINDOWS-UI-R19.md)、[R18 CF 导出与加载器](docs/conduit/WINDOWS-UI-R18.md)及 [UI 复核](docs/conduit/UI-PARITY-REVIEW-20261106.md)。Mac 原生单独验收，不用交叉构建代替。
 
 **默认禁止启动 Minecraft 游戏验证；R26 继续不启动游戏，R17 的 XPlus → SMP 授权仅为历史记录。** 清单中的游戏相关门禁仅追踪后续工作，须在用户于当前任务明确授权后执行；历史验证、旧授权和本清单均不能代替新授权。规则已写入 AGENTS.md。

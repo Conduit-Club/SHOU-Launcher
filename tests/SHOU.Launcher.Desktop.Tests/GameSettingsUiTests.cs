@@ -76,7 +76,7 @@ public sealed class GameSettingsUiTests
     {
         var service = new SettingsService(); using var vm = new MainWindowViewModel(service, new FakeExternalLauncher());
         var instances = vm.Instances; Assert.False(instances.AttachExistingCommand.CanExecute(null));
-        await instances.InspectExistingFolderAsync("C:/fixture folder"); Assert.True(instances.HasExistingCandidates); Assert.True(instances.AttachExistingCommand.CanExecute(null));
+        await instances.InspectExistingFolderAsync(Path.Combine(Path.GetTempPath(), "shou-fixture folder")); Assert.True(instances.HasExistingCandidates); Assert.True(instances.AttachExistingCommand.CanExecute(null));
         await instances.AttachExistingCommand.ExecuteAsync(null); Assert.Single(service.Snapshot.Instances); Assert.False(instances.HasExistingCandidates);
         instances.ShowInstanceSettingsCommand.Execute(null); instances.UseGlobalLaunchOptions = false;
         instances.InstanceIpPreference = GameIpPreference.IPv6; instances.InstanceWindowTitle = "Instance title"; instances.UseGlobalMemory = false; instances.InstanceMemoryMiB = 4096;

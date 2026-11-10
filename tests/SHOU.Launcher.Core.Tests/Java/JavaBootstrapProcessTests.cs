@@ -67,7 +67,7 @@ public sealed class JavaBootstrapProcessTests
             Assert.IsFalse(text.Contains("SyntheticPlayer", StringComparison.Ordinal));
             Assert.IsTrue(text.Contains("<redacted>", StringComparison.Ordinal));
             Assert.IsTrue(text.Contains("AFTER_LAUNCHER_CLOSE", StringComparison.Ordinal));
-            Assert.AreEqual(0, native.ExitCode);
+            Assert.AreEqual("completed", await File.ReadAllTextAsync(release + ".complete", deadline.Token));
         }
         finally
         {
@@ -282,7 +282,9 @@ public sealed class JavaBootstrapProcessTests
                             System.err.println("accessToken=" + args[2]); System.out.println(args[4]);
                             System.out.println("READY");
                             while (!new File(args[5]).exists()) Thread.sleep(50);
-                            System.out.println("AFTER_LAUNCHER_CLOSE"); return;
+                            System.out.println("AFTER_LAUNCHER_CLOSE");
+                            try (FileOutputStream done = new FileOutputStream(args[5] + ".complete")) { done.write("completed".getBytes(StandardCharsets.UTF_8)); }
+                            return;
                         }
                         if (args[0].equals("floodread")) {
                             String line = new String(new char[128]).replace('\0', 'X');

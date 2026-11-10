@@ -110,6 +110,24 @@ public sealed class ModrinthPackTests
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => engine.ExportAsync(instance, new("Missing local selection"), Path.Combine(root, "exports")));
     }
 
+    [TestMethod, DataRow(false), DataRow(true)]
+    public async Task ChangedImportedConfigExportsOnlyWhenExplicitlySelectedAndRoundTripsCurrentBytes(bool bundle)
+    {
+        var root = TestFiles.Root(); var engine = new ModrinthPackArchive();
+        var archive = Archive(root, Index(new JsonArray(FileEntry("config/game.txt")))); var inspection = await engine.InspectAsync(archive);
+        var game = Path.Combine(root, "game"); await engine.StageAsync(archive, inspection.ArchiveSha256, game, [], Download);
+        var manifestPath = Path.Combine(game, ContentInstallFiles.ManifestName);
+        var manifest = JsonSerializer.Deserialize<ContentInstallManifest>(await System.IO.File.ReadAllBytesAsync(manifestPath))!;
+        await System.IO.File.WriteAllBytesAsync(manifestPath, JsonSerializer.SerializeToUtf8Bytes(manifest with { InstanceId = "instance" }));
+        var instance = new GameInstance("instance", "Fixture", "1.21.1", game);
+        await System.IO.File.WriteAllTextAsync(Path.Combine(game, "config/game.txt"), "changed by game");
+        await Assert.ThrowsAsync<IOException>(() => engine.ExportAsync(instance, new("Unselected"), Path.Combine(root, "exports")));
+        var exported = await engine.ExportAsync(instance, new("Selected", OverridePaths: bundle ? [] : ["config"], BundleInstalledFiles: bundle), Path.Combine(root, "exports"));
+        var after = await engine.InspectAsync(exported); Assert.HasCount(0, after.Files);
+        await engine.StageAsync(exported, after.ArchiveSha256, Path.Combine(root, "roundtrip"), [], Download);
+        Assert.AreEqual("changed by game", await System.IO.File.ReadAllTextAsync(Path.Combine(root, "roundtrip/config/game.txt")));
+    }
+
     [TestMethod]
     public async Task ExportNeverFollowsInternalConfigLinksOrPublishesPartialArchive()
     {

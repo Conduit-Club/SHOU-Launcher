@@ -82,6 +82,7 @@ public sealed partial class InstanceWorldStore
                     ct.ThrowIfCancellationRequested(); foreach (var guard in pack.Guards) guard.Verify();
                     var source = WorldChild(worldDirectoryName, "datapacks/" + name); var destination = Path.Combine(backup, "payload", name);
                     MoveRecorded(source, destination, pack.Directory, () => moved.Add(name));
+                    SHOU.Launcher.Core.IO.FileTransactionCheckpoint.Reach("update-original-moved");
                 }
                 foreach (var item in replacements)
                 {

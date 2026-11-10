@@ -109,9 +109,7 @@ public sealed class WorldDatapackTrashTests
         }
         var state = await f.Store.GetEditStateAsync("世界 one"); var level = File.ReadAllBytes(f.Level); var manifest = File.ReadAllBytes(f.Manifest);
         using var cts = new CancellationTokenSource(); var observed = new TaskCompletionSource();
-        using var watcher = new FileSystemWatcher(f.World, "fixture.zip") { IncludeSubdirectories = true };
-        watcher.Created += (_, e) => { if (e.FullPath.Contains(Path.DirectorySeparatorChar + "payload" + Path.DirectorySeparatorChar, StringComparison.Ordinal)) { observed.TrySetResult(); cts.Cancel(); } };
-        watcher.EnableRaisingEvents = true;
+        using var checkpoint = SHOU.Launcher.Core.IO.FileTransactionCheckpoint.Observe(phase => { if (phase == "trash-payload-moved") { observed.TrySetResult(); cts.Cancel(); } });
         await Assert.ThrowsAsync<OperationCanceledException>(() => f.Store.RecycleDatapacksAsync("世界 one", state.Revision, state.Datapacks.Select(Select).ToArray(), cts.Token));
         await observed.Task.WaitAsync(TimeSpan.FromSeconds(5));
         CollectionAssert.AreEqual(level, File.ReadAllBytes(f.Level)); CollectionAssert.AreEqual(manifest, File.ReadAllBytes(f.Manifest));

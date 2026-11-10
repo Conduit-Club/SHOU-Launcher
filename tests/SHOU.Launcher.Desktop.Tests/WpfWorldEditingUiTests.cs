@@ -135,6 +135,12 @@ public sealed partial class WpfWorldEditingUiTests
         Assert.Single(f.Vm.DatapackRows);
         Assert.True(await f.Vm.ImportClipboardWorldDatapackAsync([input], "one", "world", game));
         Assert.Equal(2, f.Vm.DatapackRows.Count); Assert.Equal(before, File.ReadAllBytes(f.LevelOne)); Assert.Equal(f.LevelTwoBytes, File.ReadAllBytes(f.LevelTwo));
+        Assert.Contains("已导入", f.Vm.WorldWorkspaceFeedback);
+        var notified = false; f.Vm.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(f.Vm.WorldWorkspaceFeedback)) notified = true; };
+        Find<ListBox>(f.Window, "WorldDatapackList").SelectedItem = f.Vm.DatapackRows.Last(); Pump(f.Window);
+        await f.Vm.EnableWorldDatapacksCommand.ExecuteAsync(null); Pump(f.Window);
+        Assert.True(notified); Assert.Empty(f.Vm.WorldWorkspaceFeedback); Assert.Contains("启用状态已保存", f.Vm.WorldSettingsFeedback);
+
     }
     [AvaloniaFact]
     public async Task DelayedTrashReadDoesNotAddBottomOperationBar()

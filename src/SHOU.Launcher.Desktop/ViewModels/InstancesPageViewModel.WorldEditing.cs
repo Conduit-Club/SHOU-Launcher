@@ -152,16 +152,17 @@ public sealed partial class InstancesPageViewModel
     private async Task ChangeSelectedDatapacksAsync(bool enabled)
     {
         if (!(enabled ? CanEnableSelectedDatapacks : CanDisableSelectedDatapacks) || SelectedInstance is not { } instance || SelectedWorldRow is not { } world || CurrentWorldSettings.State is not { } state) return;
-        var key = WorldSettingsKey; var draft = CurrentWorldSettings; var selections = CurrentWorldPacks.Selected.Select(row => new WorldDatapackSelection(row.Details!.PackId, row.Details.ContentRevision)).ToArray();
+        var key = WorldSettingsKey; var workspace = _worldDraft; var draft = CurrentWorldSettings; var selections = CurrentWorldPacks.Selected.Select(row => new WorldDatapackSelection(row.Details!.PackId, row.Details.ContentRevision)).ToArray();
         WorldEditReceipt? receipt = null;
         var completed = await Owner.RunAsync(enabled ? "启用世界数据包" : "禁用世界数据包", async ct => receipt = await ((IInstanceWorldEditService)Service).SetWorldDatapacksEnabledAsync(instance.Id, world.DirectoryName, state.Revision, selections, enabled, ct));
         if (completed && receipt is not null)
         {
             var ids = selections.Select(p => p.PackId).ToHashSet(StringComparer.Ordinal);
             draft.State = state with { Revision = receipt.Revision, Datapacks = state.Datapacks.Select(pack => ids.Contains(pack.PackId) ? pack with { Enabled = enabled } : pack).ToArray() };
+            workspace.Feedback = "";
             draft.Backup = receipt.BackupPath ?? draft.Backup; draft.Feedback = enabled ? "数据包启用状态已保存，下次进入世界时生效。" : "数据包禁用状态已保存，下次进入世界时生效。";
         }
         else { draft.Conflict = true; draft.Feedback = "启停保存未完成，选择与设置草稿保留；请重新读取核对。"; }
-        if (key == WorldSettingsKey) NotifyWorldEditing();
+        if (key == WorldSettingsKey) { OnPropertyChanged(nameof(WorldWorkspaceFeedback)); NotifyWorldEditing(); }
     }
 }

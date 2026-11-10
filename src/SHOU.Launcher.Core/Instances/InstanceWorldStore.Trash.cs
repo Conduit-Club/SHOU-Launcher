@@ -159,6 +159,7 @@ public sealed partial class InstanceWorldStore
             {
                 ct.ThrowIfCancellationRequested(); transfer.Guard.Verify(); RequireVacantPackPath(transfer.To);
                 moved.Add((transfer.From, transfer.To, transfer.Pack)); MovePack(transfer.From, transfer.To, transfer.Pack.Directory);
+                SHOU.Launcher.Core.IO.FileTransactionCheckpoint.Reach("trash-payload-moved");
                 if (await PackFingerprintAsync(transfer.To, transfer.Pack.Directory, ct) != transfer.Pack.Hash) throw new IOException("移动后的数据包校验失败。");
             }
             await RequireMetadataAsync(ct);
