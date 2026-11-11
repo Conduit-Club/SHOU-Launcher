@@ -18,6 +18,11 @@ public sealed partial class AccountsPageViewModel : PageViewModel
     private AuthenticationProfileChallengeViewModel? _profileChallenge;
     private long _authenticationGeneration;
     private bool _authenticationActive;
+    private long _openedDeviceGeneration = -1;
+    private string _deviceAutomationStatus = "";
+    public Func<string, CancellationToken, Task>? DeviceCodeClipboardWriter { get; set; }
+    public string DeviceAutomationStatus { get => _deviceAutomationStatus; private set => SetProperty(ref _deviceAutomationStatus, value); }
+    public RelayCommand CancelMicrosoftAuthorizationCommand { get; private set; } = null!;
     private bool _confirmRemoval;
     public ObservableCollection<AccountProfile> Accounts { get; } = [];
     public IReadOnlyList<LoginProviderChoice> Providers { get; } =
@@ -114,6 +119,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
         LoginMicrosoftCommand = AsyncCommand(LoginMicrosoftAsync, () => CanEdit);
         LoginYggdrasilCommand = AsyncCommand(LoginYggdrasilAsync, () => CanEdit && IsYggdrasil && !string.IsNullOrWhiteSpace(Username) && Password.Length > 0);
         OpenVerificationCommand = AsyncCommand(() => Owner.RunControlAsync("打开微软授权页", ct => Owner.ExternalLauncher.OpenUriAsync(_challenge!.VerificationUri, ct)), () => _challenge is { VerificationUri.Scheme: "https" });
+        CancelMicrosoftAuthorizationCommand = Command(() => Owner.CancelOperationCommand.Execute(null));
         RefreshAccountCommand = AsyncCommand(() => Owner.RunAsync("刷新账户", ct => Service.RefreshAccountAsync(SelectedAccount!.Id, ct)), () => CanEdit && SelectedAccount is { Kind: not AccountKind.Offline });
         RemoveAccountCommand = AsyncCommand(async () =>
         {
@@ -129,16 +135,47 @@ public sealed partial class AccountsPageViewModel : PageViewModel
         var generation = BeginAuthentication();
         try
         {
-            if (await Owner.RunAsync("微软设备授权", async ct =>
+            if (await Owner.RunInlineAsync("微软设备授权", async ct =>
             {
                 var progress = new DispatchProgress<DeviceCodeChallenge>(challenge => Owner.Dispatch(() =>
                 {
-                    if (IsCurrentAuthentication(generation) && !ct.IsCancellationRequested) SetChallenge(challenge);
+                    if (IsCurrentAuthentication(generation) && !ct.IsCancellationRequested)
+                    {
+                        SetChallenge(challenge);
+                        if (_openedDeviceGeneration != generation)
+                        {
+                            _openedDeviceGeneration = generation;
+                            _ = PrepareDeviceAuthorizationAsync(challenge, generation, ct);
+                        }
+                    }
                 }));
                 await Service.LoginMicrosoftAsync(progress, ct);
             })) IsAddingAccount = false;
         }
         finally { EndAuthentication(generation); }
+    }
+    private async Task PrepareDeviceAuthorizationAsync(DeviceCodeChallenge challenge, long generation, CancellationToken ct)
+    {
+        var copied = false;
+        try
+        {
+            if (!IsCurrentAuthentication(generation) || ct.IsCancellationRequested) return;
+            if (DeviceCodeClipboardWriter is { } writer) { await writer(challenge.UserCode, ct); copied = true; }
+        }
+        catch (Exception) { /* Clipboard failure must not end an otherwise valid device authorization. */ }
+        try
+        {
+            if (!IsCurrentAuthentication(generation) || ct.IsCancellationRequested) return;
+            await Owner.ExternalLauncher.OpenUriAsync(challenge.VerificationUri, ct);
+            if (IsCurrentAuthentication(generation) && !ct.IsCancellationRequested)
+                DeviceAutomationStatus = copied ? "代码已复制，已打开默认浏览器；粘贴代码后完成授权。" : "已打开默认浏览器；请复制上方代码完成授权。";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception)
+        {
+            if (IsCurrentAuthentication(generation) && !ct.IsCancellationRequested)
+                DeviceAutomationStatus = copied ? "代码已复制；浏览器未能打开，请点击“打开微软授权页”重试。" : "请点击下方按钮打开授权页并复制代码。";
+        }
     }
     private async Task LoginYggdrasilAsync()
     {
@@ -229,6 +266,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
     private void SetChallenge(DeviceCodeChallenge? challenge)
     {
         _challenge = challenge;
+        DeviceAutomationStatus = "";
         OnPropertyChanged(nameof(HasDeviceChallenge)); OnPropertyChanged(nameof(DeviceCode)); OnPropertyChanged(nameof(DeviceInstructions));
         OpenVerificationCommand.NotifyCanExecuteChanged();
     }

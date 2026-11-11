@@ -100,7 +100,7 @@
         </DataTemplate></ContentControl.ContentTemplate>
       </ContentControl>
       <Border Name="DeviceCodePanel" IsVisible="{Binding HasDeviceChallenge}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8">
-        <StackPanel Spacing="8"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" LineHeight="34" FontSize="24" FontWeight="SemiBold" LetterSpacing="2" HorizontalAlignment="Center" /><TextBlock Text="{Binding DeviceInstructions}" Classes="accountHint" /><WrapPanel><Button Content="{loc:Loc t345486d9ee4b78e5}" Command="{Binding OpenVerificationCommand}" Margin="0,0,5,4" /><Button Content="{loc:Loc t420c20dd9fcca860}" Click="CopyDeviceCode_Click" Margin="0,0,5,4" /></WrapPanel><TextBlock Text="{loc:Loc t56c0967e94b3c13f}" Classes="accountHint" /></StackPanel>
+        <StackPanel Spacing="8"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" LineHeight="34" FontSize="24" FontWeight="SemiBold" LetterSpacing="2" HorizontalAlignment="Center" /><TextBlock Text="{Binding DeviceInstructions}" Classes="accountHint" /><WrapPanel><Button Content="{loc:Loc t345486d9ee4b78e5}" Command="{Binding OpenVerificationCommand}" Margin="0,0,5,4" /><Button Content="{loc:Loc t420c20dd9fcca860}" Click="CopyDeviceCode_Click" Margin="0,0,5,4" /></WrapPanel><TextBlock Name="DeviceAutomationStatus" Text="{Binding DeviceAutomationStatus}" Classes="accountHint"/><Button Name="CancelMicrosoftAuthorizationButton" Content="取消授权" Command="{Binding CancelMicrosoftAuthorizationCommand}" HorizontalAlignment="Left"/></StackPanel>
       </Border>
     </StackPanel>
   </ScrollViewer>

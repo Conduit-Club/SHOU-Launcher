@@ -50,7 +50,8 @@ public sealed partial class JavaDiscovery : IJavaDiscovery
             ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
         var configured = request.ConfiguredExecutable ?? _configuredExecutable;
         if (!string.IsNullOrWhiteSpace(configured)) Add(configured, "configured", requireExists: false);
-        ScanRuntimeRoot(request.ManagedRuntimeDirectory, "managed");
+        // On macOS prefer conventional installed JDKs; managed runtimes remain a fallback.
+        if (_platform.OS != LauncherOS.MacOS || !_includeSystemSources) ScanRuntimeRoot(request.ManagedRuntimeDirectory, "managed");
 
         if (_includeSystemSources)
         {
@@ -96,6 +97,7 @@ public sealed partial class JavaDiscovery : IJavaDiscovery
             }
         }
 
+        if (_platform.OS == LauncherOS.MacOS && _includeSystemSources) ScanRuntimeRoot(request.ManagedRuntimeDirectory, "managed");
         foreach (var root in PortableSearchRoots().Distinct(_platform.OS == LauncherOS.Windows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)) ScanPortableRoot(root);
         var installations = new List<JavaInstallation>();
         foreach (var (path, source) in candidates)
@@ -113,7 +115,9 @@ public sealed partial class JavaDiscovery : IJavaDiscovery
         return installations.OrderByDescending(java => java.IsUsable
             && (!request.RequiredMajorVersion.HasValue || java.MajorVersion == request.RequiredMajorVersion)
             && (!request.RequiredArchitecture.HasValue || java.RuntimeArchitecture == request.RequiredArchitecture))
-            .ThenByDescending(java => java.MajorVersion).ThenBy(java => java.ExecutablePath, StringComparer.Ordinal).ToArray();
+            .ThenByDescending(java => java.MajorVersion)
+            .ThenBy(java => _platform.OS == LauncherOS.MacOS && java.Source is "configured" or "JAVA_HOME" or "JavaVirtualMachines" or "java_home" ? 0 : 1)
+            .ThenBy(java => java.ExecutablePath, StringComparer.Ordinal).ToArray();
 
         void Add(string path, string source, bool requireExists = true)
         {

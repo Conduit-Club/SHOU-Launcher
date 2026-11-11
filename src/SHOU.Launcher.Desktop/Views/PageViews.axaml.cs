@@ -26,7 +26,32 @@ public partial class InstancesView : UserControl
 
 public partial class AccountsView : UserControl
 {
-    public AccountsView() => AvaloniaXamlLoader.Load(this);
+    private AccountsPageViewModel? clipboardOwner;
+    private Func<string, CancellationToken, Task>? clipboardWriter;
+    public AccountsView()
+    {
+        AvaloniaXamlLoader.Load(this);
+        AttachedToVisualTree += (_, _) => AttachDeviceClipboard();
+        DataContextChanged += (_, _) => { if (TopLevel.GetTopLevel(this) is not null) AttachDeviceClipboard(); };
+        DetachedFromVisualTree += (_, _) => DetachDeviceClipboard();
+    }
+    private void DetachDeviceClipboard()
+    {
+        if (clipboardOwner is not null && ReferenceEquals(clipboardOwner.DeviceCodeClipboardWriter, clipboardWriter)) clipboardOwner.DeviceCodeClipboardWriter = null;
+        clipboardOwner = null; clipboardWriter = null;
+    }
+    private void AttachDeviceClipboard()
+    {
+        DetachDeviceClipboard();
+        if (DataContext is not AccountsPageViewModel vm) return;
+        clipboardOwner = vm;
+        vm.DeviceCodeClipboardWriter = clipboardWriter = async (code, ct) =>
+        {
+            ct.ThrowIfCancellationRequested();
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。");
+            await clipboard.SetTextAsync(code);
+        };
+    }
     private async void CopyDeviceCode_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not AccountsPageViewModel vm || !vm.HasDeviceChallenge) return;
