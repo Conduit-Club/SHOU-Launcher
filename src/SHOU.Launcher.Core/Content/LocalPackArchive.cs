@@ -68,10 +68,10 @@ public sealed class LocalPackArchive
         var overrides = new Dictionary<string, string>(StringComparer.Ordinal); var skipped = 0;
         foreach (var entry in entries.Values.Where(e => e.FullName.StartsWith(overrideRoot + "/", StringComparison.Ordinal)))
         { var relative = entry.FullName[(overrideRoot.Length + 1)..]; if (AllowedPayload(relative)) overrides.Add(relative, entry.FullName); else skipped++; }
-        if (overrides.Count + references.Count > ModrinthPackArchive.MaximumFiles) throw new InvalidDataException("整合包客户端文件超过 2048 项。");
+        if (overrides.Count + references.Count > ModrinthPackArchive.MaximumFiles) throw new InvalidDataException($"整合包客户端文件超过 {ModrinthPackArchive.MaximumFiles} 项。");
         PackArchiveReader.CheckTargets(overrides.Keys); archive.Verify();
         var warnings = new List<string> { "仅创建新的客户端实例；游戏本体将在首次启动时按官方安装流程准备。", "模组版本标签及元数据只做静态提示，完整依赖与实际兼容性由加载器最终验证。" };
-        if (skipped > 0) warnings.Add($"已排除 {skipped} 项不受支持的覆盖文件；不迁移启动器凭据、游戏存档或可执行脚本。");
+        if (skipped > 0) warnings.Add($"已排除 {skipped} 项不受支持的覆盖文件；不迁移启动器凭据、玩家存档或系统可执行脚本。KubeJS / scripts 内的游戏脚本随整合包导入。");
         var reason = supported ? "尚需通过 CurseForge 官方 API 核实清单文件与下载可用性。" : "此 CurseForge ZIP 的加载器身份尚未支持；不猜测多个加载器组合。";
         return new(new(LocalPackFormat.CurseForge, name, gameVersion, loaderKind, loaderVersionText, sha256, warnings, false, reason, LocalFiles: overrides.Keys.ToArray(), SkippedFiles: skipped), references, overrides, supported);
     }
@@ -120,9 +120,11 @@ public sealed class LocalPackArchive
     internal static bool AllowedPayload(string path)
     {
         ModrinthPackArchive.SafeRelative(path); var root = path.Split('/')[0];
-        if (path is "options.txt" or "icon.png" or "pack.png") return true;
-        if (root is not ("mods" or "resourcepacks" or "shaderpacks" or "config" or "defaultconfigs") || !path.Contains('/')) return false;
-        var extension = Path.GetExtension(path).ToLowerInvariant(); return extension is not (".exe" or ".com" or ".bat" or ".cmd" or ".ps1" or ".sh" or ".command" or ".dll" or ".so" or ".dylib" or ".js" or ".vbs");
+        if (path is "options.txt" or "icon.png" or "pack.png" or "default-server.properties") return true;
+        if (root is not ("mods" or "resourcepacks" or "shaderpacks" or "config" or "defaultconfigs" or "configureddefaults" or "kubejs" or "scripts" or "datapacks" or "ftbteambases" or "schematics") || !path.Contains('/')) return false;
+        var extension = Path.GetExtension(path).ToLowerInvariant();
+        if (extension == ".js") return root is "kubejs" or "scripts";
+        return extension is not (".exe" or ".com" or ".bat" or ".cmd" or ".ps1" or ".sh" or ".command" or ".dll" or ".so" or ".dylib" or ".vbs");
     }
     private static LocalPackDescriptor Blocked(LocalPackFormat format, string name, string sha, string reason, string game = "", string loader = "", string? loaderVersion = null)
         => new(new(format, name, game, loader, loaderVersion, sha, [], false, reason), [], new Dictionary<string, string>(), false);

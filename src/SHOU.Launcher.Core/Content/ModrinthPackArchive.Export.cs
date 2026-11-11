@@ -27,7 +27,7 @@ public sealed partial class ModrinthPackArchive
             if (!info.Exists || info.Length > MaximumOverrideFileBytes) throw new IOException("选择的导出文件不存在或超过128 MiB限制。");
             if (local.TryAdd(Key(relative), relative)) overrideBytes = checked(overrideBytes + info.Length);
             else if (local[Key(relative)] != relative) throw new IOException("导出文件存在大小写或Unicode路径冲突。");
-            if (local.Count > MaximumFiles || overrideBytes > MaximumOverrideBytes) throw new IOException("导出覆盖文件超过2048项或512 MiB限制。");
+            if (local.Count > MaximumFiles || overrideBytes > MaximumOverrideBytes) throw new IOException($"导出覆盖文件超过{MaximumFiles}项或512 MiB限制。");
         }
         foreach (var requested in options.OverridePaths ?? [])
         {
@@ -37,7 +37,7 @@ public sealed partial class ModrinthPackArchive
                 var pending = new Stack<string>(); pending.Push(requested); var directories = 0;
                 while (pending.TryPop(out var current))
                 {
-                    ct.ThrowIfCancellationRequested(); if (++directories > MaximumEntries) throw new IOException("导出目录超过5000项限制。");
+                    ct.ThrowIfCancellationRequested(); if (++directories > MaximumEntries) throw new IOException($"导出目录超过{MaximumEntries}项限制。");
                     foreach (var child in Directory.EnumerateFileSystemEntries(ContentInstallFiles.Literal(instance.GameDirectory, current)))
                     {
                         var relative = Path.GetRelativePath(instance.GameDirectory, child).Replace('\\', '/');
@@ -73,7 +73,7 @@ public sealed partial class ModrinthPackArchive
             var sha512 = Convert.ToHexStringLower(await SHA512.HashDataAsync(input, ct));
             localHashes.Add(Key(relative), (length, sha1, sha512));
         }
-        if (remote.Count > MaximumFiles || remote.Sum(f => f.Size) > MaximumDownloadBytes) throw new IOException("导出下载清单超过数量或总大小限制。");
+        if (remote.Count + local.Count > MaximumFiles || remote.Sum(f => f.Size) > MaximumDownloadBytes) throw new IOException("导出客户端文件超过数量或总大小限制。");
         Directory.CreateDirectory(exportDirectory); VerifiedDownloader.RejectLink(exportDirectory);
         var final = ContentInstallFiles.Literal(exportDirectory, "pack-" + Guid.NewGuid().ToString("N") + ".mrpack"); var temporary = final + ".tmp";
         var published = false;

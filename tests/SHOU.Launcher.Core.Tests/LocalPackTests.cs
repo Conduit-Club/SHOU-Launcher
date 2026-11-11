@@ -244,6 +244,33 @@ public sealed class LocalPackTests
         var manifest = await ContentInstallFiles.ReadManifestAsync(new("unregistered", "Fixture", "1.21.1", stage)); Assert.HasCount(3, manifest.Files); Assert.IsNull(manifest.Files.Single(f => f.Kind == "resourcepack").DownloadUrl);
         Assert.IsFalse(Directory.GetFiles(stage, "*", SearchOption.AllDirectories).Any(f => f.EndsWith(".download.lock", StringComparison.Ordinal)));
     }
+    [TestMethod]
+    public async Task LargeClientPackKeepsGameScriptsAndPresetsAndItsManifestRemainsReadable()
+    {
+        var gameFiles = new[] { "kubejs/server_scripts/recipes.js", "scripts/recipes.zs", "datapacks/ftb/data/ftb/function/start.mcfunction",
+            "ftbteambases/pregen_initial/region/r.0.0.mca", "configureddefaults/config/options.json", "schematics/base.nbt", "default-server.properties" };
+        var payload = Enumerable.Range(0, 6500).Select(i => ($"overrides/config/fixture-{i}.json", "{}"))
+            .Concat(gameFiles.Select(p => ("overrides/" + p, "fixture-game-data")))
+            .Concat(new[] { ("overrides/kubejs/execute.sh", "no"), ("overrides/config/run.js", "no"), ("overrides/launcher_accounts.json", "no"), ("overrides/saves/user/level.dat", "no") }).ToArray();
+        var path = Archive(Manifest(), payload); var archive = new LocalPackArchive(); var read = await archive.ReadAsync(path);
+        Assert.AreEqual(6500 + gameFiles.Length, read.OverrideEntries.Count); Assert.AreEqual(4, read.Inspection.SkippedFiles);
+        var stage = Path.Combine(TestFiles.Root(), "stage");
+        await archive.StageCurseForgeAsync(path, read.Inspection.ArchiveSha256, stage, [], (_, _, _) => throw new AssertFailedException("No remote files in this fixture."));
+        foreach (var file in gameFiles) Assert.AreEqual("fixture-game-data", await File.ReadAllTextAsync(Path.Combine(stage, file)));
+        var manifest = await ContentInstallFiles.ReadManifestAsync(new("unregistered", "Large fixture", "1.21.1", stage));
+        Assert.AreEqual(read.OverrideEntries.Count, manifest.Files.Count);
+        Assert.IsTrue(manifest.Files.All(f => f.Sha1.Length == 40 && f.Sha512.Length == 128));
+        Assert.IsFalse(File.Exists(Path.Combine(stage, "kubejs/execute.sh")));
+    }
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task RaisedPackBudgetsStillRejectExcessClientFilesAndZipEntries(bool entries)
+    {
+        var count = entries ? ModrinthPackArchive.MaximumEntries : ModrinthPackArchive.MaximumFiles + 1;
+        var path = Archive(Manifest(), Enumerable.Range(0, count).Select(i => ($"overrides/config/{i}.json", "{}")).ToArray());
+        await Assert.ThrowsAsync<InvalidDataException>(() => new LocalPackArchive().ReadAsync(path));
+    }
     [TestMethod, DataRow("manifest.json"), DataRow("overrides/config/example.json")]
     public async Task CorruptLocalZipEntryCrcIsRejectedAndNoInstanceIsPublished(string entryName)
     {

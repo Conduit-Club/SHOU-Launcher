@@ -11,7 +11,7 @@ namespace SHOU.Launcher.Core.Content;
 public sealed partial class ModrinthPackArchive
 {
     public const long MaximumArchiveBytes = 256L * 1024 * 1024, MaximumOverrideBytes = 512L * 1024 * 1024;
-    public const int MaximumEntries = 5000, MaximumFiles = 2048;
+    public const int MaximumEntries = PackArchiveReader.MaximumEntries, MaximumFiles = 8192;
     private const long MaximumOverrideFileBytes = 128L * 1024 * 1024, MaximumDownloadBytes = 4L * 1024 * 1024 * 1024;
     private static readonly string[] DownloadSidecars = [".download.lock", ".part", ".part.resume.json"];
     private sealed record PackRead(ModrinthPackInspection Inspection, IReadOnlyDictionary<string, ZipArchiveEntry> Overrides);
@@ -43,7 +43,7 @@ public sealed partial class ModrinthPackArchive
         var size = BinaryPrimitives.ReadUInt32LittleEndian(e[12..]); var offset = BinaryPrimitives.ReadUInt32LittleEndian(e[16..]);
         if (count is 0 or > MaximumEntries || size > 4 * 1024 * 1024 || offset + (long)size > input.Length - tail.Length + end ||
             BinaryPrimitives.ReadUInt32LittleEndian(e[4..]) != 0 || BinaryPrimitives.ReadUInt16LittleEndian(e[8..]) != count)
-            throw new InvalidDataException("整合包不支持ZIP64、多卷或超过5000项的ZIP目录。");
+            throw new InvalidDataException($"整合包不支持ZIP64、多卷或超过{MaximumEntries}项的ZIP目录。");
         input.Position = offset; var header = new byte[46];
         for (var i = 0; i < count; i++)
         {
@@ -133,7 +133,7 @@ public sealed partial class ModrinthPackArchive
         }
         if (loaders > 1) unsupported = "整合包同时声明多个加载器，首批不支持此组合。";
         var sourceFiles = root.GetProperty("files");
-        if (sourceFiles.ValueKind != JsonValueKind.Array || sourceFiles.GetArrayLength() > MaximumFiles) throw new InvalidDataException("整合包下载文件超过2048项限制。");
+        if (sourceFiles.ValueKind != JsonValueKind.Array || sourceFiles.GetArrayLength() > MaximumFiles) throw new InvalidDataException($"整合包下载文件超过{MaximumFiles}项限制。");
         var files = new List<ModrinthPackFile>(); var fileKeys = new HashSet<string>(StringComparer.Ordinal); long downloadBytes = 0;
         foreach (var file in sourceFiles.EnumerateArray())
         {
@@ -158,11 +158,12 @@ public sealed partial class ModrinthPackArchive
             common[pair.Key] = pair.Value;
         }
         var overrides = common.Values.ToDictionary(e => e.FullName[(e.FullName.IndexOf('/') + 1)..], e => e, StringComparer.Ordinal);
-        if (overrides.Count > MaximumFiles) throw new InvalidDataException("客户端overrides文件超过2048项限制。");
+        if (overrides.Count > MaximumFiles) throw new InvalidDataException($"客户端overrides文件超过{MaximumFiles}项限制。");
         if (overrides.Keys.Any(p => files.Any(f => Key(f.Path) == Key(p) && f.Path != p))) throw new InvalidDataException("下载文件与overrides存在大小写或Unicode路径歧义。");
         foreach (var relative in overrides.Keys)
             if (!files.Any(f => Key(f.Path) == Key(relative) && f.Client == "unsupported")) AllowedPath(relative);
         var clientPaths = files.Where(f => f.Client != "unsupported").Select(f => Key(f.Path)).Concat(overrides.Keys.Select(Key)).ToHashSet(StringComparer.Ordinal);
+        if (clientPaths.Count > MaximumFiles) throw new InvalidDataException($"整合包客户端文件超过{MaximumFiles}项限制。");
         PackArchiveReader.CheckTargets(clientPaths);
         if (files.Where(f => f.Client != "unsupported").Any(f => DownloadSidecars.Any(suffix => clientPaths.Contains(Key(f.Path + suffix)))))
             throw new InvalidDataException("整合包路径与下载器暂存侧文件冲突。");

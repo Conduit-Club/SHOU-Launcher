@@ -9,6 +9,15 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class ContentInstallTests
 {
     [TestMethod]
+    public async Task InstallationManifestRetainsAnExplicitCountBudget()
+    {
+        var root = TestFiles.Root(); var instance = new GameInstance("large", "Large fixture", "1.21.1", root);
+        var files = Enumerable.Range(0, ContentInstallFiles.MaximumManifestFiles + 1)
+            .Select(i => new ContentInstalledFile("fixture", "v1", "pack", $"config/{i}.json", new string('0', 40), new string('0', 128), 0)).ToArray();
+        await File.WriteAllBytesAsync(Path.Combine(root, ContentInstallFiles.ManifestName), System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new ContentInstallManifest(1, instance.Id, files)));
+        await Assert.ThrowsAsync<InvalidDataException>(() => ContentInstallFiles.ReadManifestAsync(instance));
+    }
+    [TestMethod]
     public async Task RequiredDependenciesInstallActualFilesAndChecksummedManifestWithoutOptionalDownloads()
     {
         var fixture = new Fixture(); fixture.Catalog.Add("api", []); fixture.Catalog.Add("main", [new("required", "api"), new("optional", "extra")]);

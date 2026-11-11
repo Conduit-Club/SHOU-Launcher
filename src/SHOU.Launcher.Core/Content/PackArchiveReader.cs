@@ -11,7 +11,7 @@ namespace SHOU.Launcher.Core.Content;
 internal sealed class PackArchiveReader : IDisposable
 {
     internal const long MaximumArchiveBytes = 256L * 1024 * 1024, MaximumExpandedBytes = 512L * 1024 * 1024, MaximumFileBytes = 128L * 1024 * 1024;
-    internal const int MaximumEntries = 5000;
+    internal const int MaximumEntries = 10000;
     private readonly FileStream input;
     private readonly WorldPathSnapshot guard;
     private readonly WorldFileIdentity identity;
@@ -96,7 +96,7 @@ internal sealed class PackArchiveReader : IDisposable
         for (var i = tail.Length - 22; i >= 0; i--) if (BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(i)) == 0x06054b50 && i + 22 + BinaryPrimitives.ReadUInt16LittleEndian(tail.AsSpan(i + 20)) == tail.Length) { end = i; break; }
         if (end < 0) throw new InvalidDataException("ZIP 中央目录缺失。");
         var e = tail.AsSpan(end); var count = BinaryPrimitives.ReadUInt16LittleEndian(e[10..]); var size = BinaryPrimitives.ReadUInt32LittleEndian(e[12..]); var offset = BinaryPrimitives.ReadUInt32LittleEndian(e[16..]);
-        if (count is 0 or > MaximumEntries || size > 4 * 1024 * 1024 || offset + (long)size != input.Length - tail.Length + end || BinaryPrimitives.ReadUInt32LittleEndian(e[4..]) != 0 || BinaryPrimitives.ReadUInt16LittleEndian(e[8..]) != count) throw new InvalidDataException("不支持 ZIP64、多卷或超过 5000 项的 ZIP。");
+        if (count is 0 or > MaximumEntries || size > 4 * 1024 * 1024 || offset + (long)size != input.Length - tail.Length + end || BinaryPrimitives.ReadUInt32LittleEndian(e[4..]) != 0 || BinaryPrimitives.ReadUInt16LittleEndian(e[8..]) != count) throw new InvalidDataException($"不支持 ZIP64、多卷或超过 {MaximumEntries} 项的 ZIP。");
         input.Position = offset; var header = new byte[46];
         for (var i = 0; i < count; i++)
         {
