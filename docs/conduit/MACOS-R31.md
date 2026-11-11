@@ -51,7 +51,31 @@
 - Core 全量 732 通过、5 个沿用平台跳过；包括真实 aria2 daemon 的镜像回退、本机校验、取消暂停和重连续传。最后记录 `core-final.json/.log`。
 - Desktop 全量 243 通过、0 失败/跳过；含同包再次启动、运行中准备入口保护、整包等待最终准备/发布、模组更新计数及取消后迟到回调。最后记录 `ui-final.json/.log`。
 - RC1 已在真实同一个隔离 XPlus 1.21.1 副本启动两个游戏，PID/创建时间分别保留，临时/原生目录各两份；退出启动器后两者 PPID 均变为 1，重开识别运行状态，模组写入操作受保护。
-- RC1 真实 ATM10 更新列表：检查 494 项，37 项更新、6 项未核实；版本选择与确认启用/撤回通过，未应用更新。后续 RC2 接入查询实时计数。
-- 第一对进程在等待原生 UI 许可期间已按准确 PID/创建身份用 TERM 收起，未冒称主菜单或正常菜单退出。用户随后明确批准本轮 QA 启动器和两个隔离游戏的原生接口；RC2 将使用同一副本重新完成这两项。
+- RC1 真实 ATM10 更新列表：检查 494 项，37 项更新、6 项未核实；版本选择与确认启用/撤回通过，未应用更新。RC2 已实窗观察 67/494→105/494 的计数与当前文件，取消后立即恢复操作，未应用模组更新。
+- 第一对进程在等待原生 UI 许可期间已按准确 PID/创建身份用 TERM 收起，未冒称主菜单或正常菜单退出。用户随后明确批准本轮 QA 启动器和两个隔离游戏的原生接口；RC2 已使用同一副本完成后续验收。
 
 剩余跟踪见 `todo.md` 的 R31/R30。用户个人 `/Applications` 安装与 `~/Games` 实例不作为测试目标。
+
+
+## RC2 最终原生验收
+
+- 同一隔离 XPlus 6.1.3 / Minecraft 1.21.1 / Fabric 0.18.4，85 个顶层模组 JAR（游戏主菜单报告含嵌入项共 98 Mods），官方安装的 ARM64 Java 21，单窗口内存 3072 MiB。
+- 两个窗口分别为 PID 92737、92822，独立主菜单均实见。退出父启动器后，两进程同 PID/创建时间继续运行，PPID 为 1；重开启动器重新识别运行状态，准备/修复/启动计划与脚本入口保持保护。
+- 在第一窗口创建并进入隔离世界 `R3 Isolated`；第二窗口显示红色“Locked by another running instance of Minecraft”，禁止同时打开同一世界。第一窗口“Save and Quit to Title”后显示保存完成，第二窗口刷新后解除锁定并成功读回该世界，位置与场景保留。
+- 第一窗口从 Quit Game 退出时第二窗口独立存活并进入存档；第二窗口随后保存、回到标题并 Quit Game。两进程均消失，独立日志均包含 Stopping。因父启动器故意脱离，未另行采集这两个游戏的退出码，不将菜单退出观察伪写成 code=0。测试启动器两次关闭均由受监视 open 进程记录 exit0。
+- 用户个人应用、个人实例与存档未操作。全部测试游戏和 QA 窗口已关闭，原生工具本轮目标授权表已设 inactive；QA 启动器配置恢复为测试前逐字节副本。隔离测试世界与证据保留。
+- 关键证据：`rc2-game-results.json`、`rc2-first-normal-quit.json`、`rc2-two-games-{before-close,after-launcher-close,after-launcher-reopen}.json`、`rc2-native.json`、`rc2-reopen.json`、`cleanup-and-preservation.json`，以及 `native-evidence/04` 至 `19` 图像。
+
+### 候选包
+
+- 源码：`f5aa2dccba667ac5380a5cd801393bc1c414c43b`。后续文档提交不改变此包的应用源码。
+- ZIP：`/Users/moear/Code/SHOU-Launcher/.shou-dev/dist/MACOS-R31-20261111/rc2/SHOU-Launcher-osx-arm64-v1.5.0-dev.gf5aa2dcc.zip`
+- SHA-256：`1f8610ecd1d389dd45675270af4e908416980cfaa2c2bfa894dbcb9b113027bc`；大小 51,906,331 字节。
+- .NET SDK 10.0.403、Avalonia 12.1.5、Release / osx-arm64 自包含；显式传入原 `.env`，构建核实 Microsoft/CurseForge 配置存在，未输出其值。
+- 本机 ad-hoc 签名候选，未公证、未正式发布。为避免 CUA 绑定个人应用，QA 副本只换 bundle 标识/显示名并重签 apphost；Core/Desktop 程序集逐字节一致，正式 ZIP 保持原样。
+
+### 仍待完成
+
+Aria2 服务发现/安装/启停，CF/FTB 在保持来源允许列表下的外部 RPC 支持，内置自适应分片与完整单文件暂停/恢复；下载管理完整历史与大包指标仍需扩展。实例目录重命名/迁移/恢复尚未做成产品能力。全 WPF 页面逐项差表、Windows 本轮原生回归、长时游玩与更多包/加载器矩阵继续跟踪。
+
+RLCraft 的 ARM64 Java 8/LWJGL 2 补丁方案只完成资料调查与 TODO，未安装或启动。原生自动化在 Minecraft 文本框出现输入丢字，本轮使用实际可见的 `R3 Isolated` 名称完成测试，不能据此判断用户键盘输入或启动器存在确定缺陷。Mac 长列表滚动后的 CUA 点击几何不可靠，官方接口选中后 Enter 可进入；真实鼠标双击与搜索交互仍待独立复核。
