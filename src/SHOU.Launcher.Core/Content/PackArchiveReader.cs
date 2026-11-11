@@ -89,7 +89,7 @@ internal sealed class PackArchiveReader : IDisposable
         }
         CheckTargets(files);
     }
-    internal static void ValidateDirectory(FileStream input)
+    internal static void ValidateDirectory(Stream input)
     {
         if (input.Length < 22) throw new InvalidDataException("ZIP 文件不完整。");
         var tail = new byte[(int)Math.Min(input.Length, 65557)]; input.Position = input.Length - tail.Length; input.ReadExactly(tail); var end = -1;

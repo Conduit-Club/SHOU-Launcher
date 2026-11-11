@@ -191,7 +191,7 @@ internal static class WorldContentArchive
         }
         zip.Verify();
     }
-    internal static async Task ValidateBundledWorldPacksAsync(string root, DataPackFormat format, CancellationToken ct)
+    internal static async Task ValidateBundledWorldPacksAsync(string root, DataPackFormat format, CancellationToken ct, IReadOnlySet<string>? verifiedBuiltins = null)
     {
         var folder = ContentInstallFiles.Literal(root, "datapacks"); var resources = new Dictionary<string, (PackResource, string)>(); var warnings = new List<string>();
         if (Directory.Exists(folder))
@@ -212,7 +212,7 @@ internal static class WorldContentArchive
             foreach (var pack in active.Items)
             {
                 if (pack.Type != NbtType.String) throw new InvalidDataException("世界内数据包身份无效。"); var id = (string)pack.Value;
-                if (id == "vanilla") continue;
+                if (id == "vanilla" || verifiedBuiltins?.Contains(id) == true) continue;
                 if (!id.StartsWith("file/", StringComparison.Ordinal)) throw new NotSupportedException("世界依赖未核实的内建/模组数据包：" + id);
                 var name = id[5..]; ModrinthPackArchive.SafeRelative(name);
                 if (name.Contains('/') || !Path.Exists(ContentInstallFiles.Literal(folder, name))) throw new InvalidDataException("世界声明启用的数据包文件缺失。");

@@ -196,22 +196,23 @@ public sealed partial class ModrinthPackArchive
             var installed = new List<ContentInstalledFile>(); var done = 0;
             var selectedFiles = inspection.Files.Where(f => f.Client == "required" || f.Client == "optional" && selected.Contains(f.Path)).ToArray();
             var total = selectedFiles.Length + read.Overrides.Count; progress?.Report(new("安装整合包文件", 0, total));
-            foreach (var file in selectedFiles)
+            await Parallel.ForEachAsync(selectedFiles, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (file, token) =>
             {
-                ct.ThrowIfCancellationRequested(); var path = ContentInstallFiles.Literal(directory, file.Path); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                await download(file, path, ct).ConfigureAwait(false);
-                if (!await ContentInstallFiles.MatchesAsync(path, file.Sha1, file.Size, ct).ConfigureAwait(false)) throw new InvalidDataException("整合包文件SHA-1校验失败。");
+                token.ThrowIfCancellationRequested(); var path = ContentInstallFiles.Literal(directory, file.Path); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+                await download(file, path, token).ConfigureAwait(false);
+                if (!await ContentInstallFiles.MatchesAsync(path, file.Sha1, file.Size, token).ConfigureAwait(false)) throw new InvalidDataException("整合包文件SHA-1校验失败。");
                 await using var bytes = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
-                var sha512 = Convert.ToHexStringLower(await SHA512.HashDataAsync(bytes, ct).ConfigureAwait(false));
+                var sha512 = Convert.ToHexStringLower(await SHA512.HashDataAsync(bytes, token).ConfigureAwait(false));
                 if (sha512 != file.Sha512) throw new InvalidDataException("整合包文件SHA-512校验失败。");
                 foreach (var suffix in DownloadSidecars)
                 {
                     var sidecar = path + suffix; VerifiedDownloader.RejectLink(sidecar);
                     if (File.Exists(sidecar)) File.Delete(sidecar);
                 }
-                progress?.Report(new("安装整合包文件", ++done, total, file.Path));
-                installed.Add(new("mrpack", inspection.VersionId, "pack", file.Path, file.Sha1, sha512, file.Size, file.Downloads[0], file.Client, file.Server));
-            }
+                progress?.Report(new("安装整合包文件", Interlocked.Increment(ref done), total, file.Path));
+                lock (installed) installed.Add(new("mrpack", inspection.VersionId, "pack", file.Path, file.Sha1, sha512, file.Size, file.Downloads[0], file.Client, file.Server));
+
+            }).ConfigureAwait(false);
             foreach (var (relative, entry) in read.Overrides)
             {
                 var declared = inspection.Files.FirstOrDefault(f => Key(f.Path) == Key(relative));

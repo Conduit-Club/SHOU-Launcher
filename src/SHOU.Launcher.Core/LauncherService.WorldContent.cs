@@ -115,7 +115,7 @@ public sealed partial class LauncherService : IWorldContentInstallationService
                     Directory.CreateDirectory(inspect);
                     var metadataFiles = world.Files.Where(p => p == "level.dat" || p.StartsWith("datapacks/", StringComparison.Ordinal)).ToArray();
                     await WorldContentArchive.ExtractWorldAsync(path, inspect, world with { Files = metadataFiles }, revision, ct);
-                    await WorldContentArchive.ValidateBundledWorldPacksAsync(inspect, game.PackFormat, ct);
+                    await ValidateWorldPacksForInstanceAsync(inspect, game.PackFormat, instance, ct);
                 }
                 finally { VerifiedDownloader.RejectLink(inspect); if (Directory.Exists(inspect)) Directory.Delete(inspect, true); }
                 warnings.Add("导入为新的存档文件夹，保留 ZIP 内世界数据，不覆盖已有存档。");
@@ -202,7 +202,7 @@ public sealed partial class LauncherService : IWorldContentInstallationService
                 {
                     var archive = plan.Archives["world"]; using (var zip = PackArchiveReader.Open(archive)) if (await zip.Sha256Async(ct) != plan.Revision) throw new IOException("世界 ZIP 自预检后改变。");
                     Directory.CreateDirectory(stage); await WorldContentArchive.ExtractWorldAsync(archive, stage, plan.World!, plan.Revision, ct);
-                    await WorldContentArchive.ValidateBundledWorldPacksAsync(stage, plan.Game.PackFormat, ct);
+                    await ValidateWorldPacksForInstanceAsync(stage, plan.Game.PackFormat, plan.Instance, ct);
                     var sourceRecord = plan.LocalSource is null
                         ? JsonSerializer.Serialize(new { plan.Request.ProjectId, plan.Request.ReleaseId, plan.Request.FileName, Sha256 = plan.Revision })
                         : JsonSerializer.Serialize(new { Kind = "local-world", plan.Request.FileName, Sha256 = plan.Revision, GameVersion = plan.Game.Version });

@@ -14,6 +14,7 @@ public static partial class Bootstrap
     public static string[] Arguments { get; internal set; } = [];
     private static string exitReason = "normal_close";
     private static bool nativeWindowObserved;
+    internal static object? MacTitlebarObservation { get; set; }
     public static void AttachLifetime(IClassicDesktopStyleApplicationLifetime desktop)
     {
         if (desktop.MainWindow is { } window)
@@ -37,7 +38,7 @@ public static partial class Bootstrap
             os = RuntimeInformation.OSDescription, processArchitecture = RuntimeInformation.ProcessArchitecture.ToString(),
             configurationAssembly = typeof(BuildConfiguration).Assembly.Location, dataDirectory = Launcher?.Paths.DataDirectory,
             isolated = Launcher?.Paths.IsIsolated, state = Launcher?.Snapshot.State, nativeWindowHandleObserved = nativeWindowObserved,
-            reason, reportedAt = DateTimeOffset.UtcNow, evidenceBoundary = "application observation only; external GUI evidence required" };
+            macTitlebar = MacTitlebarObservation, reason, reportedAt = DateTimeOffset.UtcNow, evidenceBoundary = "application observation only; external GUI evidence required" };
         var temporary = result + ".tmp-" + Guid.NewGuid().ToString("N");
         File.WriteAllText(temporary, JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
         File.Move(temporary, result, true);

@@ -7,7 +7,7 @@ namespace SHOU.Launcher.Core.Tests;
 
 public sealed partial class LocalPackTests
 {
-    [DataTestMethod]
+    [TestMethod]
     [DataRow("exact", true)]
     [DataRow("hash", false)]
     [DataRow("size", false)]

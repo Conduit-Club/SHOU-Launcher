@@ -7,15 +7,22 @@ namespace SHOU.Launcher.Desktop.Views;
 
 public partial class MainWindow
 {
+    private IDisposable? macChromeRetry;
     private void InitializeMacTrafficLights()
     {
         if (!OperatingSystem.IsMacOS()) return;
         // AppKit owns the buttons and their actions. Adjust their native titlebar layout only.
         Opened += (_, _) => QueueMacTrafficLights();
         SizeChanged += (_, _) => QueueMacTrafficLights();
+        Closed += (_, _) => macChromeRetry?.Dispose();
         PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) QueueMacTrafficLights(); };
     }
-    private void QueueMacTrafficLights() => Dispatcher.UIThread.Post(AlignMacTrafficLights, DispatcherPriority.Render);
+    private void QueueMacTrafficLights()
+    {
+        Dispatcher.UIThread.Post(AlignMacTrafficLights, DispatcherPriority.Render);
+        macChromeRetry?.Dispose();
+        macChromeRetry = DispatcherTimer.RunOnce(AlignMacTrafficLights, TimeSpan.FromMilliseconds(300));
+    }
     private void AlignMacTrafficLights()
     {
         if (!OperatingSystem.IsMacOS() || !IsVisible || WindowState is WindowState.FullScreen or WindowState.Minimized ||
@@ -23,11 +30,14 @@ public partial class MainWindow
         var buttons = Enumerable.Range(0, 3).Select(i => NativeButton(handle.NSWindow, Selector("standardWindowButton:"), i)).ToArray();
         if (buttons.Any(b => b == 0)) return;
         var container = NativeObject(buttons[0], Selector("superview"));
-        if (container == 0 || buttons.Any(b => NativeObject(b, Selector("superview")) != container)) return;
+        var sameParent = container != 0 && buttons.All(b => NativeObject(b, Selector("superview")) == container);
+        Bootstrap.MacTitlebarObservation = new { sameParent, containerFrame = container == 0 ? null : RectValues(NativeFrame(container, Selector("frame"))), buttonFrames = buttons.Select(b => RectValues(NativeFrame(b, Selector("frame")))).ToArray() };
+        Bootstrap.WriteNativeReport("native_titlebar_observed");
+        if (!sameParent) return;
         var frame = NativeFrame(container, Selector("frame"));
-        if (frame.Height is < 18 or > 96 || frame.Width < 60) return;
+        if (frame.Height < 18 || frame.Width < 60 || frame.Height > 96 && Math.Abs(frame.Height - Bounds.Height) > 64) return;
         const double height = 48;
-        if (Math.Abs(frame.Height - height) > .1)
+        if (frame.Height <= 96 && Math.Abs(frame.Height - height) > .1)
         {
             var parent = NativeObject(container, Selector("superview"));
             if (parent == 0) return;
@@ -38,9 +48,12 @@ public partial class MainWindow
         {
             var bounds = NativeFrame(button, Selector("frame"));
             if (bounds.Height is < 8 or > 24) continue;
-            NativeSetOrigin(button, Selector("setFrameOrigin:"), new(bounds.X, (height - bounds.Height) / 2));
+            var parentHeight = frame.Height > 96 ? frame.Height : height;
+            var y = NativeBool(container, Selector("isFlipped")) ? (height - bounds.Height) / 2 : parentHeight - (height + bounds.Height) / 2;
+            NativeSetOrigin(button, Selector("setFrameOrigin:"), new(bounds.X, y));
         }
     }
+    private static double[] RectValues(NativeRect frame) => [frame.X, frame.Y, frame.Width, frame.Height];
     private const string ObjC = "/usr/lib/libobjc.A.dylib";
     [StructLayout(LayoutKind.Sequential)] private readonly struct NativeRect(double x, double y, double width, double height)
     { public readonly double X = x, Y = y, Width = width, Height = height; }

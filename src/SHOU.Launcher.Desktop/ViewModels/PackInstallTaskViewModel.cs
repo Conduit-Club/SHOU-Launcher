@@ -62,7 +62,7 @@ public sealed class PackInstallTaskViewModel : ObservableObject
         var version = release?.Version;
         instanceName = new string((project.Title + (string.IsNullOrWhiteSpace(version) ? "" : " " + version)).Where(c => !char.IsControl(c)).Take(80).ToArray()).Trim();
         if (instanceName.Length == 0) instanceName = "新整合包";
-        Name = (project.Source == "curseforge" ? "CurseForge" : "Modrinth") + " 整合包下载：" + instanceName;
+        Name = (project.Source == "curseforge" ? "CurseForge" : "Modrinth") + " 整合包下载：" + UiPrivacy.Redact(project.Title);
         RetryCommand = new(RunAsync, () => owner.CanMutate && state is "失败" or "已取消" or "需要补充文件");
         CancelCommand = new(() => { if (ReferenceEquals(page.ActivePackTask, this)) owner.CancelOperationCommand.Execute(null); }, () => IsActive);
         OpenInstanceCommand = new(async () =>

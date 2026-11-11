@@ -96,7 +96,7 @@ public sealed class LocalPackArchive
             PackArchiveReader.CheckTargets(files.Select(f => f.Path).Concat(read.OverrideEntries.Keys));
             var installed = new List<ContentInstalledFile>(); var done = 0; var total = files.Count + read.OverrideEntries.Count;
             progress?.Report(new("安装整合包文件", 0, total));
-            foreach (var file in files)
+            await Parallel.ForEachAsync(files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (file, token) =>
             {
                 var targetKind = file.Path.StartsWith("mods/", StringComparison.Ordinal) && file.Path.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ? "mod"
                     : file.Path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
@@ -105,14 +105,15 @@ public sealed class LocalPackArchive
                             : file.Path.StartsWith("datapacks/", StringComparison.Ordinal) ? "datapack" : null
                         : null;
                 if (!AllowedPayload(file.Path) || targetKind is null || file.Size is <= 0 or > PackArchiveReader.MaximumFileBytes || !ContentInstallFiles.Hash(file.Sha1, 40)) throw new InvalidDataException("解析结果的资源路径、大小或哈希无效。");
-                var target = ContentInstallFiles.Literal(directory, file.Path); Directory.CreateDirectory(Path.GetDirectoryName(target)!); await download(file, target, ct).ConfigureAwait(false);
-                if (!await ContentInstallFiles.MatchesAsync(target, file.Sha1, file.Size, ct).ConfigureAwait(false)) throw new InvalidDataException("CurseForge 模组 SHA-1 或大小校验失败。");
-                await using var bytes = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true); var sha512 = Convert.ToHexStringLower(await SHA512.HashDataAsync(bytes, ct).ConfigureAwait(false));
+                var target = ContentInstallFiles.Literal(directory, file.Path); Directory.CreateDirectory(Path.GetDirectoryName(target)!); await download(file, target, token).ConfigureAwait(false);
+                if (!await ContentInstallFiles.MatchesAsync(target, file.Sha1, file.Size, token).ConfigureAwait(false)) throw new InvalidDataException("CurseForge 模组 SHA-1 或大小校验失败。");
+                await using var bytes = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true); var sha512 = Convert.ToHexStringLower(await SHA512.HashDataAsync(bytes, token).ConfigureAwait(false));
                 if (file.Sha512 is not null && !sha512.Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("同哈希回退模组 SHA-512 校验失败。");
-                installed.Add(new("cf-" + file.ProjectId, "cf-" + file.FileId, targetKind, file.Path, file.Sha1, sha512, file.Size, file.FromModrinth ? file.DownloadUri.AbsoluteUri : null));
-                progress?.Report(new("安装整合包文件", ++done, total, file.Path));
+                lock (installed) installed.Add(new("cf-" + file.ProjectId, "cf-" + file.FileId, targetKind, file.Path, file.Sha1, sha512, file.Size, file.FromModrinth ? file.DownloadUri.AbsoluteUri : null));
+                progress?.Report(new("安装整合包文件", Interlocked.Increment(ref done), total, file.Path));
                 foreach (var suffix in new[] { ".download.lock", ".part", ".part.resume.json" }) { var sidecar = ContentInstallFiles.Literal(directory, file.Path + suffix); if (File.Exists(sidecar)) File.Delete(sidecar); }
-            }
+
+            }).ConfigureAwait(false);
             foreach (var (relative, entryName) in read.OverrideEntries)
             {
                 var entry = archive.Zip.GetEntry(entryName) ?? throw new IOException("覆盖文件在暂存副本中缺失。");

@@ -31,7 +31,7 @@ public sealed partial class LauncherService : ILocalWorldImportService
                 Directory.CreateDirectory(inspect); ownedInspect = WorldPathSnapshot.Capture(Paths.TempDirectory, inspect);
                 var metadata = world.Files.Where(f => f == "level.dat" || f.StartsWith("datapacks/", StringComparison.Ordinal)).ToArray();
                 await WorldContentArchive.ExtractWorldAsync(path, inspect, world with { Files = metadata }, sha, ct);
-                await WorldContentArchive.ValidateBundledWorldPacksAsync(inspect, game.PackFormat, ct); ownedInspect.Verify();
+                await ValidateWorldPacksForInstanceAsync(inspect, game.PackFormat, instance, ct); ownedInspect.Verify();
             }
             finally
             {
@@ -69,4 +69,7 @@ public sealed partial class LauncherService : ILocalWorldImportService
         if (await zip.Sha256Async(ct) != plan.Revision) throw new IOException("本地世界 ZIP 自预检后已改变，请重新检查。");
         source.Guard.Verify();
     }
+    private static async Task ValidateWorldPacksForInstanceAsync(string root, DataPackFormat format, GameInstance instance, CancellationToken ct)
+        => await WorldContentArchive.ValidateBundledWorldPacksAsync(root, format, ct, await WorldBuiltinPacks.ResolveAsync(instance, ct).ConfigureAwait(false)).ConfigureAwait(false);
+
 }
