@@ -7,21 +7,25 @@ namespace SHOU.Launcher.Desktop.Views;
 
 public partial class MainWindow
 {
-    private IDisposable? macChromeRetry;
+    private IDisposable? macChromeRetry, macChromeTransitionRetry;
     private void InitializeMacTrafficLights()
     {
         if (!OperatingSystem.IsMacOS()) return;
         // AppKit owns the buttons and their actions. Adjust their native titlebar layout only.
         Opened += (_, _) => QueueMacTrafficLights();
         SizeChanged += (_, _) => QueueMacTrafficLights();
-        Closed += (_, _) => macChromeRetry?.Dispose();
+        Activated += (_, _) => QueueMacTrafficLights();
+        Deactivated += (_, _) => QueueMacTrafficLights();
+        Closed += (_, _) => { macChromeRetry?.Dispose(); macChromeTransitionRetry?.Dispose(); };
         PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) QueueMacTrafficLights(); };
     }
     private void QueueMacTrafficLights()
     {
         Dispatcher.UIThread.Post(AlignMacTrafficLights, DispatcherPriority.Render);
         macChromeRetry?.Dispose();
-        macChromeRetry = DispatcherTimer.RunOnce(AlignMacTrafficLights, TimeSpan.FromMilliseconds(300));
+        macChromeRetry = DispatcherTimer.RunOnce(AlignMacTrafficLights, TimeSpan.FromMilliseconds(150));
+        macChromeTransitionRetry?.Dispose();
+        macChromeTransitionRetry = DispatcherTimer.RunOnce(AlignMacTrafficLights, TimeSpan.FromMilliseconds(1000));
     }
     private void AlignMacTrafficLights()
     {
