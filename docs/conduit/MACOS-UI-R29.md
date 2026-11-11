@@ -4,11 +4,11 @@
 
 ## 候选与构建
 
-RC2 源码 `3b20cfd67cabc48dd90fde32116a8213d9600c36`，.NET SDK 10.0.403，Avalonia 12.1.5，Release / osx-arm64 / self-contained；本地 ad-hoc 签名，未公证、未正式发行。
+最终 RC3 源码 `e16683c7b209d7562992648351afdc845239eb7c`，.NET SDK 10.0.403，Avalonia 12.1.5，Release / osx-arm64 / self-contained；本地 ad-hoc 签名，未公证、未正式发行。
 
-候选位于 `.shou-dev/dist/MACOS-R29-20261111/rc2/osx-arm64/SHOU-Launcher-osx-arm64-v1.5.0-dev.g3b20cfd6.zip`，SHA-256：
+候选位于 `.shou-dev/dist/MACOS-R29-20261111/rc3/osx-arm64/SHOU-Launcher-osx-arm64-v1.5.0-dev.ge16683c7.zip`，SHA-256：
 
-`7a3e9ad6095bf572a40c5308ed9e8865a4bbff5247e89278ccb26b45ce15953a`
+`b4b54b35253c4672f91c2ccc8e1206297a38232fdd959c6b15ec92d7c6c62556`
 
 构建显式传入本机已有 `.env`，Microsoft / CurseForge 配置嵌入校验均通过，不输出值。`BUILD-INFO.json` 的 `source_dirty=true` 来自保留的未跟踪计划文件 `SHOU_Launcher_macOS_Codex_Plan.md`；构建时已跟踪源码无差异，该计划文件未进入提交和包。构建、测试、原生下载串行通过空间门禁，任务预算 35 GiB、系统保留 20 GiB，未绕开门禁另存重型产物。最终回归前门禁曾阻止超过预算的新任务；仅归档本轮失败测试的 GUID 临时样本、移除已通过测试的可丢弃样本后恢复，保留所有候选、原生数据、日志和 TRX，清理清单与可恢复归档在本轮报告目录。
 
@@ -19,7 +19,7 @@ RC2 源码 `3b20cfd67cabc48dd90fde32116a8213d9600c36`，.NET SDK 10.0.403，Aval
 - 本地安装改为搜索旁的紧凑按钮，空白导入大卡片不再占位；项目详情显示真实图标，版本列表默认展开，移除无关收藏空提示，并避免 CF 新实例名重复拼接项目标题。
 - 实例模组读取归档内的名称、版本与 PNG 图标，异常元数据安全回退；扫描不阻塞 UI，图片和元数据有独立大小预算。搜索覆盖名称、文件名与版本。
 - 模组页可带入明确实例、游戏版本与加载器下载资源；资源包和光影不再误用模组加载器筛选。更新检查按本地哈希确认官方身份，只列出同游戏版本/加载器的正式版。兼容旧 CF 清单的 `cf-文件ID` 身份，不改写旧收据；更新需明确选择与确认，原 JAR 和精确安装清单先备份，再校验和发布，失败回滚，保留禁用状态。
-- RC2 实测暴露大包更新检查的四分钟超时会丢掉全部结果。随后改为整次检查共享 CF 连接；服务超时返回已核实更新并逐个标记尚未核实/尚未查询的文件，用户主动取消仍终止操作，不伪称全部已查完。最终候选另作复验。
+- RC2 实测暴露大包更新检查的四分钟超时会丢掉全部结果。随后改为整次检查共享 CF 连接；服务超时返回已核实更新并逐个标记尚未核实/尚未查询的文件，用户主动取消仍终止操作，不伪称全部已查完。RC3 全量自动化通过；锁屏期间直接加载最终包程序集调用只读服务，在 97.36 秒内查完 494 个模组，找到 36 项正式版更新，6 项未核实且文件保留。另查明这六项当前 CF 版本均未提供第三方下载 URL，现有更新检查不能将其作为可下载身份核实；需要后续合法手动更新入口，不伪称最新。未批量升级整合包；最终大包查询实窗因 Mac 锁屏仍待重试。
 - 微软设备授权收到代码后自动复制并打开系统默认浏览器；单次授权只打开一次，复制/浏览器失败有手动回退。移除遮挡授权面板的全局等待层；等待时隐藏重复登录表单，取消按钮固定在账户区域底部，小窗口仍可见。迟到的授权进度不能重开浏览器。
 - “游戏资源”成为独立非选择标题，与“存档”分开；游戏本体和资源导航各自选择，侧栏可滚动。
 - macOS 优先发现常规安装目录中的 JDK，再考虑托管回退；按游戏所需主版本匹配，不把 JAVA_HOME 25 强行用于要求 21 的游戏。
@@ -34,7 +34,7 @@ RC2 源码 `3b20cfd67cabc48dd90fde32116a8213d9600c36`，.NET SDK 10.0.403，Aval
 | 21.0.13+9-LTS | `~/Library/Java/JavaVirtualMachines/temurin-21.jdk/Contents/Home` |
 | 25.0.5+8-LTS | `~/Library/Java/JavaVirtualMachines/temurin-25.jdk/Contents/Home` |
 
-`/usr/libexec/java_home -V` 可见三者。`~/.zprofile` 已备份并设置 JAVA_HOME / PATH 指向 25，`launchctl` 的 JAVA_HOME 同步为 25，新的登录 shell 实测为 25。开发门禁明确登记这三个安装目录；受控测试使用正式安装的 21，候选 Java 探测使用正式安装的 25，不再依赖临时工具目录。隔离启动器的全局 Java 偏好已在实窗改为自动并保存，原配置备份保留；无关实例的独立覆盖未擅改。安装收据见 `jdk-installed.json`。[Temurin 归档安装说明](https://adoptium.net/installation/archives)。
+`/usr/libexec/java_home -V` 可见三者。`~/.zprofile` 已备份并设置 JAVA_HOME / PATH 指向 25，`launchctl` 的 JAVA_HOME 同步为 25，新的登录 shell 实测为 25。开发门禁明确登记这三个安装目录；受控测试使用正式安装的 21，候选 Java 探测使用正式安装的 25，不再依赖临时工具目录。隔离启动器的全局 Java 偏好已在实窗改为自动并保存；Fabric QA 实例通过实窗、原版 QA 实例通过最终包的 `UpdateInstanceAsync` 服务接口，将两个明确指向临时 JDK 21 的覆盖迁移到正式安装的同版本 JDK 21，原配置均已备份，其余字段保留。已独立确认隔离数据没有残余临时 Java 覆盖。安装收据见 `jdk-installed.json`。[Temurin 归档安装说明](https://adoptium.net/installation/archives)。
 
 ## 验证
 
@@ -45,10 +45,12 @@ RC2 源码 `3b20cfd67cabc48dd90fde32116a8213d9600c36`，.NET SDK 10.0.403，Aval
 | ATM10 8.5 | RC1 软件内点击版本行，通知跳转任务管理，四阶段全部 100%；498 个 required 引用均解析，安装清单 4,382 项，顶层模组 JAR 494 个，MC 1.21.1 / NeoForge 21.1.265，建议内存 8,196 MiB。安装完成可选中实例、启动按钮可用；没有点击启动。 |
 | 模组列表 | 实际 ATM10 图标/名称/版本显示，`jei` 搜索缩小到五行；侧栏“游戏资源”与“存档”分离。 |
 | 微软设备授权 | RC1 自动打开默认 Chrome 的微软设备页，剪贴板与当次代码比较一致。RC2 真实窗口拖至 880×560 后，等待时底部取消按钮通过 CUA 直接点击成功，正常回到登录表单；没有保存设备代码或完成真实账户登录。 |
+| 最终包只读更新服务 | 直接加载 RC3 中的 Core/Desktop 程序集，确认源码身份后调用同一个检查方法；97.36 秒，494 个已检查，36 项更新，6 项未核实，正常返回，安装清单原 SHA-256 未变。隔离配置仅离线档案及系统代理，未读取真实凭据或启动游戏。此项是服务/API 实测，不替代原生界面验收。 |
+| 最终 RC3 实窗 | 启动收据在 AvaloniaNativeRenderTimer.EnsureRegistered 阶段失败；随后 CUA 与系统会话均确认 Mac 锁屏。进程已退出，无窗口可操作。需手动解锁后重试，区分会话状态和应用问题，最终开窗/ATM10 大批量查询/正常退出未计通过；RC2 的成功不抵消此项。 |
 | 单个模组安装与更新 | 空白 Fabric 1.21.1 隔离实例软件内安装 Sodium 0.8.12；实际检查发现正式版 0.8.13，逐项确认更新成功。仅一个新 JAR，旧 JAR 和更新前精确清单均在 `.shou-mod-backups/`，独立核对新文件大小/SHA-1/SHA-512及备份原字节一致，没有重复旧 JAR，没有启动游戏。 |
 | 资源包与光影 | 同一明确实例软件内安装 Faithful 32x / 1.21.1 June 2026（10.52 MiB）及 Complementary Reimagined r5.9.3（0.53 MiB）；资源包筛选实际显示“任意”加载器，光影按 1.21.1 筛选，目标实例与正式 JDK 21 保留。三种资源的最终大小/SHA-1/SHA-512均匹配安装清单；没有把下载成功视为游戏内渲染通过。 |
 
-原生证据位于 `.shou-dev/reports/macos-r29-20261111/`，包括 `atm10-native-installed.json`、`auth-native.json`、`auth-minimum-rc2.json`、`sodium-update-native.json`、`resources-native.json`、`candidate-rc2.json`、`native-evidence/`。RC1、RC2 均正常关闭，未触发退出计时。CUA 无法稳定截图/输入时，沿用用户明确授权的 macOS 官方接口，仅绑定本轮候选的 PID、可执行文件、窗口与前台状态；不操作其它窗口或游戏。
+原生证据位于 `.shou-dev/reports/macos-r29-20261111/`，包括 `atm10-native-installed.json`、`auth-native.json`、`auth-minimum-rc2.json`、`sodium-update-native.json`、`resources-native.json`、`candidate-final.json`、`atm10-updates-rc3-service.json`、`atm10-unverified-diagnostics.json`、`vanilla-installed-java.json`、`native-rc3-result.json`、`native-evidence/`。RC1、RC2 均正常关闭，未触发退出计时。CUA 无法稳定截图/输入时，沿用用户明确授权的 macOS 官方接口，仅绑定本轮候选的 PID、可执行文件、窗口与前台状态；不操作其它窗口或游戏。
 
 ## 范围与后续
 
