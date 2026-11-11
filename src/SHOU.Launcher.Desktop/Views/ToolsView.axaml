@@ -7,11 +7,11 @@
     <Border Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,0,1,0">
       <StackPanel>
         <TextBlock Classes="contextHeading" Text="{loc:Loc t423f51a286789ed3}" />
-        <ToggleButton Name="JavaTrustNavigationButton" Classes="contextNavigation" IsChecked="{Binding IsJavaTrust, Mode=OneWay}" Command="{Binding ShowJavaTrustCommand}">
+        <ToggleButton Name="JavaTrustNavigationButton" IsVisible="{Binding Root.VisibleFeatures[tools-java]}" Classes="contextNavigation" IsChecked="{Binding IsJavaTrust, Mode=OneWay}" Command="{Binding ShowJavaTrustCommand}">
           <StackPanel Orientation="Horizontal" Spacing="10"><views:ClubIcon Classes="contextIcon" Kind="{x:Static themes:ClubIcons.Settings}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" /><TextBlock Text="{loc:Loc te60b6a604415f87d}" Classes="navigationLabel" /></StackPanel>
         </ToggleButton>
         <TextBlock Classes="contextHeading" Text="{loc:Loc t7ff4ff7f1107e506}" />
-        <ToggleButton Name="ToolboxNavigationButton" Classes="contextNavigation" IsChecked="{Binding IsToolbox, Mode=OneWay}" Command="{Binding ShowToolboxCommand}">
+        <ToggleButton Name="ToolboxNavigationButton" IsVisible="{Binding Root.VisibleFeatures[tools-toolbox]}" Classes="contextNavigation" IsChecked="{Binding IsToolbox, Mode=OneWay}" Command="{Binding ShowToolboxCommand}">
           <StackPanel Orientation="Horizontal" Spacing="10"><views:ClubIcon Classes="contextIcon" Kind="{x:Static themes:ClubIcons.Toolbox}" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ToggleButton}}" /><TextBlock Text="{loc:Loc t7b2a5133349a7018}" Classes="navigationLabel" /></StackPanel>
         </ToggleButton>
       </StackPanel>

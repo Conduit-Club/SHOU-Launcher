@@ -45,11 +45,11 @@ public sealed partial class SettingsPageViewModel : PageViewModel
     public string ProxyAddress { get => _proxyAddress; set { if (SetProperty(ref _proxyAddress, value)) MarkDirty(); } }
     public string ProxySecret { get => _proxySecret; set { if (SetProperty(ref _proxySecret, value)) MarkDirty(); } }
     public bool Aria2Enabled { get => _aria2Enabled; set { if (SetProperty(ref _aria2Enabled, value)) { if (value) Aria2DetailsExpanded = true; MarkDirty(); } } }
-    public string Aria2Endpoint { get => _aria2Endpoint; set { if (SetProperty(ref _aria2Endpoint, value)) { Aria2ConnectionSummary = "地址已更改；保存后可测试连接。"; MarkDirty(); } } }
-    public string Aria2Secret { get => _aria2Secret; set { if (SetProperty(ref _aria2Secret, value)) { Aria2ConnectionSummary = "密钥已更改；保存后可测试连接。"; MarkDirty(); } } }
+    public string Aria2Endpoint { get => _aria2Endpoint; set { if (SetProperty(ref _aria2Endpoint, value)) { Aria2ConnectionSummary = "地址已更改；有效输入会自动保存。"; MarkDirty(); } } }
+    public string Aria2Secret { get => _aria2Secret; set { if (SetProperty(ref _aria2Secret, value)) { Aria2ConnectionSummary = "密钥已更改；有效输入会自动保存。"; MarkDirty(); } } }
     public string MicrosoftClientId { get => _microsoftClientId; set { if (SetProperty(ref _microsoftClientId, value)) MarkDirty(); } }
     public bool IsDirty { get => _isDirty; private set { SetProperty(ref _isDirty, value); OnPropertyChanged(nameof(SaveSummary)); NotifyCommands(); } }
-    public string SaveSummary => HasJavaSelectionConflict ? "默认 Java 已在工具页更改，请先到 Java 设置确认保留哪一项。" : IsDirty ? "有未保存的修改；切换页面会保留草稿。" : "当前显示已保存的设置。";
+    public string SaveSummary => HasJavaSelectionConflict ? "默认 Java 已在工具页更改，请先到 Java 设置确认保留哪一项。" : IsDirty ? "正在更新设置；有效输入会自动保存。" : "当前显示已保存的设置。";
     public string Feedback { get => _feedback; private set => SetProperty(ref _feedback, value); }
     public string DataDirectory => Service.Paths.DataDirectory;
     public string CacheDirectory => Service.Paths.CacheDirectory;
@@ -57,14 +57,15 @@ public sealed partial class SettingsPageViewModel : PageViewModel
     public string CredentialsSummary => Owner.Snapshot.CanPersistAccounts ? "密钥写入系统安全存储；留空保留已有密钥。" : "安全存储不可用，不能保存新的连接密钥。";
     public ObservableCollection<string> Themes { get; } = ["System", "Light", "Dark"];
     public IReadOnlyList<ProxyMode> ProxyModes { get; } = Enum.GetValues<ProxyMode>();
-    public ObservableCollection<string> Languages { get; } = ["zh-CN", "zh-TW", "en-US", "en-GB", "ja-JP", "fr-FR", "es-ES", "system"];
+    public IReadOnlyList<string> Languages => Localization.UiLocalization.SupportedLanguages;
     public AsyncRelayCommand SaveCommand { get; }
     public RelayCommand DiscardDraftCommand { get; }
     public AsyncRelayCommand OpenDataDirectoryCommand { get; }
     public RelayCommand OpenJavaTrustToolsCommand { get; }
 
-    public SettingsPageViewModel(MainWindowViewModel owner) : base(owner, "设置", "游戏路径、运行时、界面与网络配置。保存后用于后续操作。")
+    public SettingsPageViewModel(MainWindowViewModel owner) : base(owner, "设置", "游戏路径、运行时、界面与网络配置。有效输入会自动保存。")
     {
+        InitializeAutoSave();
         InitializeAria2Connection();
         SaveCommand = AsyncCommand(SaveAsync, () => CanEdit && IsDirty && !HasJavaSelectionConflict);
         DiscardDraftCommand = Command(() => { Load(Owner.Snapshot.Settings); LoadPresentation(_savedPresentation); Feedback = "已恢复为已保存的设置。"; }, () => CanEdit && IsDirty);
@@ -73,45 +74,57 @@ public sealed partial class SettingsPageViewModel : PageViewModel
         InitializeJavaSelectionConflict();
         InitializeParity();
     }
-    private void MarkDirty() { if (!_loading) { IsDirty = true; Feedback = ""; } }
-    private async Task SaveAsync()
+    private void MarkDirty() { if (!_loading) { settingsEditRevision++; IsDirty = true; Feedback = ""; AutoSaveFeedback = ""; QueueAutoSave(); } }
+    private Task SaveAsync() => SaveSettingsCoreAsync(false);
+    private async Task SaveValidatedSettingsAsync(long revision)
     {
-        if (HasJavaSelectionConflict) { Owner.ShowError("默认 Java 已更改，请先在 Java 设置中选择保留草稿或使用已保存的选择。"); SelectedSection = "java"; return; }
+        if (HasJavaSelectionConflict) { ReportSettingsError("默认 Java 已更改，请先在 Java 设置中选择确认使用当前默认或此处路径。"); if (!saveIsAutomatic) SelectedSection = "java"; return; }
         var gameRoot = GameRoot.Trim();
         var java = JavaExecutable.Trim();
-        if ((gameRoot.Length > 0 && !Path.IsPathFullyQualified(gameRoot)) || (java.Length > 0 && !Path.IsPathFullyQualified(java))) { Owner.ShowError("游戏与 Java 路径须为绝对路径；留空使用默认选择。"); return; }
-        if (MemoryMiB is < 512 or > 32768 || decimal.Truncate(MemoryMiB) != MemoryMiB) { Owner.ShowError("内存须为 512–32768 MiB 的整数。"); return; }
+        if ((gameRoot.Length > 0 && !Path.IsPathFullyQualified(gameRoot)) || (java.Length > 0 && !Path.IsPathFullyQualified(java))) { ReportSettingsError("游戏与 Java 路径须为绝对路径；留空使用默认选择。"); return; }
+        if (MemoryMiB is < 512 or > 32768 || decimal.Truncate(MemoryMiB) != MemoryMiB) { ReportSettingsError("内存须为 512–32768 MiB 的整数。"); return; }
         if (!ValidateLaunchDraft() || !ValidateGameOptions()) return;
         try { SettingsPresentationStore.Validate(BuildPresentation()); }
-        catch (InvalidDataException ex) { Owner.ShowError(ex.Message); SelectedSection = "appearance"; return; }
-        if (!string.IsNullOrWhiteSpace(MicrosoftClientId) && !Guid.TryParse(MicrosoftClientId.Trim(), out _)) { Owner.ShowError("Microsoft Client ID 必须是有效 GUID。"); return; }
+        catch (InvalidDataException ex) { ReportSettingsError(ex.Message); if (!saveIsAutomatic) SelectedSection = "appearance"; return; }
+        if (!string.IsNullOrWhiteSpace(MicrosoftClientId) && !Guid.TryParse(MicrosoftClientId.Trim(), out _)) { ReportSettingsError("Microsoft Client ID 必须是有效 GUID。"); return; }
         try { _ = PCL.Core.Conduit.DownloadSources.Parse(DownloadSourcesJson); }
-        catch (Exception ex) when (ex is JsonException or InvalidDataException or ArgumentException) { Owner.ShowError("下载源配置无效：" + UiPrivacy.Redact(ex.Message)); SelectedSection = "manage"; return; }
-        if (IsCustomProxy && !IsHttpEndpoint(ProxyAddress)) { Owner.ShowError("自定义代理需要有效的 HTTP/HTTPS 地址；凭据请填入独立密钥字段。"); return; }
-        if (ProxySecret.Length > 0 && !ProxySecret.Contains(':')) { Owner.ShowError("代理凭据须使用 username:password 格式，不会以明文保存。"); return; }
-        if (Aria2Enabled && !IsLocalAria2Endpoint(Aria2Endpoint)) { Owner.ShowError("本候选仅支持本机 aria2 RPC（localhost、127.0.0.1 或 ::1），尚不支持远程 RPC；地址须为不含凭据、查询或片段的 HTTP/HTTPS URL。"); return; }
-        if (ProxyMode == ProxyMode.System && !Service.Capabilities.SupportsSystemProxy) { Owner.ShowError("当前平台尚不支持系统代理，请明确选择直连或自定义代理。"); return; }
-        var proxySecret = ProxySecret;
-        var ariaSecret = Aria2Secret;
-        ProxySecret = ""; Aria2Secret = "";
-        var saved = await Owner.RunAsync("保存设置", async ct =>
+        catch (Exception ex) when (ex is JsonException or InvalidDataException or ArgumentException) { ReportSettingsError("下载源配置无效：" + UiPrivacy.Redact(ex.Message)); if (!saveIsAutomatic) SelectedSection = "manage"; return; }
+        if (IsCustomProxy && !IsHttpEndpoint(ProxyAddress)) { ReportSettingsError("自定义代理需要有效的 HTTP/HTTPS 地址；凭据请填入独立密钥字段。"); return; }
+        if (ProxySecret.Length > 0 && !ProxySecret.Contains(':')) { ReportSettingsError("代理凭据须使用 username:password 格式，不会以明文保存。"); return; }
+        if (Aria2Enabled && !IsLocalAria2Endpoint(Aria2Endpoint)) { ReportSettingsError("本候选仅支持本机 aria2 RPC（localhost、127.0.0.1 或 ::1），尚不支持远程 RPC；地址须为不含凭据、查询或片段的 HTTP/HTTPS URL。"); return; }
+        if (ProxyMode == ProxyMode.System && !Service.Capabilities.SupportsSystemProxy) { ReportSettingsError("当前平台尚不支持系统代理，请明确选择直连或自定义代理。"); return; }
+        var presentation = BuildPresentation();
+        var latest = Service.Snapshot.Settings;
+        var candidate = latest with { GameRoot = gameRoot.Length == 0 ? null : gameRoot, JavaExecutable = java.Length == 0 ? null : java,
+            MemoryMiB = (int)MemoryMiB, Language = Language, Theme = Theme, DownloadSourcesJson = DownloadSourcesJson,
+            Proxy = new ProxySettings(ProxyMode, string.IsNullOrWhiteSpace(ProxyAddress) ? null : ProxyAddress.Trim(), latest.Proxy?.CredentialKey),
+            Aria2 = new Aria2Settings(Aria2Enabled, Aria2Endpoint.Trim(), latest.Aria2?.CredentialKey),
+            MicrosoftClientId = string.IsNullOrWhiteSpace(MicrosoftClientId) ? null : MicrosoftClientId.Trim(),
+            GameWindowWidth = UseCustomWindow ? (int)GameWindowWidth : null, GameWindowHeight = UseCustomWindow ? (int)GameWindowHeight : null,
+            GameFullscreen = GameFullscreen, MinimumMemoryMiB = UseMinimumMemory ? (int)MinimumMemoryMiB : null,
+            CustomInfo = string.IsNullOrWhiteSpace(CustomInfo) ? null : CustomInfo.Trim(), LaunchOptions = BuildGameOptions(), Downloads = BuildDownloadOptions(), Launcher = launcherOptions };
+        var proxySecret = ProxySecret; var ariaSecret = Aria2Secret;
+        if (!saveIsAutomatic) Owner.ShowError(null);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(settingsLifetime.Token); timeout.CancelAfter(TimeSpan.FromSeconds(15));
+        try
         {
-            if (ariaSecret.Length > 0) await Service.SaveConnectionSecretAsync("aria2", ariaSecret, ct);
-            if (proxySecret.Length > 0) await Service.SaveConnectionSecretAsync("proxy", proxySecret, ct);
-            var latest = Service.Snapshot.Settings;
-            var settings = latest with { GameRoot = gameRoot.Length == 0 ? null : gameRoot, JavaExecutable = java.Length == 0 ? null : java,
-                MemoryMiB = (int)MemoryMiB, Language = Language, Theme = Theme, DownloadSourcesJson = DownloadSourcesJson,
-                Proxy = new ProxySettings(ProxyMode, string.IsNullOrWhiteSpace(ProxyAddress) ? null : ProxyAddress.Trim(), latest.Proxy?.CredentialKey),
-                Aria2 = new Aria2Settings(Aria2Enabled, Aria2Endpoint.Trim(), latest.Aria2?.CredentialKey),
-                MicrosoftClientId = string.IsNullOrWhiteSpace(MicrosoftClientId) ? null : MicrosoftClientId.Trim(),
-                GameWindowWidth = UseCustomWindow ? (int)GameWindowWidth : null, GameWindowHeight = UseCustomWindow ? (int)GameWindowHeight : null,
-                GameFullscreen = GameFullscreen, MinimumMemoryMiB = UseMinimumMemory ? (int)MinimumMemoryMiB : null,
-                CustomInfo = string.IsNullOrWhiteSpace(CustomInfo) ? null : CustomInfo.Trim(), LaunchOptions = BuildGameOptions(), Downloads = BuildDownloadOptions(), Launcher = launcherOptions };
-            await Service.SaveSettingsAsync(settings, ct);
-            await SavePresentationAsync(ct);
-        }, false, proxySecret, ariaSecret);
-        if (saved) { Load(Service.Snapshot.Settings); LauncherFeedback = ""; Feedback = "设置已保存。"; }
-        else Feedback = "保存未完成，请查看错误提示；部分已成功写入的项目可能已生效。已有密钥不会被空值覆盖。";
+            if (ariaSecret.Length > 0) await Service.SaveConnectionSecretAsync("aria2", ariaSecret, timeout.Token);
+            if (proxySecret.Length > 0) await Service.SaveConnectionSecretAsync("proxy", proxySecret, timeout.Token);
+            var keys = Service.Snapshot.Settings;
+            candidate = candidate with { Proxy = candidate.Proxy! with { CredentialKey = keys.Proxy?.CredentialKey }, Aria2 = candidate.Aria2! with { CredentialKey = keys.Aria2?.CredentialKey } };
+            await Service.SaveSettingsAsync(candidate, timeout.Token);
+            await SavePresentationAsync(presentation, timeout.Token);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            AutoSaveFeedback = "设置未全部保存，请检查输入或安全存储后重试。";
+            if (!saveIsAutomatic) Owner.ShowError(UiPrivacy.Redact(ex.Message, proxySecret, ariaSecret));
+            return;
+        }
+        var loading = _loading; _loading = true;
+        try { if (ProxySecret == proxySecret) ProxySecret = ""; if (Aria2Secret == ariaSecret) Aria2Secret = ""; } finally { _loading = loading; }
+        _lastLoadedSettings = Service.Snapshot.Settings; _savedJavaExecutable = candidate.JavaExecutable ?? "";
+        if (revision == settingsEditRevision) { Load(Service.Snapshot.Settings); LauncherFeedback = ""; Feedback = "设置已自动保存。"; AutoSaveFeedback = ""; }
     }
     private static bool IsHttpEndpoint(string address) => Uri.TryCreate(address.Trim(), UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https" && string.IsNullOrEmpty(uri.UserInfo);
     private static bool IsLocalAria2Endpoint(string address) => Uri.TryCreate(address.Trim(), UriKind.Absolute, out var uri)
@@ -124,9 +137,8 @@ public sealed partial class SettingsPageViewModel : PageViewModel
         {
             GameRoot = settings.GameRoot ?? ""; JavaExecutable = settings.JavaExecutable ?? ""; MemoryMiB = settings.MemoryMiB;
             _savedJavaExecutable = settings.JavaExecutable ?? ""; HasJavaSelectionConflict = false;
-            if (!string.IsNullOrWhiteSpace(settings.Language) && !Languages.Contains(settings.Language)) Languages.Add(settings.Language);
             if (!string.IsNullOrWhiteSpace(settings.Theme) && !Themes.Contains(settings.Theme)) Themes.Add(settings.Theme);
-            Language = settings.Language; Theme = settings.Theme; DownloadSourcesJson = settings.DownloadSourcesJson;
+            Language = Localization.UiLocalization.NormalizeLanguage(settings.Language); Theme = settings.Theme; DownloadSourcesJson = settings.DownloadSourcesJson;
             ProxyMode = settings.Proxy?.Mode ?? ProxyMode.System; ProxyAddress = settings.Proxy?.Address ?? "";
             Aria2Enabled = settings.Aria2?.Enabled ?? false; Aria2Endpoint = settings.Aria2?.Endpoint ?? "http://localhost:6800/jsonrpc";
             MicrosoftClientId = settings.MicrosoftClientId ?? ""; ProxySecret = ""; Aria2Secret = "";
@@ -143,9 +155,11 @@ public sealed partial class SettingsPageViewModel : PageViewModel
     public override void Refresh(LauncherSnapshot snapshot)
     {
         if (!_loaded || !IsDirty && snapshot.Settings != _lastLoadedSettings) Load(snapshot.Settings);
-        else if (IsDirty) ReconcileJavaSelection(snapshot.Settings);
+        else if (IsDirty && !saveInProgress) ReconcileJavaSelection(snapshot.Settings);
         OnPropertyChanged(nameof(CredentialsSummary));
         RefreshParity(snapshot);
         base.Refresh(snapshot);
+        autoSaveReady = true;
+        if (waitingToSave && CanEdit) QueueAutoSave();
     }
 }

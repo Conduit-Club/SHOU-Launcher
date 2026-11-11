@@ -5,9 +5,11 @@
   </UserControl.Styles>
   <Grid ColumnDefinitions="300,*">
     <Border Grid.Column="1" ClipToBounds="True">
-      <Grid>
-        <Image Source="{Binding HomeBackground}" Stretch="UniformToFill"><Image.Effect><BlurEffect Radius="9" /></Image.Effect></Image>
-        <Border Background="#35FFFFFF" />
+      <Grid IsVisible="{Binding HasHomeBackdrop}" Opacity="{Binding BackgroundImageOpacity}">
+        <Grid.Effect><BlurEffect Radius="{Binding BackgroundImageBlur}"/></Grid.Effect>
+        <Border Background="{Binding PreviousBackgroundBrush}"/>
+        <Border Background="{Binding BackgroundBrush}" Opacity="{Binding BackgroundFade}"><Border.Transitions><Transitions><DoubleTransition Property="Opacity" Duration="0:0:0.6"/></Transitions></Border.Transitions></Border>
+        <Border Background="#35FFFFFF"/>
       </Grid>
     </Border>
     <Border Name="LaunchAccountPanel" Background="{DynamicResource ClubSidebar}">
@@ -19,7 +21,7 @@
           </Button>
           <TextBlock Name="ConcurrentPlayHint" Text="{Binding Root.Instances.ConcurrentPlayHint}" IsVisible="{Binding Root.Instances.IsSelectedInstanceRunning}" FontSize="11" LineHeight="16" Foreground="{DynamicResource ClubMuted}" TextWrapping="Wrap" />
           <Grid ColumnDefinitions="*,10,*">
-            <Button Name="HomeSelectInstanceButton" Content="{loc:Loc tf5a76549ed49cfaa}" Command="{Binding Root.ShowInstancesCommand}" HorizontalAlignment="Stretch" Height="35" />
+            <Button Name="HomeSelectInstanceButton" IsVisible="{Binding Root.VisibleFeatures[instance-manager]}" Content="{loc:Loc tf5a76549ed49cfaa}" Command="{Binding Root.ShowInstancesCommand}" HorizontalAlignment="Stretch" Height="35" />
             <Button Grid.Column="2" Name="HomeInstanceSettingsButton" Content="{loc:Loc tcb5c4d21c9d75f2f}" Command="{Binding Root.Instances.ShowInstanceSettingsCommand}" HorizontalAlignment="Stretch" Height="35" />
           </Grid>
         </StackPanel>
@@ -60,7 +62,7 @@
         <Border Name="ClubServersCard" Classes="card" IsVisible="{Binding ShowClubServers}">
           <StackPanel Spacing="6">
             <DockPanel Margin="0,0,0,1"><Button Name="RefreshServersButton" DockPanel.Dock="Right" Classes="flat" Command="{Binding RefreshServersCommand}" AutomationProperties.Name="{loc:Loc tf06fb3f71f88681b}" ToolTip.Tip="{loc:Loc t802a407c774302aa}" MinHeight="18" MinWidth="20" Height="18" Width="20" Padding="2"><views:ClubIcon Name="RefreshServersIcon" Kind="refresh-cw" Width="14" Height="14" Foreground="{DynamicResource ClubForeground}" /></Button><TextBlock Text="{loc:Loc tccc334b83bd8dcca}" Classes="sectionTitle" LineHeight="18" VerticalAlignment="Center" /></DockPanel>
-            <ListBox Name="ServerSelector" Classes="serverCards" ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer}" IsEnabled="{Binding CanEdit}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox Name="ServerSelector" FontFamily="{DynamicResource ClubMotdFontFamily}" Classes="serverCards" ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer}" IsEnabled="{Binding CanEdit}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate></ListBox.ItemsPanel>
               <ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" ToolTip.Tip="{Binding Status}"><StackPanel Spacing="3"><TextBlock Text="{Binding Name}" FontSize="15" LineHeight="20" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" LineHeight="14" TextTrimming="CharacterEllipsis" /></StackPanel><Path Classes="serverSelectionCheck" Grid.Column="1" Data="M 1,7 L 5,12 L 13,1" Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource ClubAccent}" StrokeThickness="1.6" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" /></Grid></DataTemplate></ListBox.ItemTemplate>
             </ListBox>

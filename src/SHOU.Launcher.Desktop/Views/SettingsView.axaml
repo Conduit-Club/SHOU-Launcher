@@ -1,6 +1,6 @@
 <UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="using:SHOU.Launcher.Desktop.Localization"
              xmlns:local="using:SHOU.Launcher.Desktop.Views" xmlns:views="using:SHOU.Launcher.Desktop.Views" x:Class="SHOU.Launcher.Desktop.Views.SettingsView" FontSize="13">
-  <UserControl.Resources><local:SettingsPreferenceLabelConverter x:Key="PreferenceLabel" /><DataTemplate x:Key="GameChoiceTemplate"><TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}" /></DataTemplate></UserControl.Resources>
+  <UserControl.Resources><local:SettingsPreferenceLabelConverter x:Key="PreferenceLabel" /><DataTemplate x:Key="GameChoiceTemplate"><TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}" /></DataTemplate><DataTemplate x:Key="AboutCreditTemplate"><Grid ColumnDefinitions="44,12,*,Auto" Margin="8,8" ColumnSpacing="0"><Grid><Image Source="{Binding Portrait}" IsVisible="{Binding HasPortrait}" Width="36" Height="36"/><views:ClubIcon Kind="user" IsVisible="{Binding !HasPortrait}" Width="28" Height="28"/></Grid><StackPanel Grid.Column="2" Spacing="4" Margin="0,0,12,0"><TextBlock Text="{loc:Translate Name}" FontSize="15"/><TextBlock Text="{loc:Translate Description}" Classes="muted" TextWrapping="Wrap"/></StackPanel><Button Grid.Column="3" IsVisible="{Binding HasAction}" Content="{loc:Translate ActionLabel}" Command="{Binding OpenCommand}" VerticalAlignment="Center"/></Grid></DataTemplate></UserControl.Resources>
   <UserControl.Styles>
     <Style Selector="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
     <Style Selector="Border.card"><Setter Property="Padding" Value="15,12" /><Setter Property="CornerRadius" Value="6" /></Style>
@@ -18,49 +18,44 @@
     <Border Name="SettingsContextNavigation" Background="{DynamicResource ClubSurface}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,0,1,0">
       <ScrollViewer HorizontalScrollBarVisibility="Disabled"><StackPanel Margin="0,6,0,12">
         <TextBlock Classes="contextHeading" Text="{loc:Loc t847c5f681ce955a0}" />
-        <Button Name="SettingsLaunchNavigation" Classes="contextNavigation" Classes.selected="{Binding IsLaunchSection}" Command="{Binding SelectSectionCommand}" CommandParameter="launch">
+        <Button Name="SettingsLaunchNavigation" IsVisible="{Binding Root.VisibleFeatures[settings-launch]}" Classes="contextNavigation" Classes.selected="{Binding IsLaunchSection}" Command="{Binding SelectSectionCommand}" CommandParameter="launch">
           <Grid ColumnDefinitions="24,6,*"><views:ClubIcon Classes="contextIcon" Kind="rocket" /><TextBlock Grid.Column="2" Classes="navigationLabel" Text="{loc:Loc t56410fc65314dfb5}" VerticalAlignment="Center"  /></Grid>
         </Button>
-        <Button Name="SettingsJavaNavigation" Classes="contextNavigation" Classes.selected="{Binding IsJavaSection}" Command="{Binding SelectSectionCommand}" CommandParameter="java">
+        <Button Name="SettingsJavaNavigation" IsVisible="{Binding Root.VisibleFeatures[settings-java]}" Classes="contextNavigation" Classes.selected="{Binding IsJavaSection}" Command="{Binding SelectSectionCommand}" CommandParameter="java">
           <Grid ColumnDefinitions="24,6,*"><views:ClubIcon Classes="contextIcon" Kind="coffee" /><TextBlock Grid.Column="2" Classes="navigationLabel" Text="Java" VerticalAlignment="Center"  /></Grid>
         </Button>
-        <Button Name="SettingsManageNavigation" Classes="contextNavigation" Classes.selected="{Binding IsManageSection}" Command="{Binding SelectSectionCommand}" CommandParameter="manage">
+        <Button Name="SettingsManageNavigation" IsVisible="{Binding Root.VisibleFeatures[settings-manage]}" Classes="contextNavigation" Classes.selected="{Binding IsManageSection}" Command="{Binding SelectSectionCommand}" CommandParameter="manage">
           <Grid ColumnDefinitions="24,6,*"><views:ClubIcon Classes="contextIcon" Kind="book-marked" /><TextBlock Grid.Column="2" Classes="navigationLabel" Text="{loc:Loc tbb6d995724f49a72}" VerticalAlignment="Center"  /></Grid>
         </Button>
         <TextBlock Classes="contextHeading" Text="{loc:Loc td6965cf52f76549a}" />
-        <Button Name="SettingsAppearanceNavigation" Classes="contextNavigation" Classes.selected="{Binding IsAppearanceSection}" Command="{Binding SelectSectionCommand}" CommandParameter="appearance">
+        <Button Name="SettingsAppearanceNavigation" IsVisible="{Binding Root.VisibleFeatures[settings-appearance]}" Classes="contextNavigation" Classes.selected="{Binding IsAppearanceSection}" Command="{Binding SelectSectionCommand}" CommandParameter="appearance">
           <Grid ColumnDefinitions="24,6,*"><views:ClubIcon Classes="contextIcon" Kind="palette" /><TextBlock Grid.Column="2" Classes="navigationLabel" Text="{loc:Loc t38c043e08502e710}" VerticalAlignment="Center"  /></Grid>
         </Button>
-        <Button Name="SettingsLanguageNavigation" Classes="contextNavigation" Classes.selected="{Binding IsLanguageSection}" Command="{Binding SelectSectionCommand}" CommandParameter="language">
+        <Button Name="SettingsLanguageNavigation" IsVisible="{Binding Root.VisibleFeatures[settings-language]}" Classes="contextNavigation" Classes.selected="{Binding IsLanguageSection}" Command="{Binding SelectSectionCommand}" CommandParameter="language">
           <Grid ColumnDefinitions="24,6,*"><views:ClubIcon Classes="contextIcon" Kind="earth" /><TextBlock Grid.Column="2" Classes="navigationLabel" Text="{loc:Loc t9f6fee1aba17a565}" VerticalAlignment="Center"  /></Grid>
         </Button>
-        <Button Name="SettingsMiscNavigation" Classes="contextNavigation" Classes.selected="{Binding IsMiscSection}" Command="{Binding SelectSectionCommand}" CommandParameter="misc">
+        <Button Name="SettingsMiscNavigation" IsVisible="{Binding Root.VisibleFeatures[settings-misc]}" Classes="contextNavigation" Classes.selected="{Binding IsMiscSection}" Command="{Binding SelectSectionCommand}" CommandParameter="misc">
           <Grid ColumnDefinitions="24,6,*"><views:ClubIcon Classes="contextIcon" Kind="monitor-cog" /><TextBlock Grid.Column="2" Classes="navigationLabel" Text="{loc:Loc t887d938275c72602}" VerticalAlignment="Center"  /></Grid>
         </Button>
         <TextBlock Classes="contextHeading" Text="{loc:Loc t52d25a9e30ba94f1}" />
-        <Button Name="SettingsAboutNavigation" Classes="contextNavigation" Classes.selected="{Binding IsAboutSection}" Command="{Binding SelectSectionCommand}" CommandParameter="about">
+        <Button Name="SettingsAboutNavigation" IsVisible="{Binding Root.VisibleFeatures[settings-about]}" Classes="contextNavigation" Classes.selected="{Binding IsAboutSection}" Command="{Binding SelectSectionCommand}" CommandParameter="about">
           <Grid ColumnDefinitions="24,6,*"><views:ClubIcon Classes="contextIcon" Kind="info" /><TextBlock Grid.Column="2" Classes="navigationLabel" Text="{loc:Loc t0fe8acdee57bdb1f}" VerticalAlignment="Center"  /></Grid>
         </Button>
-        <Button Name="SettingsUpdatesNavigation" Classes="contextNavigation" Classes.selected="{Binding IsUpdatesSection}" Command="{Binding SelectSectionCommand}" CommandParameter="updates">
+        <Button Name="SettingsUpdatesNavigation" IsVisible="{Binding Root.VisibleFeatures[settings-updates]}" Classes="contextNavigation" Classes.selected="{Binding IsUpdatesSection}" Command="{Binding SelectSectionCommand}" CommandParameter="updates">
           <Grid ColumnDefinitions="24,6,*"><views:ClubIcon Classes="contextIcon" Kind="refresh-cw" /><TextBlock Grid.Column="2" Classes="navigationLabel" Text="{loc:Loc t651f274470153a05}" VerticalAlignment="Center"  /></Grid>
         </Button>
-        <Button Name="SettingsFeedbackNavigation" Classes="contextNavigation" Classes.selected="{Binding IsFeedbackSection}" Command="{Binding SelectSectionCommand}" CommandParameter="feedback">
+        <Button Name="SettingsFeedbackNavigation" IsVisible="{Binding Root.VisibleFeatures[settings-feedback]}" Classes="contextNavigation" Classes.selected="{Binding IsFeedbackSection}" Command="{Binding SelectSectionCommand}" CommandParameter="feedback">
           <Grid ColumnDefinitions="24,6,*"><views:ClubIcon Classes="contextIcon" Kind="message-circle" /><TextBlock Grid.Column="2" Classes="navigationLabel" Text="{loc:Loc t8b2106ca13719cb2}" VerticalAlignment="Center"  /></Grid>
         </Button>
-        <Button Name="SettingsLogsNavigation" Classes="contextNavigation" Classes.selected="{Binding IsLogsSection}" Command="{Binding SelectSectionCommand}" CommandParameter="logs">
+        <Button Name="SettingsLogsNavigation" IsVisible="{Binding Root.VisibleFeatures[settings-logs]}" Classes="contextNavigation" Classes.selected="{Binding IsLogsSection}" Command="{Binding SelectSectionCommand}" CommandParameter="logs">
           <Grid ColumnDefinitions="24,6,*"><views:ClubIcon Classes="contextIcon" Kind="scroll-text" /><TextBlock Grid.Column="2" Classes="navigationLabel" Text="{loc:Loc t6598755879490792}" VerticalAlignment="Center"  /></Grid>
         </Button>
       </StackPanel></ScrollViewer>
     </Border>
     <DockPanel Grid.Column="1">
-      <Border Name="SettingsSaveBar" DockPanel.Dock="Bottom" Background="{DynamicResource ClubSurface}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,1,0,0" Padding="0,3,0,0" Margin="24,2,24,4">
-        <Grid ColumnDefinitions="*,Auto">
-          <StackPanel VerticalAlignment="Center" Margin="0,0,10,0"><TextBlock Name="SettingsDraftStatus" IsVisible="{Binding IsDirty}" Text="{loc:Translate SaveSummary}" ToolTip.Tip="{loc:Translate SaveSummary}" Classes="muted" LineHeight="16" FontSize="11" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /><TextBlock Text="{loc:Translate Feedback}" ToolTip.Tip="{loc:Translate Feedback}" Classes="status muted" LineHeight="14" FontSize="10" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /></StackPanel>
-          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"><Button Name="SaveSettingsButton" Classes="primary" Content="{loc:Loc tc8550237ba701f64}" Command="{Binding SaveCommand}" /><Button Name="DiscardSettingsButton" Content="{loc:Loc t70403791a99417bb}" Command="{Binding DiscardDraftCommand}" /></StackPanel>
-        </Grid>
-      </Border>
       <ScrollViewer Name="SettingsPageScroller" HorizontalScrollBarVisibility="Disabled">
         <StackPanel Spacing="14" Margin="24,24,24,8">
+          <TextBlock Name="SettingsAutoSaveFeedback" Text="{loc:Translate AutoSaveFeedback}" IsVisible="{Binding HasAutoSaveFeedback}" Foreground="{DynamicResource ClubErrorForeground}" TextWrapping="Wrap"/>
           <StackPanel Name="LaunchSettingsSection" IsVisible="{Binding IsLaunchSection}" Spacing="14">
             <Border Classes="card"><StackPanel Spacing="9" IsEnabled="{Binding CanEdit}">
               <TextBlock Classes="sectionTitle" Text="{loc:Loc t8dd0655d53256a1f}" />
@@ -119,31 +114,226 @@
               <TextBlock Text="本机 RPC 地址" Classes="label"/>
               <TextBox Name="Aria2EndpointSetting" Text="{Binding Aria2Endpoint}" PlaceholderText="http://localhost:6800/jsonrpc"/>
               <TextBlock Text="RPC 密钥（服务未设置则留空）" Classes="label"/>
-              <TextBox Name="Aria2SecretSetting" Text="{Binding Aria2Secret}" PasswordChar="●"/>
+              <TextBox Name="Aria2SecretSetting" Text="{Binding Aria2Secret, UpdateSourceTrigger=LostFocus}" PasswordChar="●"/>
               <TextBlock Text="{loc:Translate CredentialsSummary}" Classes="muted" TextWrapping="Wrap"/>
-              <Button Name="TestAria2ConnectionButton" Content="测试已保存的连接" Command="{Binding TestAria2ConnectionCommand}" HorizontalAlignment="Left"/>
+              <Button Name="TestAria2ConnectionButton" Content="测试连接" Command="{Binding TestAria2ConnectionCommand}" HorizontalAlignment="Left"/>
               <TextBlock Name="Aria2ConnectionStatus" Text="{Binding Aria2ConnectionSummary}" TextWrapping="Wrap" Classes="muted"/>
             </StackPanel></Border>
           </StackPanel>
-          <StackPanel Name="AppearanceSettingsSection" IsVisible="{Binding IsAppearanceSection}" Spacing="14">
-            <Border Classes="card"><StackPanel Spacing="8" IsEnabled="{Binding CanEdit}"><TextBlock Classes="sectionTitle" Text="{loc:Loc t5cd9eeef256e7cf1}"/><CheckBox Name="ShowClubIntroductionSetting" Content="{loc:Loc t4c761a62d0857e35}" IsChecked="{Binding ShowClubIntroduction}"/><CheckBox Name="ShowClubServersSetting" Content="{loc:Loc t4db9a8ff39d7bda9}" IsChecked="{Binding ShowClubServers}"/><WrapPanel><Button Name="ChooseHomePicturesButton" Content="{loc:Loc t7ff87815a52623fc}" Click="ChooseBackgrounds_Click" Margin="0,4,8,4"/><Button Name="ResetHomePicturesButton" Content="{loc:Loc tb0962267b4c04ada}" Command="{Binding RestoreBackgroundCommand}" Margin="0,4,8,4"/></WrapPanel><TextBlock Text="{loc:Translate BackgroundSummary}" Classes="muted"/></StackPanel></Border>
-            <Border Classes="card"><StackPanel Spacing="8" IsEnabled="{Binding CanEdit}"><TextBlock Classes="sectionTitle" Text="{loc:Loc t89e5e14c8db996da}"/>
-              <Grid ColumnDefinitions="82,*,90" ColumnSpacing="8"><TextBlock Classes="settingLabel" Text="{loc:Loc t04405e4a9ffd2a3d}"/><Slider Grid.Column="1" Minimum="50" Maximum="100" Value="{Binding WindowOpacity}" TickFrequency="1" IsSnapToTickEnabled="True"/><NumericUpDown Name="WindowOpacitySetting" Grid.Column="2" Minimum="50" Maximum="100" Value="{Binding WindowOpacity}" FormatString="0"/></Grid>
-              <Grid ColumnDefinitions="82,*"><TextBlock Classes="settingLabel" Text="{loc:Loc t788db1cfec2a3db5}"/><ComboBox Name="ThemeSetting" Grid.Column="1" ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
-              <Grid ColumnDefinitions="82,*,82,*" ColumnSpacing="8"><TextBlock Classes="settingLabel" Text="{loc:Loc t0749b3e79d60511e}"/><ComboBox Name="LightAccentSetting" Grid.Column="1" ItemsSource="{Binding AccentChoices}" SelectedItem="{Binding LightAccent}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox><TextBlock Grid.Column="2" Classes="settingLabel" Text="{loc:Loc td988940b113e0f27}"/><ComboBox Grid.Column="3" ItemsSource="{Binding AccentChoices}" SelectedItem="{Binding DarkAccent}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
-              <CheckBox Name="ShowStartupLogoSetting" Content="{loc:Loc t8aa5d1b4c3fc5be2}" IsChecked="{Binding ShowStartupLogo}"/><CheckBox Name="LockWindowSizeSetting" Content="{loc:Loc tb61e39bfa4e57232}" IsChecked="{Binding LockWindowSize}"/><CheckBox Name="ShowLaunchTipsSetting" Content="{loc:Loc t5a46fc326a59719b}" IsChecked="{Binding ShowLaunchTips}"/><CheckBox Name="NotifyClubUpdatesSetting" Content="{loc:Loc tcabc3ec0e94348b9}" IsChecked="{Binding NotifyClubUpdates}"/><CheckBox Name="AdvancedMaterialSetting" Content="{loc:Loc t024ea32a1313c4fe}" IsChecked="{Binding AdvancedMaterial}" ToolTip.Tip="{loc:Loc t848e79eebd3a9dab}"/>
-            </StackPanel></Border>
-            <Border Classes="card"><StackPanel Spacing="8"><TextBlock Classes="sectionTitle" Text="{loc:Loc t078838da4218490b}"/><Grid ColumnDefinitions="82,*"><TextBlock Classes="settingLabel" Text="{loc:Loc t078838da4218490b}"/><ComboBox Name="FontFamilySetting" Grid.Column="1" ItemsSource="{Binding FontChoices}" SelectedItem="{Binding SelectedFont}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid></StackPanel></Border>
-            <Border Classes="card"><StackPanel Spacing="8"><TextBlock Classes="sectionTitle" Text="{loc:Loc ta950dd1ab1c059dd}" ToolTip.Tip="{loc:Loc t941935be29e9ad21}"/><CheckBox Name="RotateHomeBackgroundSetting" Content="{loc:Loc t6f894812df38768c}" IsChecked="{Binding RotateHomeBackground}"/><WrapPanel><Button Content="{loc:Loc t7d035001b555125c}" Command="{Binding OpenPicturesDirectoryCommand}" Margin="0,3,8,3"/><Button Content="{loc:Loc tee1b60ff9e53a999}" Command="{Binding RefreshBackgroundCommand}" Margin="0,3,8,3"/></WrapPanel></StackPanel></Border>
-            <Border Classes="card"><StackPanel Spacing="8"><TextBlock Classes="sectionTitle" Text="{loc:Loc t3c3638bb300c2032}"/><WrapPanel><Button Content="{loc:Loc t138d7c8b800614f6}" Command="{Binding OpenMusicDirectoryCommand}" Margin="0,3,8,3"/><Button Name="RefreshMusicButton" Content="{loc:Loc t958be7e98504adb7}" Command="{Binding RefreshMusicCommand}" Margin="0,3,8,3"/><Button Content="{loc:Loc tc3396195e91ccdd8}" Command="{Binding PlayMusicCommand}" Margin="0,3,8,3"/><Button Content="{loc:Loc tca4d973c0b006b75}" Command="{Binding StopMusicCommand}" Margin="0,3,8,3"/></WrapPanel><ComboBox ItemsSource="{Binding MusicTracks}" SelectedItem="{Binding SelectedMusic}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></StackPanel></Border>
-            <Border Classes="card"><StackPanel Spacing="8"><TextBlock Classes="sectionTitle" Text="{loc:Loc tc2e679a42feb5e22}"/>
-              <Grid ColumnDefinitions="82,*"><TextBlock Classes="settingLabel" Text="{loc:Loc tc3ebe56c4633ef87}"/><ComboBox Name="TitleModeSetting" Grid.Column="1" ItemsSource="{Binding TitleModes}" SelectedItem="{Binding TitleMode}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
-              <TextBox Text="{Binding CustomTitleText}" IsVisible="{Binding IsTextTitle}" MaxLength="256"/><Grid IsVisible="{Binding IsImageTitle}" ColumnDefinitions="*,Auto" ColumnSpacing="8"><TextBox Text="{Binding CustomTitleImage}"/><Button Grid.Column="1" Content="{loc:Loc t9ad12a1ab4f6b527}" Click="ChooseTitleImage_Click"/></Grid>
-              <Grid ColumnDefinitions="82,*"><TextBlock Classes="settingLabel" Text="{loc:Loc t3e0d676d2d85073d}"/><ComboBox Name="HomeSourceSetting" Grid.Column="1" ItemsSource="{Binding HomeSources}" SelectedItem="{Binding HomeSource}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
-              <Grid IsVisible="{Binding IsCustomHome}" ColumnDefinitions="*,Auto" ColumnSpacing="8"><TextBox Text="{Binding HomeLocation}" ToolTip.Tip="{loc:Loc t7de1743c39f80f24}"/><Button Grid.Column="1" Content="{loc:Loc t822fb37dba29381a}" Click="ChooseHomeDocument_Click"/></Grid>
-              <WrapPanel><CheckBox Content="{loc:Loc tf1bbb4dc6aade547}" IsChecked="{Binding HideDownloads}" Margin="0,3,18,3"/><CheckBox Content="{loc:Loc t6f9e5d21f4feae5d}" IsChecked="{Binding HideTools}" Margin="0,3,18,3"/></WrapPanel>
-            </StackPanel></Border>
-          </StackPanel>
+<StackPanel Name="AppearanceSettingsSection" IsVisible="{Binding IsAppearanceSection}" Spacing="14">
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc t89e5e14c8db996da}" Classes="sectionTitle"/>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc t04405e4a9ffd2a3d}" Classes="settingLabel"/>
+        <Grid Grid.Column="1" ColumnDefinitions="*,12,95">
+          <Slider Minimum="50" Maximum="100" Value="{Binding WindowOpacity}"/>
+          <NumericUpDown Name="WindowOpacitySetting" Grid.Column="2" Minimum="50" Maximum="100" Value="{Binding WindowOpacity}" FormatString="0"/>
+        </Grid>
+      </Grid>
+      <UniformGrid Columns="3">
+        <StackPanel Spacing="6" Margin="4,0">
+          <TextBlock Text="{loc:Loc t788db1cfec2a3db5}" Classes="settingLabel"/>
+          <ComboBox Name="ThemeSetting" ItemsSource="{Binding Themes}" SelectedItem="{Binding Theme}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+        <StackPanel Spacing="6" Margin="4,0">
+          <TextBlock Text="{loc:Loc t0749b3e79d60511e}" Classes="settingLabel"/>
+          <ComboBox Name="LightAccentSetting" ItemsSource="{Binding AccentChoices}" SelectedItem="{Binding LightAccent}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+        <StackPanel Spacing="6" Margin="4,0">
+          <TextBlock Text="{loc:Loc td988940b113e0f27}" Classes="settingLabel"/>
+          <ComboBox Name="DarkAccentSetting" ItemsSource="{Binding AccentChoices}" SelectedItem="{Binding DarkAccent}">
+            <ComboBox.ItemTemplate>
+              <DataTemplate>
+                <TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/>
+              </DataTemplate>
+            </ComboBox.ItemTemplate>
+          </ComboBox>
+        </StackPanel>
+      </UniformGrid>
+      <CheckBox Name="ShowStartupLogoSetting" Content="{loc:Loc t148314849d1e3c95}" IsChecked="{Binding ShowStartupLogo}"/>
+      <CheckBox Name="LockWindowSizeSetting" Content="{loc:Loc tb61e39bfa4e57232}" IsChecked="{Binding LockWindowSize}"/>
+      <CheckBox Name="ShowLaunchTipsSetting" Content="{loc:Loc t678463fdac2d7c9a}" IsChecked="{Binding ShowLaunchTips}"/>
+      <CheckBox Name="NotifyClubUpdatesSetting" Content="{loc:Loc tcabc3ec0e94348b9}" IsChecked="{Binding NotifyClubUpdates}"/>
+      <CheckBox Name="AdvancedMaterialSetting" Content="{loc:Loc t024ea32a1313c4fe}" IsChecked="{Binding AdvancedMaterial}"/>
+    </StackPanel>
+  </Border>
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc t078838da4218490b}" Classes="sectionTitle"/>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc t63d6b47116de363c}" Classes="settingLabel"/>
+        <ComboBox Grid.Column="1" Name="FontFamilySetting" ItemsSource="{Binding FontChoices}" SelectedItem="{Binding SelectedFont}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc t58145f3b31599087}" Classes="settingLabel"/>
+        <ComboBox Grid.Column="1" Name="MotdFontSetting" ItemsSource="{Binding FontChoices}" SelectedItem="{Binding MotdFont}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+    </StackPanel>
+  </Border>
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc t36887d9b2ad35a12}" Classes="sectionTitle"/>
+      <CheckBox Name="RotateHomeBackgroundSetting" Content="{loc:Loc t4b3b45a347eb3097}" IsChecked="{Binding RotateHomeBackground}"/>
+      <TextBlock Text="{loc:Loc t4a14255e93d43a6e}" Classes="muted"/>
+      <WrapPanel>
+        <Button Name="ChooseHomePicturesButton" Content="{loc:Loc t79b21b81fac46f51}" Click="ChooseBackgrounds_Click" Margin="0,3,8,3"/>
+        <Button Name="ResetHomePicturesButton" Content="{loc:Loc t8b4261294f8e2c90}" Command="{Binding RestoreBackgroundCommand}" Margin="0,3,8,3"/>
+        <Button Name="OpenPicturesDirectoryButton" Content="{loc:Loc te360fc3377b293ec}" Command="{Binding OpenPicturesDirectoryCommand}" Margin="0,3,8,3"/>
+        <Button Name="RefreshHomePicturesButton" Content="{loc:Loc tee1b60ff9e53a999}" Command="{Binding RefreshBackgroundCommand}" Margin="0,3,8,3"/>
+      </WrapPanel>
+      <TextBlock Text="{loc:Translate BackgroundSummary}" Classes="muted"/>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc tff13402cecbb9194}" Classes="settingLabel"/>
+        <ComboBox Grid.Column="1" Name="BackgroundFitSetting" ItemsSource="{Binding BackgroundFits}" SelectedItem="{Binding BackgroundFit}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc t9eaa61edf066946a}" Classes="settingLabel"/>
+        <NumericUpDown Grid.Column="1" Name="BackgroundOpacitySetting" Minimum="0" Maximum="100" Value="{Binding BackgroundOpacity}" FormatString="0"/>
+      </Grid>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc t80faf20d6a765f01}" Classes="settingLabel"/>
+        <NumericUpDown Grid.Column="1" Name="BackgroundBlurSetting" Minimum="0" Maximum="40" Value="{Binding BackgroundBlur}" FormatString="0"/>
+      </Grid>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc t38feac1ef57f7530}" Classes="settingLabel"/>
+        <NumericUpDown Grid.Column="1" Name="SlideshowIntervalSetting" Minimum="5" Maximum="300" Value="{Binding SlideshowSeconds}" FormatString="0"/>
+      </Grid>
+    </StackPanel>
+  </Border>
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc t3c3638bb300c2032}" Classes="sectionTitle"/>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc t8bf8b9780d342816}" Classes="settingLabel"/>
+        <Slider Grid.Column="1" Name="MusicVolumeSetting" Minimum="0" Maximum="100" Value="{Binding MusicVolume}"/>
+      </Grid>
+      <CheckBox Name="MusicShuffleSetting" Content="{loc:Loc tf34b7ce61098e539}" IsChecked="{Binding MusicShuffle}"/>
+      <CheckBox Name="MusicAutoPlaySetting" Content="{loc:Loc t9f8c282f835b62a6}" IsChecked="{Binding MusicAutoPlay}"/>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc t4fa138a971d33ed5}" Classes="settingLabel"/>
+        <ComboBox Grid.Column="1" Name="MusicGamePolicySetting" ItemsSource="{Binding MusicGamePolicies}" SelectedItem="{Binding MusicGamePolicy}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+      <ComboBox Name="MusicTrackSelector" ItemsSource="{Binding MusicTracks}" SelectedItem="{Binding SelectedMusic}">
+        <ComboBox.ItemTemplate>
+          <DataTemplate>
+            <TextBlock Text="{Binding Name}"/>
+          </DataTemplate>
+        </ComboBox.ItemTemplate>
+      </ComboBox>
+      <WrapPanel>
+        <Button Name="OpenMusicFolderButton" Content="{loc:Loc tb0d3d0cf02bc6965}" Command="{Binding OpenMusicDirectoryCommand}" Margin="0,3,8,3"/>
+        <Button Name="RefreshMusicButton" Content="{loc:Loc t4c16c62e756a2e25}" Command="{Binding RefreshMusicCommand}" Margin="0,3,8,3"/>
+        <Button Name="PlayMusicButton" Content="{loc:Loc tc3396195e91ccdd8}" Command="{Binding PlayMusicCommand}" Margin="0,3,8,3"/>
+        <Button Name="StopMusicButton" Content="{loc:Loc tca4d973c0b006b75}" Command="{Binding StopMusicCommand}" Margin="0,3,8,3"/>
+      </WrapPanel>
+    </StackPanel>
+  </Border>
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc tc3ebe56c4633ef87}" Classes="sectionTitle"/>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc ta45897804b7572f2}" Classes="settingLabel"/>
+        <ComboBox Grid.Column="1" Name="TitleModeSetting" ItemsSource="{Binding TitleModes}" SelectedItem="{Binding TitleMode}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+      <TextBox Name="CustomTitleTextSetting" Text="{Binding CustomTitleText}" IsVisible="{Binding IsTextTitle}" MaxLength="256"/>
+      <Grid IsVisible="{Binding IsImageTitle}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <TextBox Name="CustomTitleImageSetting" Text="{Binding CustomTitleImage}"/>
+        <Button Grid.Column="1" Content="{loc:Loc t9ad12a1ab4f6b527}" Click="ChooseTitleImage_Click"/>
+      </Grid>
+    </StackPanel>
+  </Border>
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc t3e0d676d2d85073d}" Classes="sectionTitle"/>
+      <CheckBox Name="ShowClubIntroductionSetting" Content="{loc:Loc tb25cf527bf367792}" IsChecked="{Binding ShowClubIntroduction}"/>
+      <CheckBox Name="ShowClubServersSetting" Content="{loc:Loc t3fd014a1f6ed480b}" IsChecked="{Binding ShowClubServers}"/>
+      <Grid ColumnDefinitions="130,*">
+        <TextBlock Text="{loc:Loc t1c623e5fbeffe5f2}" Classes="settingLabel"/>
+        <ComboBox Grid.Column="1" Name="HomeSourceSetting" ItemsSource="{Binding HomeSources}" SelectedItem="{Binding HomeSource}">
+          <ComboBox.ItemTemplate>
+            <DataTemplate>
+              <TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/>
+            </DataTemplate>
+          </ComboBox.ItemTemplate>
+        </ComboBox>
+      </Grid>
+      <Grid IsVisible="{Binding IsCustomHome}" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <TextBox Name="HomeLocationSetting" Text="{Binding HomeLocation}"/>
+        <Button IsVisible="{Binding IsCustomHomeFile}" Grid.Column="1" Content="{loc:Loc t33e69e113e978c4e}" Click="ChooseHomeDocument_Click"/>
+      </Grid>
+    </StackPanel>
+  </Border>
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc t7a347b34ab5567ea}" Classes="sectionTitle"/>
+      <TextBlock Text="{loc:Loc t8f6178afb7effd3b}" Classes="muted"/>
+      <ItemsControl Name="FeatureHideGroups" ItemsSource="{Binding FeatureGroups}" IsVisible="{Binding Root.VisibleFeatures[feature-hide]}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <StackPanel Spacing="7" Margin="0,7">
+              <TextBlock Text="{loc:Translate Title}" FontWeight="SemiBold"/>
+              <ItemsControl ItemsSource="{Binding Choices}">
+                <ItemsControl.ItemsPanel>
+                  <ItemsPanelTemplate>
+                    <WrapPanel/>
+                  </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <CheckBox Content="{loc:Translate Title}" IsChecked="{Binding Hidden}" MinWidth="130" Margin="0,3,12,3"/>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+  </Border>
+</StackPanel>
           <StackPanel Name="LanguageSettingsSection" IsVisible="{Binding IsLanguageSection}" Spacing="14"><Border Classes="card"><StackPanel Spacing="9" IsEnabled="{Binding CanEdit}"><TextBlock Classes="sectionTitle" Text="{loc:Loc t9f6fee1aba17a565}"/><Grid ColumnDefinitions="90,*"><TextBlock Classes="settingLabel" Text="{loc:Loc t3d13868593ae4eeb}"/><ComboBox Name="LanguageSetting" Grid.Column="1" ItemsSource="{Binding Languages}" SelectedItem="{Binding Language}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid><Grid ColumnDefinitions="90,*"><TextBlock Classes="settingLabel" Text="{loc:Loc t911ff33787921f2c}"/><ComboBox Name="RegionalFormatSetting" Grid.Column="1" ItemsSource="{Binding RegionChoices}" SelectedItem="{Binding RegionalFormat}"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{loc:Translate ., Converter={StaticResource PreferenceLabel}}"/></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid><Border Background="{DynamicResource ClubSelection}" CornerRadius="5" Padding="24" Margin="9,0"><StackPanel Spacing="16"><TextBlock Text="{loc:Loc t58180fce3e44b99b}" LineHeight="35" FontSize="25" FontWeight="SemiBold"/><Button Content="{loc:Loc t9d09c117cc732997}" Command="{Binding OpenProjectCommand}"/></StackPanel></Border></StackPanel></Border></StackPanel>
           <StackPanel Name="MiscSettingsSection" IsVisible="{Binding IsMiscSection}" Spacing="14">
             <Border Classes="card"><StackPanel Spacing="8"><TextBlock Classes="sectionTitle" Text="{loc:Loc t5b50d7c4b5950dc5}"/>
@@ -152,15 +342,98 @@
               <CheckBox Name="DisableHardwareAccelerationSetting" Content="{loc:Loc tff5dba9cb7d49f84}" IsChecked="{Binding DisableHardwareAcceleration}" ToolTip.Tip="{loc:Loc t6d82f15ee4690509}"/>
               <WrapPanel><Button Name="ExportSettingsButton" Content="{loc:Loc tfe017784aa548855}" Click="ExportSettings_Click" Margin="0,3,8,3"/><Button Name="ImportSettingsButton" Content="{loc:Loc t1a80d4a192698b02}" Click="ImportSettings_Click" Margin="0,3,8,3"/></WrapPanel>
             </StackPanel></Border>
-            <Border Classes="card"><StackPanel Spacing="8" IsEnabled="{Binding CanEdit}"><TextBlock Classes="sectionTitle" Text="{loc:Loc t97b31b5d63f57e51}"  ToolTip.Tip="{loc:Translate CredentialsSummary}"/><CheckBox Name="UseDnsOverHttpsSetting" Content="{loc:Loc t61da6e6dbde1e9d8}" IsChecked="{Binding UseDnsOverHttps}" ToolTip.Tip="{loc:Loc tdcf34de5a7f40688}"/><Grid ColumnDefinitions="92,*"><TextBlock Classes="settingLabel" Text="{loc:Loc tfe51a8c86091b1e6}" /><ComboBox Name="ProxyModeSetting" Grid.Column="1" ItemsSource="{Binding ProxyModes}" SelectedItem="{Binding ProxyMode}" /></Grid><StackPanel IsVisible="{Binding IsCustomProxy}" Spacing="7" Margin="9,0"><TextBox Name="ProxyAddressSetting" Text="{Binding ProxyAddress}" PlaceholderText="http://127.0.0.1:7890" /><TextBox Name="ProxySecretSetting" Text="{Binding ProxySecret}" PasswordChar="●" PlaceholderText="{loc:Loc t12cb30be6910fbe2}" /></StackPanel></StackPanel></Border>
+            <Border Classes="card"><StackPanel Spacing="8" IsEnabled="{Binding CanEdit}"><TextBlock Classes="sectionTitle" Text="{loc:Loc t97b31b5d63f57e51}"  ToolTip.Tip="{loc:Translate CredentialsSummary}"/><CheckBox Name="UseDnsOverHttpsSetting" Content="{loc:Loc t61da6e6dbde1e9d8}" IsChecked="{Binding UseDnsOverHttps}" ToolTip.Tip="{loc:Loc tdcf34de5a7f40688}"/><Grid ColumnDefinitions="92,*"><TextBlock Classes="settingLabel" Text="{loc:Loc tfe51a8c86091b1e6}" /><ComboBox Name="ProxyModeSetting" Grid.Column="1" ItemsSource="{Binding ProxyModes}" SelectedItem="{Binding ProxyMode}" /></Grid><StackPanel IsVisible="{Binding IsCustomProxy}" Spacing="7" Margin="9,0"><TextBox Name="ProxyAddressSetting" Text="{Binding ProxyAddress}" PlaceholderText="http://127.0.0.1:7890" /><TextBox Name="ProxySecretSetting" Text="{Binding ProxySecret, UpdateSourceTrigger=LostFocus}" PasswordChar="●" PlaceholderText="{loc:Loc t12cb30be6910fbe2}" /></StackPanel></StackPanel></Border>
             <Border Classes="card"><Expander Header="{loc:Loc tde90f1bae01bfe50}"><StackPanel Spacing="8" Margin="8,10"><TextBlock Classes="label" Text="{loc:Loc t67ae2bf7dacfde5d}" /><TextBlock Text="{Binding DataDirectory}" Classes="muted" /><TextBlock Classes="label" Text="{loc:Loc t3c6cf2eb5d9a3c51}" /><TextBlock Text="{Binding CacheDirectory}" Classes="muted" /><Button Content="{loc:Loc tda99ea1331dc3046}" Command="{Binding OpenDataDirectoryCommand}" /><TextBlock Classes="label" Text="{loc:Loc t8ec96af634a85bed}" /><TextBox Name="MicrosoftClientIdSetting" Text="{Binding MicrosoftClientId}" IsEnabled="{Binding CanEdit}" PlaceholderText="{loc:Loc tac8817889eec6bf0}" /><TextBlock Classes="muted" Text="{loc:Loc tca365f98a69ba937}" /></StackPanel></Expander></Border>
           </StackPanel>
-          <StackPanel Name="AboutSettingsSection" IsVisible="{Binding IsAboutSection}" Spacing="14">
-            <Border Classes="card"><StackPanel Spacing="10"><TextBlock Classes="sectionTitle" Text="{loc:Loc t07cf529081e07007}" /><Grid ColumnDefinitions="48,*" Margin="9,6"><Image Source="/Assets/Conduit/club-logo.png" Width="38" Height="38" /><StackPanel Grid.Column="1" Spacing="5"><TextBlock Text="{loc:Translate SoftwareName}" LineHeight="32" FontSize="23" FontWeight="SemiBold" /><TextBlock Text="{loc:Loc t2a2846c57eb53222}" /><TextBlock Text="{loc:Translate SoftwareVersion}" Classes="muted" /></StackPanel></Grid><WrapPanel Margin="9,0"><Button Content="{loc:Loc t390454a193f8d16f}" Command="{Binding OpenClubCommand}" Margin="0,3,10,3" /><Button Content="{loc:Loc t9167585eb2f64c3f}" Command="{Binding OpenProjectCommand}" Margin="0,3,10,3" /></WrapPanel></StackPanel></Border>
-            <Border Classes="card"><StackPanel Spacing="9"><TextBlock Classes="sectionTitle" Text="{loc:Loc t065d53d95c055a59}" /><TextBlock Text="{Binding BuildDetails}" Classes="muted" Margin="9,0" /><TextBlock Text="{loc:Translate CredentialCapability}" Margin="9,0" /></StackPanel></Border>
-            <Border Classes="card"><StackPanel Spacing="9"><TextBlock Classes="sectionTitle" Text="{loc:Loc tad5ff6fb4f25d7fb}" /><TextBlock Text="{loc:Loc t0d5ef03afd68266a}" Margin="9,0" /><TextBlock Text="{loc:Loc t0e1c8682fb86f0bc}" Classes="muted" Margin="9,0" /></StackPanel></Border>
-            <Border Classes="card"><Expander Header="{loc:Loc t1352d0d826f739fe}"><StackPanel Spacing="9" Margin="9,10"><TextBlock Text="{loc:Loc t286dd76ac21c03cc}"/><ItemsControl Name="LicenseDocuments" ItemsSource="{Binding Licenses}"><ItemsControl.ItemTemplate><DataTemplate><Expander Header="{Binding Name}"><ScrollViewer MaxHeight="280"><TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="8"/></ScrollViewer></Expander></DataTemplate></ItemsControl.ItemTemplate></ItemsControl><Button Content="{loc:Loc t1c6c37490d081918}" Command="{Binding OpenProjectCommand}"/></StackPanel></Expander></Border>
-          </StackPanel>
+<StackPanel Name="AboutSettingsSection" IsVisible="{Binding IsAboutSection}" Spacing="14">
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc t07cf529081e07007}" Classes="sectionTitle"/>
+      <Grid ColumnDefinitions="48,*" ColumnSpacing="12">
+        <Image Source="/Assets/Conduit/club-logo.png" Width="42" Height="42"/>
+        <StackPanel Grid.Column="1" Spacing="8">
+          <TextBlock Text="{loc:Translate SoftwareName}" FontSize="24" FontWeight="SemiBold"/>
+          <TextBlock Text="{loc:Loc t2a2846c57eb53222}"/>
+          <TextBlock Text="{loc:Loc t40a782d43a96162f}"/>
+          <TextBlock Text="{loc:Translate SoftwareVersion}" Classes="muted"/>
+        </StackPanel>
+      </Grid>
+      <WrapPanel>
+        <Button Content="{loc:Loc t390454a193f8d16f}" Command="{Binding OpenClubCommand}" Margin="0,3,10,3"/>
+        <Button Content="{loc:Loc td854044d5ce6cd2a}" Command="{Binding OpenProjectCommand}" Margin="0,3,10,3"/>
+      </WrapPanel>
+    </StackPanel>
+  </Border>
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc t199e232f9d511523}" Classes="sectionTitle"/>
+      <ItemsControl Name="OriginalCredits" ItemsSource="{Binding OriginalCredits}" ItemTemplate="{StaticResource AboutCreditTemplate}"/>
+    </StackPanel>
+  </Border>
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc tb7f16d747c68864b}" Classes="sectionTitle"/>
+      <ItemsControl Name="ClubAcknowledgements" ItemsSource="{Binding ClubAcknowledgements}" ItemTemplate="{StaticResource AboutCreditTemplate}"/>
+    </StackPanel>
+  </Border>
+  <Border Classes="card">
+    <Expander Header="{loc:Loc ta77db7e0a10ccaa1}">
+      <ItemsControl Name="HistoricalCredits" ItemsSource="{Binding HistoricalCredits}" ItemTemplate="{StaticResource AboutCreditTemplate}"/>
+    </Expander>
+  </Border>
+  <Border Classes="card">
+    <StackPanel Spacing="10">
+      <TextBlock Text="{loc:Loc td67e813c1227f6c4}" Classes="sectionTitle"/>
+      <ItemsControl Name="ClubContributors" ItemsSource="{Binding ClubContributors}" ItemTemplate="{StaticResource AboutCreditTemplate}"/>
+    </StackPanel>
+  </Border>
+  <Border Classes="card">
+    <Expander Name="AboutPrivacySection" Header="{loc:Loc ta35a70eb14682930}" IsExpanded="True">
+      <StackPanel Spacing="9" Margin="8,12">
+        <TextBlock Text="{loc:Loc t9d06d61ee41fcd3e}" FontWeight="SemiBold"/>
+        <TextBlock Text="{loc:Loc taffcee307cfb401f}"/>
+        <TextBlock Text="{loc:Loc t73b126a0aabe2e01}" FontWeight="SemiBold" Margin="0,10,0,0"/>
+        <TextBlock Text="{loc:Loc td4ec05e2afa60282}"/>
+        <TextBlock Text="{loc:Loc t3497c1bd86a1652c}"/>
+        <WrapPanel>
+          <Button Content="{loc:Loc t38b899b44339abff}" Command="{Binding OpenCommunitySourceCommand}" Margin="0,3,8,3"/>
+          <Button Name="OpenPrivacyButton" Content="{loc:Loc td56ddef7d359808b}" Command="{Binding OpenPrivacyCommand}" Margin="0,3,8,3"/>
+        </WrapPanel>
+      </StackPanel>
+    </Expander>
+  </Border>
+  <Border Classes="card">
+    <Expander Header="{loc:Loc t17885ed3ef564375}">
+      <StackPanel Spacing="10" Margin="8,12">
+        <TextBlock Text="{loc:Loc td4ec05e2afa60282}"/>
+        <Button Content="{loc:Loc ta4fc763353b3d343}" Command="{Binding OpenOriginalSourceCommand}" HorizontalAlignment="Left"/>
+      </StackPanel>
+    </Expander>
+  </Border>
+  <Border Classes="card">
+    <Expander Header="{loc:Loc t5c34f7d0e2124dca}">
+      <ItemsControl Name="LicenseDocuments" ItemsSource="{Binding Licenses}">
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Expander Header="{Binding Name}">
+              <ScrollViewer MaxHeight="280">
+                <TextBlock Text="{Binding Text}" TextWrapping="Wrap" Margin="8"/>
+              </ScrollViewer>
+            </Expander>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </Expander>
+  </Border>
+  <Border Classes="card">
+    <Expander Header="{loc:Loc t065d53d95c055a59}">
+      <StackPanel Spacing="8" Margin="8,10">
+        <TextBlock Text="{Binding BuildDetails}" TextWrapping="Wrap" Classes="muted"/>
+        <TextBlock Text="{loc:Translate CredentialCapability}"/>
+      </StackPanel>
+    </Expander>
+  </Border>
+</StackPanel>
           <StackPanel Name="UpdatesSettingsSection" IsVisible="{Binding IsUpdatesSection}" Spacing="14"><Border Classes="card"><StackPanel Spacing="9"><DockPanel><views:LoadingGlyph DockPanel.Dock="Right" Width="24" Height="24" IsVisible="{Binding IsLauncherBusy}"/><TextBlock Classes="sectionTitle" Text="{loc:Loc t40f7cd2f6f68e5a1}"/></DockPanel><TextBlock Text="{loc:Translate SoftwareVersion}" FontSize="21" LineHeight="30"/><WrapPanel><Button Name="CheckLauncherUpdatesButton" Content="{loc:Loc t0680f1a5de11e1c6}" Command="{Binding CheckUpdatesCommand}" Margin="0,3,8,3"/><Button Content="{loc:Loc t8eaea891ab90f264}" Command="{Binding OpenReleasesCommand}" Margin="0,3,8,3"/><Button Name="OpenSelectedReleaseButton" Content="前往此版本下载页面" Command="{Binding OpenSelectedReleaseCommand}" Margin="0,3,8,3"/></WrapPanel><ListBox Name="LauncherReleaseList" ItemsSource="{Binding Releases}" SelectedItem="{Binding SelectedRelease}" MaxHeight="180"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="3" Margin="8"><TextBlock Text="{Binding Tag}" FontWeight="SemiBold"/><TextBlock Text="{Binding Title}"/></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox><TextBlock Text="{Binding ReleaseNotes}" TextWrapping="Wrap"/></StackPanel></Border></StackPanel>
           <StackPanel Name="FeedbackSettingsSection" IsVisible="{Binding IsFeedbackSection}" Spacing="14"><Border Classes="card"><StackPanel Spacing="9"><DockPanel><views:LoadingGlyph DockPanel.Dock="Right" Width="24" Height="24" IsVisible="{Binding IsLauncherBusy}"/><TextBlock Classes="sectionTitle" Text="{loc:Loc td7458d4306675d6f}"/></DockPanel><Button ToolTip.Tip="{loc:Loc t17446947768a1524}" Content="{loc:Loc td403a1b145ffc84d}" Command="{Binding OpenFeedbackCommand}" Margin="9,0"/></StackPanel></Border><Border Classes="card"><StackPanel Spacing="9"><TextBlock Classes="sectionTitle" Text="{loc:Loc t0b919f782432f404}"/><Grid ColumnDefinitions="*,Auto" ColumnSpacing="8"><TextBox Name="FeedbackQueryBox" Text="{Binding FeedbackQuery}" PlaceholderText="{loc:Loc tdd5f95d8e6a7af24}"/><Button Name="RefreshFeedbackButton" Grid.Column="1" Content="{loc:Loc taee88743413144a2}" Command="{Binding RefreshFeedbackCommand}"/></Grid><ItemsControl Name="LauncherFeedbackList" ItemsSource="{Binding FeedbackItems}"><ItemsControl.ItemTemplate><DataTemplate><Button Command="{Binding $parent[UserControl].DataContext.OpenFeedbackItemCommand}" CommandParameter="{Binding}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Margin="0,4"><StackPanel Spacing="4"><TextBlock Text="{Binding Title}" TextWrapping="Wrap"/><TextBlock Text="{Binding State}" Classes="muted"/></StackPanel></Button></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel></Border></StackPanel>
           <StackPanel Name="LogFilesSettingsSection" IsVisible="{Binding IsLogsSection}" Spacing="14">

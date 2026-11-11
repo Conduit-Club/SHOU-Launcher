@@ -25,7 +25,8 @@ public partial class MainWindow : Window
         KeyDown += (_, e) =>
         {
             if (DataContext is not MainWindowViewModel vm) return;
-            if (OperatingSystem.IsMacOS() && e.KeyModifiers == (KeyModifiers.Meta | KeyModifiers.Control) && e.Key == Key.F)
+            if (e.Key == Key.F12) { vm.ToggleHiddenFeatures(); e.Handled = true; }
+            else if (OperatingSystem.IsMacOS() && e.KeyModifiers == (KeyModifiers.Meta | KeyModifiers.Control) && e.Key == Key.F)
             {
                 if (WindowState == WindowState.FullScreen) WindowState = WindowState.Normal;
                 else if (CanMaximize) WindowState = WindowState.FullScreen;

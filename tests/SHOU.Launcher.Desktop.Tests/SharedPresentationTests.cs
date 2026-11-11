@@ -128,7 +128,7 @@ public sealed class SharedPresentationTests
             vm.ShowSettingsCommand.Execute(null); vm.Settings.SelectedSection = "manage"; Pump(window);
             Assert.Empty(vm.Settings.SourceEditorSummary);
             vm.Settings.DownloadSourcesJson = "invalid fixture JSON"; Pump(window);
-            Assert.Contains("来源草稿无效", vm.Settings.SourceEditorSummary);
+            Assert.Contains("来源配置无效", vm.Settings.SourceEditorSummary);
             Assert.Contains(window.GetVisualDescendants().OfType<TextBlock>(), t => t.IsEffectivelyVisible && t.Text == vm.Settings.SourceEditorSummary);
         }
         finally { window.Close(); }
@@ -142,7 +142,7 @@ public sealed class SharedPresentationTests
         try
         {
             vm.ShowSettingsCommand.Execute(null); Pump(window);
-            Assert.False(Find<TextBlock>(window, "SettingsDraftStatus").IsEffectivelyVisible);
+            Assert.False(Find<TextBlock>(window, "SettingsAutoSaveFeedback").IsEffectivelyVisible);
             foreach (var section in SettingsPageViewModel.SectionIds)
             { vm.Settings.SelectedSection = section; Pump(window); NoMigrationParagraphs(); }
             vm.ShowToolsCommand.Execute(null); Pump(window);

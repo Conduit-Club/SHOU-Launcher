@@ -85,7 +85,7 @@ public sealed partial class SettingsPageViewModel
             _allSources.Clear(); foreach (var source in parsed) _allSources.Add(NewRow(source));
             UpdateSourceCategory(); SourceEditorSummary = "";
         }
-        catch (Exception ex) when (ex is JsonException or InvalidDataException or ArgumentException) { SourceEditorSummary = "来源草稿无效：" + UiPrivacy.Redact(ex.Message); }
+        catch (Exception ex) when (ex is JsonException or InvalidDataException or ArgumentException) { SourceEditorSummary = "来源配置无效：" + UiPrivacy.Redact(ex.Message); }
     }
     private void UpdateSourceCategory(SettingsSourceRow? preferred = null)
     {
@@ -110,7 +110,7 @@ public sealed partial class SettingsPageViewModel
         try
         {
             DownloadSourcesJson = JsonSerializer.Serialize(_allSources.Select(s => s.ToSource()).OrderBy(s => s.Category).ThenBy(s => s.Priority));
-            SourceEditorSummary = "来源顺序有未保存修改，切换分类保留草稿。";
+            SourceEditorSummary = "来源顺序已更改，有效配置会自动保存。";
         }
         finally { _updatingSources = false; }
     }

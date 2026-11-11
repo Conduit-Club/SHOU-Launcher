@@ -24,7 +24,7 @@ public sealed partial class SettingsPageViewModel
         }, () => CanEdit && HasJavaSelectionConflict);
         KeepJavaDraftCommand = Command(() =>
         {
-            _savedJavaExecutable = Owner.Snapshot.Settings.JavaExecutable ?? ""; HasJavaSelectionConflict = false;
+            _savedJavaExecutable = Owner.Snapshot.Settings.JavaExecutable ?? ""; HasJavaSelectionConflict = false; MarkDirty();
         }, () => CanEdit && HasJavaSelectionConflict);
     }
     private static bool EqualJavaSelection(string first, string second) => first.Trim().Equals(second.Trim(),

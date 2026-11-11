@@ -23,28 +23,27 @@ public sealed class WindowCloseTests
         cleanup.SetResult(); await work; await PumpUntil(()=>!window.IsVisible); Assert.Equal(0,service.SnapshotSubscribers); Assert.Equal(0,service.StopCalls);
     }
     [AvaloniaFact]
-    public async Task UnsavedSettingsCanReturnThenSaveAndReopenWithPersistedValue()
+    public async Task ClosingFlushesSettingsWithoutDraftPromptAndReopensWithPersistedValue()
     {
         var service=new FakeLauncherService(); var vm=new MainWindowViewModel(service,new FakeExternalLauncher()); var window=new MainWindow { DataContext=vm }; window.Show(); await vm.InitializeAsync();
-        vm.Settings.MemoryMiB=4096; window.Close(); Assert.True(window.FindControl<Border>("WindowCloseOverlay")!.IsVisible);
-        Click(window,"CancelWindowCloseButton"); await PumpUntil(()=>!window.FindControl<Border>("WindowCloseOverlay")!.IsVisible); Assert.True(window.IsVisible); Assert.True(vm.Settings.IsDirty);
-        window.Close(); Click(window,"SaveSettingsAndCloseButton"); await PumpUntil(()=>!window.IsVisible);
+        vm.Settings.MemoryMiB=4096; window.Close(); await PumpUntil(()=>!window.IsVisible);
+        Assert.False(window.FindControl<Border>("WindowCloseOverlay")!.IsVisible);
         Assert.Equal(4096,service.Snapshot.Settings.MemoryMiB); using var restarted=new MainWindowViewModel(service,new FakeExternalLauncher()); Assert.Equal(4096,restarted.Settings.MemoryMiB);
     }
     [AvaloniaFact]
-    public async Task InstanceDraftCannotBeSilentlySavedByTheGlobalSettingsCloseButton()
+    public async Task InstanceEditsStillRequireDecisionWhileLauncherSettingsAutosave()
     {
         var service=new FakeLauncherService(); var vm=new MainWindowViewModel(service,new FakeExternalLauncher()); var window=new MainWindow { DataContext=vm }; window.Show(); await vm.InitializeAsync();
         vm.Instances.MemoryMiB=4096; vm.Settings.MemoryMiB=3072; window.Close();
-        Assert.True(window.FindControl<Border>("WindowCloseOverlay")!.IsVisible); Assert.False(window.FindControl<Button>("SaveSettingsAndCloseButton")!.IsVisible);
+        Assert.True(window.FindControl<Border>("WindowCloseOverlay")!.IsVisible); Assert.Null(window.FindControl<Button>("SaveSettingsAndCloseButton"));
         Click(window,"CancelWindowCloseButton"); await PumpUntil(()=>!window.FindControl<Border>("WindowCloseOverlay")!.IsVisible); Assert.Equal(4096,vm.Instances.MemoryMiB);
-        window.Close(); Click(window,"DiscardAndCloseButton"); await PumpUntil(()=>!window.IsVisible); Assert.Equal(0,service.SaveCalls);
+        window.Close(); Click(window,"DiscardAndCloseButton"); await PumpUntil(()=>!window.IsVisible); Assert.Equal(3072,service.Snapshot.Settings.MemoryMiB);
     }
     [AvaloniaFact]
-    public async Task DiscardCloseKeepsSavedValueAndInvalidSaveKeepsWindowAndDraft()
+    public async Task InvalidSettingsCloseWithoutWritingOverLastValidConfiguration()
     {
-        var service=new FakeLauncherService(); var saved=service.Snapshot.Settings.MemoryMiB; var vm=new MainWindowViewModel(service,new FakeExternalLauncher()); var window=new MainWindow { DataContext=vm }; window.Show(); await vm.InitializeAsync();
-        vm.Settings.GameRoot="relative-folder"; window.Close(); Click(window,"SaveSettingsAndCloseButton"); await PumpUntil(()=>!window.FindControl<Border>("WindowCloseOverlay")!.IsVisible);
-        Assert.True(window.IsVisible); Assert.True(vm.Settings.IsDirty); window.Close(); Click(window,"DiscardAndCloseButton"); await PumpUntil(()=>!window.IsVisible); Assert.Equal(saved,service.Snapshot.Settings.MemoryMiB); Assert.NotEqual("relative-folder",service.Snapshot.Settings.GameRoot);
+        var service=new FakeLauncherService(); var saved=service.Snapshot.Settings; var vm=new MainWindowViewModel(service,new FakeExternalLauncher()); var window=new MainWindow { DataContext=vm }; window.Show(); await vm.InitializeAsync();
+        vm.Settings.GameRoot="relative-folder"; window.Close(); await PumpUntil(()=>!window.IsVisible);
+        Assert.Equal(saved,service.Snapshot.Settings); Assert.Equal(0,service.SaveCalls);
     }
 }

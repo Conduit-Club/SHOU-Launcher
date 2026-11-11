@@ -28,7 +28,7 @@ public sealed class WpfSettingsParityTests
             Assert.Equal(135, Find<Border>(window, "SettingsContextNavigation").Bounds.Width);
             Assert.InRange(Find<Button>(window, "SettingsLaunchNavigation").Bounds.Width, 130, 135);
             Assert.Equal(841, Find<ScrollViewer>(window, "SettingsPageScroller").Bounds.Width);
-            Assert.InRange(Find<Border>(window, "SettingsSaveBar").Bounds.Height, 28, 36);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Control>(), c => c.Name == "SettingsSaveBar");
             var memory = Find<NumericUpDown>(window, "MaximumMemorySetting");
             Assert.True(memory.Bounds.Width >= 130);
             Assert.Equal("2048", memory.GetVisualDescendants().OfType<TextBox>().Single().Text);

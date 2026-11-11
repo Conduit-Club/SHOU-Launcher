@@ -73,6 +73,6 @@ public sealed partial class SettingsPageViewModel
             if (MaximumConnections != decimal.Truncate(MaximumConnections) || MaximumConnections is < 1 or > 64 || MaximumKiBPerSecond != decimal.Truncate(MaximumKiBPerSecond) || MaximumKiBPerSecond is < 0 or > 1048576) throw new ArgumentException("请填写有效的下载并发和限速值。");
             return true;
         }
-        catch (Exception ex) when (ex is ArgumentException or InvalidDataException) { Owner.ShowError(ex.Message); return false; }
+        catch (Exception ex) when (ex is ArgumentException or InvalidDataException) { ReportSettingsError(ex.Message); return false; }
     }
 }

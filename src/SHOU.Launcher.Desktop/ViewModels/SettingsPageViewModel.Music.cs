@@ -9,7 +9,15 @@ public sealed record MusicTrack(string Name, string Path);
 public sealed partial class SettingsPageViewModel
 {
     private readonly BackgroundAudio backgroundAudio = new();
-    private MusicTrack? selectedMusic;
+    private MusicTrack? selectedMusic, playingTrack;
+    private bool musicWanted, musicAutoWasEnabled, musicStoppedManually, previousMusicGameRunning;
+    private decimal appliedVolume = -1;
+    private readonly Avalonia.Threading.DispatcherTimer musicTimer = new() { Interval = TimeSpan.FromSeconds(.5) };
+    public decimal MusicVolume { get => appearanceOptions.MusicVolume; set => Appearance(value, p => p.MusicVolume, (p, v) => p with { MusicVolume = v }); }
+    public bool MusicAutoPlay { get => appearanceOptions.MusicAutoPlay; set => Appearance(value, p => p.MusicAutoPlay, (p, v) => p with { MusicAutoPlay = v }); }
+    public bool MusicShuffle { get => appearanceOptions.MusicShuffle; set => Appearance(value, p => p.MusicShuffle, (p, v) => p with { MusicShuffle = v }); }
+    public string MusicGamePolicy { get => appearanceOptions.MusicGamePolicy; set => Appearance(value, p => p.MusicGamePolicy, (p, v) => p with { MusicGamePolicy = v }); }
+    public IReadOnlyList<string> MusicGamePolicies { get; } = ["keep", "stop", "only"];
     public ObservableCollection<MusicTrack> MusicTracks { get; } = [];
     public MusicTrack? SelectedMusic { get => selectedMusic; set { if (SetProperty(ref selectedMusic, value)) PlayMusicCommand.NotifyCanExecuteChanged(); } }
     public RelayCommand RefreshMusicCommand { get; private set; } = null!;
@@ -28,8 +36,39 @@ public sealed partial class SettingsPageViewModel
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { LauncherFeedback = UiPrivacy.Redact(ex.Message); }
         });
-        PlayMusicCommand = Command(() => { try { backgroundAudio.Play(SelectedMusic!.Path); LauncherFeedback = ""; } catch (Exception ex) when (ex is IOException or ArgumentException or PlatformNotSupportedException) { LauncherFeedback = UiPrivacy.Redact(ex.Message); } }, () => SelectedMusic is not null);
-        StopMusicCommand = Command(backgroundAudio.Stop);
+        PlayMusicCommand = Command(() => { musicWanted = true; musicStoppedManually = false; playingTrack = null; backgroundAudio.Stop(); UpdateMusicPlayback(); }, () => SelectedMusic is not null);
+        StopMusicCommand = Command(() => { musicWanted = false; musicStoppedManually = true; backgroundAudio.Stop(); playingTrack = null; });
+        musicTimer.Tick += (_, _) => UpdateMusicPlayback(); musicTimer.Start();
+        RefreshMusicCommand.Execute(null); ApplyMusicOptions();
     }
-    internal void DisposeLauncherSettings() { settingsLifetime.Cancel(); settingsWork?.Cancel(); backgroundAudio.Dispose(); }
+    private void ApplyMusicOptions()
+    {
+        if (_savedPresentation.MusicAutoPlay != musicAutoWasEnabled)
+        { musicWanted = _savedPresentation.MusicAutoPlay; musicAutoWasEnabled = _savedPresentation.MusicAutoPlay; if (!musicWanted) backgroundAudio.Stop(); }
+        UpdateMusicPlayback();
+    }
+    private void UpdateMusicPlayback()
+    {
+        if (settingsLifetime.IsCancellationRequested || !OperatingSystem.IsWindows() && !OperatingSystem.IsMacOS()) return;
+        var p = _savedPresentation; var running = Owner.Snapshot.GameSessions.Count > 0 || Owner.Snapshot.GameProcessId is not null;
+        if (running && !previousMusicGameRunning && p.MusicGamePolicy == "only") musicStoppedManually = false;
+        previousMusicGameRunning = running;
+        if (musicStoppedManually) return;
+        if (p.MusicGamePolicy == "stop" && running || p.MusicGamePolicy == "only" && !running)
+        { backgroundAudio.Stop(); return; }
+        if ((!musicWanted && !(p.MusicGamePolicy == "only" && running)) || MusicTracks.Count == 0) return;
+        try
+        {
+            var volumeChanged = appliedVolume != p.MusicVolume;
+            if (backgroundAudio.IsPlaying && (!volumeChanged || OperatingSystem.IsWindows()))
+            { if (volumeChanged) backgroundAudio.SetVolume(p.MusicVolume); appliedVolume = p.MusicVolume; return; }
+            var track = volumeChanged && playingTrack is not null ? playingTrack : playingTrack is null ? SelectedMusic ?? MusicTracks[0] :
+                p.MusicShuffle ? MusicTracks[Random.Shared.Next(MusicTracks.Count)] : MusicTracks[(Math.Max(0, MusicTracks.IndexOf(playingTrack)) + 1) % MusicTracks.Count];
+            backgroundAudio.Play(track.Path, p.MusicVolume); playingTrack = track; appliedVolume = p.MusicVolume;
+        }
+        catch (Exception ex) when (ex is IOException or ArgumentException or InvalidOperationException)
+        { musicWanted = false; musicStoppedManually = true; backgroundAudio.Stop(); LauncherFeedback = UiPrivacy.Redact(ex.Message); }
+    }
+
+    internal void DisposeLauncherSettings() { autoSaveTimer.Stop(); musicTimer.Stop(); DisposeAbout(); settingsLifetime.Cancel(); settingsWork?.Cancel(); backgroundAudio.Dispose(); }
 }

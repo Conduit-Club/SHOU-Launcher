@@ -123,12 +123,13 @@ public sealed partial class SettingsPageViewModel
     {
         Owner.Home.SetPresentation(_savedPresentation.ShowClubIntroduction, _savedPresentation.ShowClubServers, _savedPresentation.RotateHomeBackground, (double)_savedPresentation.WindowOpacity / 100);
         Owner.Home.ApplyAppearance(_savedPresentation);
+        if (PlayMusicCommand is not null) ApplyMusicOptions();
         OnPropertyChanged(nameof(SavedPresentation));
         Owner.NotifyLauncherAppearance();
     }
-    private async Task SavePresentationAsync(CancellationToken cancellationToken)
+    private async Task SavePresentationAsync(SettingsPresentationPreferences preferences, CancellationToken cancellationToken)
     {
-        var preferences = BuildPresentation(); SettingsPresentationStore.Validate(preferences);
+        SettingsPresentationStore.Validate(preferences);
         await _presentationStore.SaveAsync(preferences, cancellationToken);
         _savedPresentation = preferences;
         ApplyPresentation();
@@ -136,10 +137,10 @@ public sealed partial class SettingsPageViewModel
     private bool ValidateLaunchDraft()
     {
         if (UseCustomWindow && (GameWindowWidth is < 320 or > 16384 || GameWindowHeight is < 320 or > 16384 || decimal.Truncate(GameWindowWidth) != GameWindowWidth || decimal.Truncate(GameWindowHeight) != GameWindowHeight))
-        { Owner.ShowError("窗口宽高须为 320–16384 的整数。"); SelectedSection = "launch"; return false; }
+        { ReportSettingsError("窗口宽高须为 320–16384 的整数。"); if (!saveIsAutomatic) SelectedSection = "launch"; return false; }
         if (UseMinimumMemory && (MinimumMemoryMiB < 512 || MinimumMemoryMiB > MemoryMiB || decimal.Truncate(MinimumMemoryMiB) != MinimumMemoryMiB))
-        { Owner.ShowError("初始内存须为不少于 512 MiB 且不超过最大内存的整数。"); SelectedSection = "launch"; return false; }
-        if (WindowOpacity is < 50 or > 100) { Owner.ShowError("窗口不透明度须为 50–100%。"); SelectedSection = "appearance"; return false; }
+        { ReportSettingsError("初始内存须为不少于 512 MiB 且不超过最大内存的整数。"); if (!saveIsAutomatic) SelectedSection = "launch"; return false; }
+        if (WindowOpacity is < 50 or > 100) { ReportSettingsError("窗口不透明度须为 50–100%。"); if (!saveIsAutomatic) SelectedSection = "appearance"; return false; }
         return true;
     }
     private void LoadLaunchDraft(LauncherSettings settings)

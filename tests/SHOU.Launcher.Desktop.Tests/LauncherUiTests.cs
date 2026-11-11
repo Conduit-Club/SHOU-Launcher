@@ -133,7 +133,7 @@ public sealed class LauncherUiTests
             fake.Publish(fake.Snapshot with { Downloads = [new("new", "后台任务", "Downloading")] });
             vm.SelectedPage = vm.Settings; Pump(window);
             Assert.Equal("/任务/含空格 游戏", Find<TextBox>(window, "GameRootSetting").Text);
-            Assert.True(Find<Button>(window, "SaveSettingsButton").IsEnabled);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name == "SaveSettingsButton");
         }
         finally { window.Close(); }
     }
@@ -163,7 +163,7 @@ public sealed class LauncherUiTests
         Assert.True(vm.Settings.IsDirty); Assert.Equal(0, fake.SaveCalls);
         Assert.Contains("无法持久保存", vm.ErrorMessage);
         Assert.DoesNotContain("fixture-not-in-error", vm.ErrorMessage);
-        Assert.Equal("", vm.Settings.Aria2Secret);
+        Assert.Equal("fixture-not-in-error", vm.Settings.Aria2Secret);
     }
 
     [AvaloniaFact]

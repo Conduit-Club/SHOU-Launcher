@@ -160,7 +160,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool IsToolsSelected => CurrentSection == "tools";
     public string WindowTitle => Localization.UiLocalization.Instance.Text(Snapshot.Build.Name);
     public string BrandTitle => Settings.SavedPresentation.TitleMode == "text" ? Settings.SavedPresentation.TitleText : WindowTitle;
-    internal void NotifyLauncherAppearance() => OnPropertyChanged(nameof(BrandTitle));
+    internal void NotifyLauncherAppearance() { OnPropertyChanged(nameof(BrandTitle)); NotifyFeatureVisibility(); }
     public string BuildSummary => $"{Snapshot.Build.Version} · {Snapshot.Build.Codename} · {Snapshot.Build.Configuration}";
     public string SourceSummary => Snapshot.Build.SourceSha.Length > 12 ? Snapshot.Build.SourceSha[..12] : Snapshot.Build.SourceSha;
     public string PlatformSummary => $"{Snapshot.Platform.OS} · 硬件 {Snapshot.Platform.HardwareArchitecture} / 进程 {Snapshot.Platform.ProcessArchitecture}";
@@ -262,6 +262,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             await Task.WhenAll(pending, Tools.Toolbox.CancelAndWaitAsync(), Settings.CancelAndWaitAsync(), Instances.CancelComponentWorkAsync()).WaitAsync(TimeSpan.FromSeconds(30));
         }
         finally { closing = false; NotifyState(); }
+        await Settings.FlushAutoSaveAsync();
     }
 
     public async Task RunControlAsync(string label, Func<CancellationToken, Task> action)

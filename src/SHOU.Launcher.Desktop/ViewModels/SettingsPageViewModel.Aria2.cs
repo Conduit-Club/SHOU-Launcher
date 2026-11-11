@@ -12,9 +12,10 @@ public sealed partial class SettingsPageViewModel
     {
         TestAria2ConnectionCommand = AsyncCommand(() => RunSettingsWork(async ct =>
         {
+            if (!await FlushAutoSaveAsync()) return;
             var result = await ((IAria2ConnectionService)Service).TestAria2ConnectionAsync(ct);
             ct.ThrowIfCancellationRequested();
             Aria2ConnectionSummary = result.Message + (result.Version is { } version ? " · v" + version : "");
-        }), () => CanEdit && !IsDirty && !IsLauncherBusy && Service is IAria2ConnectionService);
+        }), () => CanEdit && !IsLauncherBusy && Service is IAria2ConnectionService);
     }
 }

@@ -29,12 +29,18 @@ public sealed class UiLocalization : ObservableObject
         catalog = data is null ? [] : JsonSerializer.Deserialize<Dictionary<string, string>>(data) ?? [];
         catalogs[code] = catalog; return catalog;
     }
+    public static IReadOnlyList<string> SupportedLanguages { get; } = ["zh-CN", "zh-TW", "en-US"];
+    public static string NormalizeLanguage(string? requested)
+    {
+        var code = string.Equals(requested, "system", StringComparison.OrdinalIgnoreCase) ? SystemUi.Name : requested ?? "zh-CN";
+        if (code.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+            return code.Contains("Hant", StringComparison.OrdinalIgnoreCase) || code.StartsWith("zh-TW", StringComparison.OrdinalIgnoreCase) ||
+                code.StartsWith("zh-HK", StringComparison.OrdinalIgnoreCase) || code.StartsWith("zh-MO", StringComparison.OrdinalIgnoreCase) ? "zh-TW" : "zh-CN";
+        return "en-US";
+    }
     public void SetLanguage(string requested, string region = "system")
     {
-        var code = requested == "system" ? SystemUi.Name : requested;
-        var supported = new[] { "zh-CN", "zh-TW", "en-US", "en-GB", "ja-JP", "fr-FR", "es-ES" };
-        code = supported.Contains(code, StringComparer.OrdinalIgnoreCase) ? supported.First(c => c.Equals(code, StringComparison.OrdinalIgnoreCase))
-            : code.StartsWith("zh", StringComparison.OrdinalIgnoreCase) ? "zh-CN" : supported.FirstOrDefault(c => c.StartsWith(code.Split('-')[0] + "-", StringComparison.OrdinalIgnoreCase)) ?? "en-US";
+        var code = NormalizeLanguage(requested);
         // Do not pin an AsyncLocal culture in one save callback: it would revert at the await boundary.
         CultureInfo.DefaultThreadCurrentUICulture = CultureInfo.GetCultureInfo(code);
         FormattingCulture = region == "system" ? SystemRegion : CultureInfo.GetCultureInfo(region);
@@ -50,7 +56,7 @@ public sealed class UiLocalization : ObservableObject
     {
         if (string.IsNullOrEmpty(phrase) || locale == "zh-CN") return phrase;
         // Picker labels are native language names, not translatable UI captions.
-        if (phrase is "简体中文（中国大陆）" or "繁體中文（台灣）" or "English (United States)" or "English (United Kingdom)" or "日本語" or "Français" or "Español") return phrase;
+        if (phrase is "简体中文" or "繁體中文" or "English") return phrase;
         var key = Key(phrase); return Catalog("zh-CN").ContainsKey(key) ? Get(key) : phrase;
     }
     public string Format(string phrase, params object?[] arguments) => string.Format(FormattingCulture, Text(phrase), arguments);

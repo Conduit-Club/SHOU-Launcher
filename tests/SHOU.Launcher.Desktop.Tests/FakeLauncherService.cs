@@ -136,7 +136,7 @@ internal class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMi
     public Task StopGameAsync(CancellationToken cancellationToken = default) { StopCalls++; Publish(Snapshot with { State = "Ready", GameProcessId = null }); return Task.CompletedTask; }
     public Task CancelDownloadAsync(string taskId, CancellationToken cancellationToken = default) { LastCancelledDownloadId = taskId; Publish(Snapshot with { Downloads = Snapshot.Downloads.Select(t => t.Id == taskId ? t with { State = "Cancelled" } : t).ToArray() }); return Task.CompletedTask; }
     public Task RetryDownloadAsync(string taskId, CancellationToken cancellationToken = default) { LastRetriedDownloadId = taskId; Publish(Snapshot with { Downloads = Snapshot.Downloads.Select(t => t.Id == taskId ? t with { State = "Queued", Error = null } : t).ToArray() }); return Task.CompletedTask; }
-    public Task SaveSettingsAsync(LauncherSettings settings, CancellationToken cancellationToken = default) { SaveCalls++; Publish(Snapshot with { Settings = settings }); return Task.CompletedTask; }
+    public virtual Task SaveSettingsAsync(LauncherSettings settings, CancellationToken cancellationToken = default) { SaveCalls++; Publish(Snapshot with { Settings = settings }); return Task.CompletedTask; }
     public Task SaveConnectionSecretAsync(string kind, string secret, CancellationToken cancellationToken = default)
     {
         if (FailCredentialSave) throw new CredentialStoreException(CredentialFailure.Locked, "安全存储已锁定，无法持久保存。");

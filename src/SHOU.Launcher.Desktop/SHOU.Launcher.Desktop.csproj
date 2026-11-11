@@ -16,7 +16,7 @@
     <PackageReference Include="PlainToolkit.CngProtectedData" Version="2.1.0" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <AvaloniaResource Include="Assets/**" />
-    <EmbeddedResource Include="Localization/Resources/*.json" />
+    <EmbeddedResource Include="Localization/Resources/zh-CN.json;Localization/Resources/zh-TW.json;Localization/Resources/en-US.json" />
     <Content Include="Assets/AchievementIcons/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/mcgen.txt" />
     <Content Include="Assets/AchievementIcons/README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/achievement-icons.md" />
   </ItemGroup>

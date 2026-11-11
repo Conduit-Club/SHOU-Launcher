@@ -10,10 +10,13 @@ public sealed class SettingsPreferenceLabelConverter : IValueConverter
     {
         var label = value?.ToString() switch
         {
-        "zh-CN" => "简体中文（中国大陆）", "zh-TW" => "繁體中文（台灣）", "en-US" => "English (United States)", "en-GB" => "English (United Kingdom)", "ja-JP" => "日本語", "fr-FR" => "Français", "es-ES" => "Español", "system" => "跟随系统",
+        "zh-CN" => "简体中文", "zh-TW" => "繁體中文", "en-US" => "English", "en-GB" => "English (United Kingdom)", "ja-JP" => "日本語", "fr-FR" => "Français", "es-ES" => "Español", "system" => "跟随系统",
         "System" => "跟随系统", "Light" => "浅色", "Dark" => "深色",
         "default" => "默认", "none" => "无", "text" => "文本", "image" => "图片", "local" => "本地文件", "remote" => "网络地址", "" => "默认",
-        "garnet" => "绯红", "blue" => "海蓝", "jade" => "青玉",
+        "sky" => "天空蓝", "cat" => "龙猫蓝", "death" => "死机蓝", "garnet" => "嘉然配色", "aimisi" => "爱弥斯配色", "elegant" => "高雅人士配色", "blue" => "海蓝", "jade" => "青玉",
+        "empty" => "空白", "smart" => "智能填充", "center" => "居中", "fit" => "完整适应", "stretch" => "拉伸", "tile" => "平铺",
+        "top-left" => "左上", "top-right" => "右上", "bottom-left" => "左下", "bottom-right" => "右下",
+        "keep" => "保持播放状态", "stop" => "游戏运行时停止", "only" => "仅在游戏运行时播放",
         "off" => "不提示", "club-updates" => "社团更新日志",
         "X86" => "32 Bit", "X64" => "64 Bit", "Arm64" => "ARM64",
         "configured" => "用户选择", "managed" => "启动器管理", "portable" => "便携目录", "registry" => "注册表", "installed" => "系统安装",

@@ -48,8 +48,8 @@ public sealed partial class SettingsPageViewModel
     public bool IsImageTitle => TitleMode == "image";
     public string CustomTitleText { get => appearanceOptions.TitleText; set => Appearance(value, p => p.TitleText, (p, v) => p with { TitleText = v }); }
     public string CustomTitleImage { get => appearanceOptions.TitleImage; set => Appearance(value, p => p.TitleImage, (p, v) => p with { TitleImage = v }); }
-    public string HomeSource { get => appearanceOptions.HomeSource; set { Appearance(value, p => p.HomeSource, (p, v) => p with { HomeSource = v }); OnPropertyChanged(nameof(IsCustomHome)); } }
-    public bool IsCustomHome => HomeSource != "default";
+    public string HomeSource { get => appearanceOptions.HomeSource; set { Appearance(value, p => p.HomeSource, (p, v) => p with { HomeSource = v }); OnPropertyChanged(nameof(IsCustomHome)); OnPropertyChanged(nameof(IsCustomHomeFile)); } }
+    public bool IsCustomHome => HomeSource is "local" or "remote";
     public string HomeLocation { get => appearanceOptions.HomeLocation; set => Appearance(value, p => p.HomeLocation, (p, v) => p with { HomeLocation = v }); }
     public bool HideDownloads { get => appearanceOptions.HiddenSections?.Contains("download") == true; set => SetHidden("download", value); }
     public bool HideTools { get => appearanceOptions.HiddenSections?.Contains("tools") == true; set => SetHidden("tools", value); }
@@ -58,8 +58,8 @@ public sealed partial class SettingsPageViewModel
     public bool DisableHardwareAcceleration { get => launcherOptions.DisableHardwareAcceleration; set => Behavior(value, p => p.DisableHardwareAcceleration, (p, v) => p with { DisableHardwareAcceleration = v }); }
     public bool UseDnsOverHttps { get => launcherOptions.UseDnsOverHttps; set => Behavior(value, p => p.UseDnsOverHttps, (p, v) => p with { UseDnsOverHttps = v }); }
     public IReadOnlyList<string> TitleModes { get; } = ["default", "none", "text", "image"];
-    public IReadOnlyList<string> HomeSources { get; } = ["default", "local", "remote"];
-    public IReadOnlyList<string> AccentChoices { get; } = ["default", "garnet", "blue", "jade"];
+    public IReadOnlyList<string> HomeSources { get; } = ["default", "empty", "local", "remote"];
+    public IReadOnlyList<string> AccentChoices { get; } = ["default", "sky", "cat", "death", "garnet", "aimisi", "elegant", "blue", "jade"];
     public IReadOnlyList<string> RegionChoices { get; } = ["system", "zh-CN", "zh-TW", "en-US", "en-GB", "ja-JP", "fr-FR", "es-ES"];
     public ObservableCollection<string> FontChoices { get; } = [""];
     public ObservableCollection<LauncherRelease> Releases { get; } = [];
@@ -93,8 +93,9 @@ public sealed partial class SettingsPageViewModel
     { var items = (appearanceOptions.HiddenSections ?? []).Where(s => s != section).ToList(); if (hidden) items.Add(section); appearanceOptions = appearanceOptions with { HiddenSections = items.ToArray() }; OnPropertyChanged(property); MarkDirty(); }
     public void SetBackgroundImages(IReadOnlyList<string> files)
     { appearanceOptions = appearanceOptions with { BackgroundImages = files.ToArray() }; OnPropertyChanged(nameof(BackgroundSummary)); MarkDirty(); }
+    private bool fontsLoaded;
     public void LoadFontChoices()
-    { if (FontChoices.Count > 1) return; foreach (var font in FontManager.Current.SystemFonts.Select(f => f.Name).Distinct().Order(StringComparer.CurrentCulture).Take(1000)) FontChoices.Add(font); }
+    { if (fontsLoaded) return; fontsLoaded = true; foreach (var font in FontManager.Current.SystemFonts.Select(f => f.Name).Distinct().Order(StringComparer.CurrentCulture).Take(1000)) if (!FontChoices.Contains(font)) FontChoices.Add(font); }
     private void InitializeLauncherSettings()
     {
         RestoreBackgroundCommand = Command(() => SetBackgroundImages([]), () => CanEdit);
@@ -117,6 +118,8 @@ public sealed partial class SettingsPageViewModel
         RestoreHistoricalLogsCommand = AsyncCommand(() => RunSettingsWork(async ct => { await LauncherLogArchive.RestoreAsync(LogsDirectory, lastLogRecycle, ct); RefreshLogFiles(); LauncherFeedback = "历史日志已恢复。"; }), () => !IsLauncherBusy && Directory.Exists(lastLogRecycle));
         LoadLicenses();
         InitializeMusic();
+        InitializeFeatureGroups();
+        InitializeAbout();
     }
     public Task AddJavaAsync(string path) => RunSettingsWork(async ct =>
     {
@@ -168,12 +171,17 @@ public sealed partial class SettingsPageViewModel
     private void LoadLauncherOptions(LauncherSettings settings)
     { launcherOptions = settings.Launcher ?? new(); foreach (var name in new[] { nameof(RegionalFormat), nameof(LogLineLimit), nameof(DisableHardwareAcceleration), nameof(UseDnsOverHttps) }) OnPropertyChanged(name); }
     private void LoadAppearanceOptions(SettingsPresentationPreferences preferences)
-    { appearanceOptions = preferences; foreach (var name in new[] { nameof(LockWindowSize), nameof(ShowStartupLogo), nameof(ShowLaunchTips), nameof(NotifyClubUpdates), nameof(AdvancedMaterial), nameof(SelectedFont), nameof(LightAccent), nameof(DarkAccent), nameof(TitleMode), nameof(CustomTitleText), nameof(CustomTitleImage), nameof(HomeSource), nameof(HomeLocation), nameof(IsCustomHome), nameof(IsImageTitle), nameof(IsTextTitle), nameof(HideDownloads), nameof(HideTools), nameof(BackgroundSummary) }) OnPropertyChanged(name); }
+    { appearanceOptions = preferences; foreach (var font in new[] { preferences.FontFamily, preferences.MotdFontFamily }) if (!FontChoices.Contains(font)) FontChoices.Add(font); foreach (var name in new[] { nameof(LockWindowSize), nameof(ShowStartupLogo), nameof(ShowLaunchTips), nameof(NotifyClubUpdates), nameof(AdvancedMaterial), nameof(SelectedFont), nameof(LightAccent), nameof(DarkAccent), nameof(TitleMode), nameof(CustomTitleText), nameof(CustomTitleImage), nameof(HomeSource), nameof(HomeLocation), nameof(IsCustomHome), nameof(IsImageTitle), nameof(IsTextTitle), nameof(HideDownloads), nameof(HideTools), nameof(BackgroundSummary) }) OnPropertyChanged(name); RefreshFeatureChoices(); NotifyAppearanceFields(); }
     private SettingsPresentationPreferences BuildPresentation() => appearanceOptions with { ShowClubIntroduction = ShowClubIntroduction, ShowClubServers = ShowClubServers, RotateHomeBackground = RotateHomeBackground, WindowOpacity = WindowOpacity, LastClubNotice = _savedPresentation.LastClubNotice };
     internal async Task RecordClubNoticeAsync(string key, CancellationToken ct)
     {
-        var updated = _savedPresentation with { LastClubNotice = key };
-        await _presentationStore.SaveAsync(updated, ct); _savedPresentation = updated;
+        await settingsSaveGate.WaitAsync(ct);
+        try
+        {
+            var updated = _savedPresentation with { LastClubNotice = key };
+            await _presentationStore.SaveAsync(updated, ct); _savedPresentation = updated;
+        }
+        finally { settingsSaveGate.Release(); }
     }
     public byte[] ExportSettings()
     {
@@ -194,6 +202,6 @@ public sealed partial class SettingsPageViewModel
             Proxy = imported.Proxy is { } p ? p with { CredentialKey = current.Proxy?.CredentialKey } : current.Proxy,
             Aria2 = imported.Aria2 is { } a ? a with { CredentialKey = current.Aria2?.CredentialKey } : current.Aria2 };
         SHOU.Launcher.Core.Configuration.ConfigurationStore.ValidateSettings(imported); SettingsPresentationStore.Validate(presentation);
-        Load(imported); LoadPresentation(presentation); IsDirty = true; LauncherFeedback = "已读入设置草稿；点击保存设置后生效。";
+        Load(imported); LoadPresentation(presentation); MarkDirty(); LauncherFeedback = "已导入设置，有效内容会自动保存。";
     }
 }

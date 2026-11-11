@@ -38,8 +38,8 @@ public sealed partial class InstancesPageViewModel
         new("modify", "修改", "↻"), new("export", "导出", "⇧"), new("worlds", "存档", "▣"), new("screenshots", "截图", "▧"),
         new("mods", "模组", "◇"), new("resourcepacks", "资源包", "▤"), new("shaders", "光影包", "☼"),
         new("schematics", "投影原理图", "▥"), new("servers", "服务器", "▱"), new("relations", "模组关系", "⌘")];
-    public IReadOnlyList<InstanceSectionChoice> GameSections => Sections.Take(4).ToArray();
-    public IReadOnlyList<InstanceSectionChoice> ResourceSections => Sections.Skip(4).ToArray();
+    public IReadOnlyList<InstanceSectionChoice> GameSections => Sections.Take(4).Where(s => Owner.IsFeatureVisible("instance-" + s.Key)).ToArray();
+    public IReadOnlyList<InstanceSectionChoice> ResourceSections => Sections.Skip(4).Where(s => Owner.IsFeatureVisible("instance-" + s.Key)).ToArray();
     public ObservableCollection<GameInstance> FilteredInstances { get; } = [];
     public ObservableCollection<InstanceContentEntry> ContentEntries { get; } = [];
     public bool IsSelection { get => _isSelection; private set { if (SetProperty(ref _isSelection, value)) { if (value) IsRenameEditorOpen = false; NotifyWorkspace(); } } }
@@ -176,7 +176,7 @@ public sealed partial class InstancesPageViewModel
     private void NotifyWorkspace()
     {
         foreach (var name in new[] { nameof(ContextTitle), nameof(IsOverview), nameof(IsInstanceSettings), nameof(IsModify), nameof(IsExport), nameof(IsFileSection), nameof(IsOtherSection),
-                     nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary), nameof(HasTruncatedScreenshots), nameof(IsModsSection), nameof(OpenContentFolderCaption), nameof(GameVersionLabel), nameof(HasModLoader), nameof(LoaderLabel), nameof(GameDirectorySummary) }) OnPropertyChanged(name);
+                     nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary), nameof(HasTruncatedScreenshots), nameof(IsModsSection), nameof(CanShowModUpdates), nameof(OpenContentFolderCaption), nameof(GameVersionLabel), nameof(HasModLoader), nameof(LoaderLabel), nameof(GameDirectorySummary) }) OnPropertyChanged(name);
         if (_workspaceReady) NotifyCommands();
     }
     private async Task SaveInstanceEditAsync()

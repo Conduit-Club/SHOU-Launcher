@@ -57,8 +57,7 @@ public sealed class CandidateCapabilityTests
         {
             Assert.Equal(existingRemote, vm.Settings.Aria2Endpoint);
             vm.Settings.Theme = "Dark"; vm.Settings.Aria2Secret = "fixture-rpc-secret";
-            Find<Button>(window, "SaveSettingsButton").Command!.Execute(null);
-            await vm.Settings.SaveCommand.ExecutionTask!; Pump(window);
+            await vm.Settings.SaveCommand.ExecuteAsync(null); Pump(window);
             Assert.True(vm.HasError); Assert.Contains("尚不支持远程 RPC", vm.ErrorMessage);
             Assert.Equal(0, fake.SaveCalls); Assert.Empty(fake.SavedSecretKinds);
             Assert.Equal(existingRemote, fake.Snapshot.Settings.Aria2!.Endpoint);
@@ -93,11 +92,11 @@ public sealed class CandidateCapabilityTests
             Assert.Contains("1.37.0", Find<TextBlock>(window, "Aria2ConnectionStatus").Text);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name is "StartAria2Button" or "StopAria2Button");
             vm.Settings.Aria2Endpoint = "http://localhost:6801/jsonrpc"; Pump(window);
-            Assert.False(vm.Settings.TestAria2ConnectionCommand.CanExecute(null));
-            await vm.Settings.SaveCommand.ExecuteAsync(null); Pump(window);
+            Assert.True(vm.Settings.TestAria2ConnectionCommand.CanExecute(null));
+            await vm.Settings.TestAria2ConnectionCommand.ExecuteAsync(null); Pump(window);
             Assert.Same(firstSource, vm.Settings.Sources[0]); Assert.Equal(offset, scroller.Offset);
             await vm.Settings.TestAria2ConnectionCommand.ExecuteAsync(null); Pump(window);
-            Assert.Equal(2, fake.Probes); Assert.Equal("http://localhost:6801/jsonrpc", fake.Snapshot.Settings.Aria2!.Endpoint);
+            Assert.Equal(3, fake.Probes); Assert.Equal("http://localhost:6801/jsonrpc", fake.Snapshot.Settings.Aria2!.Endpoint);
         }
         finally { window.Close(); }
     }

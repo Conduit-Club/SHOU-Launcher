@@ -23,7 +23,7 @@ public sealed partial class InstancesPageViewModel
     private int modCheckGeneration;
     public InstanceModUpdate? SelectedModUpdate { get => selectedModUpdate; set { if (SetProperty(ref selectedModUpdate, value)) { ConfirmModUpdate = false; NotifyCommands(); } } }
     public string ModUpdateStatus { get => modUpdateStatus; private set { SetProperty(ref modUpdateStatus, value); OnPropertyChanged(nameof(HasModUpdateStatus)); } }
-    public bool HasModUpdateStatus => ModUpdateStatus.Length > 0;
+    public bool HasModUpdateStatus => ModUpdateStatus.Length > 0 && Owner.IsFeatureVisible("mod-updates");
     public bool HasModUpdates => ModUpdates.Count > 0;
     public bool ConfirmModUpdate { get => confirmModUpdate; set { SetProperty(ref confirmModUpdate, value); NotifyCommands(); } }
     public RelayCommand DownloadInstanceResourcesCommand { get; private set; } = null!;
