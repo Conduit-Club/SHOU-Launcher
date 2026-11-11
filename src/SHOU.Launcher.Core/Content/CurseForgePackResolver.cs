@@ -77,13 +77,18 @@ public sealed class CurseForgePackResolver
             if (Number(project, "id") != reference.ProjectId || Number(project, "gameId") != 432) throw new InvalidDataException("官方项目身份或游戏不匹配。");
             var classId = Number(project, "classId");
             var folder = classId == 6 && name.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ? "mods/"
-                : classId == 12 && name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? "resourcepacks/" : throw new InvalidDataException("本轮 CurseForge 文件仅支持 classId 6 模组 JAR 和 classId 12 资源包 ZIP。");
+                : name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? classId switch
+                {
+                    12 => "resourcepacks/", 6552 => "shaderpacks/", 6945 => "datapacks/",
+                    _ => throw new InvalidDataException("CurseForge 整合包只支持模组 JAR、资源包 / 光影 / 数据包 ZIP。")
+                } : throw new InvalidDataException("CurseForge 文件扩展名与项目类型不匹配。");
             var size = Number(data, "fileLength"); if (size is <= 0 or > PackArchiveReader.MaximumFileBytes) throw new InvalidDataException("官方文件大小超过单项 128 MiB 边界。");
             var hashes = data.GetProperty("hashes");
             if (hashes.ValueKind != JsonValueKind.Array || hashes.GetArrayLength() > 8) throw new InvalidDataException("官方哈希列表无效。");
             var sha1s = hashes.EnumerateArray().Where(h => Number(h, "algo") == 1).Select(h => Text(h, "value", 40)).ToArray();
             if (sha1s.Length != 1 || !ContentInstallFiles.Hash(sha1s[0], 40)) throw new InvalidDataException("官方文件缺少唯一有效 SHA-1。");
             var sha1 = sha1s[0].ToLowerInvariant(); var warnings = new List<string>();
+            if (classId == 6945) warnings.Add(Label(reference) + "：整合包数据包装入实例 datapacks；全局装载由整合包模组负责，不改写已有世界的启停设置。");
             var versions = data.TryGetProperty("gameVersions", out var values) && values.ValueKind == JsonValueKind.Array ? values.EnumerateArray().Take(128).Select(v => v.GetString() ?? "").ToArray() : [];
             if (!versions.Contains(gameVersion, StringComparer.Ordinal)) warnings.Add(Label(reference) + "：官方标签未列出目标 " + gameVersion + "，实际兼容性仍由加载器验证。");
             if (classId == 6 && loader == "fabric" && !versions.Contains("Fabric", StringComparer.OrdinalIgnoreCase)) warnings.Add(Label(reference) + "：官方标签未声明 Fabric，需由加载器最终验证。");

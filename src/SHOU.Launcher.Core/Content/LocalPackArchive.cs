@@ -96,7 +96,11 @@ public sealed class LocalPackArchive
             foreach (var file in files)
             {
                 var targetKind = file.Path.StartsWith("mods/", StringComparison.Ordinal) && file.Path.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ? "mod"
-                    : file.Path.StartsWith("resourcepacks/", StringComparison.Ordinal) && file.Path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? "resourcepack" : null;
+                    : file.Path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                        ? file.Path.StartsWith("resourcepacks/", StringComparison.Ordinal) ? "resourcepack"
+                            : file.Path.StartsWith("shaderpacks/", StringComparison.Ordinal) ? "shader"
+                            : file.Path.StartsWith("datapacks/", StringComparison.Ordinal) ? "datapack" : null
+                        : null;
                 if (!AllowedPayload(file.Path) || targetKind is null || file.Size is <= 0 or > PackArchiveReader.MaximumFileBytes || !ContentInstallFiles.Hash(file.Sha1, 40)) throw new InvalidDataException("解析结果的资源路径、大小或哈希无效。");
                 var target = ContentInstallFiles.Literal(directory, file.Path); Directory.CreateDirectory(Path.GetDirectoryName(target)!); await download(file, target, ct).ConfigureAwait(false);
                 if (!await ContentInstallFiles.MatchesAsync(target, file.Sha1, file.Size, ct).ConfigureAwait(false)) throw new InvalidDataException("CurseForge 模组 SHA-1 或大小校验失败。");
@@ -112,7 +116,7 @@ public sealed class LocalPackArchive
                 await File.WriteAllBytesAsync(target, bytes, ct).ConfigureAwait(false); installed.RemoveAll(f => ContentInstallFiles.PathKey(f.RelativePath) == ContentInstallFiles.PathKey(relative));
                 installed.Add(new("cf-local", actual[..16], "pack", relative, Convert.ToHexStringLower(SHA1.HashData(bytes)), Convert.ToHexStringLower(SHA512.HashData(bytes)), bytes.Length));
             }
-            archive.Verify(); ct.ThrowIfCancellationRequested(); await File.WriteAllBytesAsync(ContentInstallFiles.Literal(directory, ContentInstallFiles.ManifestName), JsonSerializer.SerializeToUtf8Bytes(new ContentInstallManifest(1, "unregistered", installed)), ct).ConfigureAwait(false);
+            archive.Verify(); ct.ThrowIfCancellationRequested(); await File.WriteAllBytesAsync(ContentInstallFiles.Literal(directory, ContentInstallFiles.ManifestName), ContentInstallFiles.SerializeManifest(new ContentInstallManifest(1, "unregistered", installed)), ct).ConfigureAwait(false);
             return read.Inspection;
         }
         finally { VerifiedDownloader.RejectLink(copyPath); if (File.Exists(copyPath)) File.Delete(copyPath); }

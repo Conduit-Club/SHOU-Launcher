@@ -11,6 +11,14 @@ public static class ContentInstallFiles
 {
     public const string ManifestName = ".shou-content-manifest.json";
     public const int MaximumManifestFiles = 10000;
+    private const int MaximumManifestBytes = 4 * 1024 * 1024;
+    internal static byte[] SerializeManifest(ContentInstallManifest manifest)
+    {
+        if (manifest.Files.Count > MaximumManifestFiles) throw new InvalidDataException($"实例安装清单超过{MaximumManifestFiles}条限制。");
+        var bytes = JsonSerializer.SerializeToUtf8Bytes(manifest);
+        if (bytes.Length > MaximumManifestBytes) throw new InvalidDataException("安装清单超过4 MiB，未发布实例或文件改动。");
+        return bytes;
+    }
     public static string PathKey(string path) => path.Normalize(NormalizationForm.FormC).ToUpperInvariant();
     public static void ValidateFile(ContentFile file)
     {
@@ -31,7 +39,7 @@ public static class ContentInstallFiles
     {
         var path = Literal(instance.GameDirectory, ManifestName);
         if (!File.Exists(path)) return new(1, instance.Id, []);
-        if (new FileInfo(path).Length > 4 * 1024 * 1024) throw new InvalidDataException("安装清单过大，原文件保留。");
+        if (new FileInfo(path).Length > MaximumManifestBytes) throw new InvalidDataException("安装清单过大，原文件保留。");
         var manifest = JsonSerializer.Deserialize<ContentInstallManifest>(await File.ReadAllBytesAsync(path, ct).ConfigureAwait(false));
         if (manifest is null || manifest.FormatVersion != 1 || manifest.InstanceId != instance.Id || manifest.Files is null || manifest.Files.Count > MaximumManifestFiles ||
             manifest.Files.Select(f => PathKey(f.RelativePath)).Distinct(StringComparer.Ordinal).Count() != manifest.Files.Count) throw new InvalidDataException("安装清单无效，原文件保留。");
@@ -93,7 +101,7 @@ public static class ContentInstallFiles
             var merged = previous.Files.Where(f => completed.All(n => PathKey(n.RelativePath) != PathKey(f.RelativePath))).Concat(completed).ToArray();
             if (merged.Length > MaximumManifestFiles) throw new InvalidDataException($"实例安装清单超过{MaximumManifestFiles}条限制。");
             var nextManifest = Literal(stage, ManifestName);
-            await File.WriteAllBytesAsync(nextManifest, JsonSerializer.SerializeToUtf8Bytes(new ContentInstallManifest(1, instance.Id, merged)), ct).ConfigureAwait(false);
+            await File.WriteAllBytesAsync(nextManifest, ContentInstallFiles.SerializeManifest(new ContentInstallManifest(1, instance.Id, merged)), ct).ConfigureAwait(false);
             foreach (var file in plan.Files)
             {
                 ct.ThrowIfCancellationRequested(); var target = Literal(instance.GameDirectory, file.RelativePath);

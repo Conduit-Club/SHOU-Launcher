@@ -222,7 +222,7 @@ public sealed partial class ModrinthPackArchive
             }
             ct.ThrowIfCancellationRequested();
             await File.WriteAllBytesAsync(ContentInstallFiles.Literal(directory, ContentInstallFiles.ManifestName),
-                JsonSerializer.SerializeToUtf8Bytes(new ContentInstallManifest(1, "unregistered", installed)), ct).ConfigureAwait(false);
+                ContentInstallFiles.SerializeManifest(new ContentInstallManifest(1, "unregistered", installed)), ct).ConfigureAwait(false);
             return inspection;
         }
         finally { VerifiedDownloader.RejectLink(archiveCopy); if (File.Exists(archiveCopy)) File.Delete(archiveCopy); }

@@ -9,6 +9,14 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class ContentInstallTests
 {
     [TestMethod]
+    public void ManifestByteBudgetAppliesBeforePublishingEvenBelowTheFileCountLimit()
+    {
+        var files = Enumerable.Range(0, 7000).Select(i => new ContentInstalledFile("fixture", "v1", "pack",
+            $"config/{new string('a', 200)}/{new string('b', 200)}/fixture-{i}.json", new string('0', 40), new string('0', 128), 0)).ToArray();
+        Assert.IsLessThan(ContentInstallFiles.MaximumManifestFiles, files.Length);
+        Assert.ThrowsExactly<InvalidDataException>(() => ContentInstallFiles.SerializeManifest(new(1, "fixture", files)));
+    }
+    [TestMethod]
     public async Task InstallationManifestRetainsAnExplicitCountBudget()
     {
         var root = TestFiles.Root(); var instance = new GameInstance("large", "Large fixture", "1.21.1", root);

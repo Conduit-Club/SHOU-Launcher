@@ -144,7 +144,7 @@ internal static class ShouPackArchive
             }
         }
         archive.Verify();
-        if (stage is not null) await File.WriteAllBytesAsync(ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName), JsonSerializer.SerializeToUtf8Bytes(new ContentInstallManifest(1, "unregistered", installed)), ct).ConfigureAwait(false);
+        if (stage is not null) await File.WriteAllBytesAsync(ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName), ContentInstallFiles.SerializeManifest(new ContentInstallManifest(1, "unregistered", installed)), ct).ConfigureAwait(false);
         return new(new(LocalPackFormat.ShouExport, Text(root, "Name"), game, loader, loaderVersion, sha, ["导入到独立新实例；不迁移账户、Java 或原目录。"], true, LocalFiles: files.Select(f => f.Path).ToArray()), [], new Dictionary<string, string>(), false);
     }
 

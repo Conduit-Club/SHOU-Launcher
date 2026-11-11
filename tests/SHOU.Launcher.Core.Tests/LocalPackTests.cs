@@ -90,6 +90,34 @@ public sealed class LocalPackTests
         Assert.IsTrue(result.Warnings.Any(w => w.Contains("同 SHA-1", StringComparison.Ordinal)));
     }
     [TestMethod]
+    [DataRow(12, "resourcepacks", "resourcepack")]
+    [DataRow(6552, "shaderpacks", "shader")]
+    [DataRow(6945, "datapacks", "datapack")]
+    public async Task PackResourceClassesKeepTheirOwnFolderKindAndVerifiedBytes(int classId, string folder, string kind)
+    {
+        var asset = Resource() with { ClassId = classId }; using var handler = new FixtureApi(asset); using var http = new HttpClient(handler);
+        var archive = new LocalPackArchive(); var source = Archive(Manifest(asset)); var read = await archive.ReadAsync(source);
+        var resolver = new CurseForgePackResolver(http, FixtureKey); var resolved = await resolver.ResolveAsync(read.CurseForgeFiles, "1.21.1", "fabric");
+        Assert.IsEmpty(resolved.BlockedFiles); Assert.AreEqual(folder + "/fixture.zip", resolved.Files.Single().Path);
+        var stage = Path.Combine(TestFiles.Root(), "stage");
+        await archive.StageCurseForgeAsync(source, read.Inspection.ArchiveSha256, stage, resolved.Files, (f, p, ct) => resolver.DownloadAsync(f, p, ct: ct));
+        CollectionAssert.AreEqual(asset.Bytes, await File.ReadAllBytesAsync(Path.Combine(stage, folder, "fixture.zip")));
+        var manifest = await ContentInstallFiles.ReadManifestAsync(new("unregistered", "Resource fixture", "1.21.1", stage));
+        Assert.AreEqual(kind, manifest.Files.Single().Kind); Assert.IsFalse(Directory.Exists(Path.Combine(stage, "saves")));
+        if (classId == 6945) Assert.IsTrue(resolved.Warnings.Any(w => w.Contains("不改写已有世界", StringComparison.Ordinal)));
+    }
+    [TestMethod]
+    [DataRow(6, "bad.zip")]
+    [DataRow(6945, "bad.jar")]
+    [DataRow(17, "world.zip")]
+    [DataRow(6552, "native.dll")]
+    public async Task PackClassesStillRejectUnsupportedKindsAndWrongExtensions(int classId, string name)
+    {
+        var asset = Resource() with { ClassId = classId, Name = name }; using var handler = new FixtureApi(asset); using var http = new HttpClient(handler);
+        var result = await new CurseForgePackResolver(http, FixtureKey).ResolveAsync([new(asset.Project, asset.FileId, true)], "1.21.1", "fabric");
+        Assert.IsEmpty(result.Files); Assert.HasCount(1, result.BlockedFiles);
+    }
+    [TestMethod]
     public async Task ArchivedRequiredPackDependencyStagesOnlyTheOfficialUrlWithHashAndWarning()
     {
         var resource = Resource() with { Available = false, FileStatus = 8 }; using var handler = new FixtureApi(resource); using var http = new HttpClient(handler); var resolver = new CurseForgePackResolver(http, FixtureKey);

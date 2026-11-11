@@ -64,7 +64,7 @@ public sealed partial class LauncherService
                     var profile = await CacheLoaderProfileAsync(inspection.Loader, inspection.GameVersion, inspection.LoaderVersion, token).ConfigureAwait(false);
                     var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination, Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);
                     var manifestPath = ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName); var manifest = JsonSerializer.Deserialize<ContentInstallManifest>(await File.ReadAllBytesAsync(manifestPath, token).ConfigureAwait(false)) ?? throw new InvalidDataException("整合包安装清单缺失。");
-                    await File.WriteAllBytesAsync(manifestPath, JsonSerializer.SerializeToUtf8Bytes(manifest with { InstanceId = instance.Id }), token).ConfigureAwait(false);
+                    await File.WriteAllBytesAsync(manifestPath, ContentInstallFiles.SerializeManifest(manifest with { InstanceId = instance.Id }), token).ConfigureAwait(false);
                     if (request.PrepareAfterImport)
                     {
                         await PrepareInstanceAsync(instance with { GameDirectory = stage }, token, publishInstalled: false).ConfigureAwait(false);
