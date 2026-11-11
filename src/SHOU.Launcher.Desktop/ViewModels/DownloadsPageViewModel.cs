@@ -193,7 +193,9 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
 
     public ObservableCollection<DownloadRowViewModel> Tasks { get; } = [];
     public bool IsEmpty => Tasks.Count == 0 && PackTasks.Count == 0;
-    public string Summary => $"{PackTasks.Count + Tasks.Count} 项任务 · {PackTasks.Count(t => t.IsActive)} 项整合包安装中 · {Tasks.Count(t => t.Task.State == "Downloading")} 项文件下载中";
+    public string Summary => HasPackTasks
+        ? $"{PackTasks.Count} 项整合包任务 · {PackTasks.Count(t => t.IsActive)} 项安装中 · {Tasks.Count(t => t.Task.State == "Downloading")} 个文件下载中"
+        : $"{Tasks.Count} 项任务 · {Tasks.Count(t => t.Task.State == "Downloading")} 项下载中";
     public DownloadCategoryViewModel MinecraftCategory { get; }
     public IReadOnlyList<DownloadCategoryViewModel> CommunityCategories { get; }
     public IReadOnlyList<DownloadCategoryViewModel> InstallerCategories { get; }
