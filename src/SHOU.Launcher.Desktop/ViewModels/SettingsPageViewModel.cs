@@ -44,8 +44,8 @@ public sealed partial class SettingsPageViewModel : PageViewModel
     public string ProxyAddress { get => _proxyAddress; set { if (SetProperty(ref _proxyAddress, value)) MarkDirty(); } }
     public string ProxySecret { get => _proxySecret; set { if (SetProperty(ref _proxySecret, value)) MarkDirty(); } }
     public bool Aria2Enabled { get => _aria2Enabled; set { if (SetProperty(ref _aria2Enabled, value)) { if (value) Aria2DetailsExpanded = true; MarkDirty(); } } }
-    public string Aria2Endpoint { get => _aria2Endpoint; set { if (SetProperty(ref _aria2Endpoint, value)) MarkDirty(); } }
-    public string Aria2Secret { get => _aria2Secret; set { if (SetProperty(ref _aria2Secret, value)) MarkDirty(); } }
+    public string Aria2Endpoint { get => _aria2Endpoint; set { if (SetProperty(ref _aria2Endpoint, value)) { Aria2ConnectionSummary = "地址已更改；保存后可测试连接。"; MarkDirty(); } } }
+    public string Aria2Secret { get => _aria2Secret; set { if (SetProperty(ref _aria2Secret, value)) { Aria2ConnectionSummary = "密钥已更改；保存后可测试连接。"; MarkDirty(); } } }
     public string MicrosoftClientId { get => _microsoftClientId; set { if (SetProperty(ref _microsoftClientId, value)) MarkDirty(); } }
     public bool IsDirty { get => _isDirty; private set { SetProperty(ref _isDirty, value); OnPropertyChanged(nameof(SaveSummary)); NotifyCommands(); } }
     public string SaveSummary => HasJavaSelectionConflict ? "默认 Java 已在工具页更改，请先到 Java 设置确认保留哪一项。" : IsDirty ? "有未保存的修改；切换页面会保留草稿。" : "当前显示已保存的设置。";
@@ -64,6 +64,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
 
     public SettingsPageViewModel(MainWindowViewModel owner) : base(owner, "设置", "游戏路径、运行时、界面与网络配置。保存后用于后续操作。")
     {
+        InitializeAria2Connection();
         SaveCommand = AsyncCommand(SaveAsync, () => CanEdit && IsDirty && !HasJavaSelectionConflict);
         DiscardDraftCommand = Command(() => { Load(Owner.Snapshot.Settings); LoadPresentation(_savedPresentation); Feedback = "已恢复为已保存的设置。"; }, () => CanEdit && IsDirty);
         OpenDataDirectoryCommand = AsyncCommand(() => Owner.RunControlAsync("打开数据目录", ct => Owner.ExternalLauncher.OpenDirectoryAsync(DataDirectory, ct)));
@@ -132,6 +133,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
             LoadGameOptions(settings);
             LoadLauncherOptions(settings);
             RefreshSourceEditor(settings.DownloadSourcesJson);
+            Aria2ConnectionSummary = "尚未测试当前保存的连接；下载时会自动探测，未连接则使用内置下载器。";
             IsDirty = false; _loaded = true;
         }
         finally { _loading = false; }

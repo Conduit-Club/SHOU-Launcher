@@ -50,13 +50,14 @@ public sealed class DownloadCoordinatorNativeTests
                 try { _ = await rpc.GetVersionAsync(); ready = true; } catch (HttpRequestException) { await Task.Delay(50); }
             Assert.IsTrue(ready, "The local test daemon did not start.");
             var options = new NetworkOptions(); options.Update(new(Aria2: new(true, endpoint.AbsoluteUri), Downloads: new(MaximumConnections: 2)));
-            var downloader = new DownloadCoordinator(http, new VerifiedDownloader(http, options), options);
+            var warnings = new List<string>();
+            var downloader = new DownloadCoordinator(http, new VerifiedDownloader(http, options), options, warnings.Add);
             var destination = Path.Combine(TestFiles.Root(), "native.jar");
             var request = new DownloadRequest([server.Uri("missing"), server.Uri("file")], destination, Sha256: Convert.ToHexString(SHA256.HashData(bytes)), Size: bytes.Length);
             var reports = new List<TransferProgress>();
             await downloader.DownloadAsync(request, new ProgressCallback(reports.Add)).WaitAsync(TimeSpan.FromSeconds(30));
             CollectionAssert.AreEqual(bytes, await File.ReadAllBytesAsync(destination));
-            Assert.IsTrue(reports.Any(p => p.Stage == "Completed" && p.Backend == "aria2"));
+            Assert.IsTrue(reports.Any(p => p.Stage == "Completed" && p.Backend == "aria2"), string.Join("; ", warnings) + "; daemonExited=" + daemon.HasExited + (daemon.HasExited ? "; exit=" + daemon.ExitCode + "; stdout=" + stdout.GetAwaiter().GetResult() + "; stderr=" + stderr.GetAwaiter().GetResult() : ""));
             Assert.IsFalse(reports.Any(p => p.Backend == "内置"));
             Assert.IsFalse(File.Exists(destination + ".aria2-part"));
             await rpc.CallAsync("changeGlobalOption", [new Dictionary<string, string> { ["max-overall-download-limit"] = "64K" }]);
@@ -69,7 +70,7 @@ public sealed class DownloadCoordinatorNativeTests
             reports.Clear();
             await downloader.DownloadAsync(cancelled, new ProgressCallback(reports.Add)).WaitAsync(TimeSpan.FromSeconds(30));
             CollectionAssert.AreEqual(bytes, await File.ReadAllBytesAsync(cancelled.DestinationPath));
-            Assert.IsTrue(reports.Any(p => p.Stage == "Completed" && p.Backend == "aria2"));
+            Assert.IsTrue(reports.Any(p => p.Stage == "Completed" && p.Backend == "aria2"), string.Join("; ", warnings) + "; daemonExited=" + daemon.HasExited + (daemon.HasExited ? "; exit=" + daemon.ExitCode + "; stdout=" + stdout.GetAwaiter().GetResult() + "; stderr=" + stderr.GetAwaiter().GetResult() : ""));
             Assert.IsFalse(reports.Any(p => p.Backend == "内置"));
         }
         finally

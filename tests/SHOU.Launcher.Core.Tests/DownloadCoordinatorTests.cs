@@ -209,6 +209,8 @@ public sealed class DownloadCoordinatorTests
                 var id = root.GetProperty("id").GetString();
                 switch (root.GetProperty("method").GetString())
                 {
+                    case "aria2.getVersion":
+                        response = new { jsonrpc = "2.0", id, result = new { version = "1.37.0" } }; break;
                     case "aria2.tellStatus" when Path is null:
                         response = new { jsonrpc = "2.0", id, error = new { code = 1, message = "fixture GID missing" } }; break;
                     case "aria2.addUri":

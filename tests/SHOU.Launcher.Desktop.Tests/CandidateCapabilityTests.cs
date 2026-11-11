@@ -73,4 +73,33 @@ public sealed class CandidateCapabilityTests
         }
         finally { window.Close(); }
     }
+    [AvaloniaFact]
+    public async Task Aria2ConnectionTestUsesSavedPortAndReportsStatusWithoutProcessControls()
+    {
+        var fake = new RpcService();
+        using var vm = new MainWindowViewModel(fake, new FakeExternalLauncher());
+        var window = new MainWindow { DataContext = vm }; window.Show();
+        vm.SelectedPage = vm.Settings; vm.Settings.SelectSectionCommand.Execute("manage"); Pump(window);
+        try
+        {
+            Assert.Equal("http://localhost:6800/jsonrpc", vm.Settings.Aria2Endpoint);
+            await vm.Settings.TestAria2ConnectionCommand.ExecuteAsync(null); Pump(window);
+            Assert.Equal(1, fake.Probes);
+            Assert.Contains("1.37.0", Find<TextBlock>(window, "Aria2ConnectionStatus").Text);
+            Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name is "StartAria2Button" or "StopAria2Button");
+            vm.Settings.Aria2Endpoint = "http://localhost:6801/jsonrpc"; Pump(window);
+            Assert.False(vm.Settings.TestAria2ConnectionCommand.CanExecute(null));
+            await vm.Settings.SaveCommand.ExecuteAsync(null); Pump(window);
+            await vm.Settings.TestAria2ConnectionCommand.ExecuteAsync(null); Pump(window);
+            Assert.Equal(2, fake.Probes); Assert.Equal("http://localhost:6801/jsonrpc", fake.Snapshot.Settings.Aria2!.Endpoint);
+        }
+        finally { window.Close(); }
+    }
+    private sealed class RpcService : FakeLauncherService, IAria2ConnectionService
+    {
+        public int Probes;
+        public Task<Aria2ConnectionStatus> TestAria2ConnectionAsync(CancellationToken cancellationToken = default)
+        { cancellationToken.ThrowIfCancellationRequested(); Probes++; return Task.FromResult(new Aria2ConnectionStatus(true, "已连接", Snapshot.Settings.Aria2?.Endpoint ?? "http://localhost:6800/jsonrpc", "1.37.0")); }
+    }
+
 }

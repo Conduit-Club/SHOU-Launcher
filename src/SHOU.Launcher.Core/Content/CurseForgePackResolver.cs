@@ -178,8 +178,18 @@ public sealed class CurseForgePackResolver
             throw new InvalidDataException(label + "：文件哈希或大小无效。");
         using var redirects = new CdnRedirectHandler(http, file.FromFtb); using var downloads = new HttpClient(redirects) { Timeout = Timeout.InfiniteTimeSpan };
         // Keep the CDN redirect allowlist and API-key isolation while sharing the global transfer budget.
-        var reporting = new CallbackProgress<TransferProgress>(p => progress?.Report(p with { Backend = "内置", Detail = network?.Aria2.Enabled == true ? "官方 CDN 重定向校验使用内置下载器" : p.Detail }));
-        try { await new VerifiedDownloader(downloads, network).DownloadAsync(new([file.DownloadUri], path, file.Sha1, Size: file.Size), reporting, ct).ConfigureAwait(false); }
+        var reporting = new CallbackProgress<TransferProgress>(p => progress?.Report(p with { Source = file.DownloadUri.Host, Backend = p.Backend ?? "内置",
+            Detail = p.Backend == "aria2" ? "经官方 CDN 校验通道 · " + p.Detail : p.Detail }));
+        try
+        {
+            var internalDownloader = new VerifiedDownloader(downloads, network);
+            if (network?.Aria2.Enabled == true)
+            {
+                await using var relay = new RestrictedDownloadRelay(downloads, file.DownloadUri, file.Size, network);
+                await new DownloadCoordinator(downloads, new CdnFallback(internalDownloader, file.DownloadUri), network, policyHandledByTransport: true).DownloadAsync(new([relay.Uri], path, file.Sha1, Size: file.Size), reporting, ct).ConfigureAwait(false);
+            }
+            else await internalDownloader.DownloadAsync(new([file.DownloadUri], path, file.Sha1, Size: file.Size), reporting, ct).ConfigureAwait(false);
+        }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex) when (ex is AggregateException or HttpRequestException or IOException or InvalidDataException or OperationCanceledException)
         { throw new IOException(label + "：下载失败；" + (redirects.FailureReason ?? "文件传输或 SHA-1/大小校验失败。")); }
@@ -195,6 +205,11 @@ public sealed class CurseForgePackResolver
             catch (Exception ex) when (ex is IOException or InvalidDataException) { throw new IOException(label + "：无法读取已下载文件进行 SHA-512 校验。"); }
             if (!digest.Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException(label + "：下载文件 SHA-512 校验失败。");
         }
+    }
+    private sealed class CdnFallback(IVerifiedDownloader downloader, Uri source) : IVerifiedDownloader
+    {
+        public Task DownloadAsync(DownloadRequest request, IProgress<TransferProgress>? progress = null, CancellationToken cancellationToken = default)
+            => downloader.DownloadAsync(request with { Sources = [source] }, progress, cancellationToken);
     }
     private static Uri ManualIdentityUri(int project, int file) => new($"https://api.curseforge.com/v1/mods/{project}/files/{file}");
     private static bool AllowedDownloadUri(Uri uri, bool allowFtb = false) => AllowedCurseForgeUri(uri) || ContentInstallFiles.AllowedUri(uri) || allowFtb && FtbPackFileIndex.AllowedUri(uri);

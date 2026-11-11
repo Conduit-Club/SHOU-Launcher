@@ -11,6 +11,7 @@ public sealed class NetworkOptions
     public Aria2Settings Aria2 => Capture().Aria2;
     public ICredentialStore? Credentials { get; set; }
     public DownloadBudget Budget { get; } = new();
+    public Aria2RpcConnection Aria2Connection { get; } = new();
     public void Update(LauncherSettings settings) => Volatile.Write(ref current, new(settings.Proxy ?? new(), settings.Aria2 ?? new(), Interlocked.Increment(ref revision), settings.Downloads ?? new(), settings.Launcher));
     private long revision;
     public NetworkConfiguration Capture() => Volatile.Read(ref current);

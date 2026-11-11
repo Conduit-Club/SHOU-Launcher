@@ -44,7 +44,7 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
         var result = JsonNode.Parse(await response.Content.ReadAsStringAsync(timeout.Token).ConfigureAwait(false))
             ?? throw new IOException("aria2 RPC 未返回 JSON。");
         if ((string?)result["id"] != id || (string?)result["jsonrpc"] != "2.0") throw new IOException("aria2 RPC 响应 ID 或协议版本无效。");
-        if (result["error"] is { } error) throw new Aria2RpcException((int?)error["code"] ?? -1);
+        if (result["error"] is { } error) { var failure = new Aria2RpcException((int?)error["code"] ?? -1); failure.Data["method"] = method; throw failure; }
         response.EnsureSuccessStatusCode();
         return result["result"]?.DeepClone() ?? throw new IOException("aria2 RPC 未返回结果。");
     }
@@ -61,11 +61,12 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
     }
 
     public async Task DownloadAsync(IReadOnlyList<string> urls, string partialPath, string userAgent,
-        Action<Aria2Progress>? progress, CancellationToken cancellationToken = default, int connections = 1)
+        Action<Aria2Progress>? progress, CancellationToken cancellationToken = default, int connections = 1, IReadOnlyDictionary<string, string>? requestOptions = null)
     {
         if (urls.Count == 0) throw new ArgumentException("未提供 aria2 下载地址。");
         var fullPath = Path.GetFullPath(partialPath);
         var gid = TaskId(fullPath);
+        if (requestOptions?.Keys.Any(k => k is not ("all-proxy" or "all-proxy-user" or "all-proxy-passwd" or "no-proxy")) == true) throw new ArgumentException("Unsupported aria2 transport option.");
         var slots = Math.Clamp(connections, 1, 16).ToString(CultureInfo.InvariantCulture);
         var attached = false;
         try
@@ -87,8 +88,26 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
                 }
                 else if (status != "complete")
                 {
-                    await CallAsync("changeOption", [gid, new Dictionary<string, string> { ["split"] = slots, ["max-connection-per-server"] = slots }], cancellationToken).ConfigureAwait(false);
-                    if (status == "paused") await CallAsync("unpause", [gid], cancellationToken).ConfigureAwait(false);
+                    // Re-register only this owned GID from its preserved .aria2 sidecar.
+                    // Direct unpause can abort aria2 1.37.0 in Piece::initWrCache;
+                    // a fresh request group also safely refreshes expiring relay URIs.
+                    if (status != "paused") await PauseOwnedAsync(gid, cancellationToken).ConfigureAwait(false);
+                    await CallAsync("remove", [gid], cancellationToken).ConfigureAwait(false);
+                    using var cleanup = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    cleanup.CancelAfter(TimeSpan.FromSeconds(5));
+                    while (true)
+                    {
+                        JsonNode removed;
+                        try { removed = await CallAsync("tellStatus", [gid], cleanup.Token).ConfigureAwait(false); }
+                        catch (Aria2RpcException ex) when (ex.Code == 1) { break; } // A paused waiting job is removed immediately.
+                        if ((string?)removed["status"] == "removed")
+                        {
+                            await CallAsync("removeDownloadResult", [gid], cancellationToken).ConfigureAwait(false);
+                            break;
+                        }
+                        await Task.Delay(100, cleanup.Token).ConfigureAwait(false);
+                    }
+                    existing = null;
                 }
             }
             if (existing == null)
@@ -100,6 +119,7 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
                     ["file-allocation"] = "none", ["uri-selector"] = "inorder", ["split"] = slots, ["min-split-size"] = "1M",
                     ["max-connection-per-server"] = slots, ["max-tries"] = "2", ["connect-timeout"] = "15", ["timeout"] = "30"
                 };
+                if (requestOptions is not null) foreach (var option in requestOptions) options[option.Key] = option.Value;
                 if (!string.IsNullOrWhiteSpace(userAgent)) options["user-agent"] = userAgent;
                 attached = true;
                 await CallAsync("addUri", [urls.ToArray(), options], cancellationToken).ConfigureAwait(false);
@@ -128,7 +148,7 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
             if (attached)
             {
                 using var pauseTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                try { await CallAsync("forcePause", [gid], pauseTimeout.Token).ConfigureAwait(false); }
+                try { await PauseOwnedAsync(gid, pauseTimeout.Token).ConfigureAwait(false); }
                 catch (Exception) { /* RPC may be unavailable; leave the job and its files available for reconnect. */ }
             }
             throw;
@@ -138,10 +158,27 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
             if (attached)
             {
                 using var pauseTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
-                try { await CallAsync("forcePause", [gid], pauseTimeout.Token).ConfigureAwait(false); }
+                try { await PauseOwnedAsync(gid, pauseTimeout.Token).ConfigureAwait(false); }
                 catch (Exception) { /* Leave only this owned GID available for reconnect. */ }
             }
             throw;
+        }
+    }
+
+    private async Task PauseOwnedAsync(string gid, CancellationToken ct)
+    {
+        await CallAsync("pause", [gid], ct).ConfigureAwait(false);
+        // A paused status can precede disk-cache/connection cleanup. Wait for a
+        // stable idle observation before allowing immediate reattachment.
+        var idle = false;
+        while (true)
+        {
+            await Task.Delay(100, ct).ConfigureAwait(false);
+            var state = await CallAsync("tellStatus", [gid], ct).ConfigureAwait(false);
+            if ((string?)state["status"] is "complete" or "error" or "removed") return;
+            var stopped = (string?)state["status"] == "paused" && (string?)state["connections"] == "0";
+            if (stopped && idle) return;
+            idle = stopped;
         }
     }
 
