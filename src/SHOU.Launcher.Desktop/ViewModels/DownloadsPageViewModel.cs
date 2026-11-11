@@ -12,17 +12,17 @@ public sealed class DownloadRowViewModel : ObservableObject
     public AsyncRelayCommand CancelCommand { get; }
     public AsyncRelayCommand RetryCommand { get; }
     public string Name => Task.Name;
-    public string State => Task.State switch { "Queued" => "等待中", "Downloading" => "下载中", "Completed" => "已完成", "Failed" => "失败", "Cancelled" => "已取消", _ => Task.State };
-    public bool IsIndeterminate => Task.TotalBytes is null or <= 0;
+    public string State => Task.State switch { "Queued" => "等待中", "Downloading" => "下载中", "Verifying" => "校验中", "Retrying" => "重试/切源", "Completed" => "已完成", "Failed" => "失败", "Cancelled" => "已取消", _ => Task.State };
+    public bool IsIndeterminate => Task.State is "Verifying" or "Retrying" || Task.TotalBytes is null or <= 0;
     public double Progress => Task.TotalBytes is > 0 ? Math.Clamp(Task.BytesReceived * 100d / Task.TotalBytes.Value, 0, 100) : 0;
     public string Transfer => $"{FormatBytes(Task.BytesReceived)} / {(Task.TotalBytes is { } total ? FormatBytes(total) : "未知大小")} · {FormatBytes((long)Task.BytesPerSecond)}/s";
-    public string Source => Task.Source is { } source ? UiPrivacy.Redact(source) : "来源尚未确定";
+    public string Source => UiPrivacy.Redact((Task.Backend ?? "内置") + " · " + (Task.Source == "cache" ? "缓存复用" : Task.Source ?? "来源尚未确定") + (Task.Detail is { Length: > 0 } detail ? " · " + detail : ""));
     public string? Error => Task.Error is { } error ? UiPrivacy.Redact(error) : null;
     public bool HasError => !string.IsNullOrWhiteSpace(Error);
     public DownloadRowViewModel(MainWindowViewModel owner, DownloadTaskSnapshot task)
     {
         Task = task;
-        CancelCommand = new(() => owner.RunControlAsync("取消所属安装", ct => owner.Service.CancelDownloadAsync(Task.Id, ct)), () => Task.State is "Queued" or "Downloading");
+        CancelCommand = new(() => owner.RunControlAsync("取消所属安装", ct => owner.Service.CancelDownloadAsync(Task.Id, ct)), () => Task.State is "Queued" or "Downloading" or "Verifying" or "Retrying");
         RetryCommand = new(() => owner.RunAsync("重试所属安装", ct => owner.Service.RetryDownloadAsync(Task.Id, ct)), () => owner.CanMutate && Task.State is "Failed" or "Cancelled");
     }
     internal void Update(DownloadTaskSnapshot task)

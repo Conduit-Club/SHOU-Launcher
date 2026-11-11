@@ -19,16 +19,16 @@ public sealed partial class LocalPackTests
             var count = Interlocked.Increment(ref active); lock (concurrencyLock) maximum = Math.Max(maximum, count);
             try
             {
-                if (Interlocked.Increment(ref entered) == 4) { gate.SetResult(); if (cancel) cancellation.Cancel(); }
+                if (Interlocked.Increment(ref entered) == 2) { gate.SetResult(); if (cancel) cancellation.Cancel(); }
                 await gate.Task.WaitAsync(token);
                 token.ThrowIfCancellationRequested(); await File.WriteAllBytesAsync(path, assets.Single(a => a.FileId == file.FileId).Bytes, token);
             }
             finally { Interlocked.Decrement(ref active); }
         }
         var stage = Path.Combine(TestFiles.Root(), "stage");
-        var operation = new LocalPackArchive().StageCurseForgeAsync(source, read.Inspection.ArchiveSha256, stage, result.Files, Download, cancellation.Token);
+        var operation = new LocalPackArchive().StageCurseForgeAsync(source, read.Inspection.ArchiveSha256, stage, result.Files, Download, cancellation.Token, maximumConnections: 2);
         if (cancel) await Assert.ThrowsAsync<OperationCanceledException>(async () => await operation.WaitAsync(TimeSpan.FromSeconds(10)));
         else { await operation.WaitAsync(TimeSpan.FromSeconds(10)); Assert.AreEqual(6, Directory.GetFiles(Path.Combine(stage, "mods")).Length); }
-        Assert.AreEqual(4, maximum); Assert.AreEqual(0, active);
+        Assert.AreEqual(2, maximum); Assert.AreEqual(0, active);
     }
 }

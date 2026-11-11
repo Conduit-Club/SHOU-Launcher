@@ -15,8 +15,9 @@
         <views:AccountsView Name="HomeAccountsView" DataContext="{Binding Root.Accounts}" IsVisible="{Binding !Root.IsHomeLaunching}" />
         <StackPanel Name="HomeLaunchActions" Grid.Row="1" Margin="20,5,20,20" Spacing="10" IsVisible="{Binding !Root.IsHomeLaunching}">
           <Button Name="HomeLaunchButton" Classes="primary" Command="{Binding Root.Instances.LaunchCommand}" HorizontalAlignment="Stretch" Height="54" ToolTip.Tip="{Binding Root.Instances.LaunchPrerequisite}">
-            <StackPanel Spacing="3"><TextBlock Text="{loc:Loc t7ab2a77d57a655e0}" HorizontalAlignment="Center" LineHeight="18" /><TextBlock Name="HomeSelectedInstanceName" Text="{Binding SelectedInstanceName}" Classes="muted" FontSize="11" LineHeight="16" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" MaxLines="1" ToolTip.Tip="{Binding SelectedInstanceName}" MaxWidth="232" HorizontalAlignment="Center" /></StackPanel>
+            <StackPanel Spacing="3"><TextBlock Text="{Binding Root.Instances.LaunchCaption}" HorizontalAlignment="Center" LineHeight="18" /><TextBlock Name="HomeSelectedInstanceName" Text="{Binding SelectedInstanceName}" Classes="muted" FontSize="11" LineHeight="16" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" MaxLines="1" ToolTip.Tip="{Binding SelectedInstanceName}" MaxWidth="232" HorizontalAlignment="Center" /></StackPanel>
           </Button>
+          <TextBlock Name="ConcurrentPlayHint" Text="{Binding Root.Instances.ConcurrentPlayHint}" IsVisible="{Binding Root.Instances.IsSelectedInstanceRunning}" FontSize="11" LineHeight="16" Foreground="{DynamicResource ClubMuted}" TextWrapping="Wrap" />
           <Grid ColumnDefinitions="*,10,*">
             <Button Name="HomeSelectInstanceButton" Content="{loc:Loc tf5a76549ed49cfaa}" Command="{Binding Root.ShowInstancesCommand}" HorizontalAlignment="Stretch" Height="35" />
             <Button Grid.Column="2" Name="HomeInstanceSettingsButton" Content="{loc:Loc tcb5c4d21c9d75f2f}" Command="{Binding Root.Instances.ShowInstanceSettingsCommand}" HorizontalAlignment="Stretch" Height="35" />

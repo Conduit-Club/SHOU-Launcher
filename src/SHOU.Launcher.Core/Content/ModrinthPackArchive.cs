@@ -173,7 +173,7 @@ public sealed partial class ModrinthPackArchive
         return new(new(nameText, version, gameVersion, loader, loaderVersion, sha256, files, overrides.Keys.ToArray(), warnings, unsupported is null, unsupported), overrides);
     }
     public async Task<ModrinthPackInspection> StageAsync(string archivePath, string expectedSha256, string directory,
-        IReadOnlyList<string>? optionalFiles, Func<ModrinthPackFile, string, CancellationToken, Task> download, CancellationToken ct = default, IProgress<PackInstallProgress>? progress = null)
+        IReadOnlyList<string>? optionalFiles, Func<ModrinthPackFile, string, CancellationToken, Task> download, CancellationToken ct = default, IProgress<PackInstallProgress>? progress = null, int maximumConnections = 8)
     {
         if (!ContentInstallFiles.Hash(expectedSha256, 64)) throw new InvalidDataException("请先读取整合包并确认其文件身份。");
         VerifiedDownloader.RejectLink(directory); Directory.CreateDirectory(directory);
@@ -196,7 +196,7 @@ public sealed partial class ModrinthPackArchive
             var installed = new List<ContentInstalledFile>(); var done = 0;
             var selectedFiles = inspection.Files.Where(f => f.Client == "required" || f.Client == "optional" && selected.Contains(f.Path)).ToArray();
             var total = selectedFiles.Length + read.Overrides.Count; progress?.Report(new("安装整合包文件", 0, total));
-            await Parallel.ForEachAsync(selectedFiles, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (file, token) =>
+            await Parallel.ForEachAsync(selectedFiles, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections, 1, 64), CancellationToken = ct }, async (file, token) =>
             {
                 token.ThrowIfCancellationRequested(); var path = ContentInstallFiles.Literal(directory, file.Path); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 await download(file, path, token).ConfigureAwait(false);

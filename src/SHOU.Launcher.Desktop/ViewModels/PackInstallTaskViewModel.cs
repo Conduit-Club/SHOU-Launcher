@@ -127,7 +127,9 @@ public sealed class PackInstallTaskViewModel : ObservableObject
                     Steps[2].Update("已完成", 100);
                 }
                 Activate(3);
-                await owner.Service.InstallInstanceAsync(importedInstance.Id, ct);
+                if (owner.Service is IInstanceInstallProgressService preparing)
+                    await preparing.InstallInstanceWithProgressAsync(importedInstance.Id, ProgressFor(generation, 3), ct);
+                else await owner.Service.InstallInstanceAsync(importedInstance.Id, ct);
                 Steps[3].Update("已完成", 100);
             }, ex =>
             {
@@ -158,12 +160,13 @@ public sealed class PackInstallTaskViewModel : ObservableObject
             if (generation != runVersion || !IsActive || stepIndex != step) return;
             completedFiles = Math.Max(0, p.CompletedFiles); totalFiles = Math.Max(completedFiles, p.TotalFiles);
             detail = UiPrivacy.Redact(p.Stage + (p.CurrentFile is null ? "" : "：" + p.CurrentFile));
-            Steps[step].Update("进行中", totalFiles == 0 ? 0 : completedFiles * 100d / totalFiles, totalFiles == 0, detail);
+            Steps[step].Update("进行中", step == 3 || totalFiles == 0 ? 0 : completedFiles * 100d / totalFiles, step == 3 || totalFiles == 0, detail + (totalFiles > 0 ? $" · {completedFiles}/{totalFiles} 项" : ""));
             Changed();
         });
     private void Activate(int step)
     {
         stepIndex = step; completedFiles = totalFiles = 0;
+        priorTransfers = owner.Snapshot.Downloads.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
         detail = Steps[step].Name; Steps[step].Update("进行中", unknown: true); Changed();
     }
     internal void Refresh(LauncherSnapshot snapshot)
@@ -172,13 +175,15 @@ public sealed class PackInstallTaskViewModel : ObservableObject
         {
             var files = snapshot.Downloads.Where(t => !priorTransfers.Contains(t.Id)).ToArray();
             speed = snapshot.DownloadBytesPerSecond;
-            var transfer = files.LastOrDefault(t => t.State is "Downloading" or "Verifying" or "Retrying");
+            var active = files.Where(t => t.State is "Queued" or "Downloading" or "Verifying" or "Retrying").ToArray();
+            var transfer = active.OrderBy(t => t.UpdatedAt).LastOrDefault();
             if (transfer is not null && stepIndex is 0 or 2 or 3)
             {
-                detail = UiPrivacy.Redact(transfer.Name) + $" · {transfer.BytesReceived / 1048576d:0.0} / " +
+                var transferDetail = $"{active.Length} 项传输/校验 · " + UiPrivacy.Redact(transfer.Name) + $" · {transfer.BytesReceived / 1048576d:0.0} / " +
                     (transfer.TotalBytes is { } size ? $"{size / 1048576d:0.0} MiB" : "未知大小");
+                if (stepIndex == 0) detail = transfer.State == "Verifying" ? "整合包文件校验中" : transferDetail;
                 if (stepIndex == 0) Steps[0].Update("进行中", transfer.TotalBytes is > 0 ? transfer.BytesReceived * 100d / transfer.TotalBytes.Value : 0,
-                    transfer.TotalBytes is null or <= 0, detail);
+                    transfer.State != "Downloading" || transfer.TotalBytes is null or <= 0, detail);
             }
         }
         Changed();

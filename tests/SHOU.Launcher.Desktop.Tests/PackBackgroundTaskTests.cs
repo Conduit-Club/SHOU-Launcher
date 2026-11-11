@@ -55,6 +55,25 @@ public sealed class PackBackgroundTaskTests
         Assert.Null(service.LastLaunchServerId);
     }
     [AvaloniaFact]
+    public async Task AllFileBytesDoNotCompleteThePackBeforePreparationAndPublicationReturn()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var service = new PackFixture(); service.Download.SetResult("/fixture/pack.zip");
+        service.InstallBehavior = async ct => { entered.TrySetResult(); await release.Task.WaitAsync(ct); };
+        using var vm = new MainWindowViewModel(service, new FakeExternalLauncher());
+        var row = await Open(vm); var pending = row.DownloadCommand.ExecuteAsync(null);
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5)); Dispatcher.UIThread.RunJobs();
+            var task = Assert.Single(vm.Downloads.PackTasks);
+            Assert.True(task.IsActive); Assert.False(task.IsCompleted); Assert.True(task.OverallProgress < 100);
+            Assert.True(task.Steps[3].IsIndeterminate); Assert.Contains("5/5", task.Steps[3].Detail);
+            release.SetResult(); await pending; Assert.True(task.IsCompleted); Assert.Equal(100, task.OverallProgress);
+        }
+        finally { release.TrySetResult(); await pending; }
+    }
+    [AvaloniaFact]
     public async Task BaseGameFailureKeepsImportedInstanceAndRetryDoesNotReimport()
     {
         var service = new PackFixture(); service.Download.SetResult("/fixture/pack.zip");
@@ -79,8 +98,10 @@ public sealed class PackBackgroundTaskTests
         await task.ProvideManualFileAsync(task.ManualFiles[0], "/fixture/correct.jar");
         Assert.True(task.IsCompleted); Assert.False(task.HasManualFiles); Assert.Equal(1, service.Imports); Assert.Null(service.LastLaunchServerId);
     }
-    private sealed class PackFixture : FakeLauncherService, ILauncherCatalogService, ILocalPackService, ILocalPackProgressService, ILocalPackManualFileService
+    private sealed class PackFixture : FakeLauncherService, ILauncherCatalogService, ILocalPackService, ILocalPackProgressService, ILocalPackManualFileService, IInstanceInstallProgressService
     {
+        public async Task InstallInstanceWithProgressAsync(string instanceId, IProgress<PackInstallProgress> progress, CancellationToken cancellationToken = default)
+        { progress.Report(new("检查游戏资源", 5, 5, "fixture")); await InstallInstanceAsync(instanceId, cancellationToken); }
         internal static ContentProject Project => new("cf-1", "fixture", "Fixture Pack", "Synthetic pack", "QA", 1, "modpack", null, new("https://www.curseforge.com/minecraft/modpacks/fixture"), Source: "curseforge");
         internal TaskCompletionSource<string> Download { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         internal int Imports;

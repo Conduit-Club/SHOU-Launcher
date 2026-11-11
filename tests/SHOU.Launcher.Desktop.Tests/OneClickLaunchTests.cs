@@ -13,6 +13,17 @@ namespace SHOU.Launcher.Desktop.Tests;
 
 public sealed class OneClickLaunchTests
 {
+    [AvaloniaFact]
+    public async Task RunningPackCanLaunchAgainWhileItsMutationActionsStayProtected()
+    {
+        using var fixture = new Fixture(true, _ => throw new InvalidOperationException("Already installed."));
+        await fixture.ClickLaunch().WaitAsync(Deadline); Pump(fixture.Window);
+        Assert.True(fixture.Launch.IsEffectivelyEnabled); Assert.Equal("再开一个游戏窗口", fixture.Vm.Instances.LaunchCaption);
+        Assert.True(Find<TextBlock>(fixture.Window, "ConcurrentPlayHint").IsEffectivelyVisible);
+        Assert.Contains("同一世界", fixture.Vm.Instances.LaunchPrerequisite);
+        await fixture.ClickLaunch().WaitAsync(Deadline); Pump(fixture.Window);
+        Assert.False(fixture.Vm.IsBusy); Assert.False(fixture.Vm.HasError); Assert.True(fixture.Vm.Instances.IsSelectedInstanceRunning);
+    }
     private static readonly TimeSpan Deadline = TimeSpan.FromSeconds(5);
     private static void Pump(Window window) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);

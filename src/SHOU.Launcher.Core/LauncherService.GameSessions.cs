@@ -5,14 +5,16 @@ namespace SHOU.Launcher.Core;
 public sealed partial class LauncherService
 {
     private Task? sessionMonitor;
+    private bool IsGameDirectoryRunning(GameInstance instance) => Snapshot.Instances.Where(i => PathEquals(i.GameDirectory, instance.GameDirectory))
+        .Any(i => games.Values.Any(g => g.InstanceId == i.Id && !g.Process.Completion.IsCompleted) || gameSessions.ReadAll(i).Count > 0);
     private void EnsureInstanceNotRunning(GameInstance instance)
     {
         foreach (var other in Snapshot.Instances.Where(i => i.Id != instance.Id && PathEquals(i.GameDirectory, instance.GameDirectory)))
         {
-            if (games.TryGetValue(other.Id, out var shared) && !shared.Process.Completion.IsCompleted) throw new InvalidOperationException("共用此游戏目录的另一实例仍在运行，请先退出。");
+            if (games.Values.Any(g => g.InstanceId == other.Id && !g.Process.Completion.IsCompleted)) throw new InvalidOperationException("共用此游戏目录的另一实例仍在运行，请先退出。");
             gameSessions.EnsureWritable(other);
         }
-        if (games.TryGetValue(instance.Id, out var owned) && !owned.Process.Completion.IsCompleted)
+        if (games.Values.Any(g => g.InstanceId == instance.Id && !g.Process.Completion.IsCompleted))
             throw new InvalidOperationException("此实例的游戏仍在运行。请先退出此游戏，或选择其它实例。");
         gameSessions.EnsureWritable(instance);
     }
@@ -21,15 +23,15 @@ public sealed partial class LauncherService
         var active = new List<GameSessionSnapshot>();
         foreach (var instance in Snapshot.Instances)
         {
-            GameSessionSnapshot? registered = null;
-            try { registered = gameSessions.Read(instance); }
+            IReadOnlyList<GameSessionSnapshot> registered = [];
+            try { registered = gameSessions.ReadAll(instance); }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { /* Mutation still fails closed through EnsureWritable. */ }
-            if (registered is not null) active.Add(registered);
-            else if (games.TryGetValue(instance.Id, out var owned) && !owned.Process.Completion.IsCompleted)
+            active.AddRange(registered);
+            foreach (var owned in games.Values.Where(g => g.InstanceId == instance.Id && !g.Process.Completion.IsCompleted && registered.All(s => s.ProcessId != g.Process.ProcessId)))
                 active.Add(new(instance.Id, owned.Process.ProcessId,
-                    Snapshot.GameSessions.FirstOrDefault(s => s.InstanceId == instance.Id)?.StartedAt ?? DateTimeOffset.UtcNow));
+                    Snapshot.GameSessions.FirstOrDefault(s => s.ProcessId == owned.Process.ProcessId)?.StartedAt ?? DateTimeOffset.UtcNow));
         }
-        var next = active.OrderBy(s => s.InstanceId, StringComparer.Ordinal).ToArray();
+        var next = active.DistinctBy(s => s.ProcessId).OrderBy(s => s.InstanceId, StringComparer.Ordinal).ThenBy(s => s.ProcessId).ToArray();
         if (Snapshot.GameSessions.SequenceEqual(next)) return;
         Set(s => s with { GameSessions = next, GameProcessId = next.LastOrDefault()?.ProcessId });
     }

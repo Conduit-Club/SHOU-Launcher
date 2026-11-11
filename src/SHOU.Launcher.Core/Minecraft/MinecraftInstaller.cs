@@ -14,20 +14,22 @@ public sealed record InstalledGame(ResolvedVersion Version, LibraryResolution Li
     IReadOnlyList<string> LegacyExtractions);
 
 public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader downloader, string cacheDirectory,
-    Func<IReadOnlyList<DownloadSource>> sources)
+    Func<IReadOnlyList<DownloadSource>> sources, Func<int>? maximumConnections = null)
 {
     public async Task<InstalledGame> InstallAsync(ResolvedVersion version, RuleContext context, string gameDirectory,
-        IProgress<TransferProgress>? progress = null, CancellationToken ct = default)
+        IProgress<TransferProgress>? progress = null, CancellationToken ct = default, string? nativeSession = null, bool preserveGameData = false, IProgress<PackInstallProgress>? phases = null)
     {
         Directory.CreateDirectory(gameDirectory);
         var metadata = version.Metadata;
         var client = metadata["downloads"]?["client"] as JsonObject ?? throw new InvalidDataException("Version has no downloadable client.");
         var clientId = (string?)metadata["jar"] ?? version.InheritanceChain.FirstOrDefault() ?? version.Id;
         var clientPath = SafePath.Within(cacheDirectory, $"versions/{SafePath.Identifier(clientId)}/{clientId}.jar");
+        phases?.Report(new("检查游戏客户端", 0, 1));
         await FetchDescriptorAsync(client, clientPath, progress, ct).ConfigureAwait(false);
         var librariesDirectory = Path.Combine(cacheDirectory, "libraries");
         var libraries = LibraryResolver.Resolve(metadata, context);
-        await Parallel.ForEachAsync(libraries.Files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (file, token) =>
+        var completedLibraries = 0; phases?.Report(new("检查依赖库", 0, libraries.Files.Count));
+        await Parallel.ForEachAsync(libraries.Files, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections?.Invoke() ?? 8, 1, 64), CancellationToken = ct }, async (file, token) =>
         {
             var path = SafePath.Within(librariesDirectory, file.RelativePath);
             var sha1 = file.Sha1;
@@ -37,6 +39,7 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
                 await using var local = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, true);
                 if (!string.Equals(Convert.ToHexStringLower(await SHA1.HashDataAsync(local, token)), sha1, StringComparison.OrdinalIgnoreCase))
                     throw new InvalidDataException("加载器生成库已变化，请重新安装加载器。");
+                phases?.Report(new("检查依赖库", Interlocked.Increment(ref completedLibraries), libraries.Files.Count, file.RelativePath));
                 return;
             }
             if (string.IsNullOrWhiteSpace(sha1))
@@ -44,6 +47,7 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
                 sha1 = await ReadChecksumAsync(file.Url, token).ConfigureAwait(false);
             }
             await downloader.DownloadAsync(new(Map(file.Url), path, sha1, Size: file.Size), progress, token).ConfigureAwait(false);
+            phases?.Report(new("检查依赖库", Interlocked.Increment(ref completedLibraries), libraries.Files.Count, file.RelativePath));
         }).ConfigureAwait(false);
         var assetsDirectory = Path.Combine(cacheDirectory, "assets");
         var indexDescriptor = metadata["assetIndex"] as JsonObject ?? throw new InvalidDataException("Version has no asset index descriptor.");
@@ -51,23 +55,32 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
         var indexPath = SafePath.Within(assetsDirectory, $"indexes/{SafePath.Identifier(indexId)}.json");
         await FetchDescriptorAsync(indexDescriptor, indexPath, progress, ct).ConfigureAwait(false);
         var assets = AssetResolver.Parse(indexId, await File.ReadAllTextAsync(indexPath, ct).ConfigureAwait(false));
-        await Parallel.ForEachAsync(assets.Objects.DistinctBy(a => a.Hash), new ParallelOptions { MaxDegreeOfParallelism = 6, CancellationToken = ct }, async (asset, token) =>
+        var objects = assets.Objects.DistinctBy(a => a.Hash).ToArray(); var completedAssets = 0;
+        phases?.Report(new("检查游戏资源", 0, objects.Length));
+        await Parallel.ForEachAsync(objects, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections?.Invoke() ?? 8, 1, 64), CancellationToken = ct }, async (asset, token) =>
         {
             await downloader.DownloadAsync(new(Map(asset.OfficialUri), SafePath.Within(assetsDirectory, asset.RelativePath), asset.Hash, Size: asset.Size), progress, token).ConfigureAwait(false);
+            phases?.Report(new("检查游戏资源", Interlocked.Increment(ref completedAssets), objects.Length, asset.Hash));
         }).ConfigureAwait(false);
-        AssetResolver.MaterializeLegacyLayout(assets, assetsDirectory, gameDirectory);
+        if (!preserveGameData) AssetResolver.MaterializeLegacyLayout(assets, assetsDirectory, gameDirectory);
         var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(metadata.ToJsonString())))[..16].ToLowerInvariant();
         var nativesDirectory = SafePath.Within(gameDirectory, $".shou/natives/{SafePath.Identifier(version.Id)}/{context.OSName}/{context.JavaArchitecture}/{fingerprint}");
+        if (nativeSession is not null) nativesDirectory = SafePath.Within(nativesDirectory, SafePath.Identifier(nativeSession));
         Directory.CreateDirectory(nativesDirectory);
+        phases?.Report(new("解包原生库", 0, 0));
         var extracted = new List<string>();
         foreach (var native in libraries.Files.Where(f => f.LegacyNative))
             extracted.AddRange(await LibraryResolver.ExtractLegacyNativesAsync(SafePath.Within(librariesDirectory, native.RelativePath), nativesDirectory, native.Excludes, ct).ConfigureAwait(false));
         // A completion marker is written only after every verified download and native extraction succeeds.
-        var marker = SafePath.Within(gameDirectory, ".shou/install.json");
-        await File.WriteAllTextAsync(marker + ".tmp", JsonSerializer.Serialize(new { version = version.Id, javaMajor = version.RequiredJavaMajor,
-            os = context.OSName, javaArchitecture = context.JavaArchitecture.ToString(), metadataFingerprint = fingerprint,
-            libraries = libraries.Files.Count, assets = assets.Objects.Count, completedAt = DateTimeOffset.UtcNow }), ct).ConfigureAwait(false);
-        File.Move(marker + ".tmp", marker, true);
+        if (!preserveGameData)
+        {
+            phases?.Report(new("写入安装完成清单", 0, 0));
+            var marker = SafePath.Within(gameDirectory, ".shou/install.json");
+            await File.WriteAllTextAsync(marker + ".tmp", JsonSerializer.Serialize(new { version = version.Id, javaMajor = version.RequiredJavaMajor,
+                os = context.OSName, javaArchitecture = context.JavaArchitecture.ToString(), metadataFingerprint = fingerprint,
+                libraries = libraries.Files.Count, assets = assets.Objects.Count, completedAt = DateTimeOffset.UtcNow }), ct).ConfigureAwait(false);
+            File.Move(marker + ".tmp", marker, true);
+        }
         return new(version, libraries, assets, clientPath, librariesDirectory, assetsDirectory, nativesDirectory, extracted);
     }
     private IReadOnlyList<Uri> Map(Uri uri) => DownloadSources.Resolve([uri.AbsoluteUri], sources()).Select(s => new Uri(s.Url)).ToArray();

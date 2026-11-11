@@ -33,7 +33,7 @@ public sealed partial class LauncherService : IMinecraftPackageService
                 if (selected.File is null) throw new InvalidOperationException("此版本没有可下载的所选文件。");
                 // A dedicated transport follows no redirects and carries no account/API headers.
                 using var client = new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false));
-                await new VerifiedDownloader(client).DownloadAsync(new([selected.Source], destination, selected.File.Sha1, Size: selected.File.Size),
+                await new VerifiedDownloader(client, network).DownloadAsync(new([selected.Source], destination, selected.File.Sha1, Size: selected.File.Size),
                     new InlineProgress<TransferProgress>(OnTransfer), cancellation.Token).ConfigureAwait(false);
             }
             finally { downloadOwners.End(ownership); installCancellation = null; }

@@ -44,6 +44,7 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
                     try
                     {
                         await DownloadOneAsync(uri, destination, request, progress, cancellationToken).ConfigureAwait(false);
+                        progress?.Report(new(destination, "Verifying", new FileInfo(destination + ".part").Length, request.Size, uri.Host, "内置", "校验大小与哈希"));
                         var checksummed = request.Sha1 is not null || request.Sha256 is not null;
                         var valid = checksummed ? await IsValidAsync(destination + ".part", request, cancellationToken).ConfigureAwait(false)
                             : request.Size is not { } declaredSize || new FileInfo(destination + ".part").Length == declaredSize;
@@ -62,6 +63,7 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
                     {
                         // Do not expose signed URLs, headers or response bodies in errors.
                         failures.Add(new IOException($"Download source {uri.Host} attempt {attempt + 1}: {ex.GetType().Name}"));
+                        progress?.Report(new(destination, "Retrying", 0, request.Size, uri.Host, "内置", $"第 {attempt + 1} 次传输未通过，重试或切换下一来源（{ex.GetType().Name}）"));
                     }
                 }
             }

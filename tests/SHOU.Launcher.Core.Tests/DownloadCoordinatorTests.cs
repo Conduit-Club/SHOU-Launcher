@@ -30,6 +30,47 @@ public sealed class DownloadCoordinatorTests
     }
 
     [TestMethod]
+    public async Task NonDefaultConcurrencyKeepsRpcAndReservesEverySegment()
+    {
+        var bytes = new byte[16 * 1024 * 1024];
+        var destination = Path.Combine(TestFiles.Root(), "segmented.jar");
+        using var rpc = new RpcFixture(bytes);
+        using var http = new HttpClient(new HttpClientHandler { UseProxy = false });
+        var options = new NetworkOptions(); options.Update(new(Aria2: new(true, rpc.Endpoint.AbsoluteUri), Downloads: new(MaximumConnections: 2)));
+        var fallback = new RecordingDownloader(); var progress = new List<TransferProgress>();
+        await new DownloadCoordinator(http, fallback, options).DownloadAsync(new([new Uri("https://one.invalid/file"), new Uri("https://two.invalid/file")], destination,
+            Sha256: Convert.ToHexString(SHA256.HashData(bytes)), Size: bytes.Length), new Callback(progress.Add));
+        Assert.AreEqual("2", rpc.Options!.Value.GetProperty("split").GetString());
+        Assert.AreEqual("2", rpc.Options.Value.GetProperty("max-connection-per-server").GetString());
+        Assert.AreEqual(2, rpc.SourceCount); Assert.AreEqual(0, fallback.Calls);
+        Assert.IsTrue(progress.Any(p => p.Stage == "Verifying" && p.Backend == "aria2"));
+        using var allSlots = await options.Budget.EnterAsync(2, 2, CancellationToken.None);
+        using var queuedCancellation = new CancellationTokenSource();
+        var queued = options.Budget.EnterAsync(2, queuedCancellation.Token);
+        Assert.IsFalse(queued.IsCompleted); queuedCancellation.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(async () => await queued);
+    }
+
+    [TestMethod]
+    public async Task StrictPolicyExplainsItsInternalBackendInsteadOfSilentlyIgnoringAria2()
+    {
+        foreach (var policy in new[] { new DownloadBehavior(MaximumKiBPerSecond: 100), new DownloadBehavior(HttpsOnly: true) })
+        {
+            var options = new NetworkOptions(); options.Update(new(Aria2: new(true, "not-used"), Downloads: policy));
+            using var http = new HttpClient(); var fallback = new ProgressDownloader(); var reports = new List<TransferProgress>();
+            await new DownloadCoordinator(http, fallback, options).DownloadAsync(new([new Uri("https://test.invalid/file")], Path.Combine(TestFiles.Root(), "file"), Sha1: new string('a', 40)), new Callback(reports.Add));
+            Assert.AreEqual("内置", reports.Single().Backend); Assert.IsFalse(string.IsNullOrWhiteSpace(reports.Single().Detail));
+        }
+    }
+    private sealed class Callback(Action<TransferProgress> report) : IProgress<TransferProgress>
+    { public void Report(TransferProgress progress) => report(progress); }
+    private sealed class ProgressDownloader : IVerifiedDownloader
+    {
+        public Task DownloadAsync(DownloadRequest r, IProgress<TransferProgress>? p = null, CancellationToken ct = default)
+        { p?.Report(new(r.DestinationPath, "Completed", 1, 1)); return Task.CompletedTask; }
+    }
+
+    [TestMethod]
     public async Task RpcHashMismatchPreservesInstalledFileUntilInternalVerifiedFallback()
     {
         var valid = Encoding.UTF8.GetBytes("expected library fixture");
@@ -157,6 +198,8 @@ public sealed class DownloadCoordinatorTests
         public string? Path { get; private set; }
         public int AddCount { get; private set; }
         public int ForgetCount { get; private set; }
+        public JsonElement? Options;
+        public int SourceCount;
         public RpcFixture(byte[] output)
         {
             server = new(context =>
@@ -170,6 +213,7 @@ public sealed class DownloadCoordinatorTests
                         response = new { jsonrpc = "2.0", id, error = new { code = 1, message = "fixture GID missing" } }; break;
                     case "aria2.addUri":
                         var options = root.GetProperty("params")[1];
+                        Options = options.Clone(); SourceCount = root.GetProperty("params")[0].GetArrayLength();
                         Path = System.IO.Path.Combine(options.GetProperty("dir").GetString()!, options.GetProperty("out").GetString()!);
                         File.WriteAllBytes(Path, output); AddCount++;
                         response = new { jsonrpc = "2.0", id, result = "fixture" }; break;

@@ -17,7 +17,7 @@ public sealed partial class LauncherService : ICurseForgeExportService
             if (plan.References.Count > 0)
             {
                 using var client = localPackResolver is null ? new HttpClient(new Downloads.ConfigurableNetworkHandler(network, allowAutoRedirect: false)) : null;
-                var resolver = localPackResolver ?? new CurseForgePackResolver(client!, build.CurseForgeApiKey);
+                var resolver = localPackResolver ?? new CurseForgePackResolver(client!, build.CurseForgeApiKey, network: network);
                 var official = await resolver.ResolveAsync(plan.References, Instances.InstanceIdentity.GameVersion(instance), instance.Loader, ct).ConfigureAwait(false);
                 if (official.BlockedFiles.Count > 0 || official.Files.Count != plan.References.Count) throw new InvalidDataException("CurseForge 文件身份未通过官方核实，未生成导出包。");
                 var installed = await ContentInstallFiles.ReadManifestAsync(instance, ct).ConfigureAwait(false);

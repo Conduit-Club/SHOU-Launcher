@@ -10,6 +10,33 @@ namespace SHOU.Launcher.Core.Tests.Platform;
 public sealed class ProcessRunnerTests
 {
     [TestMethod]
+    public async Task ReopenedRegistryRetainsBothWindowsOfOneInstanceAfterTheOwnerExits()
+    {
+        var fixture = new PlatformFixture(); var runner = new ProcessRunner();
+        var first = await runner.StartAsync(fixture.JavaProcess("sleep"));
+        var second = await runner.StartAsync(fixture.JavaProcess("sleep"));
+        using var a = Process.GetProcessById(first.ProcessId); using var b = Process.GetProcessById(second.ProcessId);
+        try
+        {
+            var instance = new GameInstance("same", "Same pack", "fixture", fixture.Root);
+            var directory = Path.Combine(fixture.Root, "multiple-registry"); var registry = new GameSessionRegistry(directory);
+            registry.Register(instance, first.ProcessId); registry.Register(instance, second.ProcessId);
+            Assert.HasCount(2, registry.ReadAll(instance));
+            await ((IDetachableProcess)first).DetachAsync(); await ((IDetachableProcess)second).DetachAsync(); await runner.DisposeAsync();
+            Assert.IsFalse(a.HasExited); Assert.IsFalse(b.HasExited);
+            registry = new GameSessionRegistry(directory); Assert.HasCount(2, registry.ReadAll(instance));
+            a.Kill(entireProcessTree: true); await a.WaitForExitAsync();
+            Assert.AreEqual(second.ProcessId, registry.ReadAll(instance).Single().ProcessId);
+            Assert.ThrowsExactly<InvalidOperationException>(() => registry.EnsureWritable(instance));
+        }
+        finally
+        {
+            if (!a.HasExited) { a.Kill(entireProcessTree: true); await a.WaitForExitAsync(); }
+            if (!b.HasExited) { b.Kill(entireProcessTree: true); await b.WaitForExitAsync(); }
+            await first.DisposeAsync(); await second.DisposeAsync(); await runner.DisposeAsync();
+        }
+    }
+    [TestMethod]
     public async Task FailedSessionRegistrationStopsOnlyTheNewChildBeforePrivateHandoff()
     {
         var fixture = new PlatformFixture();

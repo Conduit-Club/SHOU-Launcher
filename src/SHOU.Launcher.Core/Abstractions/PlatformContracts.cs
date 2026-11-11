@@ -104,7 +104,8 @@ public interface IJavaDiscovery
 }
 public sealed record JavaRuntimeRequest(string Component, int MajorVersion, LauncherOS OS,
     RuntimeArchitecture Architecture, string InstallRoot, Uri? CatalogUri = null);
-public sealed record TransferProgress(string Id, string Stage, long BytesReceived, long? TotalBytes, string? Source = null);
+public sealed record TransferProgress(string Id, string Stage, long BytesReceived, long? TotalBytes, string? Source = null,
+    string? Backend = null, string? Detail = null);
 public interface IJavaRuntimeInstaller
 {
     Task<JavaInstallation> InstallAsync(JavaRuntimeRequest request, IProgress<TransferProgress>? progress = null, CancellationToken cancellationToken = default);

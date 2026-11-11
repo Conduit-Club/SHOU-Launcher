@@ -19,10 +19,12 @@ public sealed class CurseForgePackResolver
     private readonly HttpClient http;
     private readonly string? apiKey;
     private readonly string? manualCacheRoot;
-    public CurseForgePackResolver(HttpClient http, string? apiKey, string? manualCacheRoot = null)
+    private readonly NetworkOptions? network;
+    public CurseForgePackResolver(HttpClient http, string? apiKey, string? manualCacheRoot = null, NetworkOptions? network = null)
     {
         this.http = http;
         this.manualCacheRoot = manualCacheRoot;
+        this.network = network;
         if (http.DefaultRequestHeaders.Contains("x-api-key") || http.DefaultRequestHeaders.Authorization is not null || http.DefaultRequestHeaders.Contains("Cookie")) throw new ArgumentException("整合包专用客户端不能携带全局鉴权头。");
         if (apiKey is not null && (apiKey.Length > 8192 || apiKey.Any(c => char.IsControl(c) || char.IsWhiteSpace(c)))) throw new ArgumentException("CurseForge API key 配置格式无效。");
         this.apiKey = string.IsNullOrEmpty(apiKey) ? null : apiKey;
@@ -175,7 +177,9 @@ public sealed class CurseForgePackResolver
         if (!ContentInstallFiles.Hash(file.Sha1, 40) || (file.Size <= 0 || file.Size > maximumBytes) || file.Sha512 is not null && !ContentInstallFiles.Hash(file.Sha512, 128))
             throw new InvalidDataException(label + "：文件哈希或大小无效。");
         using var redirects = new CdnRedirectHandler(http, file.FromFtb); using var downloads = new HttpClient(redirects) { Timeout = Timeout.InfiniteTimeSpan };
-        try { await new VerifiedDownloader(downloads).DownloadAsync(new([file.DownloadUri], path, file.Sha1, Size: file.Size), progress, ct).ConfigureAwait(false); }
+        // Keep the CDN redirect allowlist and API-key isolation while sharing the global transfer budget.
+        var reporting = new CallbackProgress<TransferProgress>(p => progress?.Report(p with { Backend = "内置", Detail = network?.Aria2.Enabled == true ? "官方 CDN 重定向校验使用内置下载器" : p.Detail }));
+        try { await new VerifiedDownloader(downloads, network).DownloadAsync(new([file.DownloadUri], path, file.Sha1, Size: file.Size), reporting, ct).ConfigureAwait(false); }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex) when (ex is AggregateException or HttpRequestException or IOException or InvalidDataException or OperationCanceledException)
         { throw new IOException(label + "：下载失败；" + (redirects.FailureReason ?? "文件传输或 SHA-1/大小校验失败。")); }

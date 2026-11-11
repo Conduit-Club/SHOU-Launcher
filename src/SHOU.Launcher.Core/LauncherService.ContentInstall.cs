@@ -51,7 +51,7 @@ public sealed partial class LauncherService : IContentInstallationService, ICont
         if (CurseForgePackResolver.AllowedCurseForgeUri(file.Uri))
         {
             using var transport = ContentTransport();
-            await new CurseForgePackResolver(transport, null).DownloadAsync(new(0, 0, file.FileName, file.Sha1, null, file.Size, file.Uri, false), target, new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
+            await new CurseForgePackResolver(transport, null, network: network).DownloadAsync(new(0, 0, file.FileName, file.Sha1, null, file.Size, file.Uri, false), target, new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
             return;
         }
         var sources = ModDownloadSources.Resolve(file.Uri.AbsoluteUri, Sources()).Select(s => new Uri(s)).ToArray();

@@ -11,13 +11,13 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class ProcessLifecycleRegressionTests
 {
     [TestMethod, TestCategory("DesktopPlatforms")]
-    public async Task DifferentInstancesRunTogetherWhileTheSameInstanceRemainsProtected()
+    public async Task SameAndDifferentInstancesRunTogetherWhileMutationRemainsProtected()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Cached fixture must not use network.")));
         var downloader = new PipelineDownloads();
         var original = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
         await using var nativeProcesses = (ProcessRunner)original.Processes;
-        var runner = new HoldingRunner();
+        var runner = new HoldingRunner { HoldWindowProbe = true };
         var platform = original with { Processes = runner, JavaDiscovery = new FixtureJava(original.Info.Context.HardwareArchitecture) };
         using var lease = platform.DataLock.Acquire(platform.Paths);
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
@@ -32,24 +32,37 @@ public sealed class ProcessLifecycleRegressionTests
             """);
         var account = await service.AddOfflineAccountAsync("FixtureOnly"); await service.SelectAccountAsync(account.Id);
         var first = await service.CreateInstanceAsync("First", "fixture");
-        await service.LaunchAsync(first.Id);
+        await service.LaunchAsync(first.Id).WaitAsync(TimeSpan.FromSeconds(5));
         Assert.AreEqual("Ready", service.Snapshot.State);
-        await Assert.ThrowsAsync<InvalidOperationException>(() => service.LaunchAsync(first.Id));
+        var marker = Path.Combine(first.GameDirectory, ".shou/install.json"); var originalMarker = await File.ReadAllBytesAsync(marker);
+        await service.LaunchAsync(first.Id);
+        Assert.AreEqual(2, service.Snapshot.GameSessions.Count);
+        CollectionAssert.AreEqual(originalMarker, await File.ReadAllBytesAsync(marker), "A repeat launch must not republish installation state beneath a live game.");
+        Assert.AreEqual(2, Directory.GetDirectories(Path.Combine(first.GameDirectory, ".shou/natives"), "*", SearchOption.AllDirectories).Count(p => Guid.TryParseExact(Path.GetFileName(p), "N", out _)));
         var second = await service.CreateInstanceAsync("Second", "fixture");
         await service.LaunchAsync(second.Id);
-        Assert.AreEqual(2, service.Snapshot.GameSessions.Count);
+        Assert.AreEqual(3, service.Snapshot.GameSessions.Count);
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.InstallInstanceAsync(first.Id));
         await service.StopGameAsync();
         Assert.IsFalse(runner.Children[0].Completion.IsCompleted, "Stopping the selected second instance must leave the first alive.");
-        Assert.IsTrue(runner.Children[1].Completion.IsCompleted);
+        Assert.IsFalse(runner.Children[1].Completion.IsCompleted);
+        Assert.IsTrue(runner.Children[2].Completion.IsCompleted);
+        var clientPath = Path.Combine(platform.Paths.CacheDirectory, "versions/fixture/fixture.jar");
+        await File.WriteAllTextAsync(clientPath, "changed fixture");
+        await Assert.ThrowsAsync<IOException>(() => service.LaunchAsync(first.Id));
+        Assert.AreEqual("changed fixture", await File.ReadAllTextAsync(clientPath));
+        Assert.IsFalse(runner.Children[0].Completion.IsCompleted); Assert.IsFalse(runner.Children[1].Completion.IsCompleted);
     }
 
-    private sealed class HoldingRunner : IProcessRunner
+    private sealed class HoldingRunner : IProcessRunner, IGameWindowObserver
     {
+        public bool HoldWindowProbe { get; init; }
         public List<HoldingProcess> Children { get; } = [];
         public Task<IManagedProcess> StartAsync(ProcessSpec spec, IProgress<ProcessOutput>? output = null, CancellationToken cancellationToken = default)
         { var child = new HoldingProcess(18000 + Children.Count); Children.Add(child); return Task.FromResult<IManagedProcess>(child); }
         public Task<ProcessResult> RunAsync(ProcessSpec spec, IProgress<ProcessOutput>? output = null, CancellationToken cancellationToken = default) => throw new AssertFailedException("Unexpected helper.");
+        public async Task<bool> WaitForGameWindowAsync(IManagedProcess process, TimeSpan timeout, CancellationToken cancellationToken)
+        { if (HoldWindowProbe) await Task.Delay(Timeout.Infinite, cancellationToken); return false; }
     }
     private sealed class HoldingProcess(int pid) : IManagedProcess
     {

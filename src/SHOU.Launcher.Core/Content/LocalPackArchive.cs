@@ -78,7 +78,7 @@ public sealed class LocalPackArchive
         return new(new(LocalPackFormat.CurseForge, name, gameVersion, loaderKind, loaderVersionText, sha256, warnings, false, reason, LocalFiles: overrides.Keys.ToArray(), SkippedFiles: skipped, PackVersion: packVersion, RecommendedMemoryMiB: recommendedMemory), references, overrides, supported);
     }
     public async Task<LocalPackInspection> StageCurseForgeAsync(string path, string expectedSha256, string directory,
-        IReadOnlyList<CurseForgePackFile> files, Func<CurseForgePackFile, string, CancellationToken, Task> download, CancellationToken ct = default, IProgress<PackInstallProgress>? progress = null)
+        IReadOnlyList<CurseForgePackFile> files, Func<CurseForgePackFile, string, CancellationToken, Task> download, CancellationToken ct = default, IProgress<PackInstallProgress>? progress = null, int maximumConnections = 8)
     {
         if (!ContentInstallFiles.Hash(expectedSha256, 64)) throw new InvalidDataException("请先读取整合包并确认其 SHA-256。");
         VerifiedDownloader.RejectLink(directory); Directory.CreateDirectory(directory); if (Directory.EnumerateFileSystemEntries(directory).Any()) throw new IOException("整合包暂存目录须为空。");
@@ -96,7 +96,7 @@ public sealed class LocalPackArchive
             PackArchiveReader.CheckTargets(files.Select(f => f.Path).Concat(read.OverrideEntries.Keys));
             var installed = new List<ContentInstalledFile>(); var done = 0; var total = files.Count + read.OverrideEntries.Count;
             progress?.Report(new("安装整合包文件", 0, total));
-            await Parallel.ForEachAsync(files, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (file, token) =>
+            await Parallel.ForEachAsync(files, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections, 1, 64), CancellationToken = ct }, async (file, token) =>
             {
                 var targetKind = file.Path.StartsWith("mods/", StringComparison.Ordinal) && file.Path.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ? "mod"
                     : file.Path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)

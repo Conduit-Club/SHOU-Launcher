@@ -53,7 +53,7 @@ public sealed partial class LauncherService : ILauncherCatalogService, IMinecraf
                 if (Content.CurseForgePackResolver.AllowedCurseForgeUri(file.Uri))
                 {
                     using var transport = ContentTransport();
-                    await new Content.CurseForgePackResolver(transport, null).DownloadResourceAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), cancellation.Token).ConfigureAwait(false);
+                    await new Content.CurseForgePackResolver(transport, null, network: network).DownloadResourceAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), cancellation.Token).ConfigureAwait(false);
                 }
                 else
                 {

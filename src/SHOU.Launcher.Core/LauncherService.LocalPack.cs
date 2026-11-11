@@ -21,7 +21,7 @@ public sealed partial class LauncherService : ILocalPackProgressService, ILocalP
         await InitializeAsync(cancellationToken).ConfigureAwait(false); var read = await new LocalPackArchive().ReadAsync(archivePath, cancellationToken).ConfigureAwait(false);
         if (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge) return read.Inspection;
         using var dedicated = localPackResolver is null ? new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false)) : null;
-        var resolver = localPackResolver ?? new CurseForgePackResolver(dedicated!, build.CurseForgeApiKey, Paths.CacheDirectory);
+        var resolver = localPackResolver ?? new CurseForgePackResolver(dedicated!, build.CurseForgeApiKey, Paths.CacheDirectory, network);
         var identity = read.Inspection;
         var resolution = await resolver.ResolveAsync(read.CurseForgeFiles, identity.GameVersion, identity.Loader, cancellationToken,
             new(identity.Name, identity.PackVersion ?? "", identity.GameVersion, identity.Loader, identity.LoaderVersion), progress).ConfigureAwait(false);
@@ -64,14 +64,14 @@ public sealed partial class LauncherService : ILocalPackProgressService, ILocalP
             var root = Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory; EnsureIsolatedGamePath(root); VerifiedDownloader.RejectLink(root); Directory.CreateDirectory(root);
             var stage = ContentInstallFiles.Literal(root, ".shou-local-stage-" + Guid.NewGuid().ToString("N")); var destination = ContentInstallFiles.Literal(root, Guid.NewGuid().ToString("N")); var moved = false; var registered = false;
             using var dedicated = localPackResolver is null ? new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false)) : null;
-            var resolver = localPackResolver ?? new CurseForgePackResolver(dedicated!, build.CurseForgeApiKey, Paths.CacheDirectory);
+            var resolver = localPackResolver ?? new CurseForgePackResolver(dedicated!, build.CurseForgeApiKey, Paths.CacheDirectory, network);
             try
             {
                 await RunContentTransferAsync("local-pack:" + Guid.NewGuid().ToString("N"), token => ImportLocalPackAsync(request, token), async token =>
                 {
                     var inspection = isShou ? await ShouPackArchive.StageAsync(request.ArchivePath, request.ExpectedSha256, stage, token).ConfigureAwait(false)
                         : await new LocalPackArchive().StageCurseForgeAsync(request.ArchivePath, request.ExpectedSha256, stage, capturedPlan.Files,
-                        (file, path, transferToken) => resolver.DownloadAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), transferToken), token, progress).ConfigureAwait(false);
+                        (file, path, transferToken) => resolver.DownloadAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), transferToken), token, progress, network.Capture().Downloads?.MaximumConnections ?? 8).ConfigureAwait(false);
                     var profile = await CacheLoaderProfileAsync(inspection.Loader, inspection.GameVersion, inspection.LoaderVersion, token).ConfigureAwait(false);
                     var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination, MemoryMiB: inspection.RecommendedMemoryMiB, Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);
                     var manifestPath = ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName); var manifest = JsonSerializer.Deserialize<ContentInstallManifest>(await File.ReadAllBytesAsync(manifestPath, token).ConfigureAwait(false)) ?? throw new InvalidDataException("整合包安装清单缺失。");

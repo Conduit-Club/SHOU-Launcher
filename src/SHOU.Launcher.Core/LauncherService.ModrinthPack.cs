@@ -28,7 +28,7 @@ public sealed partial class LauncherService : IModrinthPackService
             {
                 await RunContentTransferAsync("mrpack-import:" + Guid.NewGuid().ToString("N"), token => ImportModrinthPackAsync(request, token), async token =>
                 {
-                    var inspection = await new ModrinthPackArchive().StageAsync(request.ArchivePath, request.ExpectedSha256, stage, request.OptionalClientFiles, DownloadPackFileAsync, token, progress).ConfigureAwait(false);
+                    var inspection = await new ModrinthPackArchive().StageAsync(request.ArchivePath, request.ExpectedSha256, stage, request.OptionalClientFiles, DownloadPackFileAsync, token, progress, network.Capture().Downloads?.MaximumConnections ?? 8).ConfigureAwait(false);
                     var profile = await CacheLoaderProfileAsync(inspection.Loader, inspection.GameVersion, inspection.LoaderVersion, token).ConfigureAwait(false);
                     var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination,
                         Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);

@@ -61,11 +61,12 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
     }
 
     public async Task DownloadAsync(IReadOnlyList<string> urls, string partialPath, string userAgent,
-        Action<Aria2Progress>? progress, CancellationToken cancellationToken = default)
+        Action<Aria2Progress>? progress, CancellationToken cancellationToken = default, int connections = 1)
     {
         if (urls.Count == 0) throw new ArgumentException("未提供 aria2 下载地址。");
         var fullPath = Path.GetFullPath(partialPath);
         var gid = TaskId(fullPath);
+        var slots = Math.Clamp(connections, 1, 16).ToString(CultureInfo.InvariantCulture);
         var attached = false;
         try
         {
@@ -84,8 +85,11 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
                     await CallAsync("removeDownloadResult", [gid], cancellationToken).ConfigureAwait(false);
                     existing = null;
                 }
-                else if (status == "paused")
-                    await CallAsync("unpause", [gid], cancellationToken).ConfigureAwait(false);
+                else if (status != "complete")
+                {
+                    await CallAsync("changeOption", [gid, new Dictionary<string, string> { ["split"] = slots, ["max-connection-per-server"] = slots }], cancellationToken).ConfigureAwait(false);
+                    if (status == "paused") await CallAsync("unpause", [gid], cancellationToken).ConfigureAwait(false);
+                }
             }
             if (existing == null)
             {
@@ -93,8 +97,8 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
                 {
                     ["gid"] = gid, ["dir"] = Path.GetDirectoryName(fullPath)!, ["out"] = Path.GetFileName(fullPath),
                     ["continue"] = "true", ["auto-file-renaming"] = "false", ["allow-overwrite"] = "true",
-                    ["file-allocation"] = "none", ["uri-selector"] = "inorder", ["split"] = "1",
-                    ["max-connection-per-server"] = "1", ["max-tries"] = "1", ["connect-timeout"] = "15", ["timeout"] = "30"
+                    ["file-allocation"] = "none", ["uri-selector"] = "inorder", ["split"] = slots, ["min-split-size"] = "1M",
+                    ["max-connection-per-server"] = slots, ["max-tries"] = "2", ["connect-timeout"] = "15", ["timeout"] = "30"
                 };
                 if (!string.IsNullOrWhiteSpace(userAgent)) options["user-agent"] = userAgent;
                 attached = true;
@@ -126,6 +130,16 @@ public sealed class Aria2RpcClient(HttpClient client, Uri endpoint, string secre
                 using var pauseTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
                 try { await CallAsync("forcePause", [gid], pauseTimeout.Token).ConfigureAwait(false); }
                 catch (Exception) { /* RPC may be unavailable; leave the job and its files available for reconnect. */ }
+            }
+            throw;
+        }
+        catch
+        {
+            if (attached)
+            {
+                using var pauseTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+                try { await CallAsync("forcePause", [gid], pauseTimeout.Token).ConfigureAwait(false); }
+                catch (Exception) { /* Leave only this owned GID available for reconnect. */ }
             }
             throw;
         }
