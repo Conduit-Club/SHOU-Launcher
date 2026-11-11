@@ -77,7 +77,7 @@ public sealed partial class LauncherService : IInstanceWorkspaceService, IInstan
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(false); cancellationToken.ThrowIfCancellationRequested();
         var instance = FindInstance(instanceId); EnsureIsolatedGamePath(instance.GameDirectory);
-        return InstanceWorkspace.List(instance, kind);
+        return await Task.Run(() => InstanceWorkspace.List(instance, kind), cancellationToken).ConfigureAwait(false);
     }
     public Task ImportInstanceContentAsync(string instanceId, string kind, string sourcePath, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     {

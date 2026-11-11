@@ -16,6 +16,7 @@ public static class InstanceWorkspace
         var folder = Folder(instance.GameDirectory, kind);
         if (!System.IO.Directory.Exists(folder)) return [];
         var entries = new List<InstanceContentEntry>();
+        var iconBytes = 0;
         foreach (var item in new DirectoryInfo(folder).EnumerateFileSystemInfos().OrderByDescending(i => i.LastWriteTimeUtc))
         {
             if (entries.Count >= 2000) break;
@@ -25,8 +26,11 @@ public static class InstanceWorkspace
             if (!directory && !Accepts(kind, item.Name)) continue;
             var file = SafePath.Within(folder, item.Name);
             var relative = kind switch { "worlds" => "saves/", "shaders" => "shaderpacks/", _ => kind + "/" } + item.Name;
+            var metadata = kind == "mods" ? ModArchiveMetadata.Read(file, iconBytes < 16 * 1024 * 1024) : null;
+            iconBytes += metadata?.Icon?.Length ?? 0;
             entries.Add(new(item.Name, relative, file, kind, directory ? 0 : ((FileInfo)item).Length,
-                item.LastWriteTimeUtc, !item.Name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase), directory));
+                item.LastWriteTimeUtc, !item.Name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase), directory,
+                metadata?.Name, metadata?.Version, metadata?.Icon));
         }
         return entries;
     }

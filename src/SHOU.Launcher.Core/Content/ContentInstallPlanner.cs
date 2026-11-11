@@ -7,8 +7,10 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
 {
     public const int MaximumProjects = 64, MaximumDepth = 16;
     public const long MaximumTotalBytes = 2L * 1024 * 1024 * 1024;
-    public async Task<ContentInstallPlan> PlanAsync(GameInstance instance, string gameVersion, ContentInstallRequest request, CancellationToken ct = default, bool worldDatapacks = false, bool updatingDatapacks = false)
+    public async Task<ContentInstallPlan> PlanAsync(GameInstance instance, string gameVersion, ContentInstallRequest request, CancellationToken ct = default, bool worldDatapacks = false, bool updatingDatapacks = false,
+        IReadOnlySet<string>? replacingModPaths = null, ContentInstallManifest? installedMods = null)
     {
+        if (replacingModPaths is not null && (request.Kind != "mod" || worldDatapacks || updatingDatapacks || replacingModPaths.Count != 1)) throw new InvalidOperationException("模组更新须明确一个原文件。");
         if (updatingDatapacks && !worldDatapacks) throw new InvalidOperationException("替换模式仅用于显式存档数据包更新预检。");
         if (request.Kind == "datapack" && !worldDatapacks) throw new NotSupportedException("数据包须明确选择存档目标。");
         if (worldDatapacks && request.Kind != "datapack") throw new InvalidDataException("存档安装只接受数据包。");
@@ -61,9 +63,18 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
                     SafePath.Identifier(childId);
                     var childProject = await dependencies.GetContentProjectAsync(childId, ct).ConfigureAwait(false);
                     var dependencyLoader = worldDatapacks ? childId.StartsWith("cf-", StringComparison.Ordinal) ? null : "datapack" : childProject.Kind == "mod" ? instance.Loader : null;
-                    var choices = await catalog.GetContentReleasesAsync(childId, gameVersion, dependencyLoader, ct).ConfigureAwait(false);
-                    child = choices.Where(r => Compatible(r, worldDatapacks ? "datapack" : childProject.Kind, gameVersion, instance.Loader))
-                        .OrderByDescending(r => r.Published).FirstOrDefault() ?? throw new InvalidDataException("required依赖没有兼容此实例的版本。");
+                    var existing = (installedMods?.Files ?? []).Where(f => f.ProjectId == childId && !f.RelativePath.EndsWith(".disabled", StringComparison.Ordinal)).ToArray();
+                    if (existing.Length == 1 && await ContentInstallFiles.MatchesAsync(ContentInstallFiles.Literal(instance.GameDirectory, existing[0].RelativePath), existing[0].Sha1, existing[0].Size, ct).ConfigureAwait(false))
+                    {
+                        child = await dependencies.GetContentReleaseAsync(existing[0].ReleaseId, ct).ConfigureAwait(false);
+                        if (!child.Files.Any(f => f.Sha1 == existing[0].Sha1 && f.Size == existing[0].Size && existing[0].RelativePath == "mods/" + f.FileName)) throw new InvalidDataException("已装依赖的在线文件身份不符，请先核对。");
+                    }
+                    else
+                    {
+                        var choices = await catalog.GetContentReleasesAsync(childId, gameVersion, dependencyLoader, ct).ConfigureAwait(false);
+                        child = choices.Where(r => Compatible(r, worldDatapacks ? "datapack" : childProject.Kind, gameVersion, instance.Loader))
+                            .OrderByDescending(r => r.Published).FirstOrDefault() ?? throw new InvalidDataException("required依赖没有兼容此实例的版本。");
+                    }
                 }
                 else throw new NotSupportedException("required外部文件依赖缺少可验证的项目/版本身份，需要手动处理。");
                 await Visit(child, dependency.ProjectId, dependency.FileName, depth + 1).ConfigureAwait(false);
@@ -77,13 +88,16 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
         if (files.Select(f => ContentInstallFiles.PathKey(f.RelativePath)).Distinct(StringComparer.Ordinal).Count() != files.Count) throw new InvalidDataException("依赖文件名称存在大小写或Unicode形式冲突。");
         foreach (var incompatible in incompatibilities)
             if (files.Any(f => Matches(f.ProjectId, f.ReleaseId, incompatible))) throw new InvalidDataException("依赖声明了与本次安装不兼容的资源。");
-        var installed = await ContentInstallFiles.ReadManifestAsync(instance, ct).ConfigureAwait(false);
+        var installed = installedMods ?? await ContentInstallFiles.ReadManifestAsync(instance, ct).ConfigureAwait(false);
         foreach (var item in installed.Files)
         {
-            if ((!updatingDatapacks || files.All(f => f.ProjectId != item.ProjectId)) && (files.Any(f => f.ProjectId == item.ProjectId && f.ReleaseId != item.ReleaseId) || incompatibilities.Any(d => Matches(item.ProjectId, item.ReleaseId, d))))
+            if (incompatibilities.Any(d => Matches(item.ProjectId, item.ReleaseId, d)) ||
+                (!updatingDatapacks || files.All(f => f.ProjectId != item.ProjectId)) && !(replacingModPaths?.Contains(item.RelativePath) ?? false)
+                && files.Any(f => f.ProjectId == item.ProjectId && f.ReleaseId != item.ReleaseId))
                 throw new InvalidDataException("安装清单存在其他版本或不兼容资源，请先显式处理旧文件。");
         }
-        IReadOnlyList<ContentInstallFile> checkedFiles = updatingDatapacks ? files.Where(f => !installed.Files.Any(old => old.RelativePath == f.RelativePath && files.Any(next => next.ProjectId == old.ProjectId))).ToArray() : files;
+        IReadOnlyList<ContentInstallFile> checkedFiles = updatingDatapacks ? files.Where(f => !installed.Files.Any(old => old.RelativePath == f.RelativePath && files.Any(next => next.ProjectId == old.ProjectId))).ToArray()
+            : replacingModPaths is not null ? files.Where(f => !replacingModPaths.Contains(f.RelativePath)).ToArray() : files;
         await ContentInstallFiles.CheckConflictsAsync(instance.GameDirectory, checkedFiles, ct).ConfigureAwait(false);
         if (request.Kind == "shader") warnings.Add("文件装入shaderpacks；启用光影仍需实例具备相应渲染模组。");
         return new(instance.Id, gameVersion, instance.Loader, files, warnings.Distinct().ToArray());

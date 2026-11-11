@@ -140,6 +140,18 @@ public sealed class ContentInstallTests
         Assert.HasCount(1, (await ContentInstallFiles.ReadManifestAsync(f.Instance)).Files);
     }
 
+    [TestMethod]
+    public async Task ModUpdateRetainsAnAlreadyVerifiedUnpinnedRequiredDependency()
+    {
+        var f = new Fixture(); f.Catalog.Add("api", []); f.Catalog.Add("main", [new("required", "api")]);
+        await ContentInstallFiles.InstallAsync(f.Instance, await f.Plan(), f.Download);
+        var installed = await ContentInstallFiles.ReadManifestAsync(f.Instance);
+        f.Catalog.Add("api", [], "api-new"); f.Catalog.Releases["api-new"] = f.Catalog.Releases["api-new"] with { Published = DateTimeOffset.UtcNow.AddDays(1) };
+        f.Catalog.Add("main", [new("required", "api")], "main-new");
+        var plan = await new ContentInstallPlanner(f.Catalog, f.Catalog).PlanAsync(f.Instance, "1.21.1", new("instance", "main", "main-new", "main.jar", "mod"),
+            replacingModPaths: new HashSet<string> { "mods/main.jar" }, installedMods: installed with { Files = installed.Files.Where(f => f.ProjectId != "main").ToArray() });
+        Assert.AreEqual("api", plan.Files.Single(f => f.Dependency).ReleaseId);
+    }
     private sealed class Fixture
     {
         public string Root { get; } = TestFiles.Root();

@@ -153,8 +153,10 @@ public sealed class SharedPresentationTests
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<TextBlock>().Where(t => t.IsEffectivelyVisible), t => t.Text == vm.Downloads.CatalogPurpose);
             vm.ShowInstancesCommand.Execute(null); vm.Instances.ShowInstanceSettingsCommand.Execute(null); Pump(window);
             var navigation = Find<ListBox>(window, "InstanceSectionNavigation");
-            var items = navigation.GetVisualDescendants().OfType<ListBoxItem>().ToArray();
+            var resourceNavigation = Find<ListBox>(window, "InstanceResourceNavigation");
+            var items = navigation.GetVisualDescendants().OfType<ListBoxItem>().Concat(resourceNavigation.GetVisualDescendants().OfType<ListBoxItem>()).ToArray();
             Assert.Equal(vm.Instances.Sections.Count, items.Length);
+            Assert.DoesNotContain(Find<TextBlock>(window, "InstanceResourcesHeading").GetVisualAncestors(), parent => parent is ListBoxItem);
             Assert.All(items, item => Assert.Equal(Assert.IsType<InstanceSectionChoice>(item.DataContext).Title, Avalonia.Automation.AutomationProperties.GetName(item)));
         }
         finally { window.Close(); }

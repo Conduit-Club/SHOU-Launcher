@@ -13,7 +13,13 @@ public interface IInstanceDirectoryService
 public sealed record InstanceEdit(string Name, string? JavaExecutable, int? MemoryMiB, GameLaunchOptions? LaunchOptions = null,
     InstanceDirectoryMode? DirectoryMode = null, bool ConfirmDirectoryChange = false);
 public sealed record InstanceContentEntry(string Name, string RelativePath, string FullPath, string Kind,
-    long Bytes, DateTimeOffset Modified, bool Enabled = true, bool Directory = false);
+    long Bytes, DateTimeOffset Modified, bool Enabled = true, bool Directory = false,
+    string? ModName = null, string? ModVersion = null, byte[]? IconPng = null)
+{
+    public string DisplayName => ModName ?? Name;
+    public string VersionLabel => ModVersion is { Length: > 0 } ? ModVersion : "";
+    public bool HasIcon => IconPng is { Length: > 0 };
+}
 public interface IInstanceWorkspaceService
 {
     Task UpdateInstanceAsync(string instanceId, InstanceEdit edit, CancellationToken cancellationToken = default);

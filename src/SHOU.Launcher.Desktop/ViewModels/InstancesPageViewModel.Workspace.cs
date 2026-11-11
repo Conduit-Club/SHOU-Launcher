@@ -38,6 +38,8 @@ public sealed partial class InstancesPageViewModel
         new("modify", "修改", "↻"), new("export", "导出", "⇧"), new("worlds", "存档", "▣"), new("screenshots", "截图", "▧"),
         new("mods", "模组", "◇"), new("resourcepacks", "资源包", "▤"), new("shaders", "光影包", "☼"),
         new("schematics", "投影原理图", "▥"), new("servers", "服务器", "▱"), new("relations", "模组关系", "⌘")];
+    public IReadOnlyList<InstanceSectionChoice> GameSections => Sections.Take(4).ToArray();
+    public IReadOnlyList<InstanceSectionChoice> ResourceSections => Sections.Skip(4).ToArray();
     public ObservableCollection<GameInstance> FilteredInstances { get; } = [];
     public ObservableCollection<InstanceContentEntry> ContentEntries { get; } = [];
     public bool IsSelection { get => _isSelection; private set { if (SetProperty(ref _isSelection, value)) { if (value) IsRenameEditorOpen = false; NotifyWorkspace(); } } }
@@ -51,7 +53,7 @@ public sealed partial class InstancesPageViewModel
         set
         {
             if (value is null || !SetProperty(ref _selectedSection, value)) return;
-            Feedback = ""; ContentEntries.Clear(); SelectedContent = null; ClearScreenshotPreviews(); NotifyWorkspace();
+            Feedback = ""; ContentSearchText = ""; ContentEntries.Clear(); SelectedContent = null; ClearScreenshotPreviews(); ClearModUpdates(); NotifyWorkspace();
             ActivateWorldWorkspace(value.Key);
             _pendingContentRefresh = IsFileSection;
             ScheduleContentRefresh();
@@ -65,10 +67,10 @@ public sealed partial class InstancesPageViewModel
     public bool IsFileSection => !IsSelection && SelectedSection?.Key is "screenshots" or "mods" or "resourcepacks" or "shaders" or "schematics";
     public bool IsOtherSection => !IsSelection && !IsOverview && !IsInstanceSettings && !IsModify && !IsExport && !IsFileSection && SelectedSection?.Key is not ("worlds" or "servers");
     public bool ModsUnsupported => SelectedSection?.Key == "mods" && SelectedInstance is { } instance && !InstanceIdentity.SupportsModDirectory(instance.Loader);
-    public bool IsContentEmpty => ContentEntries.Count == 0;
+    public bool IsContentEmpty => IsContentList ? FilteredContentEntries.Count == 0 : ContentEntries.Count == 0;
     public bool CanImportContent => IsFileSection && SelectedSection.Key != "worlds" && !ModsUnsupported && CanEdit && !IsSelectedInstanceRunning && Service is IInstanceWorkspaceService;
     public string SectionTitle => SelectedSection?.Title ?? "实例";
-    public string ContentEmptyTitle => ModsUnsupported ? "该实例不可使用模组" : "尚未发现" + SectionTitle;
+    public string ContentEmptyTitle => ModsUnsupported ? "该实例不可使用模组" : ContentSearchText.Trim().Length > 0 && ContentEntries.Count > 0 ? "没有匹配搜索的资源" : "尚未发现" + SectionTitle;
     public string CapabilityReason => SelectedSection?.Key switch
     {
         "servers" => "服务器列表的 NBT 编辑与单实例连接仍待移植，可直接在游戏内管理；原文件保持。",
@@ -124,6 +126,7 @@ public sealed partial class InstancesPageViewModel
         ToggleModCommand = AsyncCommand(ToggleModAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedSection.Key == "mods" && SelectedContent is not null && Service is IInstanceWorkspaceService);
         ExportInstanceCommand = AsyncCommand(ExportAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         _workspaceReady = true;
+        InitializeModManagement();
         InitializeExistingInstances();
     }
     private void ScheduleContentRefresh()
