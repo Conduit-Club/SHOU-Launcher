@@ -7,18 +7,24 @@ using SHOU.Launcher.Core.Minecraft;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService
+public sealed partial class LauncherService : ILocalPackProgressService
 {
     private readonly CurseForgePackResolver? localPackResolver;
     private sealed record LocalPackPlan(IReadOnlyList<CurseForgePackFile> Files, IReadOnlyList<string> Warnings);
     private readonly ConcurrentDictionary<string, LocalPackPlan> localPackPlans = new(StringComparer.OrdinalIgnoreCase);
-    public async Task<LocalPackInspection> InspectLocalPackAsync(string archivePath, CancellationToken cancellationToken = default)
+    public Task<LocalPackInspection> InspectLocalPackAsync(string archivePath, CancellationToken cancellationToken = default)
+        => InspectLocalPackCoreAsync(archivePath, null, cancellationToken);
+    public Task<LocalPackInspection> InspectLocalPackWithProgressAsync(string archivePath, IProgress<PackInstallProgress> progress, CancellationToken cancellationToken = default)
+        => InspectLocalPackCoreAsync(archivePath, new PackProgressReporter(progress), cancellationToken);
+    private async Task<LocalPackInspection> InspectLocalPackCoreAsync(string archivePath, IProgress<PackInstallProgress>? progress, CancellationToken cancellationToken)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(false); var read = await new LocalPackArchive().ReadAsync(archivePath, cancellationToken).ConfigureAwait(false);
         if (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge) return read.Inspection;
         using var dedicated = localPackResolver is null ? new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false)) : null;
         var resolver = localPackResolver ?? new CurseForgePackResolver(dedicated!, build.CurseForgeApiKey);
-        var resolution = await resolver.ResolveAsync(read.CurseForgeFiles, read.Inspection.GameVersion, read.Inspection.Loader, cancellationToken).ConfigureAwait(false);
+        var identity = read.Inspection;
+        var resolution = await resolver.ResolveAsync(read.CurseForgeFiles, identity.GameVersion, identity.Loader, cancellationToken,
+            new(identity.Name, identity.PackVersion ?? "", identity.GameVersion, identity.Loader, identity.LoaderVersion), progress).ConfigureAwait(false);
         var warnings = read.Inspection.Warnings.Concat(resolution.Warnings).Concat(resolution.BlockedFiles.Select(item => "未完成：" + item)).ToArray();
         if (resolution.BlockedFiles.Count > 0) return read.Inspection with { Warnings = warnings, CapabilityReason = $"有 {resolution.BlockedFiles.Count} 项未核实，未下载或创建实例。请查看完整阻塞列表后重新预检。" };
         ValidateLocalPackTargets(read, resolution.Files);
@@ -26,7 +32,11 @@ public sealed partial class LauncherService
         while (localPackPlans.Count > 8) { var other = localPackPlans.Keys.FirstOrDefault(k => k != read.Inspection.ArchiveSha256); if (other is null) break; localPackPlans.TryRemove(other, out _); }
         return read.Inspection with { CanImport = true, CapabilityReason = null, Warnings = warnings, LocalFiles = resolution.Files.Select(f => f.Path).Concat(read.OverrideEntries.Keys).Distinct(StringComparer.Ordinal).ToArray() };
     }
-    public async Task<LocalPackImportResult> ImportLocalPackAsync(LocalPackImportRequest request, CancellationToken cancellationToken = default)
+    public Task<LocalPackImportResult> ImportLocalPackAsync(LocalPackImportRequest request, CancellationToken cancellationToken = default)
+        => ImportLocalPackCoreAsync(request, null, cancellationToken);
+    public Task<LocalPackImportResult> ImportLocalPackWithProgressAsync(LocalPackImportRequest request, IProgress<PackInstallProgress> progress, CancellationToken cancellationToken = default)
+        => ImportLocalPackCoreAsync(request, new PackProgressReporter(progress), cancellationToken);
+    private async Task<LocalPackImportResult> ImportLocalPackCoreAsync(LocalPackImportRequest request, IProgress<PackInstallProgress>? progress, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request); request = request with { OptionalClientFiles = request.OptionalClientFiles?.ToArray() };
         if (string.IsNullOrWhiteSpace(request.InstanceName) || request.InstanceName.Length > 80 || request.InstanceName.Any(char.IsControl)) throw new ArgumentException("请输入 1–80 字的单行实例名称。");
@@ -35,7 +45,7 @@ public sealed partial class LauncherService
         if (!read.Inspection.ArchiveSha256.Equals(request.ExpectedSha256, StringComparison.OrdinalIgnoreCase)) throw new IOException("整合包自预检后已改变，请重新预检。");
         if (read.Inspection.Format == LocalPackFormat.Modrinth)
         {
-            var result = await ImportModrinthPackAsync(new(request.ArchivePath, request.ExpectedSha256, request.InstanceName, request.OptionalClientFiles, request.PrepareAfterImport), cancellationToken).ConfigureAwait(false);
+            var result = await ImportModrinthPackCoreAsync(new(request.ArchivePath, request.ExpectedSha256, request.InstanceName, request.OptionalClientFiles, request.PrepareAfterImport), progress, cancellationToken).ConfigureAwait(false);
             return new(result.Instance, result.InstalledFiles, read.Inspection.Warnings, result);
         }
         var isShou = read.Inspection.Format == LocalPackFormat.ShouExport && read.Inspection.CanImport;
@@ -44,7 +54,7 @@ public sealed partial class LauncherService
         LocalPackPlan? plan = isShou ? new([], read.Inspection.Warnings) : null;
         if (!isShou && !localPackPlans.TryGetValue(request.ExpectedSha256, out plan))
         {
-            var inspection = await InspectLocalPackAsync(request.ArchivePath, cancellationToken).ConfigureAwait(false);
+            var inspection = await InspectLocalPackCoreAsync(request.ArchivePath, progress, cancellationToken).ConfigureAwait(false);
             if (!inspection.CanImport || !localPackPlans.TryGetValue(request.ExpectedSha256, out plan)) throw new InvalidOperationException(inspection.CapabilityReason ?? "整合包文件尚未全部核实。");
         }
         var capturedPlan = plan!; LocalPackImportResult? imported = null;
@@ -60,9 +70,9 @@ public sealed partial class LauncherService
                 {
                     var inspection = isShou ? await ShouPackArchive.StageAsync(request.ArchivePath, request.ExpectedSha256, stage, token).ConfigureAwait(false)
                         : await new LocalPackArchive().StageCurseForgeAsync(request.ArchivePath, request.ExpectedSha256, stage, capturedPlan.Files,
-                        (file, path, transferToken) => resolver.DownloadAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), transferToken), token).ConfigureAwait(false);
+                        (file, path, transferToken) => resolver.DownloadAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), transferToken), token, progress).ConfigureAwait(false);
                     var profile = await CacheLoaderProfileAsync(inspection.Loader, inspection.GameVersion, inspection.LoaderVersion, token).ConfigureAwait(false);
-                    var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination, Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);
+                    var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination, MemoryMiB: inspection.RecommendedMemoryMiB, Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);
                     var manifestPath = ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName); var manifest = JsonSerializer.Deserialize<ContentInstallManifest>(await File.ReadAllBytesAsync(manifestPath, token).ConfigureAwait(false)) ?? throw new InvalidDataException("整合包安装清单缺失。");
                     await File.WriteAllBytesAsync(manifestPath, ContentInstallFiles.SerializeManifest(manifest with { InstanceId = instance.Id }), token).ConfigureAwait(false);
                     if (request.PrepareAfterImport)

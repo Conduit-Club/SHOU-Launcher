@@ -173,7 +173,7 @@ public sealed partial class ModrinthPackArchive
         return new(new(nameText, version, gameVersion, loader, loaderVersion, sha256, files, overrides.Keys.ToArray(), warnings, unsupported is null, unsupported), overrides);
     }
     public async Task<ModrinthPackInspection> StageAsync(string archivePath, string expectedSha256, string directory,
-        IReadOnlyList<string>? optionalFiles, Func<ModrinthPackFile, string, CancellationToken, Task> download, CancellationToken ct = default)
+        IReadOnlyList<string>? optionalFiles, Func<ModrinthPackFile, string, CancellationToken, Task> download, CancellationToken ct = default, IProgress<PackInstallProgress>? progress = null)
     {
         if (!ContentInstallFiles.Hash(expectedSha256, 64)) throw new InvalidDataException("请先读取整合包并确认其文件身份。");
         VerifiedDownloader.RejectLink(directory); Directory.CreateDirectory(directory);
@@ -193,8 +193,10 @@ public sealed partial class ModrinthPackArchive
             if (!inspection.CanImport) throw new NotSupportedException(inspection.CapabilityReason);
             var selected = (optionalFiles ?? []).ToHashSet(StringComparer.Ordinal);
             if (selected.Any(p => !inspection.Files.Any(f => f.Path == p && f.Client == "optional"))) throw new InvalidDataException("可选文件选择已失效或包含服务器文件。");
-            var installed = new List<ContentInstalledFile>();
-            foreach (var file in inspection.Files.Where(f => f.Client == "required" || f.Client == "optional" && selected.Contains(f.Path)))
+            var installed = new List<ContentInstalledFile>(); var done = 0;
+            var selectedFiles = inspection.Files.Where(f => f.Client == "required" || f.Client == "optional" && selected.Contains(f.Path)).ToArray();
+            var total = selectedFiles.Length + read.Overrides.Count; progress?.Report(new("安装整合包文件", 0, total));
+            foreach (var file in selectedFiles)
             {
                 ct.ThrowIfCancellationRequested(); var path = ContentInstallFiles.Literal(directory, file.Path); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
                 await download(file, path, ct).ConfigureAwait(false);
@@ -207,6 +209,7 @@ public sealed partial class ModrinthPackArchive
                     var sidecar = path + suffix; VerifiedDownloader.RejectLink(sidecar);
                     if (File.Exists(sidecar)) File.Delete(sidecar);
                 }
+                progress?.Report(new("安装整合包文件", ++done, total, file.Path));
                 installed.Add(new("mrpack", inspection.VersionId, "pack", file.Path, file.Sha1, sha512, file.Size, file.Downloads[0], file.Client, file.Server));
             }
             foreach (var (relative, entry) in read.Overrides)
@@ -218,8 +221,10 @@ public sealed partial class ModrinthPackArchive
                 if (bytes.LongLength != entry.Length) throw new InvalidDataException("overrides条目长度不一致。");
                 await File.WriteAllBytesAsync(path, bytes, ct).ConfigureAwait(false);
                 installed.RemoveAll(f => Key(f.RelativePath) == Key(relative));
+                progress?.Report(new("安装整合包文件", ++done, total, relative));
                 installed.Add(new("mrpack-local", inspection.VersionId, "pack", relative, Convert.ToHexStringLower(SHA1.HashData(bytes)), Convert.ToHexStringLower(SHA512.HashData(bytes)), bytes.Length));
             }
+            progress?.Report(new("安装整合包文件", total, total));
             ct.ThrowIfCancellationRequested();
             await File.WriteAllBytesAsync(ContentInstallFiles.Literal(directory, ContentInstallFiles.ManifestName),
                 ContentInstallFiles.SerializeManifest(new ContentInstallManifest(1, "unregistered", installed)), ct).ConfigureAwait(false);

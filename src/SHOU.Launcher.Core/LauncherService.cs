@@ -587,11 +587,21 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     }
     private static LauncherSnapshot AccountCandidate(LauncherSnapshot state, AccountProfile account) => state with
     { Accounts = state.Accounts.Where(a => a.Id != account.Id).Append(account).ToArray(), SelectedAccountId = account.Id };
+    private readonly ConcurrentDictionary<string, (long Bytes, long Ticks, double Rate)> transferRates = new(StringComparer.Ordinal);
     private void OnTransfer(TransferProgress progress)
     {
         SetLaunchTransfer(progress);
         var id = downloadOwners.Register(progress.Id);
-        downloads[id] = new(id, Path.GetFileName(progress.Id), progress.Stage, progress.BytesReceived, progress.TotalBytes, progress.Source);
+        var now = System.Diagnostics.Stopwatch.GetTimestamp();
+        var rate = transferRates.AddOrUpdate(id, (progress.BytesReceived, now, 0d), (_, previous) =>
+        {
+            if (progress.Stage != "Downloading" || progress.BytesReceived < previous.Bytes) return (progress.BytesReceived, now, 0d);
+            var seconds = System.Diagnostics.Stopwatch.GetElapsedTime(previous.Ticks, now).TotalSeconds;
+            return seconds >= 0.12 ? (progress.BytesReceived, now, Math.Max(0, (progress.BytesReceived - previous.Bytes) / seconds)) : previous;
+        });
+        downloads[id] = new(id, Path.GetFileName(progress.Id), progress.Stage, progress.BytesReceived, progress.TotalBytes, progress.Source,
+            BytesPerSecond: progress.Stage == "Downloading" ? rate.Rate : 0);
+        if (progress.Stage is "Completed" or "Failed" or "Cancelled") transferRates.TryRemove(id, out _);
         lock (sync)
         {
             if (DateTimeOffset.UtcNow - lastDownloadUpdate < TimeSpan.FromMilliseconds(120) && progress.Stage != "Completed") return;
@@ -600,7 +610,11 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         Set(s => s with { Downloads = downloads.Values.TakeLast(250).ToArray() });
     }
     private void MarkDownloads(string state, string? error)
-    { foreach (var item in downloads.ToArray()) if (item.Value.State is "Queued" or "Downloading") downloads[item.Key] = item.Value with { State = state, Error = error }; Set(s => s with { Downloads = downloads.Values.TakeLast(250).ToArray() }); }
+    {
+        foreach (var item in downloads.ToArray()) if (item.Value.State is "Queued" or "Downloading" or "Verifying" or "Retrying")
+        { transferRates.TryRemove(item.Key, out _); downloads[item.Key] = item.Value with { State = state, Error = error, BytesPerSecond = 0 }; }
+        Set(s => s with { Downloads = downloads.Values.TakeLast(250).ToArray() });
+    }
     private void RegisterSession(AuthSession session)
     { redactor.Register(session.AccessToken); redactor.Register(session.RefreshToken); redactor.Register(session.ClientToken); redactor.Register(session.Profile.PlayerUuid); redactor.Register(session.Profile.DisplayName); }
     private void ReplaceAccount(AccountProfile account) => Set(s => s with { Accounts = s.Accounts.Where(a => a.Id != account.Id).Append(account).ToArray() });

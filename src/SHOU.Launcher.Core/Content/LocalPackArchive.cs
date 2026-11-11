@@ -47,6 +47,8 @@ public sealed class LocalPackArchive
         }
         if (Text(root, "manifestType") != "minecraftModpack" || root.GetProperty("manifestVersion").GetInt32() != 1) throw new InvalidDataException("manifest.json 不是支持的 CurseForge Minecraft 整合包清单。");
         var minecraft = root.GetProperty("minecraft"); var gameVersion = IO.SafePath.Identifier(Text(minecraft, "version")); var name = Text(root, "name");
+        var packVersion = root.TryGetProperty("version", out var version) && version.ValueKind == JsonValueKind.String ? Text(root, "version") : null;
+        int? recommendedMemory = minecraft.TryGetProperty("recommendedRam", out var ram) && ram.TryGetInt32(out var memory) && memory is >= 512 and <= 65536 ? memory : null;
         var loaderKind = "vanilla"; string? loaderVersionText = null; var supported = true; var loaders = minecraft.GetProperty("modLoaders");
         if (loaders.ValueKind != JsonValueKind.Array || loaders.GetArrayLength() > 16) throw new InvalidDataException("CurseForge 加载器列表无效。");
         var primary = loaders.EnumerateArray().Where(l => l.TryGetProperty("primary", out var flag) && flag.ValueKind == JsonValueKind.True).ToArray();
@@ -73,10 +75,10 @@ public sealed class LocalPackArchive
         var warnings = new List<string> { "仅创建新的客户端实例；游戏本体将在首次启动时按官方安装流程准备。", "模组版本标签及元数据只做静态提示，完整依赖与实际兼容性由加载器最终验证。" };
         if (skipped > 0) warnings.Add($"已排除 {skipped} 项不受支持的覆盖文件；不迁移启动器凭据、玩家存档或系统可执行脚本。KubeJS / scripts 内的游戏脚本随整合包导入。");
         var reason = supported ? "尚需通过 CurseForge 官方 API 核实清单文件与下载可用性。" : "此 CurseForge ZIP 的加载器身份尚未支持；不猜测多个加载器组合。";
-        return new(new(LocalPackFormat.CurseForge, name, gameVersion, loaderKind, loaderVersionText, sha256, warnings, false, reason, LocalFiles: overrides.Keys.ToArray(), SkippedFiles: skipped), references, overrides, supported);
+        return new(new(LocalPackFormat.CurseForge, name, gameVersion, loaderKind, loaderVersionText, sha256, warnings, false, reason, LocalFiles: overrides.Keys.ToArray(), SkippedFiles: skipped, PackVersion: packVersion, RecommendedMemoryMiB: recommendedMemory), references, overrides, supported);
     }
     public async Task<LocalPackInspection> StageCurseForgeAsync(string path, string expectedSha256, string directory,
-        IReadOnlyList<CurseForgePackFile> files, Func<CurseForgePackFile, string, CancellationToken, Task> download, CancellationToken ct = default)
+        IReadOnlyList<CurseForgePackFile> files, Func<CurseForgePackFile, string, CancellationToken, Task> download, CancellationToken ct = default, IProgress<PackInstallProgress>? progress = null)
     {
         if (!ContentInstallFiles.Hash(expectedSha256, 64)) throw new InvalidDataException("请先读取整合包并确认其 SHA-256。");
         VerifiedDownloader.RejectLink(directory); Directory.CreateDirectory(directory); if (Directory.EnumerateFileSystemEntries(directory).Any()) throw new IOException("整合包暂存目录须为空。");
@@ -92,7 +94,8 @@ public sealed class LocalPackArchive
             if (files.Count != required.Length || required.Any(r => files.Count(f => f.ProjectId == r.ProjectId && f.FileId == r.FileId) != 1)) throw new InvalidDataException("已解析文件未完整匹配 required 清单，未创建实例。");
             if (files.Select(f => ContentInstallFiles.PathKey(f.Path)).Distinct(StringComparer.Ordinal).Count() != files.Count || files.Sum(f => f.Size) > 4L * 1024 * 1024 * 1024) throw new InvalidDataException("解析结果存在路径冲突或超过总大小预算。");
             PackArchiveReader.CheckTargets(files.Select(f => f.Path).Concat(read.OverrideEntries.Keys));
-            var installed = new List<ContentInstalledFile>();
+            var installed = new List<ContentInstalledFile>(); var done = 0; var total = files.Count + read.OverrideEntries.Count;
+            progress?.Report(new("安装整合包文件", 0, total));
             foreach (var file in files)
             {
                 var targetKind = file.Path.StartsWith("mods/", StringComparison.Ordinal) && file.Path.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ? "mod"
@@ -107,6 +110,7 @@ public sealed class LocalPackArchive
                 await using var bytes = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true); var sha512 = Convert.ToHexStringLower(await SHA512.HashDataAsync(bytes, ct).ConfigureAwait(false));
                 if (file.Sha512 is not null && !sha512.Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("同哈希回退模组 SHA-512 校验失败。");
                 installed.Add(new("cf-" + file.ProjectId, "cf-" + file.FileId, targetKind, file.Path, file.Sha1, sha512, file.Size, file.FromModrinth ? file.DownloadUri.AbsoluteUri : null));
+                progress?.Report(new("安装整合包文件", ++done, total, file.Path));
                 foreach (var suffix in new[] { ".download.lock", ".part", ".part.resume.json" }) { var sidecar = ContentInstallFiles.Literal(directory, file.Path + suffix); if (File.Exists(sidecar)) File.Delete(sidecar); }
             }
             foreach (var (relative, entryName) in read.OverrideEntries)
@@ -114,8 +118,10 @@ public sealed class LocalPackArchive
                 var entry = archive.Zip.GetEntry(entryName) ?? throw new IOException("覆盖文件在暂存副本中缺失。");
                 var bytes = await PackArchiveReader.ReadEntryAsync(entry, PackArchiveReader.MaximumFileBytes, ct).ConfigureAwait(false); var target = ContentInstallFiles.Literal(directory, relative); Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 await File.WriteAllBytesAsync(target, bytes, ct).ConfigureAwait(false); installed.RemoveAll(f => ContentInstallFiles.PathKey(f.RelativePath) == ContentInstallFiles.PathKey(relative));
+                progress?.Report(new("安装整合包文件", ++done, total, relative));
                 installed.Add(new("cf-local", actual[..16], "pack", relative, Convert.ToHexStringLower(SHA1.HashData(bytes)), Convert.ToHexStringLower(SHA512.HashData(bytes)), bytes.Length));
             }
+            progress?.Report(new("安装整合包文件", total, total));
             archive.Verify(); ct.ThrowIfCancellationRequested(); await File.WriteAllBytesAsync(ContentInstallFiles.Literal(directory, ContentInstallFiles.ManifestName), ContentInstallFiles.SerializeManifest(new ContentInstallManifest(1, "unregistered", installed)), ct).ConfigureAwait(false);
             return read.Inspection;
         }

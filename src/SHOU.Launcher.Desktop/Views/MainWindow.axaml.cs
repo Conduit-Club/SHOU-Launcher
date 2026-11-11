@@ -15,6 +15,7 @@ public partial class MainWindow : Window
     {
         AvaloniaXamlLoader.Load(this);
         ConfigurePlatformChrome();
+        InitializeMacTrafficLights();
         InitializePackDrop();
         InitializeGameVisibility();
         InitializeLauncherPreferences();
@@ -86,6 +87,9 @@ public partial class MainWindow : Window
         Grid.SetColumn(brand, 2);
         brand.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Right;
         brand.Margin = new Thickness(0, 0, 16, 0);
+        var brandOrder = new[] { "ShouBadge", "WindowBrandTitle", "BrandLogo", "CustomBrandImage" }.Select(name => brand.Children.Single(c => c.Name == name)).ToArray();
+        brand.Children.Clear();
+        foreach (var child in brandOrder) brand.Children.Add(child);
         var navigation = this.FindControl<StackPanel>("PrimaryNavigation")!;
         navigation.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         navigation.Margin = new Thickness(0);

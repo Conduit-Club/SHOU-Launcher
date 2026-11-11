@@ -121,7 +121,8 @@ public sealed class ContentFileRowViewModel
 {
     public ContentFile File { get; }
     public string Name => File.FileName;
-    public string Detail => $"{File.Size / 1048576d:0.00} MiB · SHA-1 {File.Sha1[..Math.Min(12, File.Sha1.Length)]}…";
+    public bool IsPackFile { get; }
+    public string Detail { get; }
     public AsyncRelayCommand DownloadCommand { get; }
     public AsyncRelayCommand InstallCommand { get; }
     public bool ShowInstallButton { get; }
@@ -129,7 +130,10 @@ public sealed class ContentFileRowViewModel
     public ContentFileRowViewModel(DownloadsPageViewModel owner, ContentFile file, ContentRelease? release = null)
     {
         File = file;
-        DownloadCommand = new(() => owner.DownloadFileAsync(file), () => owner.CanEdit && owner.CatalogAvailable);
+        IsPackFile = owner.SelectedProject?.Kind == "modpack";
+        Detail = IsPackFile ? $"{release?.Version} · {File.Size / 1048576d:0.00} MiB" + (release is null ? "" : $" · 更新于 {release.Published.LocalDateTime:yyyy/M/d}")
+            : $"{File.Size / 1048576d:0.00} MiB · SHA-1 {File.Sha1[..Math.Min(12, File.Sha1.Length)]}…";
+        DownloadCommand = new(() => IsPackFile ? owner.DownloadCatalogPackAsync(file, release) : owner.DownloadFileAsync(file), () => owner.CanEdit && owner.CatalogAvailable);
         InstallCommand = new(() => owner.InstallResourceAsync(release!, file), () => owner.CanInstallResource(release) &&
             (!owner.ShowWorldContentInstall || file.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)));
         ShowInstallButton = owner.ShowResourceInstall || owner.ShowWorldContentInstall;
@@ -138,6 +142,7 @@ public sealed class ContentFileRowViewModel
 }
 public sealed record ContentReleaseRowViewModel(ContentRelease Release, IReadOnlyList<ContentFileRowViewModel> Files, bool WorldContent = false)
 {
+    public bool ShowHeading => !Files.Any(f => f.IsPackFile);
     public string Notice => Release.Notice ?? "";
     public bool HasNotice => !string.IsNullOrWhiteSpace(Release.Notice);
     public string Name => Release.Name;
@@ -187,8 +192,8 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private bool _favoritesLoadFailed;
 
     public ObservableCollection<DownloadRowViewModel> Tasks { get; } = [];
-    public bool IsEmpty => Tasks.Count == 0;
-    public string Summary => $"{Tasks.Count} 项任务 · {Tasks.Count(t => t.Task.State == "Downloading")} 项下载中";
+    public bool IsEmpty => Tasks.Count == 0 && PackTasks.Count == 0;
+    public string Summary => $"{PackTasks.Count + Tasks.Count} 项任务 · {PackTasks.Count(t => t.IsActive)} 项整合包安装中 · {Tasks.Count(t => t.Task.State == "Downloading")} 项文件下载中";
     public DownloadCategoryViewModel MinecraftCategory { get; }
     public IReadOnlyList<DownloadCategoryViewModel> CommunityCategories { get; }
     public IReadOnlyList<DownloadCategoryViewModel> InstallerCategories { get; }
@@ -202,9 +207,9 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public bool IsTasksPage => !_isConfiguration && !_isResourceDetail && SelectedCategory.Id == "tasks";
     public bool IsConfiguration => _isConfiguration;
     public bool IsResourceDetail => _isResourceDetail;
-    public bool ShowCategorySidebar => !_isResourceDetail;
+    public bool ShowCategorySidebar => !_isResourceDetail && !IsTasksPage;
     public bool CatalogAvailable => _catalog is not null;
-    public bool CanQuery => !_disposed && CatalogAvailable && Owner.CanReadRemote;
+    public bool CanQuery => !_disposed && CatalogAvailable && Owner.CanBrowseDownloads;
     public bool IsLoading => _loading;
     public string RequestStatus { get => _requestStatus; private set { if (SetProperty(ref _requestStatus, value)) OnPropertyChanged(nameof(ShowRequestStatus)); } }
     public bool ShowRequestStatus => _requestMessageVisible;
@@ -392,7 +397,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         foreach (var category in Categories) category.RefreshSelection();
         OnPropertyChanged(nameof(IsPackageDetail)); OnPropertyChanged(nameof(CatalogPurpose));
         NotifyContentInstallationPage();
-        foreach (var name in new[] { nameof(SelectedCategory), nameof(IsCatalogPage), nameof(IsSearchPage), nameof(IsInstallerPage), nameof(IsFavoritesPage), nameof(IsTasksPage), nameof(IsConfiguration), nameof(IsResourceDetail), nameof(ShowCategorySidebar), nameof(SearchPlaceholder), nameof(SearchSupported), nameof(SearchCapabilityReason), nameof(PageSummary), nameof(InstallerTitle), nameof(InstallerDescription), nameof(HasProjects) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(SelectedCategory), nameof(IsCatalogPage), nameof(IsSearchPage), nameof(IsInstallerPage), nameof(IsFavoritesPage), nameof(IsTasksPage), nameof(IsConfiguration), nameof(IsResourceDetail), nameof(ShowCategorySidebar), nameof(ShowTaskSummarySidebar), nameof(SearchPlaceholder), nameof(SearchSupported), nameof(SearchCapabilityReason), nameof(PageSummary), nameof(InstallerTitle), nameof(InstallerDescription), nameof(HasProjects) }) OnPropertyChanged(name);
         NotifyCommands();
         NotifyBrowseState();
     }
@@ -622,11 +627,14 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             else { row.Update(task); if (Tasks.IndexOf(row) != i) Tasks.Move(Tasks.IndexOf(row), i); }
         }
         RefreshContentTargets(snapshot);
+        foreach (var task in PackTasks) task.Refresh(snapshot);
+        NotifyPackTasks();
         OnPropertyChanged(nameof(IsEmpty)); OnPropertyChanged(nameof(Summary)); NotifyInstallDraft(); base.Refresh(snapshot);
     }
     public override void NotifyCommands()
     {
         foreach (var task in Tasks) { task.CancelCommand.NotifyCanExecuteChanged(); task.RetryCommand.NotifyCanExecuteChanged(); }
+        foreach (var task in PackTasks) { task.RetryCommand.NotifyCanExecuteChanged(); task.OpenInstanceCommand.NotifyCanExecuteChanged(); }
         foreach (var row in LatestVersions.Concat(VersionGroups.SelectMany(g => g.Versions))) row.SelectCommand.NotifyCanExecuteChanged();
         foreach (var row in Projects.Concat(FavoriteProjects)) row.OpenCommand.NotifyCanExecuteChanged();
         foreach (var file in ReleaseGroups.SelectMany(g => g.Releases).SelectMany(r => r.Files)) { file.DownloadCommand.NotifyCanExecuteChanged(); file.InstallCommand.NotifyCanExecuteChanged(); }

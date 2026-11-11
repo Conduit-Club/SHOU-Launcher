@@ -9,7 +9,7 @@ namespace SHOU.Launcher.Core.Content;
 
 public sealed record CurseForgePackReference(int ProjectId, int FileId, bool Required);
 public sealed record CurseForgePackFile(int ProjectId, int FileId, string Path, string Sha1, string? Sha512,
-    long Size, Uri DownloadUri, bool FromModrinth);
+    long Size, Uri DownloadUri, bool FromModrinth, bool FromFtb = false);
 public sealed record CurseForgePackResolution(IReadOnlyList<CurseForgePackFile> Files,
     IReadOnlyList<string> Warnings, IReadOnlyList<string> BlockedFiles);
 
@@ -21,20 +21,27 @@ public sealed class CurseForgePackResolver
     public CurseForgePackResolver(HttpClient http, string? apiKey)
     {
         this.http = http;
-        if (http.DefaultRequestHeaders.Contains("x-api-key") || http.DefaultRequestHeaders.Authorization is not null) throw new ArgumentException("整合包专用客户端不能携带全局鉴权头。");
+        if (http.DefaultRequestHeaders.Contains("x-api-key") || http.DefaultRequestHeaders.Authorization is not null || http.DefaultRequestHeaders.Contains("Cookie")) throw new ArgumentException("整合包专用客户端不能携带全局鉴权头。");
         if (apiKey is not null && (apiKey.Length > 8192 || apiKey.Any(c => char.IsControl(c) || char.IsWhiteSpace(c)))) throw new ArgumentException("CurseForge API key 配置格式无效。");
         this.apiKey = string.IsNullOrEmpty(apiKey) ? null : apiKey;
     }
-    public async Task<CurseForgePackResolution> ResolveAsync(IReadOnlyList<CurseForgePackReference> references, string gameVersion, string loader, CancellationToken ct = default)
+    public async Task<CurseForgePackResolution> ResolveAsync(IReadOnlyList<CurseForgePackReference> references, string gameVersion, string loader, CancellationToken ct = default,
+        FtbPackIdentity? ftbPack = null, IProgress<PackInstallProgress>? progress = null)
     {
         if (references.Count > 512 || references.Any(r => r.ProjectId <= 0 || r.FileId <= 0)) throw new InvalidDataException("CurseForge 清单项目数量或身份无效。");
         var required = references.Where(r => r.Required).ToArray();
         if (apiKey is null) return new([], [], required.Select(r => Label(r) + "：未配置 CurseForge API key，尚未核实文件。").ToArray());
+        var publishedFtb = await FtbPackFileIndex.ReadAsync(http, ftbPack, ct).ConfigureAwait(false);
+        var completed = 0;
+        progress?.Report(new("解析必需文件", 0, required.Length));
         var results = new Item?[required.Length]; using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromMinutes(3));
         try
         {
             await Parallel.ForEachAsync(Enumerable.Range(0, required.Length), new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = timeout.Token }, async (index, token) =>
-            { results[index] = await ResolveOneAsync(required[index], gameVersion, loader, references, token).ConfigureAwait(false); }).ConfigureAwait(false);
+            {
+                results[index] = await ResolveOneAsync(required[index], gameVersion, loader, references, publishedFtb, token).ConfigureAwait(false);
+                progress?.Report(new("解析必需文件", Interlocked.Increment(ref completed), required.Length, Label(required[index])));
+            }).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested) { }
         ct.ThrowIfCancellationRequested();
@@ -50,7 +57,8 @@ public sealed class CurseForgePackResolver
         return new(files, warnings, blocked);
     }
     private sealed record Item(CurseForgePackFile? File, IReadOnlyList<string> Warnings, string? Reason = null);
-    private async Task<Item> ResolveOneAsync(CurseForgePackReference reference, string gameVersion, string loader, IReadOnlyList<CurseForgePackReference> all, CancellationToken ct)
+    private async Task<Item> ResolveOneAsync(CurseForgePackReference reference, string gameVersion, string loader, IReadOnlyList<CurseForgePackReference> all,
+        IReadOnlyDictionary<(int, int), FtbPublishedFile> publishedFtb, CancellationToken ct)
     {
         try
         {
@@ -105,6 +113,11 @@ public sealed class CurseForgePackResolver
                 return new(new(reference.ProjectId, reference.FileId, folder + name, sha1, null, size, uri, false), warnings);
             }
             if (archivedDependency) return new(null, warnings, "已归档的历史包依赖未提供官方 CDN 地址，不能套用归档依赖例外；未猜测链接或查询哈希回退。");
+            if (publishedFtb.TryGetValue((reference.ProjectId, reference.FileId), out var ftb) && ftb.Folder == folder && ftb.Size == size && ftb.Sha1.Equals(sha1, StringComparison.OrdinalIgnoreCase))
+            {
+                warnings.Add(Label(reference) + "：采用 FTB 官方同版本清单公布的同项目 / 文件地址，核对 SHA-1、SHA-512 与大小。");
+                return new(new(reference.ProjectId, reference.FileId, folder + name, sha1, ftb.Sha512, size, ftb.Uri, false, true), warnings);
+            }
             // A null CF URL is not a license to reconstruct its CDN path. Only independently published exact-hash files qualify.
             using var alternative = await GetJsonAsync(new Uri("https://api.modrinth.com/v2/version_file/" + sha1 + "?algorithm=sha1"), false, ct).ConfigureAwait(false);
             var candidates = alternative.RootElement.GetProperty("files");
@@ -134,10 +147,10 @@ public sealed class CurseForgePackResolver
     private async Task DownloadVerifiedAsync(CurseForgePackFile file, string path, long maximumBytes, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         var label = DownloadLabel(file);
-        if (!AllowedDownloadUri(file.DownloadUri)) throw new InvalidDataException(label + "：文件来源不在官方 CDN 允许范围。");
+        if (!AllowedDownloadUri(file.DownloadUri, file.FromFtb) || file.FromFtb && (file.FromModrinth || !ContentInstallFiles.Hash(file.Sha512, 128))) throw new InvalidDataException(label + "：文件来源不在官方 CDN 允许范围。");
         if (!ContentInstallFiles.Hash(file.Sha1, 40) || (file.Size <= 0 || file.Size > maximumBytes) || file.Sha512 is not null && !ContentInstallFiles.Hash(file.Sha512, 128))
             throw new InvalidDataException(label + "：文件哈希或大小无效。");
-        using var redirects = new CdnRedirectHandler(http); using var downloads = new HttpClient(redirects) { Timeout = Timeout.InfiniteTimeSpan };
+        using var redirects = new CdnRedirectHandler(http, file.FromFtb); using var downloads = new HttpClient(redirects) { Timeout = Timeout.InfiniteTimeSpan };
         try { await new VerifiedDownloader(downloads).DownloadAsync(new([file.DownloadUri], path, file.Sha1, Size: file.Size), progress, ct).ConfigureAwait(false); }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex) when (ex is AggregateException or HttpRequestException or IOException or InvalidDataException or OperationCanceledException)
@@ -155,14 +168,14 @@ public sealed class CurseForgePackResolver
             if (!digest.Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException(label + "：下载文件 SHA-512 校验失败。");
         }
     }
-    private static bool AllowedDownloadUri(Uri uri) => AllowedCurseForgeUri(uri) || ContentInstallFiles.AllowedUri(uri);
+    private static bool AllowedDownloadUri(Uri uri, bool allowFtb = false) => AllowedCurseForgeUri(uri) || ContentInstallFiles.AllowedUri(uri) || allowFtb && FtbPackFileIndex.AllowedUri(uri);
     private static string DownloadLabel(CurseForgePackFile file)
     {
         var name = new string(Path.GetFileName(file.Path).Where(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_' or ' ' or '+' or '(' or ')').Take(120).ToArray());
         return file.ProjectId > 0 && file.FileId > 0 ? $"项目 {file.ProjectId} / 文件 {file.FileId}（{(name.Length == 0 ? "文件" : name)}）" : $"文件（{(name.Length == 0 ? "资源" : name)}）";
     }
     // This wrapper is used only by file downloads. API requests keep the caller's no-redirect transport directly.
-    private sealed class CdnRedirectHandler(HttpClient transport) : HttpMessageHandler
+    private sealed class CdnRedirectHandler(HttpClient transport, bool allowFtb) : HttpMessageHandler
     {
         internal string? FailureReason { get; private set; }
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
@@ -171,7 +184,7 @@ public sealed class CurseForgePackResolver
             var uri = request.RequestUri; var visited = new HashSet<string>(StringComparer.Ordinal);
             for (var hops = 0; ; hops++)
             {
-                if (!AllowedDownloadUri(uri)) throw Failure("重定向目标不在官方 CDN 允许范围。");
+                if (!AllowedDownloadUri(uri, allowFtb)) throw Failure("重定向目标不在官方 CDN 允许范围。");
                 if (!visited.Add(uri.AbsoluteUri)) throw Failure("检测到 CDN 重定向循环。");
                 if (transport.DefaultRequestHeaders.Contains("x-api-key") || transport.DefaultRequestHeaders.Authorization is not null || transport.DefaultRequestHeaders.Contains("Cookie")) throw Failure("专用文件下载客户端携带了全局鉴权头，已拒绝下载。");
                 // Clone only download range validators; never forward authorization, cookies, Host, or arbitrary headers.
@@ -191,7 +204,7 @@ public sealed class CurseForgePackResolver
                         if (hops >= 3) throw Failure($"CDN 重定向超过 3 跳（HTTP {status}）。");
                         var location = response.Headers.Location;
                         if (location is null || location.OriginalString.Length > 2048 || location.OriginalString.Any(char.IsControl) || !Uri.TryCreate(uri, location, out var next)) throw Failure($"CDN 重定向缺少有效 Location（HTTP {status}）。");
-                        if (!AllowedDownloadUri(next)) throw Failure($"CDN 重定向来源被拒绝（HTTP {status}）。");
+                        if (!AllowedDownloadUri(next, allowFtb)) throw Failure($"CDN 重定向来源被拒绝（HTTP {status}）。");
                         uri = next;
                     }
                     finally { response.Dispose(); }
@@ -205,6 +218,8 @@ public sealed class CurseForgePackResolver
     }
     private async Task<JsonDocument> GetJsonAsync(Uri uri, bool sendKey, CancellationToken ct)
     {
+        if (http.DefaultRequestHeaders.Contains("x-api-key") || http.DefaultRequestHeaders.Authorization is not null || http.DefaultRequestHeaders.Contains("Cookie"))
+            throw new LookupException("官方清单专用客户端不能携带全局凭据。");
         if (sendKey && (uri.Scheme != "https" || uri.Host != "api.curseforge.com" || !uri.IsDefaultPort || uri.UserInfo.Length != 0)) throw new InvalidDataException("拒绝向未知来源发送 CurseForge 凭据。");
         using var request = new HttpRequestMessage(HttpMethod.Get, uri); request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.UserAgent.ParseAdd("SHOU-Launcher/LocalPackImport"); if (sendKey) request.Headers.Add("x-api-key", apiKey!);

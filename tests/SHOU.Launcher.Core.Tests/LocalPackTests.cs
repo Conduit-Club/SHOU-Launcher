@@ -15,7 +15,7 @@ using SHOU.Launcher.Desktop.Platform;
 namespace SHOU.Launcher.Core.Tests;
 
 [TestClass]
-public sealed class LocalPackTests
+public sealed partial class LocalPackTests
 {
     private const string FixtureKey = "synthetic-fixture-key-not-real";
     private sealed record Asset(int Project, int FileId, string Name, byte[] Bytes, int ClassId = 6, bool Fallback = false, bool Available = true, int FileStatus = 4)

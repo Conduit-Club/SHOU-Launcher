@@ -82,6 +82,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Home = new(this);
         Instances = new(this);
         Downloads = new(this, catalog);
+        InitializeTaskNotifications();
         Accounts = new(this);
         Settings = new(this);
         Logs = new(this);
@@ -99,6 +100,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         {
             if (ReferenceEquals(SelectedPage, Instances)) Instances.NavigateBackCommand.Execute(null);
             else if (ReferenceEquals(SelectedPage, Downloads) && Downloads.IsResourceDetail) Downloads.BackToListCommand.Execute(null);
+            else if (ReferenceEquals(SelectedPage, Downloads) && Downloads.IsTasksPage) Downloads.SelectCategory("modpack");
             else SelectedPage = ReferenceEquals(SelectedPage, Logs) ? Settings : Home;
         }, () => IsContextPage);
         CancelOperationCommand = new(CancelCurrentOperation, () => _operation is { IsCancellationRequested: false });
@@ -148,8 +150,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         : ReferenceEquals(SelectedPage, Settings) || ReferenceEquals(SelectedPage, Logs) ? "settings"
         : ReferenceEquals(SelectedPage, Tools) ? "tools" : "launch";
     public bool IsContextPage => ReferenceEquals(SelectedPage, Instances) || ReferenceEquals(SelectedPage, Accounts) || ReferenceEquals(SelectedPage, Logs)
-        || (ReferenceEquals(SelectedPage, Downloads) && Downloads.IsResourceDetail);
+        || (ReferenceEquals(SelectedPage, Downloads) && (Downloads.IsResourceDetail || Downloads.IsTasksPage));
     public string NavigationTitle => ReferenceEquals(SelectedPage, Instances) ? (Instances.IsWorldDetails ? Instances.WorldContextTitle : Instances.ContextTitle)
+        : ReferenceEquals(SelectedPage, Downloads) && Downloads.IsTasksPage ? "任务管理"
         : ReferenceEquals(SelectedPage, Downloads) && Downloads.IsResourceDetail ? "资源下载 - " + Downloads.ProjectTitle : SelectedPage.Title;
     public bool IsLaunchSelected => CurrentSection == "launch";
     public bool IsDownloadsSelected => CurrentSection == "download";
@@ -183,7 +186,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
     public bool HasOperationTransferSummary => OperationTransferSummary.Length > 0;
-    public bool ShowOperationStatus => inlineOperations == 0 && IsBusy && (!IsHomeLaunching || !ReferenceEquals(SelectedPage, Home));
+    public bool ShowOperationStatus => !backgroundInstall && inlineOperations == 0 && IsBusy && (!IsHomeLaunching || !ReferenceEquals(SelectedPage, Home));
     public async Task<bool> RunInlineAsync(string label, Func<CancellationToken, Task> action)
     {
         inlineOperations++; OnPropertyChanged(nameof(ShowOperationStatus));
@@ -216,6 +219,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         _operation = operation;
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); operationCompletion = completion;
         _sensitiveValues = sensitiveValues;
+        if (!backgroundInstall) handledBackgroundError = null;
         _executing = true;
         _operationLabel = label;
         ShowError(null);
@@ -234,7 +238,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         catch (Exception ex)
         {
             _operationLabel = label + "失败";
-            ShowError(UiPrivacy.Redact(ex.Message, sensitiveValues));
+            if (backgroundFailure is { } failure) failure(ex);
+            else ShowError(UiPrivacy.Redact(ex.Message, sensitiveValues));
             return false;
         }
         finally
@@ -290,7 +295,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     }
     private void OnDownloadsPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
-        if (ReferenceEquals(SelectedPage, Downloads) && e.PropertyName is nameof(Downloads.IsResourceDetail) or nameof(Downloads.ProjectTitle))
+        if (ReferenceEquals(SelectedPage, Downloads) && e.PropertyName is nameof(Downloads.IsResourceDetail) or nameof(Downloads.ProjectTitle) or nameof(Downloads.IsTasksPage))
             NotifyNavigation();
     }
     private void OnLogReceived(object? sender, LauncherLog log)
@@ -302,7 +307,11 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         Snapshot = snapshot;
         Localization.UiLocalization.Instance.SetLanguage(snapshot.Settings.Language, snapshot.Settings.Launcher?.RegionalFormat ?? "system");
-        if (!string.IsNullOrWhiteSpace(snapshot.Error)) ShowError(snapshot.Error);
+        if (!string.IsNullOrWhiteSpace(snapshot.Error))
+        {
+            if (backgroundInstall) handledBackgroundError = snapshot.Error;
+            else if (snapshot.Error != handledBackgroundError) ShowError(snapshot.Error);
+        }
         foreach (var page in Pages) page.Refresh(snapshot);
         if (Application.Current is { } app)
             app.RequestedThemeVariant = snapshot.Settings.Theme switch { "Dark" => ThemeVariant.Dark, "Light" => ThemeVariant.Light, _ => ThemeVariant.Default };

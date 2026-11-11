@@ -12,7 +12,9 @@ public sealed partial class LauncherService : IModrinthPackService
 {
     public async Task<ModrinthPackInspection> InspectModrinthPackAsync(string archivePath, CancellationToken cancellationToken = default)
     { await InitializeAsync(cancellationToken).ConfigureAwait(false); return await new ModrinthPackArchive().InspectAsync(archivePath, cancellationToken).ConfigureAwait(false); }
-    public async Task<ModrinthPackImportResult> ImportModrinthPackAsync(ModrinthPackImportRequest request, CancellationToken cancellationToken = default)
+    public Task<ModrinthPackImportResult> ImportModrinthPackAsync(ModrinthPackImportRequest request, CancellationToken cancellationToken = default)
+        => ImportModrinthPackCoreAsync(request, null, cancellationToken);
+    private async Task<ModrinthPackImportResult> ImportModrinthPackCoreAsync(ModrinthPackImportRequest request, IProgress<PackInstallProgress>? progress, CancellationToken cancellationToken)
     {
         request = request with { OptionalClientFiles = request.OptionalClientFiles?.ToArray() };
         if (string.IsNullOrWhiteSpace(request.InstanceName) || request.InstanceName.Length > 80 || request.InstanceName.Any(char.IsControl)) throw new ArgumentException("请输入1–80字的单行实例名称。");
@@ -26,7 +28,7 @@ public sealed partial class LauncherService : IModrinthPackService
             {
                 await RunContentTransferAsync("mrpack-import:" + Guid.NewGuid().ToString("N"), token => ImportModrinthPackAsync(request, token), async token =>
                 {
-                    var inspection = await new ModrinthPackArchive().StageAsync(request.ArchivePath, request.ExpectedSha256, stage, request.OptionalClientFiles, DownloadPackFileAsync, token).ConfigureAwait(false);
+                    var inspection = await new ModrinthPackArchive().StageAsync(request.ArchivePath, request.ExpectedSha256, stage, request.OptionalClientFiles, DownloadPackFileAsync, token, progress).ConfigureAwait(false);
                     var profile = await CacheLoaderProfileAsync(inspection.Loader, inspection.GameVersion, inspection.LoaderVersion, token).ConfigureAwait(false);
                     var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination,
                         Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);
