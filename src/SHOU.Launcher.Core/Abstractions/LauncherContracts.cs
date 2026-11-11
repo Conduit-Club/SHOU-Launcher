@@ -48,6 +48,7 @@ public sealed record LauncherSnapshot(BuildIdentity Build, PlatformContext Platf
 {
     public IReadOnlyList<GameSessionSnapshot> GameSessions { get; init; } = [];
     public LaunchActivity? LaunchActivity { get; init; }
+    public double DownloadBytesPerSecond { get; init; }
 }
 public sealed record LaunchPlan(string JavaExecutable, RuntimeArchitecture JavaRuntimeArchitecture,
     string WorkingDirectory, [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<string> Arguments,

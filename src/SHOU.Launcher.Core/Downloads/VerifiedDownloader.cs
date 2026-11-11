@@ -136,6 +136,7 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
         var sameSource = identity?.Url == sourceIdentity || identity?.Url == uri.AbsoluteUri;
         var offset = request.AllowResume && hasHash && sameSource && File.Exists(part) ? new FileInfo(part).Length : 0;
         if (request.Size is { } size && offset > size) offset = 0;
+        progress?.Report(new(destination, "Queued", offset, request.Size, uri.Host));
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         var rate = options?.Capture().Downloads?.MaximumKiBPerSecond ?? 0;
         timeout.CancelAfter(TimeSpan.FromMinutes(rate > 0 ? 30 : 3));
@@ -163,7 +164,11 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
                 throw new IOException("Invalid resume range.");
             }
         }
-        else offset = 0; // A server ignoring Range returned a whole file; truncate first.
+        else
+        {
+            offset = 0; // A server ignoring Range returned a whole file; truncate first.
+            progress?.Report(new(destination, "Queued", 0, request.Size, uri.Host));
+        }
         await WriteResumeAsync(resumePath, new(sourceIdentity, response.Headers.ETag?.ToString()), timeout.Token).ConfigureAwait(false);
         await using var output = OpenPart(part, offset > 0);
         await using var input = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);

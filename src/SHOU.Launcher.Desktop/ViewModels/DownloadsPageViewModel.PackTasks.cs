@@ -12,7 +12,7 @@ public sealed partial class DownloadsPageViewModel
     public double TaskOverallProgress => ActivePackTask?.OverallProgress ?? PackTasks.LastOrDefault()?.OverallProgress ??
         (Tasks.Sum(t => t.Task.TotalBytes ?? 0) is > 0 and var total ? Tasks.Sum(t => t.Task.BytesReceived) * 100d / total : 0);
     public string TaskProgressText => $"{TaskOverallProgress:0.00}%";
-    public string TaskSpeedText => $"{(ActivePackTask?.BytesPerSecond ?? Tasks.Where(t => t.Task.State == "Downloading").Sum(t => t.Task.BytesPerSecond)) / 1048576d:0.00} MiB/s";
+    public string TaskSpeedText => $"{(ActivePackTask?.BytesPerSecond ?? Owner.Snapshot.DownloadBytesPerSecond) / 1048576d:0.00} MiB/s";
     public string TaskRemainingText => ActivePackTask?.RemainingFileText ?? Tasks.Count(t => t.Task.State is "Queued" or "Downloading" or "Verifying").ToString();
     public bool ExpandFileTransfers => !HasPackTasks;
     internal void NotifyPackTasks()

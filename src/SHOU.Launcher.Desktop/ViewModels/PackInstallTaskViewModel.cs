@@ -151,7 +151,7 @@ public sealed class PackInstallTaskViewModel : ObservableObject
         if (IsActive)
         {
             var files = snapshot.Downloads.Where(t => !priorTransfers.Contains(t.Id)).ToArray();
-            speed = files.Where(t => t.State == "Downloading").Sum(t => t.BytesPerSecond);
+            speed = snapshot.DownloadBytesPerSecond;
             var transfer = files.LastOrDefault(t => t.State is "Downloading" or "Verifying" or "Retrying");
             if (transfer is not null && stepIndex is 0 or 2 or 3)
             {

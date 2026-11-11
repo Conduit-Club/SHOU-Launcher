@@ -8,15 +8,25 @@ namespace SHOU.Launcher.Desktop.Views;
 public partial class MainWindow
 {
     private IDisposable? macChromeRetry, macChromeTransitionRetry;
+    private DispatcherTimer? macChromeMaintenance;
     private void InitializeMacTrafficLights()
     {
         if (!OperatingSystem.IsMacOS()) return;
         // AppKit owns the buttons and their actions. Adjust their native titlebar layout only.
-        Opened += (_, _) => QueueMacTrafficLights();
+        Opened += (_, _) =>
+        {
+            QueueMacTrafficLights();
+            if (TryGetPlatformHandle() is not IMacOSTopLevelPlatformHandle) return;
+            // AppKit can relayout standard buttons independently of Avalonia layout events.
+            // Read native geometry; write only when its center has actually drifted.
+            macChromeMaintenance = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+            macChromeMaintenance.Tick += (_, _) => AlignMacTrafficLights();
+            macChromeMaintenance.Start();
+        };
         SizeChanged += (_, _) => QueueMacTrafficLights();
         Activated += (_, _) => QueueMacTrafficLights();
         Deactivated += (_, _) => QueueMacTrafficLights();
-        Closed += (_, _) => { macChromeRetry?.Dispose(); macChromeTransitionRetry?.Dispose(); };
+        Closed += (_, _) => { macChromeRetry?.Dispose(); macChromeTransitionRetry?.Dispose(); macChromeMaintenance?.Stop(); };
         PropertyChanged += (_, e) => { if (e.Property == WindowStateProperty) QueueMacTrafficLights(); };
     }
     private void QueueMacTrafficLights()
@@ -36,25 +46,30 @@ public partial class MainWindow
         var container = NativeObject(buttons[0], Selector("superview"));
         var sameParent = container != 0 && buttons.All(b => NativeObject(b, Selector("superview")) == container);
         Bootstrap.MacTitlebarObservation = new { sameParent, containerFrame = container == 0 ? null : RectValues(NativeFrame(container, Selector("frame"))), buttonFrames = buttons.Select(b => RectValues(NativeFrame(b, Selector("frame")))).ToArray() };
-        Bootstrap.WriteNativeReport("native_titlebar_observed");
+        if (macChromeMaintenance is null) Bootstrap.WriteNativeReport("native_titlebar_observed");
         if (!sameParent) return;
         var frame = NativeFrame(container, Selector("frame"));
         if (frame.Height < 18 || frame.Width < 60 || frame.Height > 96 && Math.Abs(frame.Height - Bounds.Height) > 64) return;
         const double height = 48;
-        if (frame.Height <= 96 && Math.Abs(frame.Height - height) > .1)
+        for (var view = container; view != 0; view = NativeObject(view, Selector("superview")))
         {
-            var parent = NativeObject(container, Selector("superview"));
-            if (parent == 0) return;
+            var box = NativeFrame(view, Selector("frame"));
+            if (box.Height is < 18 or > 96 || box.Width < 60) break;
+            if (Math.Abs(box.Height - height) < .1) continue;
+            var parent = NativeObject(view, Selector("superview")); if (parent == 0) break;
             var flipped = NativeBool(parent, Selector("isFlipped"));
-            NativeSetFrame(container, Selector("setFrame:"), new(frame.X, flipped ? frame.Y : frame.Y + frame.Height - height, frame.Width, height));
+            NativeSetFrame(view, Selector("setFrame:"), new(box.X, flipped ? box.Y : box.Y + box.Height - height, box.Width, height));
         }
+        var targetY = NativeFrame(handle.NSWindow, Selector("frame")).Height - height / 2;
         foreach (var button in buttons)
         {
             var bounds = NativeFrame(button, Selector("frame"));
             if (bounds.Height is < 8 or > 24) continue;
-            var parentHeight = frame.Height > 96 ? frame.Height : height;
-            var y = NativeBool(container, Selector("isFlipped")) ? (height - bounds.Height) / 2 : parentHeight - (height + bounds.Height) / 2;
-            NativeSetOrigin(button, Selector("setFrameOrigin:"), new(bounds.X, y));
+            var local = NativeFrame(button, Selector("bounds"));
+            var center = NativeConvertPoint(button, Selector("convertPoint:toView:"), new(local.X + local.Width / 2, local.Y + local.Height / 2), 0);
+            var delta = targetY - center.Y;
+            if (Math.Abs(delta) < .25) continue;
+            NativeSetOrigin(button, Selector("setFrameOrigin:"), new(bounds.X, bounds.Y + (NativeBool(container, Selector("isFlipped")) ? -delta : delta)));
         }
     }
     private static double[] RectValues(NativeRect frame) => [frame.X, frame.Y, frame.Width, frame.Height];
@@ -75,5 +90,6 @@ public partial class MainWindow
     [DllImport(ObjC, EntryPoint = "objc_msgSend_stret")] private static extern void NativeFrameX64(out NativeRect frame, nint receiver, nint selector);
     [DllImport(ObjC, EntryPoint = "objc_msgSend")] [return: MarshalAs(UnmanagedType.I1)] private static extern bool NativeBool(nint receiver, nint selector);
     [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern void NativeSetFrame(nint receiver, nint selector, NativeRect frame);
+    [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern NativePoint NativeConvertPoint(nint receiver, nint selector, NativePoint point, nint view);
     [DllImport(ObjC, EntryPoint = "objc_msgSend")] private static extern void NativeSetOrigin(nint receiver, nint selector, NativePoint origin);
 }

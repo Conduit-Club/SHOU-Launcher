@@ -572,7 +572,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
         }
         catch (OperationCanceledException) { MarkDownloads("Cancelled", null); Set(s => s with { State = "Ready", Error = null }); throw; }
         catch (Exception ex) { var message = SafeError(ex); MarkDownloads("Failed", message); Set(s => s with { State = "Error", Error = message }); Log("Error", message); throw; }
-        finally { if (state == "Launching") Set(s => s with { LaunchActivity = null }); operation.Release(); }
+        finally { downloadRate.Reset(); Set(s => s with { DownloadBytesPerSecond = 0 }); if (state == "Launching") Set(s => s with { LaunchActivity = null }); operation.Release(); }
     }
     private Task PersistAsync(CancellationToken ct)
     {
@@ -587,17 +587,19 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
     }
     private static LauncherSnapshot AccountCandidate(LauncherSnapshot state, AccountProfile account) => state with
     { Accounts = state.Accounts.Where(a => a.Id != account.Id).Append(account).ToArray(), SelectedAccountId = account.Id };
+    private readonly DownloadRateMeter downloadRate = new();
     private readonly ConcurrentDictionary<string, (long Bytes, long Ticks, double Rate)> transferRates = new(StringComparer.Ordinal);
     private void OnTransfer(TransferProgress progress)
     {
         SetLaunchTransfer(progress);
+        var totalRate = downloadRate.Report(progress);
         var id = downloadOwners.Register(progress.Id);
         var now = System.Diagnostics.Stopwatch.GetTimestamp();
         var rate = transferRates.AddOrUpdate(id, (progress.BytesReceived, now, 0d), (_, previous) =>
         {
             if (progress.Stage != "Downloading" || progress.BytesReceived < previous.Bytes) return (progress.BytesReceived, now, 0d);
             var seconds = System.Diagnostics.Stopwatch.GetElapsedTime(previous.Ticks, now).TotalSeconds;
-            return seconds >= 0.12 ? (progress.BytesReceived, now, Math.Max(0, (progress.BytesReceived - previous.Bytes) / seconds)) : previous;
+            return seconds > 0 ? (progress.BytesReceived, now, Math.Max(0, (progress.BytesReceived - previous.Bytes) / seconds)) : previous;
         });
         downloads[id] = new(id, Path.GetFileName(progress.Id), progress.Stage, progress.BytesReceived, progress.TotalBytes, progress.Source,
             BytesPerSecond: progress.Stage == "Downloading" ? rate.Rate : 0);
@@ -607,7 +609,7 @@ public sealed partial class LauncherService : ILauncherService, ILocalPackServic
             if (DateTimeOffset.UtcNow - lastDownloadUpdate < TimeSpan.FromMilliseconds(120) && progress.Stage != "Completed") return;
             lastDownloadUpdate = DateTimeOffset.UtcNow;
         }
-        Set(s => s with { Downloads = downloads.Values.TakeLast(250).ToArray() });
+        Set(s => s with { Downloads = downloads.Values.TakeLast(250).ToArray(), DownloadBytesPerSecond = totalRate });
     }
     private void MarkDownloads(string state, string? error)
     {
