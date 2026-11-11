@@ -33,7 +33,7 @@ public sealed record AccountProfile(string Id, AccountKind Kind, string DisplayN
 public sealed record ClubServer(string Id, string Name, string Address, string Status = "尚未查询", int? OnlinePlayers = null);
 public sealed record DownloadTaskSnapshot(string Id, string Name, string State, long BytesReceived = 0,
     long? TotalBytes = null, string? Source = null, string? Error = null, double BytesPerSecond = 0,
-    string? Backend = null, string? Detail = null, DateTimeOffset UpdatedAt = default);
+    string? Backend = null, string? Detail = null, DateTimeOffset UpdatedAt = default, int Connections = 0);
 public sealed record LauncherLog(DateTimeOffset Timestamp, string Level, string Message);
 public sealed record DeviceCodeChallenge(string UserCode, Uri VerificationUri, DateTimeOffset ExpiresAt, string Message);
 public sealed record AuthenticationProfileChoice(string Id, string Name);
@@ -50,6 +50,10 @@ public sealed record LauncherSnapshot(BuildIdentity Build, PlatformContext Platf
     public IReadOnlyList<GameSessionSnapshot> GameSessions { get; init; } = [];
     public LaunchActivity? LaunchActivity { get; init; }
     public double DownloadBytesPerSecond { get; init; }
+    public DateTimeOffset DownloadRateUpdatedAt { get; init; }
+    public DownloadStatistics? DownloadTotals { get; init; }
+    public DownloadActivitySnapshot? DownloadActivity { get; init; }
+    public IReadOnlyList<DownloadActivitySnapshot> DownloadHistory { get; init; } = [];
 }
 public sealed record LaunchPlan(string JavaExecutable, RuntimeArchitecture JavaRuntimeArchitecture,
     string WorkingDirectory, [property: System.Text.Json.Serialization.JsonIgnore] IReadOnlyList<string> Arguments,

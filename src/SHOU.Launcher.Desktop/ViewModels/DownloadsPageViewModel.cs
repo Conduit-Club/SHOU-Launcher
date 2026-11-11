@@ -13,9 +13,9 @@ public sealed class DownloadRowViewModel : ObservableObject
     public AsyncRelayCommand RetryCommand { get; }
     public string Name => Task.Name;
     public string State => Task.State switch { "Queued" => "等待中", "Downloading" => "下载中", "Verifying" => "校验中", "Retrying" => "重试/切源", "Completed" => "已完成", "Failed" => "失败", "Cancelled" => "已取消", _ => Task.State };
-    public bool IsIndeterminate => Task.State is "Verifying" or "Retrying" || Task.TotalBytes is null or <= 0;
-    public double Progress => Task.TotalBytes is > 0 ? Math.Clamp(Task.BytesReceived * 100d / Task.TotalBytes.Value, 0, 100) : 0;
-    public string Transfer => $"{FormatBytes(Task.BytesReceived)} / {(Task.TotalBytes is { } total ? FormatBytes(total) : "未知大小")} · {FormatBytes((long)Task.BytesPerSecond)}/s";
+    public bool IsIndeterminate => Task.State is "Verifying" or "Retrying" || (Task.State is "Queued" or "Downloading") && (Task.TotalBytes is null or <= 0);
+    public double Progress => Task.State == "Completed" ? 100 : Task.TotalBytes is > 0 ? Math.Clamp(Task.BytesReceived * 100d / Task.TotalBytes.Value, 0, 100) : 0;
+    public string Transfer => $"{FormatBytes(Task.BytesReceived)} / {(Task.TotalBytes is { } total ? FormatBytes(total) : Task.State == "Completed" ? FormatBytes(Task.BytesReceived) : "未知大小")} · {FormatBytes((long)Task.BytesPerSecond)}/s";
     public string Source => UiPrivacy.Redact((Task.Backend ?? "内置") + " · " + (Task.Source == "cache" ? "缓存复用" : Task.Source ?? "来源尚未确定") + (Task.Detail is { Length: > 0 } detail ? " · " + detail : ""));
     public string? Error => Task.Error is { } error ? UiPrivacy.Redact(error) : null;
     public bool HasError => !string.IsNullOrWhiteSpace(Error);
@@ -194,8 +194,8 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public ObservableCollection<DownloadRowViewModel> Tasks { get; } = [];
     public bool IsEmpty => Tasks.Count == 0 && PackTasks.Count == 0;
     public string Summary => HasPackTasks
-        ? $"{PackTasks.Count} 项整合包任务 · {PackTasks.Count(t => t.IsActive)} 项安装中 · {Tasks.Count(t => t.Task.State == "Downloading")} 个文件下载中"
-        : $"{Tasks.Count} 项任务 · {Tasks.Count(t => t.Task.State == "Downloading")} 项下载中";
+        ? $"{PackTasks.Count} 项整合包任务 · {PackTasks.Count(t => t.IsActive)} 项安装中 · {TransferTotals.Downloading} 个文件下载中"
+        : $"{TransferTotals.Files} 项文件任务 · {TransferTotals.Downloading} 项下载中";
     public DownloadCategoryViewModel MinecraftCategory { get; }
     public IReadOnlyList<DownloadCategoryViewModel> CommunityCategories { get; }
     public IReadOnlyList<DownloadCategoryViewModel> InstallerCategories { get; }
@@ -339,6 +339,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         ILocalPackService? localPacks = null)
         : base(owner, "下载", "Minecraft 自动安装与社区资源")
     {
+        InitializeTransferSummary();
         _catalogSourceConfiguration = owner.Snapshot.Settings.DownloadSourcesJson;
         _catalog = catalog ?? Service as ILauncherCatalogService;
         _imageToken = _imageLifetime.Token;
@@ -622,6 +623,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         if (_disposed) return;
         _disposed = true; ++_requestRevision; CancelBrowseReads(); _imageLifetime.Cancel();
         ClearProjectRows(Projects); ClearProjectRows(FavoriteProjects);
+        transferDisplayTimer.Stop();
         _imageLifetime.Dispose();
     }
     public override void Refresh(LauncherSnapshot snapshot)
@@ -644,6 +646,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             if (row is null) Tasks.Insert(i, new(Owner, task));
             else { row.Update(task); if (Tasks.IndexOf(row) != i) Tasks.Move(Tasks.IndexOf(row), i); }
         }
+        RefreshTransferHistory(snapshot);
         RefreshContentTargets(snapshot);
         foreach (var task in PackTasks) task.Refresh(snapshot);
         NotifyPackTasks();

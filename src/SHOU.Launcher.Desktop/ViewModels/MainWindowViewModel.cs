@@ -287,7 +287,15 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         else Dispatcher.UIThread.Post(() => { if (!_disposed) action(); });
     }
 
-    private void OnSnapshotChanged(object? sender, LauncherSnapshot snapshot) => Dispatch(() => ApplySnapshot(Service.Snapshot));
+    private int snapshotRefreshQueued;
+    private void OnSnapshotChanged(object? sender, LauncherSnapshot snapshot)
+    {
+        if (Dispatcher.UIThread.CheckAccess()) { if (!_disposed) ApplySnapshot(Service.Snapshot); return; }
+        // Background file completions can arrive thousands at a time. One queued
+        // refresh consumes the newest complete snapshot; accounting stays in Core.
+        if (Interlocked.Exchange(ref snapshotRefreshQueued, 1) != 0) return;
+        Dispatch(() => { Interlocked.Exchange(ref snapshotRefreshQueued, 0); ApplySnapshot(Service.Snapshot); });
+    }
     private void OnInstancesPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
         if (e.PropertyName is nameof(Instances.ContextTitle) or nameof(Instances.WorldContextTitle) or nameof(Instances.IsWorldDetails) && ReferenceEquals(SelectedPage, Instances))

@@ -7,6 +7,16 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class DownloadRateMeterTests
 {
     [TestMethod]
+    public void DuplicateCompletionAndFinalLocalVerificationDoNotCountTrafficTwice()
+    {
+        var meter = new DownloadRateMeter(() => TimeSpan.Zero);
+        Assert.AreEqual(100, meter.Report(new("a", "Downloading", 100, 200, "cdn")));
+        Assert.AreEqual(200, meter.Report(new("a", "Downloading", 200, 200, "cdn")));
+        Assert.AreEqual(200, meter.Report(new("a", "Verifying", 200, 200, "cdn")));
+        Assert.AreEqual(200, meter.Report(new("a", "Completed", 200, 200, "cdn")));
+        Assert.AreEqual(200, meter.Report(new("a", "Completed", 200, 200, "cdn")));
+    }
+    [TestMethod]
     public void ShortParallelFilesAndFinalChunksCountOnceAndAgeOut()
     {
         var now = TimeSpan.Zero; var meter = new DownloadRateMeter(() => now);

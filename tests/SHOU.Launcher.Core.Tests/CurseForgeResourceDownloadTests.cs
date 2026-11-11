@@ -10,6 +10,22 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class CurseForgeResourceDownloadTests
 {
     [TestMethod]
+    public async Task CacheReuseRetainsItsIdentityForStatisticsWithBothBackendsEnabledOrDisabled()
+    {
+        var bytes = "verified existing bytes"u8.ToArray();
+        using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new InvalidOperationException("Verified cache must not perform HTTP.")));
+        foreach (var enabled in new[] { false, true })
+        {
+            var options = new NetworkOptions(); options.Update(new(Aria2: new(enabled, "http://127.0.0.1:1/jsonrpc")));
+            var resolver = new CurseForgePackResolver(http, null, network: options);
+            var file = new ContentFile("pack.zip", new("https://edge.forgecdn.net/files/1234/567/pack.zip"), Convert.ToHexStringLower(SHA1.HashData(bytes)), bytes.Length, true);
+            var path = Path.Combine(TestFiles.Root(), "pack.zip"); await File.WriteAllBytesAsync(path, bytes);
+            var progress = new List<TransferProgress>();
+            await resolver.DownloadResourceAsync(file, path, new CallbackProgress<TransferProgress>(progress.Add));
+            Assert.AreEqual("cache", progress.Single().Source); Assert.AreEqual("Completed", progress.Single().Stage);
+        }
+    }
+    [TestMethod]
     public async Task CdnTransportSharesTheGlobalBudgetAndCancellationWhileQueued()
     {
         var calls = 0; var bytes = "verified CDN fixture"u8.ToArray();

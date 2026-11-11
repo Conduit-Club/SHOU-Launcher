@@ -571,6 +571,8 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         await InitializeAsync(ct).ConfigureAwait(false);
         if (!await operation.WaitAsync(0, ct).ConfigureAwait(false)) throw new InvalidOperationException("另一项操作尚在运行，请等待或取消。");
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
+        var downloadOutcome = "Completed";
+        downloadActivity.Begin(state == "Launching" ? "游戏文件准备" : state == "Installing" ? "资源下载与安装" : "文件传输");
         try
         {
             Set(s => s with { State = state, Error = null });
@@ -579,9 +581,9 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
             // Only complete our own transitional state; never overwrite a newer Error/Running.
             Set(s => s.State == state ? s with { State = s.Error is null ? "Ready" : "Error" } : s);
         }
-        catch (OperationCanceledException) { MarkDownloads("Cancelled", null); Set(s => s with { State = "Ready", Error = null }); throw; }
-        catch (Exception ex) { var message = SafeError(ex); MarkDownloads("Failed", message); Set(s => s with { State = "Error", Error = message }); Log("Error", message); throw; }
-        finally { downloadRate.Reset(); Set(s => s with { DownloadBytesPerSecond = 0 }); if (state == "Launching") Set(s => s with { LaunchActivity = null }); operation.Release(); }
+        catch (OperationCanceledException) { downloadOutcome = "Cancelled"; MarkDownloads("Cancelled", null); Set(s => s with { State = "Ready", Error = null }); throw; }
+        catch (Exception ex) { downloadOutcome = "Failed"; var message = SafeError(ex); MarkDownloads("Failed", message); Set(s => s with { State = "Error", Error = message }); Log("Error", message); throw; }
+        finally { downloadActivity.Complete(downloadOutcome); downloadRate.Reset(); PublishDownloads(0); if (state == "Launching") Set(s => s with { LaunchActivity = null }); operation.Release(); }
     }
     private Task PersistAsync(CancellationToken ct)
     {
@@ -597,6 +599,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     private static LauncherSnapshot AccountCandidate(LauncherSnapshot state, AccountProfile account) => state with
     { Accounts = state.Accounts.Where(a => a.Id != account.Id).Append(account).ToArray(), SelectedAccountId = account.Id };
     private readonly DownloadRateMeter downloadRate = new();
+    private readonly DownloadActivityTracker downloadActivity = new();
     private readonly ConcurrentDictionary<string, (long Bytes, long Ticks, double Rate)> transferRates = new(StringComparer.Ordinal);
     private void OnTransfer(TransferProgress progress)
     {
@@ -611,20 +614,30 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
             return seconds > 0 ? (progress.BytesReceived, now, Math.Max(0, (progress.BytesReceived - previous.Bytes) / seconds)) : previous;
         });
         downloads[id] = new(id, Path.GetFileName(progress.Id), progress.Stage, progress.BytesReceived, progress.TotalBytes, progress.Source,
-            BytesPerSecond: progress.Stage == "Downloading" ? rate.Rate : 0, Backend: progress.Backend ?? "内置", Detail: progress.Detail, UpdatedAt: DateTimeOffset.UtcNow);
+            BytesPerSecond: progress.Stage == "Downloading" ? rate.Rate : 0, Backend: progress.Backend ?? "内置", Detail: progress.Detail, UpdatedAt: DateTimeOffset.UtcNow, Connections: progress.Stage == "Downloading" ? progress.Connections ?? 1 : 0);
+        downloadActivity.Report(downloads[id]);
         if (progress.Stage is "Completed" or "Failed" or "Cancelled") transferRates.TryRemove(id, out _);
         lock (sync)
         {
             if (DateTimeOffset.UtcNow - lastDownloadUpdate < TimeSpan.FromMilliseconds(120) && progress.Stage != "Completed") return;
             lastDownloadUpdate = DateTimeOffset.UtcNow;
         }
-        Set(s => s with { Downloads = downloads.Values.OrderBy(t => t.State is "Queued" or "Downloading" or "Verifying" or "Retrying" ? 1 : 0).ThenBy(t => t.UpdatedAt).TakeLast(250).ToArray(), DownloadBytesPerSecond = totalRate });
+        PublishDownloads(totalRate);
     }
     private void MarkDownloads(string state, string? error)
     {
         foreach (var item in downloads.ToArray()) if (item.Value.State is "Queued" or "Downloading" or "Verifying" or "Retrying")
-        { transferRates.TryRemove(item.Key, out _); downloads[item.Key] = item.Value with { State = state, Error = error, BytesPerSecond = 0 }; }
-        Set(s => s with { Downloads = downloads.Values.OrderBy(t => t.State is "Queued" or "Downloading" or "Verifying" or "Retrying" ? 1 : 0).ThenBy(t => t.UpdatedAt).TakeLast(250).ToArray() });
+        { transferRates.TryRemove(item.Key, out _); downloads[item.Key] = item.Value with { State = state, Error = error, BytesPerSecond = 0, Connections = 0 }; downloadActivity.Report(downloads[item.Key]); }
+        PublishDownloads(0);
+    }
+    private void PublishDownloads(double rate)
+    {
+        Set(s =>
+        {
+            var summary = downloadActivity.Capture();
+            return s with { Downloads = downloads.Values.OrderBy(t => t.State is "Queued" or "Downloading" or "Verifying" or "Retrying" ? 1 : 0).ThenBy(t => t.UpdatedAt).TakeLast(250).ToArray(),
+            DownloadBytesPerSecond = rate, DownloadRateUpdatedAt = DateTimeOffset.UtcNow, DownloadTotals = summary.Totals, DownloadActivity = summary.Activity, DownloadHistory = summary.History };
+        });
     }
     private void RegisterSession(AuthSession session)
     { redactor.Register(session.AccessToken); redactor.Register(session.RefreshToken); redactor.Register(session.ClientToken); redactor.Register(session.Profile.PlayerUuid); redactor.Register(session.Profile.DisplayName); }

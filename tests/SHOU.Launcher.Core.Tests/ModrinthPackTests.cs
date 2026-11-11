@@ -182,6 +182,25 @@ public sealed class ModrinthPackTests
         }
         finally { await ((ProcessRunner)platform.Processes).DisposeAsync(); }
     }
+    [TestMethod]
+    public async Task ServiceKeepsCompleteStatisticsWhenDetailSnapshotIsLimitedTo250Rows()
+    {
+        var root = TestFiles.Root();
+        var entries = new JsonArray(Enumerable.Range(0, 310).Select(i => (JsonNode)FileEntry($"mods/fixture-{i}.jar")).ToArray());
+        var archive = Archive(root, Index(entries)); var downloader = new FixtureDownloader(() => { });
+        using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new InvalidOperationException("No online request expected.")));
+        var platform = PlatformServicesFactory.Create(new(Path.Combine(root, "data")), downloader) with { Credentials = new EmptyCredentials() };
+        using var lease = platform.DataLock.Acquire(platform.Paths);
+        await using var service = new LauncherService(platform, http, downloader, new NetworkOptions()); await service.InitializeAsync();
+        var inspection = await service.InspectModrinthPackAsync(archive);
+        await service.ImportModrinthPackAsync(new(archive, inspection.ArchiveSha256, "Large statistics fixture"));
+        Assert.HasCount(250, service.Snapshot.Downloads); var totals = service.Snapshot.DownloadTotals!;
+        Assert.AreEqual(310, totals.Files); Assert.AreEqual(310, totals.Completed);
+        Assert.AreEqual(310L * Bytes.Length, totals.ReadyBytes); Assert.AreEqual(totals.ReadyBytes, totals.KnownTotalBytes);
+        Assert.AreEqual(0, totals.Pending); Assert.HasCount(1, service.Snapshot.DownloadHistory);
+        Assert.AreEqual("Completed", service.Snapshot.DownloadActivity!.State); Assert.AreEqual(0, service.Snapshot.DownloadBytesPerSecond);
+    }
+
     private sealed class FixtureDownloader(Action complete) : IVerifiedDownloader
     {
         public async Task DownloadAsync(DownloadRequest request, IProgress<TransferProgress>? progress = null, CancellationToken cancellationToken = default)

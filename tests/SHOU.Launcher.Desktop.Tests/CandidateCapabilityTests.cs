@@ -95,6 +95,7 @@ public sealed class CandidateCapabilityTests
             vm.Settings.Aria2Endpoint = "http://localhost:6801/jsonrpc"; Pump(window);
             Assert.False(vm.Settings.TestAria2ConnectionCommand.CanExecute(null));
             await vm.Settings.SaveCommand.ExecuteAsync(null); Pump(window);
+            Assert.Same(firstSource, vm.Settings.Sources[0]); Assert.Equal(offset, scroller.Offset);
             await vm.Settings.TestAria2ConnectionCommand.ExecuteAsync(null); Pump(window);
             Assert.Equal(2, fake.Probes); Assert.Equal("http://localhost:6801/jsonrpc", fake.Snapshot.Settings.Aria2!.Endpoint);
         }

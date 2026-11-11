@@ -190,6 +190,7 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
             { progress?.Report(new(destination, "Downloading", bytes, totalBytes, uri.Host)); lastProgress = DateTimeOffset.UtcNow; }
         }
         await output.FlushAsync(timeout.Token).ConfigureAwait(false);
+        progress?.Report(new(destination, "Downloading", bytes, totalBytes, uri.Host));
     }
     public static async Task<bool> IsValidAsync(string path, DownloadRequest request, CancellationToken ct = default)
     {

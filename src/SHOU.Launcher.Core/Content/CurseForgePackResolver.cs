@@ -178,7 +178,7 @@ public sealed class CurseForgePackResolver
             throw new InvalidDataException(label + "：文件哈希或大小无效。");
         using var redirects = new CdnRedirectHandler(http, file.FromFtb); using var downloads = new HttpClient(redirects) { Timeout = Timeout.InfiniteTimeSpan };
         // Keep the CDN redirect allowlist and API-key isolation while sharing the global transfer budget.
-        var reporting = new CallbackProgress<TransferProgress>(p => progress?.Report(p with { Source = file.DownloadUri.Host, Backend = p.Backend ?? "内置",
+        var reporting = new CallbackProgress<TransferProgress>(p => progress?.Report(p with { Source = p.Source == "cache" ? "cache" : file.DownloadUri.Host, Backend = p.Backend ?? "内置",
             Detail = p.Backend == "aria2" ? "经官方 CDN 校验通道 · " + p.Detail : p.Detail }));
         try
         {

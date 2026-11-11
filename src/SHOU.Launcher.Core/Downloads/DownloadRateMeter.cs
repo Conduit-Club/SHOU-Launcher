@@ -21,8 +21,7 @@ internal sealed class DownloadRateMeter(Func<TimeSpan>? clock = null)
             var network = progress.Source != "cache" && (progress.Stage == "Downloading" || progress.Stage == "Completed" && !string.IsNullOrWhiteSpace(progress.Source));
             var delta = network ? Math.Max(0, progress.BytesReceived - previous) : 0;
             if (delta > 0) { samples.Enqueue((now, delta)); bytes += delta; }
-            if (progress.Stage is "Completed" or "Cancelled" or "Failed") received.Remove(progress.Id);
-            else received[progress.Id] = Math.Max(0, progress.BytesReceived);
+            received[progress.Id] = Math.Max(0, progress.BytesReceived);
             return bytes;
         }
     }

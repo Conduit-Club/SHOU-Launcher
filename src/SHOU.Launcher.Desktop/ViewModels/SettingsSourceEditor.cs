@@ -80,6 +80,8 @@ public sealed partial class SettingsPageViewModel
         try
         {
             var parsed = DownloadSources.Parse(json);
+            string Signature(IEnumerable<DownloadSource> sources) => JsonSerializer.Serialize(sources.OrderBy(s => s.Category).ThenBy(s => s.Priority));
+            if (Signature(parsed) == Signature(_allSources.Select(s => s.ToSource()))) { SourceEditorSummary = ""; return; }
             _allSources.Clear(); foreach (var source in parsed) _allSources.Add(NewRow(source));
             UpdateSourceCategory(); SourceEditorSummary = "";
         }
