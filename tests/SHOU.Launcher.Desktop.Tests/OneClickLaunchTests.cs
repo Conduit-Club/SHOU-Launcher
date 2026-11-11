@@ -21,6 +21,7 @@ public sealed class OneClickLaunchTests
         Assert.True(fixture.Launch.IsEffectivelyEnabled); Assert.Equal("再开一个游戏窗口", fixture.Vm.Instances.LaunchCaption);
         Assert.True(Find<TextBlock>(fixture.Window, "ConcurrentPlayHint").IsEffectivelyVisible);
         Assert.Contains("同一世界", fixture.Vm.Instances.LaunchPrerequisite);
+        Assert.False(fixture.Vm.Instances.InstallCommand.CanExecute(null)); Assert.False(fixture.Vm.Instances.InspectPlanCommand.CanExecute(null));
         await fixture.ClickLaunch().WaitAsync(Deadline); Pump(fixture.Window);
         Assert.False(fixture.Vm.IsBusy); Assert.False(fixture.Vm.HasError); Assert.True(fixture.Vm.Instances.IsSelectedInstanceRunning);
     }

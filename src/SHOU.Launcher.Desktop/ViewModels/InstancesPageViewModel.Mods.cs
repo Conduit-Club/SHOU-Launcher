@@ -20,6 +20,7 @@ public sealed partial class InstancesPageViewModel
     private InstanceModUpdate? selectedModUpdate;
     private string modUpdateStatus = "";
     private bool confirmModUpdate;
+    private int modCheckGeneration;
     public InstanceModUpdate? SelectedModUpdate { get => selectedModUpdate; set { if (SetProperty(ref selectedModUpdate, value)) { ConfirmModUpdate = false; NotifyCommands(); } } }
     public string ModUpdateStatus { get => modUpdateStatus; private set { SetProperty(ref modUpdateStatus, value); OnPropertyChanged(nameof(HasModUpdateStatus)); } }
     public bool HasModUpdateStatus => ModUpdateStatus.Length > 0;
@@ -44,7 +45,19 @@ public sealed partial class InstancesPageViewModel
     private async Task CheckModUpdatesAsync()
     {
         var instance = SelectedInstance!; InstanceModUpdateCheck? result = null; ClearModUpdates();
-        if (!await Owner.RunAsync("检查模组更新", async ct => result = await ((IInstanceModUpdateService)Service).CheckInstanceModUpdatesAsync(instance.Id, ct))) return;
+        var generation = ++modCheckGeneration;
+        ModUpdateStatus = "正在核对已安装模组及其官方更新，可随时取消。";
+        var progress = new Progress<PackInstallProgress>(p =>
+        {
+            if (generation != modCheckGeneration || SelectedInstance?.Id != instance.Id || !IsModsSection) return;
+            ModUpdateStatus = $"已检查 {p.CompletedFiles}/{p.TotalFiles} 个模组" + (p.CurrentFile is { } name ? " · " + UiPrivacy.Redact(name) : "") + "；未修改文件。";
+        });
+        bool success;
+        try { success = await Owner.RunAsync("检查模组更新", async ct => result = Service is IInstanceModUpdateProgressService tracked
+            ? await tracked.CheckInstanceModUpdatesWithProgressAsync(instance.Id, progress, ct)
+            : await ((IInstanceModUpdateService)Service).CheckInstanceModUpdatesAsync(instance.Id, ct)); }
+        finally { ++modCheckGeneration; }
+        if (!success) { if (SelectedInstance?.Id == instance.Id && IsModsSection) ModUpdateStatus = "检查已取消或失败，未修改模组文件。"; return; }
         if (SelectedInstance?.Id != instance.Id || !IsModsSection) return;
         foreach (var update in result!.Updates) ModUpdates.Add(update);
         SelectedModUpdate = ModUpdates.FirstOrDefault(); OnPropertyChanged(nameof(HasModUpdates));

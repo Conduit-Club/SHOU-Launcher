@@ -7,13 +7,15 @@ using SHOU.Launcher.Core.Instances;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService : IInstanceModUpdateService
+public sealed partial class LauncherService : IInstanceModUpdateService, IInstanceModUpdateProgressService
 {
     private sealed record ModUpdateState(GameInstance Instance, ContentInstalledFile Old, ContentRelease Release, ContentFile File, DateTimeOffset Expires);
     private readonly ConcurrentDictionary<string, ModUpdateState> modUpdates = new();
     public async Task<InstanceModUpdateCheck> CheckInstanceModUpdatesAsync(string instanceId, CancellationToken cancellationToken = default)
         => await CheckInstanceModUpdatesAsync(instanceId, TimeSpan.FromMinutes(4), cancellationToken).ConfigureAwait(false);
-    internal async Task<InstanceModUpdateCheck> CheckInstanceModUpdatesAsync(string instanceId, TimeSpan budget, CancellationToken cancellationToken = default)
+    public Task<InstanceModUpdateCheck> CheckInstanceModUpdatesWithProgressAsync(string instanceId, IProgress<PackInstallProgress> progress, CancellationToken cancellationToken = default)
+        => CheckInstanceModUpdatesAsync(instanceId, TimeSpan.FromMinutes(4), cancellationToken, new PackProgressReporter(progress));
+    internal async Task<InstanceModUpdateCheck> CheckInstanceModUpdatesAsync(string instanceId, TimeSpan budget, CancellationToken cancellationToken = default, IProgress<PackInstallProgress>? progress = null)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(false);
         var instance = ContentTarget(instanceId, false);
@@ -25,7 +27,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService
         using var transport = ContentTransport(); var curseForge = new CurseForgeCatalog(transport, build.CurseForgeApiKey);
         var attempted = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
         foreach (var item in modUpdates.Where(p => p.Value.Expires < DateTimeOffset.UtcNow || p.Value.Instance.Id == instanceId)) modUpdates.TryRemove(item.Key, out _);
-        var checkedFiles = 0;
+        var checkedFiles = 0; progress?.Report(new("核对模组更新", 0, rows.Count));
         try
         {
             await Parallel.ForEachAsync(rows, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = timeout.Token }, async (row, ct) =>
@@ -65,7 +67,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService
                 { notices.Add(row.Name + "：在线检查超时，尚未核实更新；未改动此文件。"); }
                 catch (Exception ex) when (ex is IOException or HttpRequestException or InvalidDataException or AggregateException or InvalidOperationException)
                 { notices.Add(row.Name + "：暂未能核实官方更新，未改动此文件；请核对本地来源或稍后重试。"); }
-                finally { attempted.TryAdd(row.RelativePath, 0); Interlocked.Increment(ref checkedFiles); }
+                finally { attempted.TryAdd(row.RelativePath, 0); var count = Interlocked.Increment(ref checkedFiles); progress?.Report(new("核对模组更新", count, rows.Count, row.Name)); }
             }).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && timeout.IsCancellationRequested)
@@ -74,6 +76,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService
                 notices.Add(row.Name + "：本次检查达到时间上限，尚未查询；可稍后重试，未改动此文件。");
         }
         cancellationToken.ThrowIfCancellationRequested();
+        progress?.Report(new("检查结束", checkedFiles, rows.Count));
         return new(updates.OrderBy(u => u.Name, StringComparer.OrdinalIgnoreCase).ToArray(), checkedFiles, notices.Order(StringComparer.Ordinal).ToArray());
     }
     public async Task<InstanceModUpdateResult> ApplyInstanceModUpdateAsync(string token, CancellationToken cancellationToken = default)

@@ -65,6 +65,12 @@ public sealed class DownloadCoordinatorNativeTests
             await Assert.ThrowsAsync<OperationCanceledException>(() => downloader.DownloadAsync(cancelled, cancellationToken: cancel.Token));
             var state = await rpc.CallAsync("tellStatus", [Aria2RpcClient.TaskId(cancelled.DestinationPath + ".aria2-part")]);
             Assert.AreEqual("paused", (string?)state["status"]); Assert.IsFalse(File.Exists(cancelled.DestinationPath));
+            await rpc.CallAsync("changeGlobalOption", [new Dictionary<string, string> { ["max-overall-download-limit"] = "0" }]);
+            reports.Clear();
+            await downloader.DownloadAsync(cancelled, new ProgressCallback(reports.Add)).WaitAsync(TimeSpan.FromSeconds(30));
+            CollectionAssert.AreEqual(bytes, await File.ReadAllBytesAsync(cancelled.DestinationPath));
+            Assert.IsTrue(reports.Any(p => p.Stage == "Completed" && p.Backend == "aria2"));
+            Assert.IsFalse(reports.Any(p => p.Backend == "内置"));
         }
         finally
         {

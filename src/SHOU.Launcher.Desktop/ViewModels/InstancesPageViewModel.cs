@@ -120,13 +120,13 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         DiscoverJavaCommand = AsyncCommand(() => Owner.RunAsync("发现 Java", async ct => { await Service.DiscoverJavaAsync(ct); }), () => CanEdit);
         SaveRuntimeCommand = AsyncCommand(SaveRuntimeAsync, () => CanEdit);
         AutomaticJavaCommand = Command(() => { JavaExecutable = ""; SelectedJava = null; }, () => CanEdit);
-        InstallCommand = AsyncCommand(() => Owner.RunAsync("安装/校验实例", ct => Service.InstallInstanceAsync(SelectedInstance!.Id, ct)), () => CanEdit && SelectedInstanceSupported);
+        InstallCommand = AsyncCommand(() => Owner.RunAsync("安装/校验实例", ct => Service.InstallInstanceAsync(SelectedInstance!.Id, ct)), () => CanPrepareSelectedInstance);
         LaunchCommand = AsyncCommand(LaunchSelectedInstanceAsync, CanLaunch);
         InspectPlanCommand = AsyncCommand(() => Owner.RunAsync("检查启动计划", async ct =>
         {
             var plan = await Service.BuildLaunchPlanAsync(SelectedInstance!.Id, ct);
             PlanDiagnostics = $"Java：{plan.JavaExecutable}\n架构：{plan.JavaRuntimeArchitecture}\n类路径：{plan.ClasspathEntries.Count} 项\n" + string.Join("\n", plan.RedactedDiagnostics.Select(s => UiPrivacy.Redact(s)));
-        }), () => CanEdit && SelectedInstanceSupported && SelectedInstance?.Installed == true);
+        }), () => CanPrepareSelectedInstance && SelectedInstance?.Installed == true);
         InitializeWorkspace();
         InitializePresentation();
         InitializeScreenshotActions();
@@ -153,6 +153,7 @@ public sealed partial class InstancesPageViewModel : PageViewModel
     public bool IsSelectedInstanceRunning => SelectedInstance is { } instance &&
         (Owner.Snapshot.GameSessions.Any(s => s.InstanceId == instance.Id)
          || Owner.Snapshot.GameSessions.Count == 0 && Owner.Snapshot.GameProcessId is not null && Owner.Snapshot.SelectedInstanceId == instance.Id);
+    public bool CanPrepareSelectedInstance => CanEdit && !IsSelectedInstanceRunning && SelectedInstanceSupported;
     public string LaunchCaption => IsSelectedInstanceRunning ? "再开一个游戏窗口" : Localization.UiLocalization.Instance.Text("启动游戏");
     public string ConcurrentPlayHint => IsSelectedInstanceRunning ? "多开将共享此实例的配置和存档；同一世界不可同时打开。运行期间请勿修改模组与资源。" : "";
     private bool CanLaunch() => CanEdit && (!IsSelectedInstanceRunning || SelectedInstance?.Installed == true) && SelectedInstanceSupported && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId);
@@ -197,5 +198,5 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         RefreshWorkspaceSnapshot(snapshot);
         base.Refresh(snapshot);
     }
-    public override void NotifyCommands() { base.NotifyCommands(); foreach (var image in ScreenshotPreviews) image.RemoveCommand.NotifyCanExecuteChanged(); OnPropertyChanged(nameof(IsSelectedInstanceRunning)); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(LaunchCaption)); OnPropertyChanged(nameof(ConcurrentPlayHint)); OnPropertyChanged(nameof(CanImportContent)); ScheduleContentRefresh(); NotifyWorldWorkspace(); }
+    public override void NotifyCommands() { base.NotifyCommands(); foreach (var image in ScreenshotPreviews) image.RemoveCommand.NotifyCanExecuteChanged(); OnPropertyChanged(nameof(IsSelectedInstanceRunning)); OnPropertyChanged(nameof(CanPrepareSelectedInstance)); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(LaunchCaption)); OnPropertyChanged(nameof(ConcurrentPlayHint)); OnPropertyChanged(nameof(CanImportContent)); ScheduleContentRefresh(); NotifyWorldWorkspace(); }
 }

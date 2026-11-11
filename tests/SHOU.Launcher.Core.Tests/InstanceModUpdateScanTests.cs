@@ -29,7 +29,12 @@ public sealed class InstanceModUpdateScanTests
             await Assert.ThrowsAsync<OperationCanceledException>(() => service.CheckInstanceModUpdatesAsync(instance.Id, TimeSpan.FromSeconds(10), cancellation.Token));
         else
         {
-            var result = await service.CheckInstanceModUpdatesAsync(instance.Id, TimeSpan.FromSeconds(2));
+            var reports = new List<PackInstallProgress>();
+            var progress = new SHOU.Launcher.Core.Content.PackProgressReporter(new ScanProgress(reports.Add));
+            var result = await service.CheckInstanceModUpdatesAsync(instance.Id, TimeSpan.FromSeconds(2), progress: progress);
+            Assert.AreEqual(0, reports[0].CompletedFiles); Assert.AreEqual(8, reports[0].TotalFiles);
+            Assert.AreEqual(result.CheckedFiles, reports[^1].CompletedFiles);
+            Assert.IsTrue(reports.Zip(reports.Skip(1)).All(pair => pair.First.CompletedFiles <= pair.Second.CompletedFiles));
             Assert.HasCount(1, result.Updates); Assert.IsTrue(result.Updates[0].RelativePath.StartsWith("mods/", StringComparison.Ordinal));
             Assert.HasCount(7, result.Notices); Assert.IsTrue(result.CheckedFiles is > 0 and < 8);
             Assert.IsTrue(result.Notices.All(n => n.Contains("未改动此文件", StringComparison.Ordinal)));
@@ -37,6 +42,9 @@ public sealed class InstanceModUpdateScanTests
         Assert.AreEqual(8, Directory.GetFiles(Path.Combine(game, "mods")).Length);
         Assert.IsFalse(File.Exists(Path.Combine(game, ".shou-content-manifest.json")));
     }
+
+    private sealed class ScanProgress(Action<PackInstallProgress> report) : IProgress<PackInstallProgress>
+    { public void Report(PackInstallProgress value) => report(value); }
 
     private sealed class ScanHandler : HttpMessageHandler
     {
