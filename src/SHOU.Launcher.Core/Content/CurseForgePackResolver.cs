@@ -121,11 +121,16 @@ public sealed class CurseForgePackResolver
         catch (Exception ex) when (ex is JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException or FormatException or ArgumentException)
         { return new(null, [], ex is InvalidDataException ? ex.Message : "官方服务返回的文件元数据无效，未下载任何文件。"); }
     }
-    public async Task DownloadAsync(CurseForgePackFile file, string path, IProgress<TransferProgress>? progress = null, CancellationToken ct = default)
+    internal const long MaximumCachedResourceBytes = 2L * 1024 * 1024 * 1024;
+    public Task DownloadResourceAsync(ContentFile file, string path, IProgress<TransferProgress>? progress = null, CancellationToken ct = default)
+        => DownloadVerifiedAsync(new(0, 0, file.FileName, file.Sha1, null, file.Size, file.Uri, false), path, MaximumCachedResourceBytes, progress, ct);
+    public Task DownloadAsync(CurseForgePackFile file, string path, IProgress<TransferProgress>? progress = null, CancellationToken ct = default)
+        => DownloadVerifiedAsync(file, path, PackArchiveReader.MaximumFileBytes, progress, ct);
+    private async Task DownloadVerifiedAsync(CurseForgePackFile file, string path, long maximumBytes, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         var label = DownloadLabel(file);
         if (!AllowedDownloadUri(file.DownloadUri)) throw new InvalidDataException(label + "：文件来源不在官方 CDN 允许范围。");
-        if (!ContentInstallFiles.Hash(file.Sha1, 40) || file.Size is <= 0 or > PackArchiveReader.MaximumFileBytes || file.Sha512 is not null && !ContentInstallFiles.Hash(file.Sha512, 128))
+        if (!ContentInstallFiles.Hash(file.Sha1, 40) || (file.Size <= 0 || file.Size > maximumBytes) || file.Sha512 is not null && !ContentInstallFiles.Hash(file.Sha512, 128))
             throw new InvalidDataException(label + "：文件哈希或大小无效。");
         using var redirects = new CdnRedirectHandler(http); using var downloads = new HttpClient(redirects) { Timeout = Timeout.InfiniteTimeSpan };
         try { await new VerifiedDownloader(downloads).DownloadAsync(new([file.DownloadUri], path, file.Sha1, Size: file.Size), progress, ct).ConfigureAwait(false); }
@@ -149,7 +154,7 @@ public sealed class CurseForgePackResolver
     private static string DownloadLabel(CurseForgePackFile file)
     {
         var name = new string(Path.GetFileName(file.Path).Where(c => char.IsLetterOrDigit(c) || c is '.' or '-' or '_' or ' ' or '+' or '(' or ')').Take(120).ToArray());
-        return $"项目 {file.ProjectId} / 文件 {file.FileId}（{(name.Length == 0 ? "文件" : name)}）";
+        return file.ProjectId > 0 && file.FileId > 0 ? $"项目 {file.ProjectId} / 文件 {file.FileId}（{(name.Length == 0 ? "文件" : name)}）" : $"文件（{(name.Length == 0 ? "资源" : name)}）";
     }
     // This wrapper is used only by file downloads. API requests keep the caller's no-redirect transport directly.
     private sealed class CdnRedirectHandler(HttpClient transport) : HttpMessageHandler

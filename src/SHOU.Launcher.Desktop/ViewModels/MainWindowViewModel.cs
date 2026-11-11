@@ -171,6 +171,18 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public bool CanReadRemote => !_disposed && !closing && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
     public bool HasRunningGame => !_disposed && (Snapshot.State == "Running" || Snapshot.GameProcessId is not null);
     private int inlineOperations;
+    public string OperationTransferSummary
+    {
+        get
+        {
+            if (!IsBusy) return "";
+            var transfer = Snapshot.Downloads.LastOrDefault(t => t.State is "Downloading" or "Queued" or "Verifying" or "Retrying");
+            if (transfer is null) return "";
+            var bytes = transfer.TotalBytes is > 0 ? $"{transfer.BytesReceived / 1048576d:F1} / {transfer.TotalBytes.Value / 1048576d:F1} MiB" : $"{transfer.BytesReceived / 1048576d:F1} MiB";
+            return $"当前文件：{UiPrivacy.Redact(transfer.Name)}\n{bytes}";
+        }
+    }
+    public bool HasOperationTransferSummary => OperationTransferSummary.Length > 0;
     public bool ShowOperationStatus => inlineOperations == 0 && IsBusy && (!IsHomeLaunching || !ReferenceEquals(SelectedPage, Home));
     public async Task<bool> RunInlineAsync(string label, Func<CancellationToken, Task> action)
     {
@@ -310,6 +322,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         OnPropertyChanged(nameof(HasRunningGame));
         OnPropertyChanged(nameof(ShowOperationStatus));
         OnPropertyChanged(nameof(StateSummary));
+        OnPropertyChanged(nameof(OperationTransferSummary));
+        OnPropertyChanged(nameof(HasOperationTransferSummary));
         NotifyLaunchPresentation();
         CancelOperationCommand.NotifyCanExecuteChanged();
         StopGameCommand.NotifyCanExecuteChanged();

@@ -38,7 +38,7 @@ public sealed partial class LauncherService : ILauncherCatalogService, IMinecraf
     public async Task<string> DownloadContentAsync(ContentFile file, CancellationToken cancellationToken = default)
     {
         if (file.FileName.Length is 0 or > 200 || file.FileName.Contains('/') || file.FileName.Contains('\\') || file.FileName is "." or ".."
-            || file.Sha1.Length != 40 || !file.Sha1.All(Uri.IsHexDigit) || file.Size is < 0 or > 2147483648
+            || file.Sha1.Length != 40 || !file.Sha1.All(Uri.IsHexDigit) || file.Size is < 0 or > Content.CurseForgePackResolver.MaximumCachedResourceBytes
             || !(Content.ContentInstallFiles.AllowedUri(file.Uri) || Content.CurseForgePackResolver.AllowedCurseForgeUri(file.Uri)))
             throw new InvalidDataException("资源文件身份无效。");
         var path = SafePath.Within(Paths.CacheDirectory, "content/" + file.Sha1.ToLowerInvariant() + "/" + file.FileName);
@@ -53,7 +53,7 @@ public sealed partial class LauncherService : ILauncherCatalogService, IMinecraf
                 if (Content.CurseForgePackResolver.AllowedCurseForgeUri(file.Uri))
                 {
                     using var transport = ContentTransport();
-                    await new Content.CurseForgePackResolver(transport, null).DownloadAsync(new(0, 0, file.FileName, file.Sha1, null, file.Size, file.Uri, false), path, new InlineProgress<TransferProgress>(OnTransfer), cancellation.Token).ConfigureAwait(false);
+                    await new Content.CurseForgePackResolver(transport, null).DownloadResourceAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), cancellation.Token).ConfigureAwait(false);
                 }
                 else
                 {
