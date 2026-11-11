@@ -9,6 +9,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
 {
     private bool _loading;
     private bool _loaded;
+    private LauncherSettings? _lastLoadedSettings;
     private bool _isDirty;
     private string _gameRoot = "";
     private string _javaExecutable = "";
@@ -134,14 +135,15 @@ public sealed partial class SettingsPageViewModel : PageViewModel
             LoadLauncherOptions(settings);
             RefreshSourceEditor(settings.DownloadSourcesJson);
             Aria2ConnectionSummary = "尚未测试当前保存的连接；下载时会自动探测，未连接则使用内置下载器。";
+            _lastLoadedSettings = settings;
             IsDirty = false; _loaded = true;
         }
         finally { _loading = false; }
     }
     public override void Refresh(LauncherSnapshot snapshot)
     {
-        if (!_loaded || !IsDirty) Load(snapshot.Settings);
-        else ReconcileJavaSelection(snapshot.Settings);
+        if (!_loaded || !IsDirty && snapshot.Settings != _lastLoadedSettings) Load(snapshot.Settings);
+        else if (IsDirty) ReconcileJavaSelection(snapshot.Settings);
         OnPropertyChanged(nameof(CredentialsSummary));
         RefreshParity(snapshot);
         base.Refresh(snapshot);

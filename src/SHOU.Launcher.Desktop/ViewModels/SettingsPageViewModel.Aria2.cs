@@ -10,11 +10,11 @@ public sealed partial class SettingsPageViewModel
     public AsyncRelayCommand TestAria2ConnectionCommand { get; private set; } = null!;
     private void InitializeAria2Connection()
     {
-        TestAria2ConnectionCommand = AsyncCommand(async () =>
+        TestAria2ConnectionCommand = AsyncCommand(() => RunSettingsWork(async ct =>
         {
-            Aria2ConnectionStatus? result = null;
-            if (await Owner.RunAsync("测试 aria2 连接", async ct => result = await ((IAria2ConnectionService)Service).TestAria2ConnectionAsync(ct)))
-                Aria2ConnectionSummary = result!.Message + (result.Version is { } version ? " · v" + version : "");
-        }, () => CanEdit && !IsDirty && Service is IAria2ConnectionService);
+            var result = await ((IAria2ConnectionService)Service).TestAria2ConnectionAsync(ct);
+            ct.ThrowIfCancellationRequested();
+            Aria2ConnectionSummary = result.Message + (result.Version is { } version ? " · v" + version : "");
+        }), () => CanEdit && !IsDirty && !IsLauncherBusy && Service is IAria2ConnectionService);
     }
 }

@@ -83,8 +83,13 @@ public sealed class CandidateCapabilityTests
         try
         {
             Assert.Equal("http://localhost:6800/jsonrpc", vm.Settings.Aria2Endpoint);
+            var scroller = Find<ScrollViewer>(window, "SettingsPageScroller");
+            scroller.Offset = new(0, scroller.Extent.Height); Pump(window);
+            var offset = scroller.Offset; var firstSource = vm.Settings.Sources[0];
             await vm.Settings.TestAria2ConnectionCommand.ExecuteAsync(null); Pump(window);
             Assert.Equal(1, fake.Probes);
+            fake.Publish(fake.Snapshot with { }); Pump(window);
+            Assert.Same(firstSource, vm.Settings.Sources[0]); Assert.Equal(offset, scroller.Offset);
             Assert.Contains("1.37.0", Find<TextBlock>(window, "Aria2ConnectionStatus").Text);
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<Button>(), b => b.Name is "StartAria2Button" or "StopAria2Button");
             vm.Settings.Aria2Endpoint = "http://localhost:6801/jsonrpc"; Pump(window);
