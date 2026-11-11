@@ -30,6 +30,11 @@ public partial class MainWindow : Window
                 else if (CanMaximize) WindowState = WindowState.FullScreen;
                 e.Handled = true;
             }
+            else if (OperatingSystem.IsMacOS() && e.KeyModifiers == KeyModifiers.Meta && e.Key == Key.M)
+            {
+                if (WindowState != WindowState.FullScreen) WindowState = WindowState.Minimized;
+                e.Handled = true;
+            }
             else if (OperatingSystem.IsMacOS() && e.KeyModifiers == KeyModifiers.Meta && e.Key == Key.W)
             {
                 Close();

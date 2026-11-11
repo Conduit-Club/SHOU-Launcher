@@ -18,6 +18,27 @@ namespace SHOU.Launcher.Desktop.Tests;
 public sealed class WpfShellChromeTests
 {
     [AvaloniaFact]
+    public void CommandMMinimizesOnlyOnMacAndLeavesFullscreenIntact()
+    {
+        using var vm = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
+        var window = new MainWindow { DataContext = vm };
+        window.Show(); Pump(window);
+        try
+        {
+            var key = new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.M, KeyModifiers = KeyModifiers.Meta };
+            window.RaiseEvent(key); Pump(window);
+            Assert.Equal(OperatingSystem.IsMacOS() ? WindowState.Minimized : WindowState.Normal, window.WindowState);
+            Assert.Equal(OperatingSystem.IsMacOS(), key.Handled);
+            if (OperatingSystem.IsMacOS())
+            {
+                window.WindowState = WindowState.FullScreen; Pump(window);
+                window.RaiseEvent(new KeyEventArgs { RoutedEvent = InputElement.KeyDownEvent, Key = Key.M, KeyModifiers = KeyModifiers.Meta });
+                Pump(window); Assert.Equal(WindowState.FullScreen, window.WindowState);
+            }
+        }
+        finally { window.WindowState = WindowState.Normal; window.Close(); }
+    }
+    [AvaloniaFact]
     public void CaptionMaximizeAndRestoreChangeStateAndAccessibleName()
     {
         using var vm = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
