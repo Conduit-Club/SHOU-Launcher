@@ -9,7 +9,7 @@ using SHOU.Launcher.Core.Configuration;
 namespace SHOU.Launcher.Core.Tests;
 
 [TestClass]
-public sealed class LaunchPlanTests
+public sealed partial class LaunchPlanTests
 {
     [TestMethod, DataRow("windows"), DataRow("osx")]
     public void QuickConnectUsesDeclaredMinecraftArgumentsAndKeepsCredentialsRedacted(string os)

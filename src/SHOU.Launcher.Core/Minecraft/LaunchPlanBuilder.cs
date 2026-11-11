@@ -52,8 +52,23 @@ public static class LaunchPlanBuilder
         };
         string Expand(string argument) => Regex.Replace(argument, @"\$\{([^}]+)\}", match => values.TryGetValue(match.Groups[1].Value, out var value)
             ? value : throw new InvalidDataException("Unknown launch argument placeholder: " + match.Groups[1].Value), RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
+        string ExpandJvm(string argument)
+        {
+            var expanded = Expand(argument);
+            // Official BootstrapLauncher filters classpath JAR file names, while version_name
+            // identifies our loader profile. An inherited client JAR retains its vanilla name.
+            if (mainClass == "cpw.mods.bootstraplauncher.BootstrapLauncher" && argument.StartsWith("-DignoreList=", StringComparison.Ordinal) &&
+                argument.Contains("${version_name}.jar", StringComparison.Ordinal))
+            {
+                var clientName = Path.GetFileName(input.ClientJar);
+                if (string.IsNullOrWhiteSpace(clientName) || clientName.Contains(',') || clientName.Any(char.IsControl))
+                    throw new InvalidDataException("客户端 JAR 文件名不能用于加载器的模块忽略列表。");
+                if (!expanded["-DignoreList=".Length..].Split(',').Contains(clientName, StringComparer.Ordinal)) expanded += "," + clientName;
+            }
+            return expanded;
+        }
         var jvm = input.Version.Metadata["arguments"]?["jvm"] is JsonArray modernJvm
-            ? ExpandArguments(modernJvm, input.Context).Select(Expand).ToList()
+            ? ExpandArguments(modernJvm, input.Context).Select(ExpandJvm).ToList()
             : new List<string> { "-Djava.library.path=" + input.NativesDirectory, "-cp", values["classpath"] };
         if (input.Context.OSName == "osx" && !jvm.Contains("-XstartOnFirstThread", StringComparer.Ordinal)) jvm.Add("-XstartOnFirstThread");
         if (jvm.Count(a => a == "-XstartOnFirstThread") > 1) throw new InvalidDataException("Duplicate -XstartOnFirstThread.");
