@@ -38,7 +38,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
         {
             if (value is null || (!_refreshing && !Owner.CanMutate) || !SetProperty(ref _provider, value)) return;
             Password = "";
-            OnPropertyChanged(nameof(IsOffline)); OnPropertyChanged(nameof(IsMicrosoft)); OnPropertyChanged(nameof(IsYggdrasil));
+            OnPropertyChanged(nameof(IsOffline)); OnPropertyChanged(nameof(IsMicrosoft)); OnPropertyChanged(nameof(ShowMicrosoftLoginForm)); OnPropertyChanged(nameof(IsYggdrasil));
             OnPropertyChanged(nameof(AddingAccountSummary));
             UpdateChannelAccounts();
             NotifyCommands();
@@ -46,6 +46,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
     }
     public bool IsOffline => SelectedProvider.Id == "offline";
     public bool IsMicrosoft => SelectedProvider.Id == "microsoft";
+    public bool ShowMicrosoftLoginForm => IsMicrosoft && !HasDeviceChallenge;
     public bool IsYggdrasil => SelectedProvider.AuthenticationServer is not null;
     public string PlayerName { get => _playerName; set { SetProperty(ref _playerName, value ?? ""); OnPropertyChanged(nameof(HasNonAsciiPlayerName)); NotifyCommands(); } }
     public bool HasNonAsciiPlayerName => PlayerName.Any(c => c > 127);
@@ -265,9 +266,10 @@ public sealed partial class AccountsPageViewModel : PageViewModel
     }
     private void SetChallenge(DeviceCodeChallenge? challenge)
     {
+        if (_challenge == challenge) return;
         _challenge = challenge;
         DeviceAutomationStatus = "";
-        OnPropertyChanged(nameof(HasDeviceChallenge)); OnPropertyChanged(nameof(DeviceCode)); OnPropertyChanged(nameof(DeviceInstructions));
+        OnPropertyChanged(nameof(HasDeviceChallenge)); OnPropertyChanged(nameof(ShowMicrosoftLoginForm)); OnPropertyChanged(nameof(DeviceCode)); OnPropertyChanged(nameof(DeviceInstructions));
         OpenVerificationCommand.NotifyCanExecuteChanged();
     }
     public override void Refresh(LauncherSnapshot snapshot)

@@ -30,9 +30,13 @@ public sealed partial class LauncherService : IInstanceModUpdateService
                 var sha512 = Convert.ToHexStringLower(await SHA512.HashDataAsync(stream, ct).ConfigureAwait(false));
                 var tracked = manifest.Files.SingleOrDefault(f => EnabledModPath(f.RelativePath) == EnabledModPath(row.RelativePath));
                 if (tracked is not null && (tracked.Size != size || tracked.Sha1 != sha1 || tracked.Sha512 != sha512)) throw new IOException("文件已被修改，请先核对来源。");
-                var current = tracked?.ProjectId.StartsWith("cf-", StringComparison.Ordinal) == true
-                    ? await GetContentReleaseAsync(tracked.ReleaseId, ct).ConfigureAwait(false)
+                var origin = tracked is null ? null : NormalizeModOrigin(tracked);
+                var fromCurseForge = origin is not null && IsNumericCfProject(origin.ProjectId);
+                if (fromCurseForge && !origin!.ReleaseId.StartsWith(origin.ProjectId + "-", StringComparison.Ordinal)) throw new InvalidDataException("安装清单中的 CurseForge 版本身份不完整。");
+                var current = fromCurseForge
+                    ? await GetContentReleaseAsync(origin!.ReleaseId, ct).ConfigureAwait(false)
                     : await Catalog.ReleaseFromSha1Async(sha1, ct).ConfigureAwait(false);
+                if (fromCurseForge && current.ProjectId != origin!.ProjectId) throw new InvalidDataException("在线模组项目与安装清单不符。");
                 if (current.ProjectId is not { } project || !current.Files.Any(f => f.Sha1 == sha1 && f.Size == size)) throw new InvalidDataException("本地文件与在线版本身份不符。");
                 var releases = await GetContentReleasesAsync(project, InstanceIdentity.GameVersion(instance), instance.Loader, ct).ConfigureAwait(false);
                 var next = releases.Where(r => r.ProjectId == project && r.ReleaseChannel == "release" && r.Published > current.Published && ContentInstallPlanner.Compatible(r, "mod", InstanceIdentity.GameVersion(instance), instance.Loader))
@@ -48,7 +52,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService
             }
             catch (OperationCanceledException) { throw; }
             catch (Exception ex) when (ex is IOException or HttpRequestException or InvalidDataException or AggregateException or InvalidOperationException)
-            { notices.Add(row.Name + "：未能核实更新（" + ex.GetType().Name + "），原文件保留。"); }
+            { notices.Add(row.Name + "：暂未能核实官方更新，未改动此文件；请核对本地来源或稍后重试。"); }
             finally { Interlocked.Increment(ref checkedFiles); }
         }).ConfigureAwait(false);
         return new(updates.OrderBy(u => u.Name, StringComparer.OrdinalIgnoreCase).ToArray(), checkedFiles, notices.Order(StringComparer.Ordinal).ToArray());
@@ -74,8 +78,19 @@ public sealed partial class LauncherService : IInstanceModUpdateService
         modUpdates.TryRemove(token, out _); return result!;
     }
     private static string EnabledModPath(string path) => path.EndsWith(".disabled", StringComparison.Ordinal) ? path[..^9] : path;
-    private static ContentInstalledFile NormalizeModOrigin(ContentInstalledFile file)
+    private static bool IsNumericCfProject(string value) => value.StartsWith("cf-", StringComparison.Ordinal)
+        && int.TryParse(value.AsSpan(3), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var project) && project > 0;
+    internal static ContentInstalledFile NormalizeModOrigin(ContentInstalledFile file)
     {
+        // Pack manifests historically store cf-<file>; catalog APIs use cf-<project>-<file>.
+        // Keep existing manifests intact and join only independently recorded numeric identities.
+        if (IsNumericCfProject(file.ProjectId))
+        {
+            var raw = file.ReleaseId.StartsWith("cf-", StringComparison.Ordinal) ? file.ReleaseId[3..] : file.ReleaseId;
+            if (int.TryParse(raw, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var number) && number > 0)
+                return file with { ReleaseId = file.ProjectId + "-" + number.ToString(System.Globalization.CultureInfo.InvariantCulture) };
+            return file;
+        }
         if (!file.RelativePath.StartsWith("mods/", StringComparison.Ordinal) || file.DownloadUrl is null || !Uri.TryCreate(file.DownloadUrl, UriKind.Absolute, out var uri) || !ContentInstallFiles.AllowedUri(uri)) return file;
         var parts = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length == 5 && parts[0] == "data" && parts[2] == "versions" ? file with { ProjectId = parts[1], ReleaseId = parts[3] } : file;

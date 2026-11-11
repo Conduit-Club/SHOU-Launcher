@@ -64,7 +64,13 @@ public sealed class PackInstallTaskViewModel : ObservableObject
     {
         this.page = page; this.owner = owner; this.file = file; this.catalog = catalog; this.localPacks = localPacks; this.mrpacks = mrpacks;
         var version = release?.Version;
-        instanceName = new string((project.Title + (string.IsNullOrWhiteSpace(version) ? "" : " " + version)).Where(c => !char.IsControl(c)).Take(80).ToArray()).Trim();
+        var display = release?.Name.Trim() ?? "";
+        if (display.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) || display.EndsWith(".mrpack", StringComparison.OrdinalIgnoreCase)) display = Path.GetFileNameWithoutExtension(display);
+        static string Key(string text) => new(text.Where(char.IsLetterOrDigit).Select(char.ToLowerInvariant).ToArray());
+        var label = project.Source == "curseforge" && display.Length > 0 &&
+            (Key(display).StartsWith(Key(project.Slug), StringComparison.Ordinal) || Key(display).StartsWith(Key(project.Title), StringComparison.Ordinal))
+            ? display : project.Title + (string.IsNullOrWhiteSpace(version) ? "" : " " + version);
+        instanceName = new string(label.Where(c => !char.IsControl(c)).Take(80).ToArray()).Trim();
         if (instanceName.Length == 0) instanceName = "新整合包";
         Name = (project.Source == "curseforge" ? "CurseForge" : "Modrinth") + " 整合包下载：" + UiPrivacy.Redact(project.Title);
         RetryCommand = new(RunAsync, () => owner.CanMutate && state is "失败" or "已取消" or "需要补充文件");

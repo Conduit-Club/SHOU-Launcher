@@ -9,6 +9,7 @@
     <Style Selector="TextBlock.accountHint"><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /><Setter Property="FontSize" Value="11" /></Style>
     <Style Selector="Path.accountAvatar"><Setter Property="Stroke" Value="{DynamicResource ClubForeground}" /><Setter Property="StrokeThickness" Value="1.5" /><Setter Property="Stretch" Value="Uniform" /></Style>
   </UserControl.Styles>
+  <Grid RowDefinitions="*,Auto">
   <ScrollViewer Name="AccountsPanelScroller" HorizontalScrollBarVisibility="Disabled">
     <StackPanel Name="CompactAccountsPanel" Margin="20,12,20,8" Spacing="8">
       <Grid Name="AccountChannelGrid" ColumnDefinitions="*,*" RowDefinitions="34,40">
@@ -77,7 +78,7 @@
 
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="{loc:Loc t572cf45ba43634b3}" Command="{Binding EndAddAccountCommand}" /><Button Name="AddOfflineButton" Content="{loc:Loc tcde2cd071d25bbab}" Command="{Binding AddOfflineCommand}" Classes="primary" /></StackPanel>
         </StackPanel>
-        <StackPanel Name="MicrosoftAccountForm" IsVisible="{Binding IsMicrosoft}" Spacing="15" Margin="0,14,0,0">
+        <StackPanel Name="MicrosoftAccountForm" IsVisible="{Binding ShowMicrosoftLoginForm}" Spacing="15" Margin="0,14,0,0">
           <views:ClubIcon Classes="accountAvatar" Width="42" Height="46" HorizontalAlignment="Center" Kind="user" />
           <Button Name="LoginMicrosoftButton" Classes="primary" Content="{loc:Loc te8eead3a6646c67d}" Command="{Binding LoginMicrosoftCommand}" HorizontalAlignment="Center" />
           <TextBlock Text="{loc:Loc t78a4043b3fe02356}" Classes="accountHint" TextAlignment="Center" />
@@ -100,8 +101,10 @@
         </DataTemplate></ContentControl.ContentTemplate>
       </ContentControl>
       <Border Name="DeviceCodePanel" IsVisible="{Binding HasDeviceChallenge}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8">
-        <StackPanel Spacing="8"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" LineHeight="34" FontSize="24" FontWeight="SemiBold" LetterSpacing="2" HorizontalAlignment="Center" /><TextBlock Text="{Binding DeviceInstructions}" Classes="accountHint" /><WrapPanel><Button Content="{loc:Loc t345486d9ee4b78e5}" Command="{Binding OpenVerificationCommand}" Margin="0,0,5,4" /><Button Content="{loc:Loc t420c20dd9fcca860}" Click="CopyDeviceCode_Click" Margin="0,0,5,4" /></WrapPanel><TextBlock Name="DeviceAutomationStatus" Text="{Binding DeviceAutomationStatus}" Classes="accountHint"/><Button Name="CancelMicrosoftAuthorizationButton" Content="取消授权" Command="{Binding CancelMicrosoftAuthorizationCommand}" HorizontalAlignment="Left"/></StackPanel>
+        <StackPanel Spacing="8"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" LineHeight="34" FontSize="24" FontWeight="SemiBold" LetterSpacing="2" HorizontalAlignment="Center" /><TextBlock Text="{Binding DeviceInstructions}" Classes="accountHint" /><WrapPanel><Button Content="{loc:Loc t345486d9ee4b78e5}" Command="{Binding OpenVerificationCommand}" Margin="0,0,5,4" /><Button Content="{loc:Loc t420c20dd9fcca860}" Click="CopyDeviceCode_Click" Margin="0,0,5,4" /></WrapPanel><TextBlock Name="DeviceAutomationStatus" Text="{Binding DeviceAutomationStatus}" Classes="accountHint"/></StackPanel>
       </Border>
     </StackPanel>
   </ScrollViewer>
+  <Button Name="CancelMicrosoftAuthorizationButton" Grid.Row="1" Content="取消授权" AutomationProperties.Name="取消微软设备授权" Command="{Binding CancelMicrosoftAuthorizationCommand}" IsVisible="{Binding HasDeviceChallenge}" HorizontalAlignment="Stretch" Margin="20,4,20,8" />
+  </Grid>
 </UserControl>

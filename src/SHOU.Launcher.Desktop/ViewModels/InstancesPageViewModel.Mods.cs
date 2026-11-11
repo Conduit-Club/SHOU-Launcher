@@ -71,6 +71,6 @@ public sealed partial class DownloadsPageViewModel
         SelectedInstallTarget = target; _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
         SelectCategory(section switch { "mods" => "mod", "resourcepacks" => "resourcepack", "shaders" => "shader", _ => throw new ArgumentException("此类别没有资源目录。") });
         GameVersionFilter = InstanceIdentity.GameVersion(instance);
-        LoaderFilter = LoaderFilters.FirstOrDefault(l => l.Equals(instance.Loader, StringComparison.OrdinalIgnoreCase)) ?? "任意";
+        LoaderFilter = section == "mods" ? LoaderFilters.FirstOrDefault(l => l.Equals(instance.Loader, StringComparison.OrdinalIgnoreCase)) ?? "任意" : "任意";
     }
 }

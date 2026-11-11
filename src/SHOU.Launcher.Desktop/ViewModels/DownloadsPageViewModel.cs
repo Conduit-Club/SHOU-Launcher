@@ -295,7 +295,8 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public bool HasFavorites => FavoriteProjects.Count > 0;
     public bool IsProjectFavorite => _selectedProject is { } project && _favorites.Any(p => p.Id == project.Id);
     public string FavoriteAction => IsProjectFavorite ? "取消收藏" : "收藏";
-    public string FavoriteStatus { get => _favoriteStatus; private set => SetProperty(ref _favoriteStatus, value); }
+    public string FavoriteStatus { get => _favoriteStatus; private set { SetProperty(ref _favoriteStatus, value); OnPropertyChanged(nameof(ShowProjectFavoriteStatus)); } }
+    public bool ShowProjectFavoriteStatus => _favoritesLoadFailed;
     public string InstallerTitle => SelectedCategory.Title;
     private Uri InstallerPageUri => new(SelectedCategory.Id switch
     {

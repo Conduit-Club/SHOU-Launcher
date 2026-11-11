@@ -11,6 +11,19 @@ namespace SHOU.Launcher.Desktop.Tests;
 
 public sealed class CompactPackLayoutTests
 {
+    [AvaloniaTheory]
+    [InlineData("mods", "Fabric")]
+    [InlineData("resourcepacks", "任意")]
+    [InlineData("shaders", "任意")]
+    public void InstanceBrowserPinsGameAndTargetWithoutFilteringTexturesByModLoader(string section, string expectedLoader)
+    {
+        var service = new Catalog(); var instance = service.Snapshot.Instances[0] with { Loader = "fabric", LoaderVersion = "0.18.4", GameVersionId = "1.21.1" };
+        service.Publish(service.Snapshot with { Instances = [instance] });
+        using var vm = new MainWindowViewModel(service, new FakeExternalLauncher());
+        vm.Downloads.OpenInstanceResourceBrowser(instance, section);
+        Assert.Equal("1.21.1", vm.Downloads.GameVersionFilter); Assert.Equal(expectedLoader, vm.Downloads.LoaderFilter);
+        Assert.Equal(instance.Id, vm.Downloads.SelectedInstallTarget!.Instance.Id);
+    }
     [AvaloniaFact]
     public async Task LocalInstallStaysBySearchAndDoesNotOccupyAnEmptyDetailCard()
     {
