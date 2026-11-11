@@ -26,7 +26,7 @@ public interface IContentCategoryCatalogService
 public sealed record ContentFile(string FileName, Uri Uri, string Sha1, long Size, bool Primary = false);
 public sealed record ContentRelease(string Id, string Name, string Version, DateTimeOffset Published,
     IReadOnlyList<string> GameVersions, IReadOnlyList<string> Loaders, IReadOnlyList<ContentFile> Files,
-    IReadOnlyList<ContentDependency>? Dependencies = null, string? ProjectId = null, string Environment = "unknown", string? Notice = null);
+    IReadOnlyList<ContentDependency>? Dependencies = null, string? ProjectId = null, string Environment = "unknown", string? Notice = null, string ReleaseChannel = "release");
 public sealed record ContentDependency(string Type, string? ProjectId = null, string? VersionId = null, string? FileName = null);
 public interface IContentDependencyCatalogService
 {

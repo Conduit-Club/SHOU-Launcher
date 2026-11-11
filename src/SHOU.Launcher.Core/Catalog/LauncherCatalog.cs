@@ -136,6 +136,14 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
         var result = await ReadAsync("https://api.modrinth.com/v2/version/" + releaseId, true, ct, n => n is JsonObject).ConfigureAwait(false);
         return ParseRelease(result.Data);
     }
+    public async Task<ContentRelease> ReleaseFromSha1Async(string sha1, CancellationToken ct = default)
+    {
+        if (!Content.ContentInstallFiles.Hash(sha1, 40)) throw new ArgumentException("模组哈希无效。");
+        var result = await ReadAsync("https://api.modrinth.com/v2/version_file/" + sha1 + "?algorithm=sha1", true, ct, n => n is JsonObject).ConfigureAwait(false);
+        var release = ParseRelease(result.Data);
+        if (!release.Files.Any(f => f.Sha1 == sha1)) throw new InvalidDataException("在线模组身份与本地哈希不符。");
+        return release;
+    }
     public async Task<ContentProject> ProjectAsync(string projectId, CancellationToken ct = default)
     {
         SafePath.Identifier(projectId);
@@ -169,7 +177,7 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
             (string?)n?["version_number"] ?? "", DateTimeOffset.TryParse((string?)n?["date_published"], out var date) ? date : DateTimeOffset.MinValue,
             Strings(n?["game_versions"]), Strings(n?["loaders"]), files,
             dependencies.Select(d => new ContentDependency((string?)d?["dependency_type"] ?? "", (string?)d?["project_id"], (string?)d?["version_id"], (string?)d?["file_name"])).ToArray(),
-            (string?)n?["project_id"], (string?)n?["environment"] ?? "unknown");
+            (string?)n?["project_id"], (string?)n?["environment"] ?? "unknown", ReleaseChannel: (string?)n?["version_type"] ?? "release");
     }
     private static string[] Strings(JsonNode? node) => node is JsonArray values ? values.Select(v => (string?)v ?? "").ToArray() : [];
     public async Task<byte[]> IconAsync(string url, CancellationToken ct = default)

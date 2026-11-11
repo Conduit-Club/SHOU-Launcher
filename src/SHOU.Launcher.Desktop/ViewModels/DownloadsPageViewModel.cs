@@ -277,6 +277,11 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public string InstallStatus { get => _installStatus; private set => SetProperty(ref _installStatus, value); }
     public bool HasCreatedInstance => _createdInstanceId is not null;
     public ContentProject? SelectedProject => _selectedProject;
+    private ContentProjectRowViewModel? projectHeaderRow;
+    public Avalonia.Media.Imaging.Bitmap? ProjectIcon => projectHeaderRow?.Icon;
+    public bool HasProjectIcon => projectHeaderRow?.HasIcon == true;
+    private void ProjectHeaderIconChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    { if (e.PropertyName is nameof(ContentProjectRowViewModel.Icon) or nameof(ContentProjectRowViewModel.HasIcon)) { OnPropertyChanged(nameof(ProjectIcon)); OnPropertyChanged(nameof(HasProjectIcon)); } }
     public string ProjectTitle => _selectedProject?.Title ?? "";
     public string ProjectDescription => _selectedProject?.Description ?? "";
     public string ProjectSourceName => _selectedProject?.Source == "curseforge" ? "CurseForge" : "Modrinth";
@@ -522,11 +527,20 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     {
         if (!CanQuery) return;
         ++_requestRevision; CancelBrowseReads(); _selectedProject = project; _isResourceDetail = true; _isConfiguration = false;
+        if (projectHeaderRow is not null) { projectHeaderRow.PropertyChanged -= ProjectHeaderIconChanged; projectHeaderRow.Dispose(); }
+        projectHeaderRow = new(this, project); projectHeaderRow.PropertyChanged += ProjectHeaderIconChanged;
+        OnPropertyChanged(nameof(ProjectIcon)); OnPropertyChanged(nameof(HasProjectIcon));
+        _ = LoadProjectHeaderIconAsync(projectHeaderRow);
         ResetResourceInstallStatus();
         OnPropertyChanged(nameof(ProjectSourceName));
         ReleaseGroups.Clear(); LastDownloadPath = "";
         foreach (var name in new[] { nameof(SelectedProject), nameof(ProjectTitle), nameof(ProjectDescription), nameof(ProjectDetail), nameof(ProjectTile), nameof(IsProjectFavorite), nameof(FavoriteAction), nameof(HasReleases) }) OnPropertyChanged(name);
         NotifyPage(); await RefreshReleasesAsync();
+    }
+    private async Task LoadProjectHeaderIconAsync(ContentProjectRowViewModel row)
+    {
+        try { if (_catalog is not null) await row.LoadIconAsync(_catalog, _imageGate, _imageToken); }
+        catch (OperationCanceledException) { }
     }
     private async Task RefreshReleasesAsync()
     {
@@ -602,6 +616,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     }
     public void Dispose()
     {
+        if (projectHeaderRow is not null) { projectHeaderRow.PropertyChanged -= ProjectHeaderIconChanged; projectHeaderRow.Dispose(); projectHeaderRow = null; }
         _worldRead?.Cancel(); _worldRead?.Dispose();
         if (_disposed) return;
         _disposed = true; ++_requestRevision; CancelBrowseReads(); _imageLifetime.Cancel();

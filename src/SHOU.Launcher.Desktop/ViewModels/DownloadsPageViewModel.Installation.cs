@@ -38,7 +38,8 @@ public sealed partial class DownloadsPageViewModel
         set { if (value is null && _updatingTargets) return; if (SetProperty(ref _installTarget, value)) { WorldInstallTargetChanged(); NotifyCommands(); } }
     }
     public bool ShowResourceInstall => IsResourceDetail && SelectedProject?.Kind is "mod" or "resourcepack" or "shader";
-    public bool ShowPackImport => IsSearchPage && SelectedCategory.Id == "modpack" || IsResourceDetail && SelectedProject?.Kind == "modpack";
+    public bool ShowPackImport => IsSearchPage && SelectedCategory.Id == "modpack";
+    public bool ShowLocalPackPanel => ShowPackImport && LocalPackPath.Length > 0;
     public bool PackServiceAvailable => _packs is not null || _localPacks is not null;
     public string ResourceInstallStatus { get => _resourceInstallStatus; private set => SetProperty(ref _resourceInstallStatus, value); }
     public string PackStatus { get => _packStatus; private set => SetProperty(ref _packStatus, value); }
@@ -112,7 +113,7 @@ public sealed partial class DownloadsPageViewModel
     {
         if (!PackServiceAvailable || !CanEdit) return;
         var revision = ++_packRevision; _localPackPath = path; _packInspection = null; _localPackInspection = null; _packImportDetails = []; OptionalPackFiles.Clear();
-        OnPropertyChanged(nameof(LocalPackPath)); OnPropertyChanged(nameof(PackInspection)); OnPropertyChanged(nameof(HasPackInspection)); OnPropertyChanged(nameof(HasOptionalPackFiles));
+        OnPropertyChanged(nameof(LocalPackPath)); OnPropertyChanged(nameof(ShowLocalPackPanel)); OnPropertyChanged(nameof(PackInspection)); OnPropertyChanged(nameof(HasPackInspection)); OnPropertyChanged(nameof(HasOptionalPackFiles));
         OnPropertyChanged(nameof(PackDetails)); OnPropertyChanged(nameof(HasPackDetails));
         ModrinthPackInspection? inspected = null;
         LocalPackInspection? local = null;
@@ -165,7 +166,7 @@ public sealed partial class DownloadsPageViewModel
     private void NotifyContentInstallationPage()
     {
         NotifyWorldContentPage();
-        OnPropertyChanged(nameof(ShowResourceInstall)); OnPropertyChanged(nameof(ShowPackImport));
+        OnPropertyChanged(nameof(ShowResourceInstall)); OnPropertyChanged(nameof(ShowPackImport)); OnPropertyChanged(nameof(ShowLocalPackPanel));
     }
     private void ResetResourceInstallStatus() => ResourceInstallStatus = _contentInstall is null
         ? "当前后端未提供实例资源安装能力；文件仍可明确下载到缓存。"

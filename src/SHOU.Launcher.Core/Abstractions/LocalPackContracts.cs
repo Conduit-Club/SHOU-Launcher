@@ -6,7 +6,14 @@ public enum LocalPackFormat { Unknown, Modrinth, MultiMC, CurseForge, ShouExport
 public sealed record LocalPackInspection(LocalPackFormat Format, string Name, string GameVersion, string Loader,
     string? LoaderVersion, string ArchiveSha256, IReadOnlyList<string> Warnings, bool CanImport,
     string? CapabilityReason = null, ModrinthPackInspection? Modrinth = null,
-    IReadOnlyList<string>? LocalFiles = null, int SkippedFiles = 0, string? PackVersion = null, int? RecommendedMemoryMiB = null);
+    IReadOnlyList<string>? LocalFiles = null, int SkippedFiles = 0, string? PackVersion = null, int? RecommendedMemoryMiB = null,
+    IReadOnlyList<CurseForgeManualFile>? ManualFiles = null);
+public sealed record CurseForgeManualFile(int ProjectId, int FileId, string FileName, string Sha1, long Size, Uri PageUri);
+public interface ILocalPackManualFileService
+{
+    Task ProvideLocalPackFileAsync(string archivePath, string expectedArchiveSha256, int projectId, int fileId,
+        string sourcePath, CancellationToken cancellationToken = default);
+}
 public sealed record LocalPackImportRequest(string ArchivePath, string ExpectedSha256, string InstanceName,
     IReadOnlyList<string>? OptionalClientFiles = null, bool PrepareAfterImport = false);
 public sealed record LocalPackImportResult(GameInstance Instance, int InstalledFiles, IReadOnlyList<string> Warnings,

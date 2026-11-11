@@ -55,7 +55,8 @@ public sealed class DownloadSourcesR13Tests
         Assert.AreEqual("cf-307740-42", release.Id); Assert.AreEqual("cf-307740", release.ProjectId); Assert.AreEqual(1, release.Files.Count);
         address = ""; release = (await catalog.ReleasesAsync("cf-307740", null, null, default)).Single(); Assert.AreEqual(0, release.Files.Count); Assert.IsNotNull(release.Notice);
         address = "https://evil.invalid/fixture.zip";
-        await Assert.ThrowsExactlyAsync<InvalidDataException>(() => catalog.ReleasesAsync("cf-307740", null, null, default));
+        release = (await catalog.ReleasesAsync("cf-307740", null, null, default)).Single();
+        Assert.HasCount(0, release.Files); Assert.IsNotNull(release.Notice);
         address = "https://mediafilez.forgecdn.net/files/1/2/fixture.zip"; modId = 12;
         await Assert.ThrowsExactlyAsync<InvalidDataException>(() => catalog.ReleasesAsync("cf-307740", null, null, default));
     }

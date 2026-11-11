@@ -9,18 +9,20 @@ namespace SHOU.Launcher.Core.Content;
 
 public sealed record CurseForgePackReference(int ProjectId, int FileId, bool Required);
 public sealed record CurseForgePackFile(int ProjectId, int FileId, string Path, string Sha1, string? Sha512,
-    long Size, Uri DownloadUri, bool FromModrinth, bool FromFtb = false);
+    long Size, Uri DownloadUri, bool FromModrinth, bool FromFtb = false, bool FromManual = false);
 public sealed record CurseForgePackResolution(IReadOnlyList<CurseForgePackFile> Files,
-    IReadOnlyList<string> Warnings, IReadOnlyList<string> BlockedFiles);
+    IReadOnlyList<string> Warnings, IReadOnlyList<string> BlockedFiles, IReadOnlyList<CurseForgeManualFile>? ManualFiles = null);
 
 /// <summary>Caller-owned dedicated HttpClient MUST disable automatic redirects. API key is attached only to fixed CF requests.</summary>
 public sealed class CurseForgePackResolver
 {
     private readonly HttpClient http;
     private readonly string? apiKey;
-    public CurseForgePackResolver(HttpClient http, string? apiKey)
+    private readonly string? manualCacheRoot;
+    public CurseForgePackResolver(HttpClient http, string? apiKey, string? manualCacheRoot = null)
     {
         this.http = http;
+        this.manualCacheRoot = manualCacheRoot;
         if (http.DefaultRequestHeaders.Contains("x-api-key") || http.DefaultRequestHeaders.Authorization is not null || http.DefaultRequestHeaders.Contains("Cookie")) throw new ArgumentException("整合包专用客户端不能携带全局鉴权头。");
         if (apiKey is not null && (apiKey.Length > 8192 || apiKey.Any(c => char.IsControl(c) || char.IsWhiteSpace(c)))) throw new ArgumentException("CurseForge API key 配置格式无效。");
         this.apiKey = string.IsNullOrEmpty(apiKey) ? null : apiKey;
@@ -54,12 +56,13 @@ public sealed class CurseForgePackResolver
         if (references.Any(r => !r.Required)) warnings.Add("CurseForge 可选文件本轮默认不安装，仅安装清单内 required 文件。");
         if (files.Sum(f => f.Size) > 4L * 1024 * 1024 * 1024) blocked.Add("清单下载总量超过 4 GiB，本次不会创建实例。");
         if (files.Select(f => ContentInstallFiles.PathKey(f.Path)).Distinct(StringComparer.Ordinal).Count() != files.Count) blocked.Add("不同 CurseForge 项目映射到相同文件路径，本次不会创建实例。");
-        return new(files, warnings, blocked);
+        return new(files, warnings, blocked, results.Where(r => r?.Manual is not null).Select(r => r!.Manual!).ToArray());
     }
-    private sealed record Item(CurseForgePackFile? File, IReadOnlyList<string> Warnings, string? Reason = null);
+    private sealed record Item(CurseForgePackFile? File, IReadOnlyList<string> Warnings, string? Reason = null, CurseForgeManualFile? Manual = null);
     private async Task<Item> ResolveOneAsync(CurseForgePackReference reference, string gameVersion, string loader, IReadOnlyList<CurseForgePackReference> all,
         IReadOnlyDictionary<(int, int), FtbPublishedFile> publishedFtb, CancellationToken ct)
     {
+        CurseForgeManualFile? manual = null;
         try
         {
             using var response = await GetJsonAsync(new Uri($"https://api.curseforge.com/v1/mods/{reference.ProjectId}/files/{reference.FileId}"), true, ct).ConfigureAwait(false);
@@ -113,6 +116,13 @@ public sealed class CurseForgePackResolver
                 return new(new(reference.ProjectId, reference.FileId, folder + name, sha1, null, size, uri, false), warnings);
             }
             if (archivedDependency) return new(null, warnings, "已归档的历史包依赖未提供官方 CDN 地址，不能套用归档依赖例外；未猜测链接或查询哈希回退。");
+            var page = project.TryGetProperty("links", out var links) && links.TryGetProperty("websiteUrl", out var website) ? website.GetString() : null;
+            var pageUri = Uri.TryCreate(page, UriKind.Absolute, out var projectPage) && projectPage.Scheme == "https" && projectPage.IsDefaultPort && projectPage.UserInfo.Length == 0 && projectPage.Host is "www.curseforge.com" or "curseforge.com"
+                ? new Uri(projectPage.AbsoluteUri.TrimEnd('/') + "/files/" + reference.FileId)
+                : new Uri($"https://www.curseforge.com/projects/{reference.ProjectId}/files/{reference.FileId}");
+            manual = new(reference.ProjectId, reference.FileId, name, sha1, size, pageUri);
+            if (manualCacheRoot is not null && await CurseForgeManualCache.DigestAsync(manualCacheRoot, manual, ct).ConfigureAwait(false) is { } localSha512)
+                return new(new(reference.ProjectId, reference.FileId, folder + name, sha1, localSha512, size, ManualIdentityUri(reference.ProjectId, reference.FileId), false, FromManual: true), warnings);
             if (publishedFtb.TryGetValue((reference.ProjectId, reference.FileId), out var ftb) && ftb.Folder == folder && ftb.Size == size && ftb.Sha1.Equals(sha1, StringComparison.OrdinalIgnoreCase))
             {
                 warnings.Add(Label(reference) + "：采用 FTB 官方同版本清单公布的同项目 / 文件地址，核对 SHA-1、SHA-512 与大小。");
@@ -131,10 +141,10 @@ public sealed class CurseForgePackResolver
                 warnings.Add(Label(reference) + "：CurseForge 未提供第三方下载地址；使用 Modrinth 独立发布、同 SHA-1 且同大小的文件，并校验 SHA-512。");
                 return new(new(reference.ProjectId, reference.FileId, folder + name, sha1, sha512.ToLowerInvariant(), size, uri, true), warnings);
             }
-            return new(null, warnings, "作者未提供第三方下载地址，Modrinth 也未找到同哈希同大小文件；未猜测下载链接。");
+            return new(null, warnings, "作者未提供第三方下载地址，请从官网获取指定文件并选择已下载文件，校验后继续。", manual);
         }
         catch (OperationCanceledException) { throw; }
-        catch (LookupException ex) { return new(null, [], ex.Message); }
+        catch (LookupException ex) { return new(null, [], manual is null ? ex.Message : "需从官网获取并补充指定文件：" + manual.FileName, manual); }
         catch (HttpRequestException) { return new(null, [], "官方服务连接失败，请稍后重新预检。"); }
         catch (Exception ex) when (ex is JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException or FormatException or ArgumentException)
         { return new(null, [], ex is InvalidDataException ? ex.Message : "官方服务返回的文件元数据无效，未下载任何文件。"); }
@@ -147,6 +157,20 @@ public sealed class CurseForgePackResolver
     private async Task DownloadVerifiedAsync(CurseForgePackFile file, string path, long maximumBytes, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         var label = DownloadLabel(file);
+        if (file.FromManual)
+        {
+            if (manualCacheRoot is null || file.FromFtb || file.FromModrinth || file.DownloadUri != ManualIdentityUri(file.ProjectId, file.FileId)) throw new InvalidDataException("本地补充文件来源无效。");
+            var descriptor = new CurseForgeManualFile(file.ProjectId, file.FileId, Path.GetFileName(file.Path), file.Sha1, file.Size, file.DownloadUri);
+            var source = CurseForgeManualCache.PathFor(manualCacheRoot, descriptor);
+            if (await CurseForgeManualCache.DigestAsync(manualCacheRoot, descriptor, ct).ConfigureAwait(false) is not { } digest || digest != file.Sha512) throw new InvalidDataException("本地补充文件已改变，请重新提供。");
+            VerifiedDownloader.RejectLink(path); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+            await using (var input = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true))
+            await using (var output = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, true)) await input.CopyToAsync(output, ct).ConfigureAwait(false);
+            if (!await ContentInstallFiles.MatchesAsync(path, file.Sha1, file.Size, ct).ConfigureAwait(false)) throw new InvalidDataException("本地补充文件复制校验失败。");
+            await using var copied = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
+            if (Convert.ToHexStringLower(await SHA512.HashDataAsync(copied, ct).ConfigureAwait(false)) != digest) throw new InvalidDataException("本地补充文件复制 SHA-512 校验失败。");
+            return;
+        }
         if (!AllowedDownloadUri(file.DownloadUri, file.FromFtb) || file.FromFtb && (file.FromModrinth || !ContentInstallFiles.Hash(file.Sha512, 128))) throw new InvalidDataException(label + "：文件来源不在官方 CDN 允许范围。");
         if (!ContentInstallFiles.Hash(file.Sha1, 40) || (file.Size <= 0 || file.Size > maximumBytes) || file.Sha512 is not null && !ContentInstallFiles.Hash(file.Sha512, 128))
             throw new InvalidDataException(label + "：文件哈希或大小无效。");
@@ -168,6 +192,7 @@ public sealed class CurseForgePackResolver
             if (!digest.Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException(label + "：下载文件 SHA-512 校验失败。");
         }
     }
+    private static Uri ManualIdentityUri(int project, int file) => new($"https://api.curseforge.com/v1/mods/{project}/files/{file}");
     private static bool AllowedDownloadUri(Uri uri, bool allowFtb = false) => AllowedCurseForgeUri(uri) || ContentInstallFiles.AllowedUri(uri) || allowFtb && FtbPackFileIndex.AllowedUri(uri);
     private static string DownloadLabel(CurseForgePackFile file)
     {

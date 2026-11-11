@@ -95,17 +95,23 @@ public sealed class CurseForgeCatalog(HttpClient http, string? apiKey)
         var name = Text(n, "fileName"); var sha = (n?["hashes"] as JsonArray ?? []).FirstOrDefault(h => (int?)h?["algo"] == 1)?["value"]?.GetValue<string>() ?? "";
         var size = (long?)n?["fileLength"] ?? -1; var address = Text(n, "downloadUrl");
         var files = new List<ContentFile>(); string? notice = null;
-        if ((bool?)n?["isAvailable"] == false) notice = "此版本当前不可下载，请查看项目页。";
+        if ((int?)n?["fileStatus"] is 5 or 6 or 7) notice = "此文件已被官方拒绝、标记为恶意或删除，不能下载。";
+        else if ((bool?)n?["isServerPack"] == true) notice = "此文件是服务器包，请选择客户端版本。";
+        else if ((bool?)n?["isAvailable"] == false) notice = "此版本当前不可下载，请查看项目页。";
         else if (address.Length == 0) notice = "作者未提供第三方下载地址，请在项目页下载此版本。";
         else
         {
-            var uri = new Uri(address); if (!CurseForgePackResolver.AllowedCurseForgeUri(uri) || !ContentInstallFiles.Hash(sha, 40) || size is <= 0 or > ContentInstallPlanner.MaximumTotalBytes || name.Length is 0 or > 200 || name.Any(c => char.IsControl(c) || c is '/' or '\\' or ':')) throw new InvalidDataException("CurseForge 文件来源、哈希或大小无效。");
-            files.Add(new(name, uri, sha.ToLowerInvariant(), size, true));
+            if (!Uri.TryCreate(address, UriKind.Absolute, out var uri) || !CurseForgePackResolver.AllowedCurseForgeUri(uri)
+                || !ContentInstallFiles.Hash(sha, 40) || size is <= 0 or > ContentInstallPlanner.MaximumTotalBytes
+                || name.Length is 0 or > 200 || name.Any(c => char.IsControl(c) || c is '/' or '\\' or ':'))
+                notice = "此版本缺少有效的官方文件来源、SHA-1 或大小，暂不可自动下载；其它版本仍可选择。";
+            else files.Add(new(name, uri, sha.ToLowerInvariant(), size, true));
         }
         var tags = (n?["gameVersions"] as JsonArray ?? []).Select(x => (string?)x ?? "").Take(500).ToArray();
         var loaders = tags.Where(v => v.ToLowerInvariant() is "forge" or "fabric" or "neoforge" or "quilt").Select(v => v.ToLowerInvariant()).ToArray();
         var dependencies = (n?["dependencies"] as JsonArray ?? []).Select(d => new ContentDependency((int?)d?["relationType"] switch { 3 => "required", 2 => "optional", 5 => "incompatible", 1 or 4 => "embedded", _ => "unknown" }, "cf-" + (int?)d?["modId"])).ToArray();
         return new($"cf-{project}-{fileId}", Text(n, "displayName"), name, DateTimeOffset.TryParse(Text(n, "fileDate"), out var date) ? date : DateTimeOffset.MinValue,
-            tags.Where(v => v.Length > 0 && char.IsAsciiDigit(v[0])).ToArray(), loaders, files, dependencies, "cf-" + project, Notice: notice);
+            tags.Where(v => v.Length > 0 && char.IsAsciiDigit(v[0])).ToArray(), loaders, files, dependencies, "cf-" + project, Notice: notice,
+            ReleaseChannel: (int?)n?["releaseType"] switch { 2 => "beta", 3 => "alpha", _ => "release" });
     }
 }

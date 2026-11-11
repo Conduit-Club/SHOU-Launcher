@@ -25,6 +25,10 @@ public sealed class PackTaskStepViewModel(string name, double weight) : Observab
 
 public sealed class PackInstallTaskViewModel : ObservableObject
 {
+    public ObservableCollection<PackManualFileRowViewModel> ManualFiles { get; } = [];
+    public bool HasManualFiles => ManualFiles.Count > 0;
+    private string? manualArchiveSha;
+    internal MainWindowViewModel Root => owner;
     private readonly MainWindowViewModel owner;
     private readonly DownloadsPageViewModel page;
     private readonly ILauncherCatalogService catalog;
@@ -77,6 +81,7 @@ public sealed class PackInstallTaskViewModel : ObservableObject
         page.ActivePackTask = this; var generation = ++runVersion;
         priorTransfers = owner.Snapshot.Downloads.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
         error = ""; state = "正在安装"; completedFiles = totalFiles = 0; speed = 0;
+        ManualFiles.Clear(); manualArchiveSha = null;
         if (importedInstance is null) { stepIndex = -1; foreach (var step in Steps) step.Update("等待中"); }
         Changed(); owner.ShowTaskNotification(page, "已开始下载整合包", instanceName + " · 点击查看下载和安装进度");
         try
@@ -96,6 +101,8 @@ public sealed class PackInstallTaskViewModel : ObservableObject
                     else throw new NotSupportedException("当前后端未提供整合包安装能力。");
                     if (!(inspected?.CanImport ?? mr?.CanImport ?? false))
                     {
+                        manualArchiveSha = inspected?.ArchiveSha256;
+                        foreach (var missing in inspected?.ManualFiles ?? []) ManualFiles.Add(new(this, missing));
                         state = "需要补充文件";
                         error = (inspected?.CapabilityReason ?? mr?.CapabilityReason ?? "此整合包不能安装。") + Environment.NewLine +
                             string.Join(Environment.NewLine, inspected?.Warnings ?? mr?.Warnings ?? []);
@@ -132,6 +139,13 @@ public sealed class PackInstallTaskViewModel : ObservableObject
         }
     }
     private sealed class PackBlockedException : Exception;
+    public async Task ProvideManualFileAsync(PackManualFileRowViewModel row, string path)
+    {
+        if (!owner.CanMutate || !ManualFiles.Contains(row) || cachedPath is null || manualArchiveSha is null || localPacks is not ILocalPackManualFileService manual) return;
+        if (!await owner.RunAsync("校验补充文件", ct => manual.ProvideLocalPackFileAsync(cachedPath, manualArchiveSha, row.File.ProjectId, row.File.FileId, path, ct))) return;
+        ManualFiles.Remove(row); Changed();
+        if (ManualFiles.Count == 0) await RunAsync();
+    }
     private IProgress<PackInstallProgress> ProgressFor(int generation, int step)
         => new Progress<PackInstallProgress>(p =>
         {
@@ -165,7 +179,20 @@ public sealed class PackInstallTaskViewModel : ObservableObject
     }
     private void Changed()
     {
-        foreach (var p in new[] { nameof(State), nameof(Detail), nameof(Error), nameof(HasError), nameof(IsActive), nameof(IsCompleted), nameof(RemainingFiles), nameof(RemainingFileText), nameof(BytesPerSecond), nameof(OverallProgress) }) OnPropertyChanged(p);
+        foreach (var p in new[] { nameof(State), nameof(Detail), nameof(Error), nameof(HasError), nameof(HasManualFiles), nameof(IsActive), nameof(IsCompleted), nameof(RemainingFiles), nameof(RemainingFileText), nameof(BytesPerSecond), nameof(OverallProgress) }) OnPropertyChanged(p);
         RetryCommand.NotifyCanExecuteChanged(); CancelCommand.NotifyCanExecuteChanged(); OpenInstanceCommand.NotifyCanExecuteChanged(); page.NotifyPackTasks();
+    }
+}
+
+public sealed class PackManualFileRowViewModel
+{
+    internal PackInstallTaskViewModel Task { get; }
+    public CurseForgeManualFile File { get; }
+    public string Name => File.FileName;
+    public AsyncRelayCommand OpenPageCommand { get; }
+    internal PackManualFileRowViewModel(PackInstallTaskViewModel task, CurseForgeManualFile file)
+    {
+        Task = task; File = file;
+        OpenPageCommand = new(() => task.Root.RunControlAsync("打开文件官网", ct => task.Root.ExternalLauncher.OpenUriAsync(file.PageUri, ct)));
     }
 }

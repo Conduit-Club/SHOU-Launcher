@@ -7,7 +7,7 @@ using SHOU.Launcher.Core.Minecraft;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService : ILocalPackProgressService
+public sealed partial class LauncherService : ILocalPackProgressService, ILocalPackManualFileService
 {
     private readonly CurseForgePackResolver? localPackResolver;
     private sealed record LocalPackPlan(IReadOnlyList<CurseForgePackFile> Files, IReadOnlyList<string> Warnings);
@@ -21,12 +21,13 @@ public sealed partial class LauncherService : ILocalPackProgressService
         await InitializeAsync(cancellationToken).ConfigureAwait(false); var read = await new LocalPackArchive().ReadAsync(archivePath, cancellationToken).ConfigureAwait(false);
         if (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge) return read.Inspection;
         using var dedicated = localPackResolver is null ? new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false)) : null;
-        var resolver = localPackResolver ?? new CurseForgePackResolver(dedicated!, build.CurseForgeApiKey);
+        var resolver = localPackResolver ?? new CurseForgePackResolver(dedicated!, build.CurseForgeApiKey, Paths.CacheDirectory);
         var identity = read.Inspection;
         var resolution = await resolver.ResolveAsync(read.CurseForgeFiles, identity.GameVersion, identity.Loader, cancellationToken,
             new(identity.Name, identity.PackVersion ?? "", identity.GameVersion, identity.Loader, identity.LoaderVersion), progress).ConfigureAwait(false);
         var warnings = read.Inspection.Warnings.Concat(resolution.Warnings).Concat(resolution.BlockedFiles.Select(item => "未完成：" + item)).ToArray();
-        if (resolution.BlockedFiles.Count > 0) return read.Inspection with { Warnings = warnings, CapabilityReason = $"有 {resolution.BlockedFiles.Count} 项未核实，未下载或创建实例。请查看完整阻塞列表后重新预检。" };
+        if (resolution.BlockedFiles.Count > 0) return read.Inspection with { Warnings = warnings, ManualFiles = resolution.ManualFiles,
+            CapabilityReason = $"有 {resolution.BlockedFiles.Count} 项必需文件尚待补充或核实，未创建实例。" + (resolution.ManualFiles?.Count > 0 ? "请从官网获取指定文件，校验后继续安装。" : "请查看完整阻塞列表后重新预检。") };
         ValidateLocalPackTargets(read, resolution.Files);
         cancellationToken.ThrowIfCancellationRequested(); localPackPlans[read.Inspection.ArchiveSha256] = new(resolution.Files.ToArray(), warnings);
         while (localPackPlans.Count > 8) { var other = localPackPlans.Keys.FirstOrDefault(k => k != read.Inspection.ArchiveSha256); if (other is null) break; localPackPlans.TryRemove(other, out _); }
@@ -63,7 +64,7 @@ public sealed partial class LauncherService : ILocalPackProgressService
             var root = Snapshot.Settings.GameRoot ?? Paths.InstancesDirectory; EnsureIsolatedGamePath(root); VerifiedDownloader.RejectLink(root); Directory.CreateDirectory(root);
             var stage = ContentInstallFiles.Literal(root, ".shou-local-stage-" + Guid.NewGuid().ToString("N")); var destination = ContentInstallFiles.Literal(root, Guid.NewGuid().ToString("N")); var moved = false; var registered = false;
             using var dedicated = localPackResolver is null ? new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false)) : null;
-            var resolver = localPackResolver ?? new CurseForgePackResolver(dedicated!, build.CurseForgeApiKey);
+            var resolver = localPackResolver ?? new CurseForgePackResolver(dedicated!, build.CurseForgeApiKey, Paths.CacheDirectory);
             try
             {
                 await RunContentTransferAsync("local-pack:" + Guid.NewGuid().ToString("N"), token => ImportLocalPackAsync(request, token), async token =>
