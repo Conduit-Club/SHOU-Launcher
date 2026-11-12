@@ -53,6 +53,7 @@ public sealed partial class InstancesPageViewModel
         set
         {
             if (value is null || !SetProperty(ref _selectedSection, value)) return;
+            ResetContentDirectory();
             Feedback = ""; ContentSearchText = ""; ContentEntries.Clear(); SelectedContent = null; ClearScreenshotPreviews(); ClearModUpdates(); NotifyWorkspace();
             ActivateWorldWorkspace(value.Key);
             _pendingContentRefresh = IsFileSection;
@@ -72,7 +73,7 @@ public sealed partial class InstancesPageViewModel
     public bool IsContentEmpty => IsContentList ? FilteredContentEntries.Count == 0 : ContentEntries.Count == 0;
     public bool CanImportContent => IsFileSection && SelectedSection.Key != "worlds" && !ModsUnsupported && CanEdit && !IsSelectedInstanceRunning && Service is IInstanceWorkspaceService;
     public string SectionTitle => SelectedSection?.Title ?? "实例";
-    public string ContentEmptyTitle => ModsUnsupported ? "该实例不可使用模组" : ContentSearchText.Trim().Length > 0 && ContentEntries.Count > 0 ? "没有匹配搜索的资源"
+    public string ContentEmptyTitle => IsContentSubdirectory && ContentEntries.Count == 0 ? Localization.UiLocalization.Instance.Text("当前文件夹为空") : ModsUnsupported ? "该实例不可使用模组" : ContentSearchText.Trim().Length > 0 && ContentEntries.Count > 0 ? "没有匹配搜索的资源"
         : ContentEntries.Count > 0 && contentFilter != "全部" ? Localization.UiLocalization.Instance.Text(contentFilter == "可更新" ? "当前筛选下没有可更新的资源" : "当前筛选下没有资源") : "尚未发现" + SectionTitle;
     public string CapabilityReason => SelectedSection?.Key switch
     {
@@ -123,13 +124,14 @@ public sealed partial class InstancesPageViewModel
         NavigateBackCommand = Command(() => { if (IsWorldDetails) BackFromWorldCommand.Execute(null); else if (IsSelection) Owner.SelectedPage = Owner.Home; else IsSelection = true; });
         SaveInstanceSettingsCommand = AsyncCommand(SaveInstanceEditAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         RefreshContentCommand = AsyncCommand(RefreshContentAsync, () => SelectedInstance is not null && IsFileSection && Owner.CanReadRemote && Service is IInstanceWorkspaceService);
-        RefreshContentCommand.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(RefreshContentCommand.IsRunning)) ScheduleContentRefresh(); };
+        RefreshContentCommand.PropertyChanged += (_, e) => { if (e.PropertyName == nameof(RefreshContentCommand.IsRunning)) { ScheduleContentRefresh(); NotifyContentDirectory(); } };
         OpenInstanceDirectoryCommand = AsyncCommand(() => OpenInstanceFolderAsync(null), () => SelectedInstance is not null);
         OpenContentDirectoryCommand = AsyncCommand(OpenContentDirectoryAsync, () => SelectedInstance is not null && IsFileSection);
         ToggleModCommand = AsyncCommand(ToggleModAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedSection.Key == "mods" && SelectedContent is not null && Service is IInstanceWorkspaceService);
         ExportInstanceCommand = AsyncCommand(ExportAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         _workspaceReady = true;
         InitializeModManagement();
+        InitializeContentBrowser();
         InitializeModRelations();
         InitializeExistingInstances();
     }
@@ -198,12 +200,15 @@ public sealed partial class InstancesPageViewModel
     }
     private async Task RefreshContentAsync()
     {
-        var selected = SelectedInstance!; var section = SelectedSection.Key;
+        var selected = SelectedInstance!; var section = SelectedSection.Key; var directory = contentDirectory; var generation = contentDirectoryGeneration;
         StopModScan(); contentRows.Clear();
+        NotifyContentDirectory();
         await Owner.RunAsync("读取实例" + SectionTitle, async ct =>
         {
-            var rows = await ((IInstanceWorkspaceService)Service).ListInstanceContentAsync(selected.Id, section, ct);
-            if (SelectedInstance?.Id != selected.Id || SelectedSection.Key != section) return;
+            var rows = CanBrowseContentDirectories && Service is IInstanceContentBrowserService browser
+                ? await browser.BrowseInstanceContentAsync(selected.Id, section, directory, ct)
+                : await ((IInstanceWorkspaceService)Service).ListInstanceContentAsync(selected.Id, section, ct);
+            if (_workspaceDisposed || SelectedInstance?.Id != selected.Id || SelectedInstance.GameDirectory != selected.GameDirectory || SelectedSection.Key != section || generation != contentDirectoryGeneration) return;
             refreshingContentRows = true;
             try { ContentEntries.Clear(); foreach (var row in rows) ContentEntries.Add(row); }
             finally { refreshingContentRows = false; }
@@ -211,18 +216,19 @@ public sealed partial class InstancesPageViewModel
             if (section == "screenshots") await LoadScreenshotPreviewsAsync(selected.Id, rows, ct);
             MarkDuplicateMods(); NotifyContentFilter();
         }, true);
-        if (SelectedInstance?.Id == selected.Id && SelectedSection.Key == section) StartAutoModScan();
+        NotifyContentDirectory();
+        if (!_workspaceDisposed && SelectedInstance?.Id == selected.Id && SelectedInstance.GameDirectory == selected.GameDirectory && SelectedSection.Key == section && generation == contentDirectoryGeneration) StartAutoModScan();
     }
     public async Task ImportContentFileAsync(string path)
     {
         if (!CanImportContent) return;
-        var section = SelectedSection.Key;
-        if (await Owner.RunAsync("导入实例文件", async ct => { await StopModScanAsync(); await ((IInstanceWorkspaceService)Service).ImportInstanceContentAsync(SelectedInstance!.Id, section, path, ct); }))
-        { Feedback = "已导入文件。"; await RefreshContentCommand.ExecuteAsync(null); }
+        await ImportDroppedContentAsync(SelectedInstance!, SelectedSection.Key, [path], contentDirectory);
     }
-    public async Task ImportDroppedContentAsync(GameInstance expected, string kind, IReadOnlyList<string> paths)
+    public async Task ImportDroppedContentAsync(GameInstance expected, string kind, IReadOnlyList<string> paths, string? expectedDirectory = null)
     {
         if (SelectedInstance != expected || !CanEdit || IsSelectedInstanceRunning || Service is not IInstanceWorkspaceService workspace) return;
+        var directory = expectedDirectory ?? (kind == SelectedSection.Key ? contentDirectory : "");
+        if (kind == SelectedSection.Key && directory != contentDirectory) return;
         var completed = 0;
         var success = await Owner.RunAsync("导入实例文件", async ct =>
         {
@@ -230,8 +236,10 @@ public sealed partial class InstancesPageViewModel
             foreach (var path in paths)
             {
                 ct.ThrowIfCancellationRequested();
-                if (SelectedInstance != expected) throw new IOException("目标实例已改变，剩余文件未导入。");
-                await workspace.ImportInstanceContentAsync(expected.Id, kind, path, ct); completed++;
+                if (SelectedInstance != expected || kind == SelectedSection.Key && directory != contentDirectory) throw new IOException("目标实例或目录已改变，剩余文件未导入。");
+                if (kind == "schematics" && Service is IInstanceContentBrowserService browser) await browser.ImportInstanceContentToDirectoryAsync(expected.Id, kind, directory, path, ct);
+                else await workspace.ImportInstanceContentAsync(expected.Id, kind, path, ct);
+                completed++;
             }
         });
         Feedback = success ? $"已导入 {completed} 个文件。" : $"已导入 {completed}/{paths.Count} 个文件；其余未完成。";
@@ -244,7 +252,12 @@ public sealed partial class InstancesPageViewModel
         if (await Owner.RunAsync(selected.Enabled ? "禁用模组" : "启用模组", async ct => { await StopModScanAsync(); await ((IInstanceWorkspaceService)Service).SetInstanceModEnabledAsync(SelectedInstance!.Id, selected.RelativePath, !selected.Enabled, ct); }))
             await RefreshContentCommand.ExecuteAsync(null);
     }
-    private Task OpenContentDirectoryAsync() => OpenInstanceFolderAsync(SelectedSection.Key);
+    private Task OpenContentDirectoryAsync() => !IsContentSubdirectory ? OpenInstanceFolderAsync(SelectedSection.Key) : Owner.RunControlAsync("打开资源文件夹", async ct =>
+    {
+        var instance = SelectedInstance!; var directory = contentDirectory; var generation = contentDirectoryGeneration;
+        var folder = await ((IInstanceContentBrowserService)Service).GetInstanceContentDirectoryAsync(instance.Id, SelectedSection.Key, directory, ct);
+        if (SelectedInstance?.Id == instance.Id && SelectedInstance.GameDirectory == instance.GameDirectory && generation == contentDirectoryGeneration) await Owner.ExternalLauncher.OpenDirectoryAsync(folder, ct);
+    });
     public Task OpenInstanceFolderAsync(string? kind) => Owner.RunControlAsync("打开实例文件夹", async ct =>
     {
         if (Service is not IInstanceDirectoryService directories) throw new NotSupportedException("此服务没有实例目录适配器。");

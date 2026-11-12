@@ -576,8 +576,9 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
 
     private string FavoritesPath => _favoritesPathOverride ?? SHOU.Launcher.Core.IO.SafePath.Within(Service.Paths.DataDirectory, "preferences/download-favorites.json");
     private string favoriteQuery = "";
-    public string FavoriteQuery { get => favoriteQuery; set { if (SetProperty(ref favoriteQuery, value ?? "")) OnPropertyChanged(nameof(FilteredFavoriteProjects)); } }
+    public string FavoriteQuery { get => favoriteQuery; set { if (SetProperty(ref favoriteQuery, value ?? "")) { OnPropertyChanged(nameof(FilteredFavoriteProjects)); OnPropertyChanged(nameof(HasNoFavoriteMatches)); } } }
     public IReadOnlyList<ContentProjectRowViewModel> FilteredFavoriteProjects => FavoriteProjects.Where(p => string.Join(" ", p.Project.Title, p.Project.Slug, p.Project.Author, p.Project.Description, p.Project.Kind, p.Project.Source).Contains(FavoriteQuery.Trim(), StringComparison.OrdinalIgnoreCase)).ToArray();
+    public bool HasNoFavoriteMatches => HasFavorites && FavoriteQuery.Trim().Length > 0 && FilteredFavoriteProjects.Count == 0;
     private void LoadFavorites()
     {
         try
@@ -596,7 +597,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         ClearProjectRows(FavoriteProjects); foreach (var project in _favorites) FavoriteProjects.Add(new(this, project));
         FavoriteStatus = _favorites.Count == 0 ? "尚未收藏任何资源。" : $"已保存 {_favorites.Count} 项收藏。";
         OnPropertyChanged(nameof(HasFavorites)); OnPropertyChanged(nameof(IsProjectFavorite)); OnPropertyChanged(nameof(FavoriteAction));
-        OnPropertyChanged(nameof(FilteredFavoriteProjects)); RestoreFavoriteIcons();
+        OnPropertyChanged(nameof(FilteredFavoriteProjects)); OnPropertyChanged(nameof(HasNoFavoriteMatches)); RestoreFavoriteIcons();
     }
     private async Task ToggleFavoriteAsync()
     {

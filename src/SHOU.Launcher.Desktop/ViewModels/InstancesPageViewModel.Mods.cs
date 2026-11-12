@@ -60,7 +60,8 @@ public sealed partial class InstancesPageViewModel
         {
             var rows = Rows().Where(r => (ContentSearchText.Trim().Length == 0 || (r.Title + " " + r.Entry.Name + " " + r.Entry.VersionLabel + " " + r.Description + " " + r.SearchTags).Contains(ContentSearchText.Trim(), StringComparison.OrdinalIgnoreCase)) &&
                 (contentFilter switch { "可更新" => r.HasUpdate, "启用" => r.Entry.Enabled, "禁用" => !r.Entry.Enabled, "错误" => r.HasError, "重复" => r.Duplicate, _ => true }));
-            return (ContentSort switch { "文件名" => rows.OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase), "添加时间" => rows.OrderByDescending(r => r.Entry.Created ?? r.Entry.Modified), "文件大小" => rows.OrderByDescending(r => r.Entry.Bytes), "标签数量" => rows.OrderByDescending(r => r.Project?.Categories?.Count ?? 0), _ => rows.OrderBy(r => r.Title, StringComparer.CurrentCultureIgnoreCase) }).ToArray();
+            var sorted = (ContentSort switch { "文件名" => rows.OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase), "添加时间" => rows.OrderByDescending(r => r.Entry.Created ?? r.Entry.Modified), "文件大小" => rows.OrderByDescending(r => r.Entry.Bytes), "标签数量" => rows.OrderByDescending(r => r.Project?.Categories?.Count ?? 0), _ => rows.OrderBy(r => r.Title, StringComparer.CurrentCultureIgnoreCase) });
+            return sorted.OrderByDescending(r => r.IsDirectory).ToArray();
         }
     }
     private void NotifyContentFilter()
@@ -99,7 +100,7 @@ public sealed partial class InstancesPageViewModel
         CheckModUpdatesCommand = AsyncCommand(() => CheckModUpdatesAsync(false), () => CanEdit && !IsModScanBusy && SelectedInstance is not null && (IsModsSection && Service is IInstanceModUpdateService || IsResourceUpdateSection && Service is IInstanceResourceUpdateService));
         CancelModScanCommand = Command(() => { StopModScan(); ModUpdateStatus = Localization.UiLocalization.Instance.Text(IsModsSection ? "检查已取消，未修改模组文件。" : "检查已取消，未修改资源文件。"); }, () => IsModScanBusy);
         ApplyModUpdateCommand = AsyncCommand(() => RequestContentUpdatesAsync(SelectedModUpdate is { } u ? [u] : []), () => CanUpdateContent && SelectedModUpdate is not null);
-        SelectAllModsCommand = Command(() => { var visible = FilteredContentRows; var value = visible.Any(r => !r.Selected); foreach (var row in visible) row.Selected = value; }, () => IsContentList);
+        SelectAllModsCommand = Command(() => { var visible = FilteredContentRows.Where(r => r.IsFile).ToArray(); var value = visible.Any(r => !r.Selected); foreach (var row in visible) row.Selected = value; }, () => IsContentList);
         ClearModSelectionCommand = Command(() => { foreach (var row in Rows()) row.Selected = false; }, () => HasModSelection);
         UpdateSelectedModsCommand = AsyncCommand(() => RequestContentUpdatesAsync(Rows().Where(r => r.Selected && r.Update is not null).Select(r => r.Update!).ToArray()), () => CanUpdateContent && Rows().Any(r => r.Selected && r.HasUpdate));
         EnableSelectedModsCommand = AsyncCommand(() => ToggleSelectedModsAsync(true), () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);

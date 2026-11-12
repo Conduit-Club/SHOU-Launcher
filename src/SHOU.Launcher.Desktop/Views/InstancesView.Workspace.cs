@@ -116,9 +116,9 @@ public partial class InstancesView
         try
         {
             var provider = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境无法打开文件选择器。");
-            var instance = vm.SelectedInstance!; var section = vm.SelectedSection.Key;
+            var instance = vm.SelectedInstance!; var section = vm.SelectedSection.Key; var directory = vm.ContentDirectory;
             var files = await provider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "导入" + vm.SectionTitle, AllowMultiple = true });
-            if (files.Count > 0) await vm.ImportDroppedContentAsync(instance, section, files.Select(file => file.TryGetLocalPath() ?? throw new InvalidOperationException("请选择本机文件。")).ToArray());
+            if (files.Count > 0) await vm.ImportDroppedContentAsync(instance, section, files.Select(file => file.TryGetLocalPath() ?? throw new InvalidOperationException("请选择本机文件。")).ToArray(), directory);
         }
         catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
     }

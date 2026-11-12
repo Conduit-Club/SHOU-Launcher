@@ -59,7 +59,9 @@ public sealed partial class InstancesPageViewModel : PageViewModel
             // Filtering a list must not erase the launcher's persisted current instance.
             if (value is null && !_refreshing) return;
             if (!_refreshing && !Owner.CanMutate) { OnPropertyChanged(nameof(SelectedInstance)); return; }
+            var changedDirectory = _selectedInstance?.Id != value?.Id || _selectedInstance?.GameDirectory != value?.GameDirectory;
             if (!SetProperty(ref _selectedInstance, value)) return;
+            if (changedDirectory) { ResetContentDirectory(); ContentEntries.Clear(); SelectedContent = null; }
             ClearModUpdates();
             ScheduleModRelations();
             OnPropertyChanged(nameof(InstanceSummary));

@@ -40,7 +40,8 @@ public sealed class InterfaceParityFollowupTests
         await root.Settings.LogFiles.Single(r => r.Name == "history.log").OpenCommand!.ExecuteAsync(null); Assert.Equal(path, external.Opened.Single());
         root.Downloads.SelectCategory("resourcepack"); root.SelectedPage = root.Downloads; await root.Downloads.OpenProjectAsync(Service.Project); await root.Downloads.ToggleFavoriteCommand.ExecuteAsync(null); root.Downloads.BackToListCommand.Execute(null); root.Downloads.SelectCategory("favorites");
         await Wait(() => root.Downloads.FavoriteProjects.Single().HasIcon); Assert.True(service.IconCalls >= 2);
-        root.Downloads.FavoriteQuery = "Author"; Assert.Single(root.Downloads.FilteredFavoriteProjects); root.Downloads.FavoriteQuery = "missing"; Assert.Empty(root.Downloads.FilteredFavoriteProjects); Assert.Single(root.Downloads.FavoriteProjects);
+        root.Downloads.FavoriteQuery = "Author"; Assert.Single(root.Downloads.FilteredFavoriteProjects); root.Downloads.FavoriteQuery = "missing"; Assert.Empty(root.Downloads.FilteredFavoriteProjects); Assert.Single(root.Downloads.FavoriteProjects); Assert.True(root.Downloads.HasNoFavoriteMatches);
+        root.Downloads.FavoriteQuery = ""; Assert.False(root.Downloads.HasNoFavoriteMatches); Assert.Single(root.Downloads.FilteredFavoriteProjects);
     }
     [AvaloniaTheory]
     [InlineData(true)]

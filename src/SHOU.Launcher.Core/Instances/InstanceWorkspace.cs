@@ -2,6 +2,7 @@ using System.IO.Compression;
 using System.Text.Json;
 using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Core.IO;
+using SHOU.Launcher.Core.Content;
 
 namespace SHOU.Launcher.Core.Instances;
 
@@ -11,9 +12,18 @@ public static class InstanceWorkspace
     public static string Folder(string gameDirectory, string kind) => SafePath.Within(gameDirectory, kind switch
     { "worlds" => "saves", "screenshots" => "screenshots", "mods" => "mods", "resourcepacks" => "resourcepacks",
       "shaders" => "shaderpacks", "schematics" => "schematics", _ => throw new ArgumentException("未知实例内容类别。", nameof(kind)) });
-    public static IReadOnlyList<InstanceContentEntry> List(GameInstance instance, string kind, CancellationToken ct = default)
+    public static string ContentDirectory(GameInstance instance, string kind, string directory)
     {
-        var folder = Folder(instance.GameDirectory, kind);
+        if (kind != "schematics") throw new ArgumentException("此类别不提供资源目录浏览。");
+        var root = Folder(instance.GameDirectory, kind);
+        var folder = directory.Length == 0 ? root : ContentInstallFiles.Literal(root, directory);
+        SafePath.RejectLinks(folder); return folder;
+    }
+    public static IReadOnlyList<InstanceContentEntry> List(GameInstance instance, string kind, CancellationToken ct = default, string subdirectory = "", bool includeDirectories = false)
+    {
+        var folder = includeDirectories || subdirectory.Length > 0 ? ContentDirectory(instance, kind, subdirectory) : Folder(instance.GameDirectory, kind);
+        SafePath.RejectLinks(folder);
+        if (subdirectory.Length > 0 && !System.IO.Directory.Exists(folder)) throw new DirectoryNotFoundException("资源目录已移动，请返回上一级。");
         if (!System.IO.Directory.Exists(folder)) return [];
         var entries = new List<InstanceContentEntry>();
         var iconBytes = 0;
@@ -22,12 +32,12 @@ public static class InstanceWorkspace
             ct.ThrowIfCancellationRequested();
             if (item.LinkTarget is not null || (item.Attributes & FileAttributes.ReparsePoint) != 0) continue;
             var directory = item is DirectoryInfo;
-            if ((kind == "worlds") != directory) continue;
+            if (directory && kind != "worlds" && !includeDirectories || !directory && kind == "worlds") continue;
             if (!directory && !Accepts(kind, item.Name)) continue;
             var file = SafePath.Within(folder, item.Name);
-            var relative = kind switch { "worlds" => "saves/", "shaders" => "shaderpacks/", _ => kind + "/" } + item.Name;
-            var metadata = kind == "mods" ? ModArchiveMetadata.Read(file, iconBytes < 16 * 1024 * 1024) : null;
-            var resource = kind is "resourcepacks" or "shaders" ? ResourceArchiveMetadata.Read(file, iconBytes < 16 * 1024 * 1024, ct) : null;
+            var relative = Path.GetRelativePath(instance.GameDirectory, file).Replace('\\', '/');
+            var metadata = !directory && kind == "mods" ? ModArchiveMetadata.Read(file, iconBytes < 16 * 1024 * 1024) : null;
+            var resource = !directory && kind is "resourcepacks" or "shaders" ? ResourceArchiveMetadata.Read(file, iconBytes < 16 * 1024 * 1024, ct) : null;
             iconBytes += metadata?.Icon?.Length ?? resource?.Icon?.Length ?? 0;
             entries.Add(new(item.Name, relative, file, kind, directory ? 0 : ((FileInfo)item).Length,
                 item.LastWriteTimeUtc, !item.Name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) && !item.Name.EndsWith(".old", StringComparison.OrdinalIgnoreCase), directory,
@@ -42,14 +52,17 @@ public static class InstanceWorkspace
         return kind switch { "mods" => extension is ".jar" or ".litemod", "screenshots" => extension is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".tif" or ".tiff",
             "resourcepacks" or "shaders" => extension == ".zip", "schematics" => extension is ".litematic" or ".schematic" or ".schem" or ".nbt", _ => false };
     }
-    public static async Task ImportAsync(GameInstance instance, string kind, string source, CancellationToken ct)
+    public static async Task ImportAsync(GameInstance instance, string kind, string source, CancellationToken ct, string directory = "")
     {
         if (!Path.IsPathFullyQualified(source)) throw new ArgumentException("导入文件须为绝对路径。");
         var input = new FileInfo(source);
         if (!input.Exists || input.LinkTarget is not null || !Accepts(kind, input.Name)) throw new InvalidDataException("此文件不能导入所选类别。");
         var name = kind == "mods" ? input.Name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) ? input.Name[..^9] : input.Name.EndsWith(".old", StringComparison.OrdinalIgnoreCase) ? input.Name[..^4] : input.Name : input.Name;
         if (kind == "mods" && (!InstanceIdentity.SupportsModDirectory(instance.Loader) || name.EndsWith(".litemod", StringComparison.OrdinalIgnoreCase) && instance.Loader != "liteloader")) throw new InvalidOperationException("此实例的加载器不支持该模组目录或文件类型，未导入。");
-        var folder = Folder(instance.GameDirectory, kind); System.IO.Directory.CreateDirectory(folder);
+        var folder = directory.Length == 0 ? Folder(instance.GameDirectory, kind) : ContentDirectory(instance, kind, directory);
+        SafePath.RejectLinks(folder);
+        if (directory.Length > 0 && !System.IO.Directory.Exists(folder)) throw new DirectoryNotFoundException("资源目录已移动，未改为安装到根目录。");
+        System.IO.Directory.CreateDirectory(folder);
         var target = SafePath.Within(folder, name);
         if (Path.GetFullPath(source).Equals(target, OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) return;
         if (File.Exists(target) && kind != "mods") throw new IOException("同名文件已存在，原文件保留。");
@@ -66,8 +79,8 @@ public static class InstanceWorkspace
             }
             input.Refresh();
             if (!input.Exists || input.Length != new FileInfo(temporary).Length || input.LastWriteTimeUtc != sourceModified) throw new IOException("导入源在复制期间发生变化，未安装。");
-            _ = SafePath.Within(instance.GameDirectory, kind == "shaders" ? "shaderpacks/" + name : kind + "/" + name);
-            if (kind == "mods" && File.Exists(target)) await ModFileManagement.ReplaceImportedAsync(instance, "mods/" + name, temporary, ct).ConfigureAwait(false);
+            SafePath.RejectLinks(target); var relative = Path.GetRelativePath(instance.GameDirectory, target).Replace('\\', '/');
+            if (kind == "mods" && File.Exists(target)) await ModFileManagement.ReplaceImportedAsync(instance, relative, temporary, ct).ConfigureAwait(false);
             else File.Move(temporary, target, false);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }

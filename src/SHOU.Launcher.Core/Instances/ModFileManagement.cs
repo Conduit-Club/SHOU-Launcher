@@ -14,7 +14,7 @@ internal static class ModFileManagement
     private static string PathOf(GameInstance instance, string relative, string kind = "mods")
     {
         var folder = FolderName(kind);
-        if (!relative.StartsWith(folder + "/", StringComparison.Ordinal) || relative[(folder.Length + 1)..].Contains('/') || relative.Contains('\\') || !InstanceWorkspace.Accepts(kind, relative))
+        if (!relative.StartsWith(folder + "/", StringComparison.Ordinal) || kind != "schematics" && relative[(folder.Length + 1)..].Contains('/') || relative.Contains('\\') || !InstanceWorkspace.Accepts(kind, relative))
             throw new InvalidDataException("资源路径无效。");
         return ContentInstallFiles.Literal(instance.GameDirectory, relative);
     }

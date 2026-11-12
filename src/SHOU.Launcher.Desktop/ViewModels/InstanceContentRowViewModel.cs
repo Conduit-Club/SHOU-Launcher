@@ -22,7 +22,9 @@ public sealed class InstanceContentRowViewModel : ObservableObject
     public InstanceContentEntry Entry { get => entry; internal set { SetProperty(ref entry, value); Refresh(); } }
     public string Name => Entry.Name;
     public bool IsMod => Entry.Kind == "mods";
-    public bool Selected { get => selected; set => SetProperty(ref selected, value); }
+    public bool Selected { get => selected; set { if (!Entry.Directory) SetProperty(ref selected, value); } }
+    public bool IsDirectory => Entry.Directory;
+    public bool IsFile => !Entry.Directory;
     public bool Duplicate { get => duplicate; internal set { SetProperty(ref duplicate, value); Refresh(); } }
     public InstanceModUpdate? Update { get => update; internal set { SetProperty(ref update, value); Refresh(); } }
     public ContentProject? Project { get; internal set; }
@@ -35,10 +37,10 @@ public sealed class InstanceContentRowViewModel : ObservableObject
     public string Version => Entry.VersionLabel.Length > 0 ? Entry.VersionLabel : Update?.CurrentVersion ?? "";
     public bool HasVersion => Version.Length > 0;
     public double TitleMaximum => IsMod ? 300 : 450;
-    public string SecondaryText => string.Join(" · ", new[] { Entry.Enabled ? "" : Localization.UiLocalization.Instance.Text("已禁用"), Duplicate ? Localization.UiLocalization.Instance.Text("重复项目") : "", Path.GetFileNameWithoutExtension(Name) + (HasError ? ": " + Localization.UiLocalization.Instance.Text(Entry.MetadataError!) : Description.Length > 0 ? ": " + string.Join(" ", Description.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)) : "") }.Where(s => s.Length > 0));
+    public string SecondaryText => Entry.Directory ? Localization.UiLocalization.Instance.Text("双击或按 Enter 进入文件夹") : string.Join(" · ", new[] { Entry.Enabled ? "" : Localization.UiLocalization.Instance.Text("已禁用"), Duplicate ? Localization.UiLocalization.Instance.Text("重复项目") : "", Path.GetFileNameWithoutExtension(Name) + (HasError ? ": " + Localization.UiLocalization.Instance.Text(Entry.MetadataError!) : Description.Length > 0 ? ": " + string.Join(" ", Description.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)) : "") }.Where(s => s.Length > 0));
     public IReadOnlyList<string> Tags => (Project?.Categories ?? []).Select(DownloadsPageViewModel.CategoryName).Select(Localization.UiLocalization.Instance.Text).Distinct().Take(3).ToArray();
     public string SearchTags => string.Join(" ", (Project?.Categories ?? []).Concat(Tags));
-    public string FallbackIcon => Entry.Kind switch { "resourcepacks" => "layers", "shaders" => "sparkles", "schematics" => "file-box", _ => "puzzle" };
+    public string FallbackIcon => Entry.Directory ? "folder" : Entry.Kind switch { "resourcepacks" => "layers", "shaders" => "sparkles", "schematics" => "file-box", _ => "puzzle" };
     public string ToggleCaption => Localization.UiLocalization.Instance.Text(Entry.Enabled ? "禁用模组" : "启用模组");
     public string ToggleIcon => Entry.Enabled ? "circle-minus" : "circle-check";
     public string UpdateCaption => Localization.UiLocalization.Instance.Text(IsMod ? "更新模组" : "更新资源");

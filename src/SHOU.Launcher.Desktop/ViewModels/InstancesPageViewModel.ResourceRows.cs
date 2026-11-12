@@ -43,7 +43,7 @@ public sealed partial class InstancesPageViewModel
     public void ToggleContentSelection(InstanceContentRowViewModel row)
     { if (CurrentContentRow(row)) row.Selected = !row.Selected; }
     private Task RevealContentRowAsync(InstanceContentRowViewModel row)
-        => CurrentContentRow(row) ? Owner.RunControlAsync("显示资源文件", ct => Owner.ExternalLauncher.RevealFileAsync(row.Entry.FullPath, ct)) : Task.CompletedTask;
+        => CurrentContentRow(row) ? Owner.RunControlAsync("显示资源文件", ct => row.IsDirectory ? Owner.ExternalLauncher.OpenDirectoryAsync(row.Entry.FullPath, ct) : Owner.ExternalLauncher.RevealFileAsync(row.Entry.FullPath, ct)) : Task.CompletedTask;
     private async Task ToggleContentRowAsync(InstanceContentRowViewModel row)
     {
         if (!CanManageMods || !CurrentContentRow(row) || Service is not IInstanceWorkspaceService service || SelectedInstance is not { } instance) return;
