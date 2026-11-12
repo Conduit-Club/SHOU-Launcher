@@ -27,6 +27,15 @@ foreach ($library in $deps.libraries.GetEnumerator() | Where-Object { $_.Value.t
         Copy-Item -LiteralPath $file.FullName -Destination $target
         $copied+=$relative
     }
+    # Some packages publish only a license URL. Keep reviewed upstream text
+    # in the repository so packaging is complete and does not require network.
+    $supplement=Join-Path $PSScriptRoot "licenses/$name-$version"
+    if (Test-Path -LiteralPath $supplement -PathType Container) {
+        foreach ($file in Get-ChildItem -LiteralPath $supplement -File) {
+            Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $folder $file.Name)
+            $copied+=$file.Name
+        }
+    }
     $expression=[string]$metadata.license.InnerText
     if ($expression -eq 'MIT' -and -not ($copied | Where-Object { $_ -match '(?i)licen[sc]e' })) {
         $copyright=[string]$metadata.copyright
