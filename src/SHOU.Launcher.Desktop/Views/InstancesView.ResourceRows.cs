@@ -18,7 +18,7 @@ public partial class InstancesView
     {
         if (DataContext is InstancesPageViewModel browser && e.Key == Key.Back && browser.ParentContentDirectoryCommand.CanExecute(null))
         { _ = browser.ParentContentDirectoryCommand.ExecuteAsync(null); e.Handled = true; return; }
-        if (e.Key == Key.Enter && DataContext is InstancesPageViewModel { SelectedContentRow: { IsDirectory: true } folder } vmFolder)
+        if (e.Key == Key.Enter && !IsRowButton(e.Source) && DataContext is InstancesPageViewModel { SelectedContentRow: { IsDirectory: true } folder } vmFolder)
         { _ = vmFolder.OpenContentFolderAsync(folder); e.Handled = true; return; }
         if (e.Key != Key.Space || IsRowButton(e.Source) || DataContext is not InstancesPageViewModel { SelectedContentRow: { } row } vm) return;
         vm.ToggleContentSelection(row); e.Handled = true;

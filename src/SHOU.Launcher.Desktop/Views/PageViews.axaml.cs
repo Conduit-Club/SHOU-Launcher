@@ -15,7 +15,11 @@ public partial class DownloadsView : UserControl { public DownloadsView() => Ava
 
 public partial class InstancesView : UserControl
 {
-    public InstancesView() => AvaloniaXamlLoader.Load(this);
+    public InstancesView()
+    {
+        AvaloniaXamlLoader.Load(this);
+        this.FindControl<ListBox>("InstanceContentList")!.AddHandler(Avalonia.Input.InputElement.KeyDownEvent, ContentList_KeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+    }
     private async void PickJava_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not InstancesPageViewModel vm) return;

@@ -40,7 +40,7 @@ public sealed class InstanceContentRowViewModel : ObservableObject
     public string SecondaryText => Entry.Directory ? Localization.UiLocalization.Instance.Text("双击或按 Enter 进入文件夹") : string.Join(" · ", new[] { Entry.Enabled ? "" : Localization.UiLocalization.Instance.Text("已禁用"), Duplicate ? Localization.UiLocalization.Instance.Text("重复项目") : "", Path.GetFileNameWithoutExtension(Name) + (HasError ? ": " + Localization.UiLocalization.Instance.Text(Entry.MetadataError!) : Description.Length > 0 ? ": " + string.Join(" ", Description.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)) : "") }.Where(s => s.Length > 0));
     public IReadOnlyList<string> Tags => (Project?.Categories ?? []).Select(DownloadsPageViewModel.CategoryName).Select(Localization.UiLocalization.Instance.Text).Distinct().Take(3).ToArray();
     public string SearchTags => string.Join(" ", (Project?.Categories ?? []).Concat(Tags));
-    public string FallbackIcon => Entry.Directory ? "folder" : Entry.Kind switch { "resourcepacks" => "layers", "shaders" => "sparkles", "schematics" => "file-box", _ => "puzzle" };
+    public string FallbackIcon => Entry.Directory ? "folder-open" : Entry.Kind switch { "resourcepacks" => "layers", "shaders" => "sparkles", "schematics" => "file-box", _ => "puzzle" };
     public string ToggleCaption => Localization.UiLocalization.Instance.Text(Entry.Enabled ? "禁用模组" : "启用模组");
     public string ToggleIcon => Entry.Enabled ? "circle-minus" : "circle-check";
     public string UpdateCaption => Localization.UiLocalization.Instance.Text(IsMod ? "更新模组" : "更新资源");

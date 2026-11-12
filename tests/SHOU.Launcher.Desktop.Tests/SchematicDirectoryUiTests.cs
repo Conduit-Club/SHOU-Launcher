@@ -1,7 +1,13 @@
+using Avalonia;
+using Avalonia.Controls;
+using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
+using Avalonia.Input;
 using Avalonia.Threading;
+using Avalonia.VisualTree;
 using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Desktop.ViewModels;
+using SHOU.Launcher.Desktop.Views;
 using Xunit;
 
 namespace SHOU.Launcher.Desktop.Tests;
@@ -31,6 +37,23 @@ public sealed class SchematicDirectoryUiTests
         vm.SelectedSection = vm.Sections.Single(s => s.Key == "overview"); service.Gate.SetResult(); await read; Assert.Empty(vm.ContentEntries); Assert.Equal("", vm.ContentDirectory);
         vm.SelectedSection = vm.Sections.Single(s => s.Key == "schematics"); await Wait(() => vm.ContentEntries.Count == 2 && !root.IsBusy);
         await vm.ImportDroppedContentAsync(vm.SelectedInstance!, "schematics", ["/fixture/source.schem"], "old-folder"); Assert.Null(service.ImportedDirectory); Assert.Equal(0, service.RootImports);
+    }
+    [AvaloniaFact]
+    public async Task EnterBackspaceAndDoublePointerClickNavigateThroughTheActualView()
+    {
+        using var root = Open(new Service()); var vm = root.Instances; var window = new MainWindow { Width = 976, Height = 636, DataContext = root }; window.Show();
+        void Pump() { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); }
+        try
+        {
+            await Wait(() => vm.ContentEntries.Count == 2 && !root.IsBusy); Pump(); var list = window.GetVisualDescendants().OfType<ListBox>().Single(l => l.Name == "InstanceContentList");
+            list.SelectedItem = vm.FilteredContentRows.First(); Assert.True(list.ContainerFromIndex(0)!.Focus()); Assert.True(vm.SelectedContentRow?.IsDirectory); window.KeyPress(Key.Enter, RawInputModifiers.None, PhysicalKey.Enter, null); await Wait(() => vm.ContentDirectory == "builds" && !root.IsBusy); Pump();
+            Assert.True(list.ContainerFromIndex(0)!.Focus()); window.KeyPress(Key.Back, RawInputModifiers.None, PhysicalKey.Backspace, null); await Wait(() => vm.ContentDirectory == "" && !root.IsBusy); Pump();
+            var row = window.GetVisualDescendants().OfType<Border>().First(b => b.Classes.Contains("resourceRow") && b.DataContext is InstanceContentRowViewModel { IsDirectory: true });
+            var point = row.TranslatePoint(new Point(130, row.Bounds.Height / 2), window)!.Value; window.MouseMove(point);
+            window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left); window.MouseDown(point, MouseButton.Left); window.MouseUp(point, MouseButton.Left);
+            await Wait(() => vm.ContentDirectory == "builds" && !root.IsBusy); Assert.False(vm.HasModSelection);
+        }
+        finally { window.Close(); }
     }
     private sealed class Service : FakeLauncherService, IInstanceWorkspaceService, IInstanceContentBrowserService
     {
