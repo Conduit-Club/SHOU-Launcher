@@ -47,7 +47,7 @@ public static class ContentInstallFiles
         {
             _ = Literal(instance.GameDirectory, item.RelativePath);
             if (!Hash(item.Sha1, 40) || !Hash(item.Sha512, 128) || item.Size is < 0 or > ContentInstallPlanner.MaximumTotalBytes ||
-                item.DownloadUrl is { } url && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !AllowedResourceUri(uri))) throw new InvalidDataException("安装清单文件身份无效。");
+                item.DownloadUrl is { } url && (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || !PackPayloadPath.DownloadUri(uri))) throw new InvalidDataException("安装清单文件身份无效。");
         }
         return manifest;
     }

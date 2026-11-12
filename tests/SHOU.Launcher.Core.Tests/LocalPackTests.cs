@@ -93,6 +93,7 @@ public sealed partial class LocalPackTests
     [DataRow(12, "resourcepacks", "resourcepack")]
     [DataRow(6552, "shaderpacks", "shader")]
     [DataRow(6945, "datapacks", "datapack")]
+    [DataRow(17, "saves", "world")]
     public async Task PackResourceClassesKeepTheirOwnFolderKindAndVerifiedBytes(int classId, string folder, string kind)
     {
         var asset = Resource() with { ClassId = classId }; using var handler = new FixtureApi(asset); using var http = new HttpClient(handler);
@@ -103,13 +104,13 @@ public sealed partial class LocalPackTests
         await archive.StageCurseForgeAsync(source, read.Inspection.ArchiveSha256, stage, resolved.Files, (f, p, ct) => resolver.DownloadAsync(f, p, ct: ct));
         CollectionAssert.AreEqual(asset.Bytes, await File.ReadAllBytesAsync(Path.Combine(stage, folder, "fixture.zip")));
         var manifest = await ContentInstallFiles.ReadManifestAsync(new("unregistered", "Resource fixture", "1.21.1", stage));
-        Assert.AreEqual(kind, manifest.Files.Single().Kind); Assert.IsFalse(Directory.Exists(Path.Combine(stage, "saves")));
+        Assert.AreEqual(kind, manifest.Files.Single().Kind); Assert.AreEqual(folder == "saves", Directory.Exists(Path.Combine(stage, "saves")));
         if (classId == 6945) Assert.IsTrue(resolved.Warnings.Any(w => w.Contains("不改写已有世界", StringComparison.Ordinal)));
     }
     [TestMethod]
     [DataRow(6, "bad.zip")]
     [DataRow(6945, "bad.jar")]
-    [DataRow(17, "world.zip")]
+    [DataRow(999999, "unknown.zip")]
     [DataRow(6552, "native.dll")]
     public async Task PackClassesStillRejectUnsupportedKindsAndWrongExtensions(int classId, string name)
     {
@@ -268,8 +269,10 @@ public sealed partial class LocalPackTests
         var archive = new LocalPackArchive(); var inspection = await archive.ReadAsync(source); var resolution = await resolver.ResolveAsync(inspection.CurseForgeFiles, "1.21.1", "fabric"); var stage = Path.Combine(TestFiles.Root(), "stage");
         await archive.StageCurseForgeAsync(source, inspection.Inspection.ArchiveSha256, stage, resolution.Files, (file, path, ct) => resolver.DownloadAsync(file, path, ct: ct));
         CollectionAssert.AreEqual(mod.Bytes, await File.ReadAllBytesAsync(Path.Combine(stage, "mods/fixture.jar"))); CollectionAssert.AreEqual(resource.Bytes, await File.ReadAllBytesAsync(Path.Combine(stage, "resourcepacks/fixture.zip")));
-        Assert.AreEqual("{\"fixture\":true}", await File.ReadAllTextAsync(Path.Combine(stage, "config/fixture.json"))); Assert.IsFalse(File.Exists(Path.Combine(stage, "launcher_accounts.json"))); Assert.IsFalse(File.Exists(Path.Combine(stage, "config/execute.sh")));
-        var manifest = await ContentInstallFiles.ReadManifestAsync(new("unregistered", "Fixture", "1.21.1", stage)); Assert.HasCount(3, manifest.Files); Assert.IsNull(manifest.Files.Single(f => f.Kind == "resourcepack").DownloadUrl);
+        Assert.AreEqual("{\"fixture\":true}", await File.ReadAllTextAsync(Path.Combine(stage, "config/fixture.json")));
+        Assert.AreEqual("must not import", await File.ReadAllTextAsync(Path.Combine(stage, "launcher_accounts.json")));
+        Assert.AreEqual("must not execute", await File.ReadAllTextAsync(Path.Combine(stage, "config/execute.sh")));
+        var manifest = await ContentInstallFiles.ReadManifestAsync(new("unregistered", "Fixture", "1.21.1", stage)); Assert.HasCount(5, manifest.Files); Assert.IsNull(manifest.Files.Single(f => f.Kind == "resourcepack").DownloadUrl);
         Assert.IsFalse(Directory.GetFiles(stage, "*", SearchOption.AllDirectories).Any(f => f.EndsWith(".download.lock", StringComparison.Ordinal)));
     }
     [TestMethod]
@@ -283,14 +286,14 @@ public sealed partial class LocalPackTests
             .Concat(new[] { ("overrides/kubejs/execute.sh", "no"), ("overrides/config/run.js", "no"), ("overrides/launcher_accounts.json", "no"), ("overrides/saves/user/level.dat", "no"),
                 ("overrides/resources/execute.command", "no"), ("overrides/resources/run.js", "no"), ("overrides/structures/plugin.dylib", "no") }).ToArray();
         var path = Archive(Manifest(), payload); var archive = new LocalPackArchive(); var read = await archive.ReadAsync(path);
-        Assert.AreEqual(6500 + gameFiles.Length, read.OverrideEntries.Count); Assert.AreEqual(7, read.Inspection.SkippedFiles);
+        Assert.AreEqual(6500 + gameFiles.Length + 7, read.OverrideEntries.Count); Assert.AreEqual(0, read.Inspection.SkippedFiles);
         var stage = Path.Combine(TestFiles.Root(), "stage");
         await archive.StageCurseForgeAsync(path, read.Inspection.ArchiveSha256, stage, [], (_, _, _) => throw new AssertFailedException("No remote files in this fixture."));
         foreach (var file in gameFiles) Assert.AreEqual("fixture-game-data", await File.ReadAllTextAsync(Path.Combine(stage, file)));
         var manifest = await ContentInstallFiles.ReadManifestAsync(new("unregistered", "Large fixture", "1.21.1", stage));
         Assert.AreEqual(read.OverrideEntries.Count, manifest.Files.Count);
         Assert.IsTrue(manifest.Files.All(f => f.Sha1.Length == 40 && f.Sha512.Length == 128));
-        Assert.IsFalse(File.Exists(Path.Combine(stage, "kubejs/execute.sh")));
+        Assert.AreEqual("no", await File.ReadAllTextAsync(Path.Combine(stage, "kubejs/execute.sh")));
     }
     [TestMethod]
     [DataRow(false)]

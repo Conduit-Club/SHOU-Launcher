@@ -32,13 +32,14 @@ public sealed class CurseForgePackResolver
     public async Task<CurseForgePackResolution> ResolveAsync(IReadOnlyList<CurseForgePackReference> references, string gameVersion, string loader, CancellationToken ct = default,
         FtbPackIdentity? ftbPack = null, IProgress<PackInstallProgress>? progress = null)
     {
-        if (references.Count > 512 || references.Any(r => r.ProjectId <= 0 || r.FileId <= 0)) throw new InvalidDataException("CurseForge 清单项目数量或身份无效。");
+        if (references.Count > ModrinthPackArchive.MaximumFiles || references.Any(r => r.ProjectId <= 0 || r.FileId <= 0)) throw new InvalidDataException("CurseForge 清单项目数量或身份无效。");
         var required = references.Where(r => r.Required).ToArray();
         if (apiKey is null) return new([], [], required.Select(r => Label(r) + "：未配置 CurseForge API key，尚未核实文件。").ToArray());
         var publishedFtb = await FtbPackFileIndex.ReadAsync(http, ftbPack, ct).ConfigureAwait(false);
         var completed = 0;
         progress?.Report(new("解析必需文件", 0, required.Length));
-        var results = new Item?[required.Length]; using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromMinutes(3));
+        var results = new Item?[required.Length]; using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(Math.Max(180, required.Length * 2L)));
         try
         {
             await Parallel.ForEachAsync(Enumerable.Range(0, required.Length), new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = timeout.Token }, async (index, token) =>
@@ -92,8 +93,8 @@ public sealed class CurseForgePackResolver
             var folder = classId == 6 && name.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ? "mods/"
                 : name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase) ? classId switch
                 {
-                    12 => "resourcepacks/", 6552 => "shaderpacks/", 6945 => "datapacks/",
-                    _ => throw new InvalidDataException("CurseForge 整合包只支持模组 JAR、资源包 / 光影 / 数据包 ZIP。")
+                    12 => "resourcepacks/", 6552 => "shaderpacks/", 6945 => "datapacks/", 17 => "saves/",
+                    _ => throw new InvalidDataException("CurseForge 文件的项目类型尚未映射到实例目录。")
                 } : throw new InvalidDataException("CurseForge 文件扩展名与项目类型不匹配。");
             var size = Number(data, "fileLength"); if (size is <= 0 or > PackArchiveReader.MaximumFileBytes) throw new InvalidDataException("官方文件大小超过单项 128 MiB 边界。");
             var hashes = data.GetProperty("hashes");

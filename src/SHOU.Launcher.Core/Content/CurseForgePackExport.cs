@@ -20,7 +20,8 @@ internal static class CurseForgePackExport
         foreach (var file in manifest.Files)
         {
             ct.ThrowIfCancellationRequested();
-            if (!LocalPackArchive.AllowedPayload(file.RelativePath) || !ShouPackArchive.Allowed(file.RelativePath)) throw new InvalidDataException("安装清单含不可导出的文件。");
+            PackPayloadPath.Validate(file.RelativePath);
+            if (!ShouPackArchive.Allowed(file.RelativePath)) continue;
             var full = ContentInstallFiles.Literal(instance.GameDirectory, file.RelativePath);
             var guard = WorldPathSnapshot.Capture(instance.GameDirectory, full); guards.Add(guard);
             if (!await ContentInstallFiles.MatchesAsync(full, file.Sha1, file.Size, ct).ConfigureAwait(false)) throw new IOException("安装文件已改变，请先重新核对资源。");
@@ -43,19 +44,20 @@ internal static class CurseForgePackExport
             {
                 foreach (var child in Directory.EnumerateFileSystemEntries(full)) Visit(Path.GetRelativePath(instance.GameDirectory, child).Replace('\\', '/'), depth + 1);
             }
-            else if (File.Exists(full) && LocalPackArchive.AllowedPayload(path) && ShouPackArchive.Allowed(path)) paths.Add(path);
+            else if (File.Exists(full) && ShouPackArchive.Allowed(path)) paths.Add(path);
             else if (!File.Exists(full)) throw new InvalidDataException("导出路径不存在：" + path);
         }
         foreach (var path in options.OverridePaths ?? [])
         {
             var full = ContentInstallFiles.Literal(instance.GameDirectory, path);
             var scope = Directory.Exists(full) ? path + "/__scope" : path;
-            if (!LocalPackArchive.AllowedPayload(scope) || !ShouPackArchive.Allowed(scope)) throw new InvalidDataException("导出路径不受支持：" + path);
+            PackPayloadPath.Validate(scope);
+            if (!ShouPackArchive.Allowed(scope)) throw new InvalidDataException("此路径是启动器凭据文件，不能导出：" + path);
             Visit(path, 0);
         }
         // CF-owned files are references even when their containing folder was explicitly selected.
         foreach (var file in manifest.Files.Where(f => references.Any(r => f.ProjectId == "cf-" + r.ProjectId && f.ReleaseId == "cf-" + r.FileId))) paths.Remove(file.RelativePath);
-        if (references.Count > 512 || references.Select(r => r.FileId).Distinct().Count() != references.Count) throw new InvalidDataException("CurseForge 文件身份重复或超过 512 项。");
+        if (references.Count > ModrinthPackArchive.MaximumFiles || references.Select(r => r.FileId).Distinct().Count() != references.Count) throw new InvalidDataException("CurseForge 文件身份重复或超过整合包文件预算。");
         return new(options.Name, options.VersionId, references, paths, guards);
     }
 }

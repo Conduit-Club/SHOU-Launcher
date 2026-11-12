@@ -25,7 +25,7 @@ public sealed class ShouExportTests
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions()); await service.InitializeAsync();
         var inspection = await service.InspectLocalPackAsync(archive); Assert.IsTrue(inspection.CanImport); Assert.AreEqual(LocalPackFormat.ShouExport, inspection.Format);
-        CollectionAssert.AreEqual(new[] { "config/client.json" }, inspection.LocalFiles!.ToArray());
+        CollectionAssert.AreEquivalent(new[] { "config/client.json", "config/account-token.json" }, inspection.LocalFiles!.ToArray());
         var request = new LocalPackImportRequest(archive, inspection.ArchiveSha256, "roundtrip");
         if (scenario == "persist-failure") { Directory.CreateDirectory(Path.Combine(platform.Paths.LocalDataDirectory, "shou.desktop.v1.json")); await TestFiles.AssertDirectoryCommitFailureAsync(() => service.ImportLocalPackAsync(request)); }
         else if (scenario == "cancel") { using var ct = new CancellationTokenSource(); ct.Cancel(); await Assert.ThrowsAsync<OperationCanceledException>(() => service.ImportLocalPackAsync(request, ct.Token)); }
@@ -33,8 +33,8 @@ public sealed class ShouExportTests
         {
             var result = await service.ImportLocalPackAsync(request);
             Assert.AreEqual("{\"fixture\":true}", await File.ReadAllTextAsync(Path.Combine(result.Instance.GameDirectory, "config/client.json")));
-            Assert.AreNotEqual(game, result.Instance.GameDirectory); Assert.AreEqual(1, result.InstalledFiles); Assert.IsFalse(result.Instance.Installed);
-            Assert.HasCount(1, (await ContentInstallFiles.ReadManifestAsync(result.Instance)).Files); return;
+            Assert.AreNotEqual(game, result.Instance.GameDirectory); Assert.AreEqual(2, result.InstalledFiles); Assert.IsFalse(result.Instance.Installed);
+            Assert.HasCount(2, (await ContentInstallFiles.ReadManifestAsync(result.Instance)).Files); return;
         }
         Assert.IsEmpty(service.Snapshot.Instances); Assert.IsEmpty(Directory.GetDirectories(platform.Paths.InstancesDirectory));
     }

@@ -63,14 +63,7 @@ public sealed partial class ModrinthPackArchive
         return path;
     }
     private static string Key(string path) => path.Normalize(NormalizationForm.FormC).ToUpperInvariant();
-    private static void AllowedPath(string path, bool directory = false)
-    {
-        SafeRelative(path);
-        var root = path.Split('/')[0];
-        if (!directory && root == path && root is "mods" or "resourcepacks" or "shaderpacks" or "config" or "defaultconfigs" or "scripts" or "kubejs") throw new InvalidDataException("整合包文件路径须包含文件名。");
-        if (root is not ("mods" or "resourcepacks" or "shaderpacks" or "config" or "defaultconfigs" or "scripts" or "kubejs") && path is not ("options.txt" or "icon.png" or "pack.png"))
-            throw new NotSupportedException("首批整合包仅支持模组/资源包/光影包、config/defaultconfigs/scripts/kubejs与options.txt/icon.png/pack.png；不导入启动器档案、账户、本体或存档路径。");
-    }
+    private static void AllowedPath(string path, bool directory = false) => PackPayloadPath.Validate(path);
     private static async Task<byte[]> ReadBoundedAsync(Stream input, long maximum, CancellationToken ct)
     {
         using var bytes = new MemoryStream(); var buffer = new byte[16384];
@@ -101,7 +94,11 @@ public sealed partial class ModrinthPackArchive
     {
         if (zip.Entries.Count is 0 or > MaximumEntries) throw new InvalidDataException("ZIP条目数量超限。");
         var entryKeys = new HashSet<string>(StringComparer.Ordinal); var common = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal);
-        var client = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal); ZipArchiveEntry? index = null; long total = 0; var serverCount = 0;
+        var client = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal); long total = 0; var serverCount = 0;
+        var indexes = zip.Entries.Where(e => e.FullName == "modrinth.index.json").ToArray();
+        if (indexes.Length == 0) indexes = zip.Entries.Where(e => e.FullName.EndsWith("/modrinth.index.json", StringComparison.Ordinal) && e.FullName.Count(c => c == '/') == 1).ToArray();
+        if (indexes.Length != 1) throw new InvalidDataException("整合包须包含唯一的 modrinth.index.json。");
+        var index = indexes[0]; var prefix = index.FullName[..^"modrinth.index.json".Length];
         foreach (var entry in zip.Entries)
         {
             ct.ThrowIfCancellationRequested();
@@ -109,15 +106,17 @@ public sealed partial class ModrinthPackArchive
             SafeRelative(name);
             if (!entryKeys.Add(Key(name)) || ((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000) throw new InvalidDataException("ZIP含重复路径、符号链接或大小写/Unicode路径冲突。");
             if (isDirectory) { if (entry.Length != 0) throw new InvalidDataException("ZIP目录条目长度无效。"); continue; }
-            if (entry.FullName == "modrinth.index.json") { index = entry; if (entry.Length > 4 * 1024 * 1024) throw new InvalidDataException("整合包清单超过4 MiB。"); continue; }
-            var slash = name.IndexOf('/'); if (slash < 0) throw new NotSupportedException("整合包根目录含不支持的文件：" + name);
-            var layer = name[..slash]; var relative = name[(slash + 1)..]; SafeRelative(relative);
+            if (entry == index) { if (entry.Length > 4 * 1024 * 1024) throw new InvalidDataException("整合包清单超过4 MiB。"); continue; }
             if (entry.Length > MaximumOverrideFileBytes || checked(total += entry.Length) > MaximumOverrideBytes) throw new InvalidDataException("overrides超过单项128 MiB或总512 MiB限制。");
+            // Only format-defined override layers are game payload. Extra archive documentation is harmless.
+            if (!name.StartsWith(prefix, StringComparison.Ordinal)) continue;
+            var scoped = name[prefix.Length..]; var slash = scoped.IndexOf('/'); if (slash < 0) continue;
+            var layer = scoped[..slash]; var relative = scoped[(slash + 1)..]; SafeRelative(relative);
             if (layer == "server-overrides") { serverCount++; continue; }
-            var target = layer switch { "overrides" => common, "client-overrides" => client, _ => throw new NotSupportedException("不支持的整合包ZIP层：" + layer) };
+            var target = layer switch { "overrides" => common, "client-overrides" => client, _ => null };
+            if (target is null) continue;
             target.Add(Key(relative), entry);
         }
-        if (index is null) throw new InvalidDataException("整合包缺少根目录modrinth.index.json。");
         using var json = PackArchiveReader.Json(await PackArchiveReader.ReadEntryAsync(index, 4 * 1024 * 1024, ct).ConfigureAwait(false));
         UniqueJson(json.RootElement); var root = json.RootElement;
         if (root.GetProperty("formatVersion").GetInt32() != 1 || Text(root, "game") != "minecraft") throw new NotSupportedException("只支持Minecraft的Modrinth格式版本1。");
@@ -128,7 +127,7 @@ public sealed partial class ModrinthPackArchive
         {
             if (property.Name == "minecraft") continue;
             loaders++; loaderVersion = IO.SafePath.Identifier(property.Value.GetString() ?? "");
-            loader = property.Name switch { "fabric-loader" => "fabric", "forge" => "forge", "neoforge" => "neoforge", "quilt-loader" => "quilt", _ => "unknown" };
+            loader = property.Name switch { "fabric-loader" => "fabric", "forge" => "forge", "neoforge" or "neo-forge" => "neoforge", "quilt-loader" => "quilt", _ => "unknown" };
             if (!PackLoaderIdentity.Supported(loader)) unsupported = "此包的加载器尚未接入：" + property.Name;
         }
         if (loaders > 1) unsupported = "整合包同时声明多个加载器，首批不支持此组合。";
@@ -148,16 +147,16 @@ public sealed partial class ModrinthPackArchive
             if (!ContentInstallFiles.Hash(sha1, 40) || !ContentInstallFiles.Hash(sha512, 128) || size is < 0 or > ContentInstallPlanner.MaximumTotalBytes || checked(downloadBytes += size) > MaximumDownloadBytes)
                 throw new InvalidDataException("整合包文件哈希/大小无效或总下载超过4 GiB。");
             var urls = file.GetProperty("downloads").EnumerateArray().Select(u => u.GetString() ?? "").ToArray();
-            if (urls.Length is 0 or > 8 || urls.Any(u => u.Length > 2048 || u.Any(char.IsWhiteSpace) || !Uri.TryCreate(u, UriKind.Absolute, out var uri) || uri.Scheme != "https" || uri.UserInfo.Length > 0 || clientSide != "unsupported" && !ContentInstallFiles.AllowedUri(uri)))
-                throw new NotSupportedException("首批整合包仅接受cdn.modrinth.com的HTTPS文件来源，最多8个来源且不含凭据。");
+            if (urls.Length == 0 || urls.Any(u => u.Any(char.IsWhiteSpace) || !Uri.TryCreate(u, UriKind.Absolute, out var uri) || !PackPayloadPath.DownloadUri(uri)))
+                throw new NotSupportedException("整合包下载来源须为 HTTP(S)，且不含 URL 账号密码或片段。");
             files.Add(new(path, sha1.ToLowerInvariant(), sha512.ToLowerInvariant(), size, urls, clientSide, serverSide));
         }
         foreach (var pair in client)
         {
-            if (common.TryGetValue(pair.Key, out var prior) && prior.FullName[(prior.FullName.IndexOf('/') + 1)..] != pair.Value.FullName[(pair.Value.FullName.IndexOf('/') + 1)..]) throw new InvalidDataException("overrides层存在大小写或Unicode路径歧义。");
+            if (common.TryGetValue(pair.Key, out var prior) && prior.FullName[(prefix.Length + "overrides/".Length)..] != pair.Value.FullName[(prefix.Length + "client-overrides/".Length)..]) throw new InvalidDataException("overrides层存在大小写或Unicode路径歧义。");
             common[pair.Key] = pair.Value;
         }
-        var overrides = common.Values.ToDictionary(e => e.FullName[(e.FullName.IndexOf('/') + 1)..], e => e, StringComparer.Ordinal);
+        var overrides = common.Values.ToDictionary(e => { var name = e.FullName[prefix.Length..]; return name[(name.IndexOf('/') + 1)..]; }, e => e, StringComparer.Ordinal);
         if (overrides.Count > MaximumFiles) throw new InvalidDataException($"客户端overrides文件超过{MaximumFiles}项限制。");
         if (overrides.Keys.Any(p => files.Any(f => Key(f.Path) == Key(p) && f.Path != p))) throw new InvalidDataException("下载文件与overrides存在大小写或Unicode路径歧义。");
         foreach (var relative in overrides.Keys)
@@ -178,7 +177,7 @@ public sealed partial class ModrinthPackArchive
         if (!ContentInstallFiles.Hash(expectedSha256, 64)) throw new InvalidDataException("请先读取整合包并确认其文件身份。");
         VerifiedDownloader.RejectLink(directory); Directory.CreateDirectory(directory);
         if (Directory.EnumerateFileSystemEntries(directory).Any()) throw new IOException("整合包暂存目录必须为空。");
-        var archiveCopy = ContentInstallFiles.Literal(directory, ".shou-pack-input.mrpack");
+        var archiveCopy = ContentInstallFiles.Literal(Path.GetDirectoryName(Path.GetFullPath(directory))!, ".shou-pack-input-" + Guid.NewGuid().ToString("N") + ".mrpack");
         try
         {
             await using (var source = OpenArchive(archivePath))

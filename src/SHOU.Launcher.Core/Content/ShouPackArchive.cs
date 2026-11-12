@@ -7,21 +7,16 @@ using SHOU.Launcher.Core.Instances;
 
 namespace SHOU.Launcher.Core.Content;
 
-/// <summary>A portable client payload, with no launcher credentials, runtime, or executable installer.</summary>
+/// <summary>A portable client payload. Imported files are data and never executed by the archive reader.</summary>
 internal static class ShouPackArchive
 {
     private sealed record Entry(string Path, long Size, string Sha1, string Sha512);
     internal static bool Allowed(string path)
     {
-        ModrinthPackArchive.SafeRelative(path);
-        var parts = path.Split('/');
-        if (parts.Any(p => p.StartsWith('.') || p.Contains("token", StringComparison.OrdinalIgnoreCase)
-            || p.Contains("credential", StringComparison.OrdinalIgnoreCase) || p.Contains("password", StringComparison.OrdinalIgnoreCase)
-            || p.Contains("account", StringComparison.OrdinalIgnoreCase) || p.EndsWith(".part", StringComparison.OrdinalIgnoreCase)
-            || p.EndsWith(".bak", StringComparison.OrdinalIgnoreCase))) return false;
-        if (path is "options.txt" or "servers.dat" or "icon.png" or "pack.png") return true;
-        if (parts.Length < 2 || parts[0] is not ("mods" or "resourcepacks" or "shaderpacks" or "config" or "defaultconfigs" or "schematics" or "saves")) return false;
-        return Path.GetExtension(path).ToLowerInvariant() is not (".exe" or ".com" or ".bat" or ".cmd" or ".ps1" or ".sh" or ".command" or ".dll" or ".so" or ".dylib" or ".js" or ".vbs" or ".key" or ".pem" or ".pfx");
+        PackPayloadPath.Validate(path);
+        // Export omits known launcher credential stores, not arbitrary mod names containing "account" or "token".
+        return path.ToLowerInvariant() is not ("launcher_accounts.json" or "launcher_accounts_microsoft_store.json"
+            or "shou.desktop.v1.json" or "credentials.json" or "accounts.json" or "authentication.json" or ".env");
     }
 
     internal static async Task<string> ExportAsync(GameInstance instance, string outputDirectory, bool includeWorlds, CancellationToken ct, CurseForgeExportPlan? cf = null)
@@ -46,7 +41,7 @@ internal static class ShouPackArchive
                 else if (Allowed(path))
                 {
                     if (((FileInfo)entry).Length > PackArchiveReader.MaximumFileBytes || (total = checked(total + ((FileInfo)entry).Length)) > PackArchiveReader.MaximumExpandedBytes - 4 * 1024 * 1024) throw new IOException("导出内容超过单文件 128 MiB 或合计 508 MiB 限制。");
-                    files.Add(path); sizes.Add(path, ((FileInfo)entry).Length); if (files.Count > 2048) throw new IOException("导出文件超过 2048 项。");
+                    files.Add(path); sizes.Add(path, ((FileInfo)entry).Length); if (files.Count > ModrinthPackArchive.MaximumFiles) throw new IOException("导出文件超过整合包文件预算。");
                 }
             }
         }
@@ -62,9 +57,24 @@ internal static class ShouPackArchive
         }
         else
         {
-        foreach (var folder in new[] { "mods", "resourcepacks", "shaderpacks", "config", "defaultconfigs", "schematics" }.Concat(includeWorlds ? ["saves"] : Array.Empty<string>())) Visit(folder, 0);
+        var imported = await ContentInstallFiles.ReadManifestAsync(instance, ct).ConfigureAwait(false);
+        var scopes = new[] { "mods", "resourcepacks", "shaderpacks", "config", "defaultconfigs", "schematics" }
+            .Concat(imported.Files.Select(f => f.RelativePath.Split('/')[0])).Concat(includeWorlds ? ["saves"] : Array.Empty<string>())
+            .Where(p => includeWorlds || !p.Equals("saves", StringComparison.OrdinalIgnoreCase)).Distinct(StringComparer.Ordinal);
+        foreach (var scope in scopes)
+        {
+            var full = ContentInstallFiles.Literal(instance.GameDirectory, scope);
+            if (Directory.Exists(full)) Visit(scope, 0);
+            else if (File.Exists(full) && Allowed(scope))
+            {
+                var size = new FileInfo(full).Length;
+                if (size > PackArchiveReader.MaximumFileBytes || (total = checked(total + size)) > PackArchiveReader.MaximumExpandedBytes - 4 * 1024 * 1024) throw new IOException("导出文件超过大小限制。");
+                files.Add(scope); sizes.Add(scope, size);
+            }
+        }
         foreach (var name in new[] { "options.txt", "servers.dat", "icon.png", "pack.png" })
         {
+            if (sizes.ContainsKey(name)) continue;
             var path = ContentInstallFiles.Literal(instance.GameDirectory, name); if (!File.Exists(path)) continue;
             var size = new FileInfo(path).Length;
             if (size > PackArchiveReader.MaximumFileBytes || (total = checked(total + size)) > PackArchiveReader.MaximumExpandedBytes - 4 * 1024 * 1024) throw new IOException("导出文件超过大小限制。");
@@ -73,6 +83,8 @@ internal static class ShouPackArchive
         }
         if (files.Count > 2048) throw new IOException("导出文件超过 2048 项。");
         PackArchiveReader.CheckTargets(files); Directory.CreateDirectory(outputDirectory);
+        if (cf is null && files.Any(p => ContentInstallFiles.PathKey(p) == "SHOU-INSTANCE.JSON"))
+            throw new InvalidDataException("所选内容已有 shou-instance.json，请使用 MRpack 或 CurseForge 格式保留该文件。");
         var destination = ContentInstallFiles.Literal(outputDirectory, (cf is null ? "SHOU-" : "CF-") + IO.SafePath.Identifier(instance.Id) + "-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmss-fff") + ".zip");
         var temp = ContentInstallFiles.Literal(outputDirectory, ".export-" + Guid.NewGuid().ToString("N"));
         try
@@ -124,7 +136,7 @@ internal static class ShouPackArchive
         var loaderVersion = loader != "vanilla" ? IO.SafePath.Identifier(Text(root, "LoaderVersion")) : null;
         PackLoaderIdentity.ValidateShou(loader, loaderVersion);
         var files = root.GetProperty("Files").Deserialize<Entry[]>() ?? throw new InvalidDataException("SHOU 文件清单缺失。");
-        if (files.Length > 2048) throw new InvalidDataException("SHOU 文件清单超过 2048 项。");
+        if (files.Length > ModrinthPackArchive.MaximumFiles) throw new InvalidDataException("SHOU 文件清单超过整合包文件预算。");
         PackArchiveReader.CheckTargets(files.Select(f => f.Path));
         var expected = files.Select(f => f.Path).Append("shou-instance.json").ToHashSet(StringComparer.Ordinal);
         var entries = archive.Zip.Entries.Where(e => !e.FullName.EndsWith('/')).ToArray();
@@ -133,7 +145,8 @@ internal static class ShouPackArchive
         foreach (var file in files)
         {
             ct.ThrowIfCancellationRequested();
-            if (!Allowed(file.Path) || file.Size is < 0 or > PackArchiveReader.MaximumFileBytes || !ContentInstallFiles.Hash(file.Sha1, 40) || !ContentInstallFiles.Hash(file.Sha512, 128)) throw new InvalidDataException("SHOU 文件路径或身份无效。");
+            PackPayloadPath.Validate(file.Path);
+            if (file.Size is < 0 or > PackArchiveReader.MaximumFileBytes || !ContentInstallFiles.Hash(file.Sha1, 40) || !ContentInstallFiles.Hash(file.Sha512, 128)) throw new InvalidDataException("SHOU 文件路径或身份无效。");
             var entry = archive.Zip.GetEntry(file.Path)!; if (entry.Length != file.Size) throw new InvalidDataException("SHOU 文件大小不匹配。");
             var bytes = await PackArchiveReader.ReadEntryAsync(entry, PackArchiveReader.MaximumFileBytes, ct).ConfigureAwait(false);
             if (!Convert.ToHexStringLower(SHA1.HashData(bytes)).Equals(file.Sha1, StringComparison.OrdinalIgnoreCase) || !Convert.ToHexStringLower(SHA512.HashData(bytes)).Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("SHOU 文件哈希不匹配。");

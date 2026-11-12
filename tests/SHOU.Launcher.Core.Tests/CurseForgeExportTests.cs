@@ -48,7 +48,7 @@ public sealed class CurseForgeExportTests
         var zip = await service.ExportCurseForgePackAsync(source.Id, new("客户端包", "1", ["config"], true));
         using (var archive = ZipFile.OpenRead(zip))
         {
-            Assert.HasCount(2, archive.Entries); Assert.IsNotNull(archive.GetEntry("manifest.json"));
+            Assert.HasCount(3, archive.Entries); Assert.IsNotNull(archive.GetEntry("manifest.json"));
             Assert.IsNotNull(archive.GetEntry("overrides/config/client.json"));
         }
         var inspect = await service.InspectLocalPackAsync(zip); Assert.IsTrue(inspect.CanImport);
@@ -70,7 +70,7 @@ public sealed class CurseForgeExportTests
             var imported = await service.ImportLocalPackAsync(new(zip, inspect.ArchiveSha256, "回导"));
             Assert.AreNotEqual(source.Id, imported.Instance.Id);
             Assert.AreEqual("public config", await File.ReadAllTextAsync(Path.Combine(imported.Instance.GameDirectory, "config/client.json")));
-            Assert.AreEqual(1, imported.InstalledFiles); return;
+            Assert.AreEqual(2, imported.InstalledFiles); return;
         }
         CollectionAssert.AreEqual(before, service.Snapshot.Instances.ToArray());
         CollectionAssert.AreEqual(directories, Directory.GetDirectories(platform.Paths.InstancesDirectory).Order().ToArray());
