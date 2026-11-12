@@ -21,7 +21,7 @@ public sealed partial class DownloadsPageViewModel
     public RelayCommand CancelBrowseCommand { get; private set; } = null!;
     public bool IsPageLoading => _browseReads.Values.Any(r => r.Page);
     public string PageLoadingText => _browseReads.Values.FirstOrDefault(r => r.Page)?.Label + "…";
-    public bool ShowFullPageLoading => IsPageLoading && (IsCatalogPage && !HasCatalog || IsSearchPage && !HasProjects
+    public bool ShowFullPageLoading => IsPageLoading && (IsCatalogPage && !HasCatalog
         || IsResourceDetail && !HasReleases || IsPackageDetail && MinecraftPackages.Count == 0 || IsInstallerPage && !HasInstallerVersions);
     public bool ShowLoadingBadge => IsPageLoading && !ShowFullPageLoading;
 

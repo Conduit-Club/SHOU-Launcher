@@ -85,9 +85,9 @@ public sealed class AutomaticDownloadBrowsingTests
         try
         {
             owner.ShowDownloadsCommand.Execute(null); owner.Downloads.SelectCategory("mod"); Pump(window);
-            Assert.True(owner.Downloads.ShowFullPageLoading); Assert.False(owner.IsBusy);
-            var loading = Find<Grid>(window, "DownloadLoadingPage"); var sidebar = Find<Border>(window, "DownloadsCategoryPanel");
-            Assert.True(loading.Bounds.Left >= sidebar.Bounds.Right); Assert.True(Find<Button>(window, "ToolsNavigationButton").IsEffectivelyEnabled);
+            Assert.False(owner.Downloads.ShowFullPageLoading); Assert.True(owner.Downloads.ShowLoadingBadge); Assert.False(owner.IsBusy);
+            var content = Find<ScrollViewer>(window, "DownloadsPageScroller"); var sidebar = Find<Border>(window, "DownloadsCategoryPanel");
+            Assert.True(content.IsEffectivelyVisible); Assert.True(content.Bounds.Left >= sidebar.Bounds.Right); Assert.True(Find<Button>(window, "ToolsNavigationButton").IsEffectivelyEnabled);
             owner.Downloads.QueryText = "new"; await owner.Downloads.SearchCommand.ExecuteAsync(null); Pump(window);
             Assert.Equal("new-result", Assert.Single(owner.Downloads.Projects).Project.Id);
             pending.SetResult([BrowseFixture.Project("obsolete", "mod")]);
@@ -134,8 +134,30 @@ public sealed class AutomaticDownloadBrowsingTests
         }
         finally { gate.TrySetResult(); window.Close(); }
     }
-    private sealed class BrowseFixture : FakeLauncherService, ILauncherCatalogService, ILoaderInstanceService, IInstallerCatalogService, IContentCategoryCatalogService
+    [AvaloniaFact]
+    public async Task LocalPackEntryAndPreflightRemainUsableWhileTheFirstOnlineSearchIsPending()
     {
+        var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source = new BrowseFixture { Search = async (_, ct) => { await gate.Task.WaitAsync(ct); return []; } };
+        using var owner = new MainWindowViewModel(source, new FakeExternalLauncher());
+        var window = new MainWindow { Width = 880, Height = 560, DataContext = owner }; window.Show();
+        try
+        {
+            owner.ShowDownloadsCommand.Execute(null); owner.Downloads.SelectCategory("modpack");
+            await Until(() => owner.Downloads.IsPageLoading); Pump(window);
+            Assert.False(owner.Downloads.ShowFullPageLoading); Assert.True(owner.Downloads.ShowLoadingBadge);
+            var local = Find<Button>(window, "ReadModrinthPackButton");
+            Assert.True(local.IsEffectivelyVisible); Assert.True(local.IsEffectivelyEnabled);
+            await owner.Downloads.ReadLocalPackAsync("/fixture/local.zip"); Pump(window);
+            Assert.True(owner.Downloads.HasPackInspection); Assert.True(owner.Downloads.ImportLocalPackCommand.CanExecute(null));
+            Assert.True(owner.Downloads.IsPageLoading); Assert.False(owner.IsBusy); Assert.Null(source.LastLaunchServerId);
+        }
+        finally { owner.Downloads.CancelBrowseCommand.Execute(null); gate.TrySetResult(); window.Close(); }
+    }
+    private sealed class BrowseFixture : FakeLauncherService, ILauncherCatalogService, ILoaderInstanceService, IInstallerCatalogService, IContentCategoryCatalogService, ILocalPackService
+    {
+        public Task<LocalPackInspection> InspectLocalPackAsync(string path, CancellationToken ct = default) => Task.FromResult(new LocalPackInspection(LocalPackFormat.CurseForge, "Local fixture", "1.21.1", "vanilla", null, new('a', 64), [], true));
+        public Task<LocalPackImportResult> ImportLocalPackAsync(LocalPackImportRequest request, CancellationToken ct = default) => throw new NotSupportedException();
         public List<ContentQuery> Queries { get; } = [];
         public List<string> LoaderReads { get; } = [];
         public IReadOnlyList<InstallerVersion>? InstallerRows;
