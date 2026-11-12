@@ -178,7 +178,7 @@ public sealed partial class InstancesPageViewModel
     }
     private void NotifyWorkspace()
     {
-        foreach (var name in new[] { nameof(ContextTitle), nameof(IsOverview), nameof(IsInstanceSettings), nameof(IsModify), nameof(IsExport), nameof(IsFileSection), nameof(IsOtherSection), nameof(IsRelationsSection), nameof(IsResourceBrowserSection), nameof(IsResourceUpdateSection), nameof(CheckContentUpdatesCaption), nameof(CanUpdateContent), nameof(ResourceToolbarColumns), nameof(HasSelectedMods),
+        foreach (var name in new[] { nameof(ContextTitle), nameof(IsOverview), nameof(IsInstanceSettings), nameof(IsModify), nameof(IsExport), nameof(IsFileSection), nameof(IsOtherSection), nameof(IsRelationsSection), nameof(IsResourceBrowserSection), nameof(IsResourceUpdateSection), nameof(CheckContentUpdatesCaption), nameof(CanUpdateContent), nameof(CanTrashContent), nameof(CanReadContentTrash), nameof(ContentTrashTitle), nameof(CanOpenContentProject), nameof(ResourceToolbarColumns), nameof(HasSelectedMods),
                      nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary), nameof(HasTruncatedScreenshots), nameof(IsModsSection), nameof(CanShowModUpdates), nameof(OpenContentFolderCaption), nameof(GameVersionLabel), nameof(HasModLoader), nameof(LoaderLabel), nameof(GameDirectorySummary) }) OnPropertyChanged(name);
         if (_workspaceReady) NotifyCommands();
     }

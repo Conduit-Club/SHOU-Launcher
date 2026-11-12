@@ -10,17 +10,19 @@ internal static class ModFileManagement
     private sealed record TrashRecord(int Version, string InstanceId, DateTimeOffset Created,
         IReadOnlyList<ContentInstalledFile> Files, IReadOnlyList<ContentInstalledFile> RemovedManifestFiles);
 
-    private static string PathOf(GameInstance instance, string relative)
+    private static string FolderName(string kind) => kind switch { "mods" or "resourcepacks" or "schematics" => kind, "shaders" => "shaderpacks", _ => throw new ArgumentException("不支持此资源回收类别。") };
+    private static string PathOf(GameInstance instance, string relative, string kind = "mods")
     {
-        if (!relative.StartsWith("mods/", StringComparison.Ordinal) || relative[5..].Contains('/') || relative.Contains('\\') || !InstanceWorkspace.Accepts("mods", relative))
-            throw new InvalidDataException("模组路径无效。");
+        var folder = FolderName(kind);
+        if (!relative.StartsWith(folder + "/", StringComparison.Ordinal) || relative[(folder.Length + 1)..].Contains('/') || relative.Contains('\\') || !InstanceWorkspace.Accepts(kind, relative))
+            throw new InvalidDataException("资源路径无效。");
         return ContentInstallFiles.Literal(instance.GameDirectory, relative);
     }
     private static string EnabledPath(string path) => path.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) ? path[..^9] : path.EndsWith(".old", StringComparison.OrdinalIgnoreCase) ? path[..^4] : path;
-    private static void ValidatePaths(GameInstance instance, IReadOnlyList<string> paths)
+    private static void ValidatePaths(GameInstance instance, IReadOnlyList<string> paths, string kind = "mods")
     {
-        if (paths.Count == 0 || paths.Select(ContentInstallFiles.PathKey).Distinct(StringComparer.Ordinal).Count() != paths.Count) throw new InvalidDataException("请选择不重复的模组文件。");
-        foreach (var path in paths) if (!File.Exists(PathOf(instance, path))) throw new IOException("所选模组不存在，请刷新列表。");
+        if (paths.Count == 0 || paths.Select(ContentInstallFiles.PathKey).Distinct(StringComparer.Ordinal).Count() != paths.Count) throw new InvalidDataException("请选择不重复的资源文件。");
+        foreach (var path in paths) if (!File.Exists(PathOf(instance, path, kind))) throw new IOException("所选资源不存在，请刷新列表。");
     }
     public static void Toggle(GameInstance instance, IReadOnlyList<string> paths, bool enabled, Action validateTarget, CancellationToken ct)
     {
@@ -38,11 +40,11 @@ internal static class ModFileManagement
             throw;
         }
     }
-    private static string TrashRoot(GameInstance instance) => ContentInstallFiles.Literal(instance.GameDirectory, ".shou-mod-trash");
-    private static string Receipt(GameInstance instance, string id)
+    private static string TrashRoot(GameInstance instance, string kind = "mods") => ContentInstallFiles.Literal(instance.GameDirectory, kind == "mods" ? ".shou-mod-trash" : ".shou-content-trash/" + FolderName(kind));
+    private static string Receipt(GameInstance instance, string id, string kind = "mods")
     {
         if (!Guid.TryParseExact(id, "N", out _)) throw new InvalidDataException("回收记录身份无效。");
-        return ContentInstallFiles.Literal(TrashRoot(instance), id + "/receipt.json");
+        return ContentInstallFiles.Literal(TrashRoot(instance, kind), id + "/receipt.json");
     }
     private static Task<byte[]?> ManifestBytes(GameInstance instance, CancellationToken ct)
     {
@@ -63,17 +65,17 @@ internal static class ModFileManagement
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
-    public static async Task<InstanceModTrash> TrashAsync(GameInstance instance, IReadOnlyList<string> paths, Action validateTarget, CancellationToken ct)
+    public static async Task<InstanceModTrash> TrashAsync(GameInstance instance, IReadOnlyList<string> paths, Action validateTarget, CancellationToken ct, string kind = "mods")
     {
-        ValidatePaths(instance, paths); var expected = await ManifestBytes(instance, ct); var before = await ContentInstallFiles.ReadManifestAsync(instance, ct);
+        ValidatePaths(instance, paths, kind); var expected = await ManifestBytes(instance, ct); var before = await ContentInstallFiles.ReadManifestAsync(instance, ct);
         var removed = before.Files.Where(f => paths.Any(p => EnabledPath(p) == EnabledPath(f.RelativePath))).ToArray();
-        var id = Guid.NewGuid().ToString("N"); var receipt = Receipt(instance, id); var root = Path.GetDirectoryName(receipt)!;
+        var id = Guid.NewGuid().ToString("N"); var receipt = Receipt(instance, id, kind); var root = Path.GetDirectoryName(receipt)!;
         var files = new List<ContentInstalledFile>();
         foreach (var path in paths)
         {
-            await using var stream = new FileStream(PathOf(instance, path), FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
+            await using var stream = new FileStream(PathOf(instance, path, kind), FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
             var sha1 = Convert.ToHexStringLower(await SHA1.HashDataAsync(stream, ct)); stream.Position = 0;
-            files.Add(new("local", "local", "mod", path, sha1, Convert.ToHexStringLower(await SHA512.HashDataAsync(stream, ct)), stream.Length));
+            files.Add(new("local", "local", kind switch { "mods" => "mod", "resourcepacks" => "resourcepack", "shaders" => "shader", _ => "schematic" }, path, sha1, Convert.ToHexStringLower(await SHA512.HashDataAsync(stream, ct)), stream.Length));
         }
         var record = new TrashRecord(1, instance.Id, DateTimeOffset.UtcNow, files, removed); var moved = new List<ContentInstalledFile>();
         Directory.CreateDirectory(root);
@@ -82,54 +84,54 @@ internal static class ModFileManagement
             foreach (var file in files)
             {
                 ct.ThrowIfCancellationRequested(); validateTarget();
-                if (!await ContentInstallFiles.MatchesAsync(PathOf(instance, file.RelativePath), file.Sha1, file.Size, ct)) throw new IOException("模组在回收前发生变化。");
+                if (!await ContentInstallFiles.MatchesAsync(PathOf(instance, file.RelativePath, kind), file.Sha1, file.Size, ct)) throw new IOException("资源在回收前发生变化。");
                 var target = ContentInstallFiles.Literal(root, file.RelativePath); Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                File.Move(PathOf(instance, file.RelativePath), target, false); moved.Add(file);
+                File.Move(PathOf(instance, file.RelativePath, kind), target, false); moved.Add(file);
             }
             await File.WriteAllTextAsync(receipt, JsonSerializer.Serialize(record), ct);
             ct.ThrowIfCancellationRequested(); validateTarget();
-            await WriteManifestAsync(instance, before with { Files = before.Files.Except(removed).ToArray() }, expected, ct);
+            if (kind == "mods" || removed.Length > 0) await WriteManifestAsync(instance, before with { Files = before.Files.Except(removed).ToArray() }, expected, ct);
             return new(id, files.Count, record.Created);
         }
         catch
         {
-            foreach (var file in moved.AsEnumerable().Reverse()) File.Move(ContentInstallFiles.Literal(root, file.RelativePath), PathOf(instance, file.RelativePath), false);
+            foreach (var file in moved.AsEnumerable().Reverse()) File.Move(ContentInstallFiles.Literal(root, file.RelativePath), PathOf(instance, file.RelativePath, kind), false);
             if (File.Exists(receipt)) File.Delete(receipt); throw;
         }
     }
-    private static async Task<TrashRecord> ReadAsync(GameInstance instance, string id, CancellationToken ct)
+    private static async Task<TrashRecord> ReadAsync(GameInstance instance, string id, CancellationToken ct, string kind = "mods")
     {
-        var path = Receipt(instance, id);
+        var path = Receipt(instance, id, kind);
         if (!File.Exists(path) || new FileInfo(path).Length > 16 * 1024 * 1024) throw new InvalidDataException("回收记录无效。");
         var record = JsonSerializer.Deserialize<TrashRecord>(await File.ReadAllTextAsync(path, ct)) ?? throw new InvalidDataException("回收记录无效。");
         if (record.Version != 1 || record.InstanceId != instance.Id || record.Files is not { Count: > 0 } || record.RemovedManifestFiles is null || record.Files.Any(f => f is null) || record.RemovedManifestFiles.Any(f => f is null)) throw new InvalidDataException("回收记录不属于当前实例。");
         if (record.Files.Select(f => ContentInstallFiles.PathKey(f.RelativePath)).Distinct(StringComparer.Ordinal).Count() != record.Files.Count) throw new InvalidDataException("回收文件重复。");
         foreach (var file in record.Files.Concat(record.RemovedManifestFiles))
         {
-            _ = PathOf(instance, file.RelativePath);
+            _ = PathOf(instance, file.RelativePath, kind);
             if (!ContentInstallFiles.Hash(file.Sha1, 40) || !ContentInstallFiles.Hash(file.Sha512, 128) || file.Size < 0) throw new InvalidDataException("回收文件身份无效。");
         }
         return record;
     }
-    public static async Task<IReadOnlyList<InstanceModTrash>> ListAsync(GameInstance instance, CancellationToken ct)
+    public static async Task<IReadOnlyList<InstanceModTrash>> ListAsync(GameInstance instance, CancellationToken ct, string kind = "mods")
     {
-        var root = TrashRoot(instance); var result = new List<InstanceModTrash>();
+        var root = TrashRoot(instance, kind); var result = new List<InstanceModTrash>();
         if (!Directory.Exists(root)) return result;
         foreach (var folder in Directory.EnumerateDirectories(root))
         {
             ct.ThrowIfCancellationRequested();
-            try { var id = Path.GetFileName(folder); var record = await ReadAsync(instance, id, ct); result.Add(new(id, record.Files.Count, record.Created)); }
+            try { var id = Path.GetFileName(folder); var record = await ReadAsync(instance, id, ct, kind); result.Add(new(id, record.Files.Count, record.Created)); }
             catch (Exception ex) when (ex is IOException or InvalidDataException or JsonException) { }
         }
         return result.OrderByDescending(r => r.Created).ToArray();
     }
-    public static async Task RestoreAsync(GameInstance instance, string id, Action validateTarget, CancellationToken ct)
+    public static async Task RestoreAsync(GameInstance instance, string id, Action validateTarget, CancellationToken ct, string kind = "mods")
     {
-        var record = await ReadAsync(instance, id, ct); var root = Path.GetDirectoryName(Receipt(instance, id))!;
+        var record = await ReadAsync(instance, id, ct, kind); var root = Path.GetDirectoryName(Receipt(instance, id, kind))!;
         var expected = await ManifestBytes(instance, ct); var before = await ContentInstallFiles.ReadManifestAsync(instance, ct);
         foreach (var file in record.Files)
         {
-            if (File.Exists(PathOf(instance, file.RelativePath)) || File.Exists(PathOf(instance, EnabledPath(file.RelativePath))) || File.Exists(PathOf(instance, EnabledPath(file.RelativePath) + ".disabled"))) throw new IOException("恢复目标已有同名模组，原文件保留。");
+            if (File.Exists(PathOf(instance, file.RelativePath, kind)) || File.Exists(PathOf(instance, EnabledPath(file.RelativePath), kind)) || File.Exists(PathOf(instance, EnabledPath(file.RelativePath) + ".disabled", kind))) throw new IOException("恢复目标已有同名资源，原文件保留。");
             var path = ContentInstallFiles.Literal(root, file.RelativePath);
             if (!await ContentInstallFiles.MatchesAsync(path, file.Sha1, file.Size, ct)) throw new IOException("回收文件已改变，未恢复。");
             await using var stream = File.OpenRead(path); if (Convert.ToHexStringLower(await SHA512.HashDataAsync(stream, ct)) != file.Sha512) throw new IOException("回收文件哈希不符。");
@@ -138,11 +140,11 @@ internal static class ModFileManagement
         var moved = new List<ContentInstalledFile>(); var receiptMoved = false; var restoredReceipt = ContentInstallFiles.Literal(root, "restored.json");
         try
         {
-            foreach (var file in record.Files) { ct.ThrowIfCancellationRequested(); validateTarget(); File.Move(ContentInstallFiles.Literal(root, file.RelativePath), PathOf(instance, file.RelativePath), false); moved.Add(file); }
-            File.Move(Receipt(instance, id), restoredReceipt, false); receiptMoved = true;
-            validateTarget(); await WriteManifestAsync(instance, before with { Files = before.Files.Concat(record.RemovedManifestFiles).ToArray() }, expected, ct);
+            foreach (var file in record.Files) { ct.ThrowIfCancellationRequested(); validateTarget(); var target = PathOf(instance, file.RelativePath, kind); Directory.CreateDirectory(Path.GetDirectoryName(target)!); File.Move(ContentInstallFiles.Literal(root, file.RelativePath), target, false); moved.Add(file); }
+            File.Move(Receipt(instance, id, kind), restoredReceipt, false); receiptMoved = true;
+            validateTarget(); if (kind == "mods" || record.RemovedManifestFiles.Count > 0) await WriteManifestAsync(instance, before with { Files = before.Files.Concat(record.RemovedManifestFiles).ToArray() }, expected, ct);
         }
-        catch { if (receiptMoved) File.Move(restoredReceipt, Receipt(instance, id), false); foreach (var file in moved.AsEnumerable().Reverse()) File.Move(PathOf(instance, file.RelativePath), ContentInstallFiles.Literal(root, file.RelativePath), false); throw; }
+        catch { if (receiptMoved) File.Move(restoredReceipt, Receipt(instance, id, kind), false); foreach (var file in moved.AsEnumerable().Reverse()) File.Move(PathOf(instance, file.RelativePath, kind), ContentInstallFiles.Literal(root, file.RelativePath), false); throw; }
     }
     public static async Task ReplaceImportedAsync(GameInstance instance, string relative, string temporary, CancellationToken ct)
     {

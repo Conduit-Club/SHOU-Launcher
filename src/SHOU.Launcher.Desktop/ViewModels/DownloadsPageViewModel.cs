@@ -381,6 +381,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
 
     public void SelectCategory(string id)
     {
+        instanceResourceReturn = null;
         if (id != "datapack") _worldBrowserContext = null;
         var selected = Categories.FirstOrDefault(c => c.Id == id);
         if (selected is null) return;
@@ -462,6 +463,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         ++_requestRevision; CancelBrowseReads(); _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
         SetRequestStatus(IsCatalogPage ? _catalogStatus : _searchCompleted ? $"已返回 {Projects.Count} 项资源。" : "输入条件后点击搜索。", IsCatalogPage && _catalogMessageVisible);
         NotifyPage();
+        ReturnToInstanceResource();
     }
     private async Task RefreshFabricAsync()
     {
@@ -526,9 +528,10 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             await Task.WhenAll(Projects.ToArray().Select(p => p.LoadIconAsync(_catalog!, _imageGate, images.Token)));
         });
     }
-    public async Task OpenProjectAsync(ContentProject project)
+    public async Task OpenProjectAsync(ContentProject project, bool keepInstanceReturn = false)
     {
         if (!CanQuery) return;
+        if (!keepInstanceReturn) instanceResourceReturn = null;
         ++_requestRevision; CancelBrowseReads(); _selectedProject = project; _isResourceDetail = true; _isConfiguration = false;
         if (projectHeaderRow is not null) { projectHeaderRow.PropertyChanged -= ProjectHeaderIconChanged; projectHeaderRow.Dispose(); }
         projectHeaderRow = new(this, project); projectHeaderRow.PropertyChanged += ProjectHeaderIconChanged;

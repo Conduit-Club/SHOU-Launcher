@@ -49,8 +49,8 @@ public sealed partial class InstancesPageViewModel
     private InstanceContentRowViewModel Row(InstanceContentEntry entry)
     {
         if (contentRows.TryGetValue(entry.RelativePath, out var existing)) return existing;
-        var row = new InstanceContentRowViewModel(entry, NotifyModActions, RequestContentRowUpdateAsync, r => ModDetail = r.Detail,
-            RevealContentRowAsync, ToggleContentRowAsync, r => { if (CanTrashMods && CurrentContentRow(r)) RequestModTrash([r.Entry.RelativePath]); });
+        var row = new InstanceContentRowViewModel(entry, NotifyModActions, RequestContentRowUpdateAsync, ShowContentDetails,
+            RevealContentRowAsync, ToggleContentRowAsync, r => { if (CanTrashContent && CurrentContentRow(r)) RequestModTrash([r.Entry.RelativePath]); });
         contentRows.Add(entry.RelativePath, row); return row;
     }
     private InstanceContentRowViewModel[] Rows() => ContentEntries.Select(Row).ToArray();
@@ -104,18 +104,20 @@ public sealed partial class InstancesPageViewModel
         UpdateSelectedModsCommand = AsyncCommand(() => RequestContentUpdatesAsync(Rows().Where(r => r.Selected && r.Update is not null).Select(r => r.Update!).ToArray()), () => CanUpdateContent && Rows().Any(r => r.Selected && r.HasUpdate));
         EnableSelectedModsCommand = AsyncCommand(() => ToggleSelectedModsAsync(true), () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);
         DisableSelectedModsCommand = AsyncCommand(() => ToggleSelectedModsAsync(false), () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);
-        TrashSelectedModsCommand = Command(() => RequestModTrash(Rows().Where(r => r.Selected).Select(r => r.Entry.RelativePath).ToArray()), () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);
-        ConfirmModActionCommand = AsyncCommand(ConfirmModActionAsync, () => CanManageMods && HasModAction);
-        CancelModActionCommand = Command(() => { ModActionSummary = ""; pendingModUpdates = []; }, () => HasModAction);
-        CloseModDetailsCommand = Command(() => ModDetail = "");
+        TrashSelectedModsCommand = Command(() => RequestModTrash(Rows().Where(r => r.Selected).Select(r => r.Entry.RelativePath).ToArray()), () => CanTrashContent && HasModSelection);
+        ConfirmModActionCommand = AsyncCommand(ConfirmModActionAsync, () => HasModAction && (pendingModUpdates.Count > 0 ? CanManageMods : CanTrashContent));
+        CancelModActionCommand = Command(() => { ModActionSummary = ""; pendingModUpdates = []; pendingModPaths = []; }, () => HasModAction);
+        CloseModDetailsCommand = Command(() => { detailRow = null; ModDetail = ""; OnPropertyChanged(nameof(CanOpenContentProject)); });
+        OpenContentProjectCommand = AsyncCommand(OpenContentProjectAsync, () => CanOpenContentProject);
+        CloseContentTrashCommand = Command(() => { ModTrash.Clear(); SelectedModTrash = null; OnPropertyChanged(nameof(HasModTrash)); NotifyModActions(); });
         DiagnoseModsCommand = Command(DiagnoseMods, () => IsModsSection);
         OpenModChangelogCommand = AsyncCommand(async () => { if (SelectedContentRow?.Update?.ChangelogUri is { } uri) await Owner.RunControlAsync("查看更新日志", ct => Owner.ExternalLauncher.OpenUriAsync(uri, ct)); }, () => SelectedContentRow?.Update?.ChangelogUri is not null);
-        RefreshModTrashCommand = AsyncCommand(ReadModTrashAsync, () => IsModsSection && SelectedInstance is not null && Service is IInstanceModManagementService);
-        RestoreModsCommand = AsyncCommand(async () => { var instance = SelectedInstance!; var trash = SelectedModTrash ?? ModTrash.FirstOrDefault(); if (trash is null) return; if (await Owner.RunAsync("恢复模组", ct => RestoreAfterScanAsync(instance.Id, trash.Id, ct))) { await RefreshContentCommand.ExecuteAsync(null); await ReadModTrashAsync(); } }, () => CanManageMods && HasModTrash && Service is IInstanceModManagementService);
+        RefreshModTrashCommand = AsyncCommand(ReadModTrashAsync, () => CanReadContentTrash);
+        RestoreModsCommand = AsyncCommand(RestoreContentTrashAsync, () => CanTrashContent && HasModTrash);
     }
     private void NotifyModActions()
     {
-        OnPropertyChanged(nameof(HasModSelection)); OnPropertyChanged(nameof(HasSelectedMods)); OnPropertyChanged(nameof(ResourceListBottomMargin)); OnPropertyChanged(nameof(ModSelectionSummary)); OnPropertyChanged(nameof(CanManageMods)); OnPropertyChanged(nameof(CanUpdateContent)); OnPropertyChanged(nameof(CanTrashMods)); OnPropertyChanged(nameof(CheckContentUpdatesCaption)); if (_workspaceReady && !_workspaceDisposed) NotifyCommands();
+        OnPropertyChanged(nameof(HasModSelection)); OnPropertyChanged(nameof(HasSelectedMods)); OnPropertyChanged(nameof(ResourceListBottomMargin)); OnPropertyChanged(nameof(ModSelectionSummary)); OnPropertyChanged(nameof(CanManageMods)); OnPropertyChanged(nameof(CanUpdateContent)); OnPropertyChanged(nameof(CanTrashMods)); OnPropertyChanged(nameof(CanTrashContent)); OnPropertyChanged(nameof(CanReadContentTrash)); OnPropertyChanged(nameof(ContentTrashTitle)); OnPropertyChanged(nameof(CanOpenContentProject)); OnPropertyChanged(nameof(CheckContentUpdatesCaption)); if (_workspaceReady && !_workspaceDisposed) NotifyCommands();
     }
     internal void StopModScan() { ++modCheckGeneration; modScanCancellation?.Cancel(); IsModScanBusy = false; }
     private async Task StopModScanAsync()
@@ -134,7 +136,7 @@ public sealed partial class InstancesPageViewModel
     {
         ClearModRelations();
         StopModScan(); ModUpdates.Clear(); SelectedModUpdate = null; ModUpdateStatus = ""; contentRows.Clear(); contentFilter = "全部";
-        ModDetail = ""; ModActionSummary = ""; pendingModUpdates = []; OnPropertyChanged(nameof(HasModUpdates)); NotifyModActions();
+        ModDetail = ""; detailRow = null; ModTrash.Clear(); SelectedModTrash = null; OnPropertyChanged(nameof(HasModTrash)); ModActionSummary = ""; pendingModUpdates = []; pendingModPaths = []; OnPropertyChanged(nameof(HasModUpdates)); NotifyModActions();
     }
     internal void ModWorkspaceNavigationChanged()
     {
@@ -234,12 +236,18 @@ public sealed partial class InstancesPageViewModel
     }
     private async Task ConfirmModActionAsync()
     {
-        if (!HasModAction || !CanManageMods || SelectedInstance is null) return;
-        var instance = SelectedInstance!; var updates = pendingModUpdates.ToArray(); var paths = pendingModPaths.ToArray();
-        ModActionSummary = ""; pendingModUpdates = []; StopModScan();
+        if (!HasModAction || !(pendingModUpdates.Count > 0 ? CanManageMods : CanTrashContent) || SelectedInstance is null) return;
+        var instance = SelectedInstance!; var kind = SelectedSection.Key; var updates = pendingModUpdates.ToArray(); var paths = pendingModPaths.ToArray();
+        ModActionSummary = ""; pendingModUpdates = []; pendingModPaths = []; StopModScan();
         if (updates.Length == 0)
         {
-            if (await Owner.RunAsync("回收模组", async ct => { await StopModScanAsync(); await ((IInstanceModManagementService)Service).TrashInstanceModsAsync(instance.Id, paths, ct); })) { await RefreshContentCommand.ExecuteAsync(null); await ReadModTrashAsync(); }
+            if (await Owner.RunAsync(kind == "mods" ? "回收模组" : "回收资源", async ct =>
+            {
+                await StopModScanAsync();
+                if (kind == "mods") await ((IInstanceModManagementService)Service).TrashInstanceModsAsync(instance.Id, paths, ct);
+                else await ((IInstanceContentTrashService)Service).TrashInstanceContentAsync(instance.Id, kind, paths, ct);
+            }) && SelectedInstance?.Id == instance.Id && SelectedInstance.GameDirectory == instance.GameDirectory && SelectedSection.Key == kind && ReferenceEquals(Owner.SelectedPage, this))
+            { await RefreshContentCommand.ExecuteAsync(null); await ReadModTrashAsync(); }
             return;
         }
         var completed = 0; var failures = new List<string>();
@@ -257,13 +265,13 @@ public sealed partial class InstancesPageViewModel
         Feedback = $"已更新 {completed}/{updates.Length} 项模组，原文件已备份。" + (failures.Count > 0 ? "\n" + string.Join("\n", failures) : "");
         if (SelectedInstance?.Id == instance.Id && IsModsSection) await RefreshContentCommand.ExecuteAsync(null);
     }
-    private async Task RestoreAfterScanAsync(string instanceId, string trashId, CancellationToken ct)
-    { await StopModScanAsync(); await ((IInstanceModManagementService)Service).RestoreInstanceModsAsync(instanceId, trashId, ct); }
     private async Task ReadModTrashAsync()
     {
-        if (SelectedInstance is not { } instance || Service is not IInstanceModManagementService service) return;
-        IReadOnlyList<InstanceModTrash>? rows = null;
-        if (!await Owner.RunInlineAsync("读取模组回收站", async ct => rows = await service.GetInstanceModTrashAsync(instance.Id, ct)) || rows is null || SelectedInstance?.Id != instance.Id || !IsModsSection) return;
+        if (SelectedInstance is not { } instance || !CanReadContentTrash) return;
+        var kind = SelectedSection.Key; IReadOnlyList<InstanceModTrash>? rows = null;
+        if (!await Owner.RunInlineAsync(kind == "mods" ? "读取模组回收站" : "读取资源回收站", async ct => rows = kind == "mods"
+            ? await ((IInstanceModManagementService)Service).GetInstanceModTrashAsync(instance.Id, ct)
+            : await ((IInstanceContentTrashService)Service).GetInstanceContentTrashAsync(instance.Id, kind, ct)) || rows is null || SelectedInstance?.Id != instance.Id || SelectedInstance.GameDirectory != instance.GameDirectory || SelectedSection.Key != kind || !ReferenceEquals(Owner.SelectedPage, this)) return;
         ModTrash.Clear(); foreach (var row in rows) ModTrash.Add(row); SelectedModTrash = ModTrash.FirstOrDefault(); OnPropertyChanged(nameof(SelectedModTrash)); OnPropertyChanged(nameof(HasModTrash)); NotifyModActions();
     }
 }

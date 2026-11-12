@@ -168,9 +168,13 @@
             </UniformGrid></Border>
             <Button Content="{Binding OpenContentFolderCaption}" Command="{Binding OpenContentDirectoryCommand}" IsVisible="{Binding IsScreenshots}" HorizontalAlignment="Left"/>
 
-            <Border Classes="card" IsVisible="{Binding HasModTrash}"><StackPanel Spacing="8"><TextBlock Text="{loc:Loc t557e7ef05116a514}" Classes="sectionTitle"/><ComboBox Name="ModTrashSelector" ItemsSource="{Binding ModTrash}" SelectedItem="{Binding SelectedModTrash}"><ComboBox.ItemTemplate><DataTemplate><TextBlock><Run Text="{Binding Created, StringFormat='{}{0:g}'}"/><Run Text="  "/><Run Text="{Binding Files}"/><Run Text=" 个文件"/></TextBlock></DataTemplate></ComboBox.ItemTemplate></ComboBox><Button Name="RestoreModsButton" Content="{loc:Loc t675c2e148a7a9305}" Command="{Binding RestoreModsCommand}" HorizontalAlignment="Left"/></StackPanel></Border>
+            <Border Name="ContentTrashPanel" Classes="card" Padding="12,10" IsVisible="{Binding HasModTrash}"><Grid ColumnDefinitions="Auto,*,Auto,Auto">
+              <TextBlock Text="{Binding ContentTrashTitle}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,8,0"/>
+              <ComboBox Grid.Column="1" Name="ModTrashSelector" ItemsSource="{Binding ModTrash}" SelectedItem="{Binding SelectedModTrash}" MinWidth="100" Margin="0,0,8,0"><ComboBox.ItemTemplate><DataTemplate><TextBlock TextTrimming="CharacterEllipsis"><Run Text="{Binding Created, StringFormat='{}{0:g}'}"/><Run Text="  "/><Run Text="{Binding Files}"/><Run Text=" 个文件"/></TextBlock></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+              <Button Grid.Column="2" Name="RestoreModsButton" Content="{loc:Loc tfe4e0d291b7478d9}" Command="{Binding RestoreModsCommand}" Margin="0,0,8,0"/><Button Grid.Column="3" Name="CloseContentTrashButton" Content="{loc:Loc tafd4b783536b8297}" Command="{Binding CloseContentTrashCommand}"/>
+            </Grid></Border>
             <Border Name="ModActionPrompt" Classes="card" IsVisible="{Binding HasModAction}"><StackPanel Spacing="10"><ScrollViewer MaxHeight="220"><TextBlock Text="{loc:Translate ModActionSummary}" TextWrapping="Wrap"/></ScrollViewer><WrapPanel><Button Name="ConfirmModActionButton" Content="{loc:Translate ModActionCaption}" Command="{Binding ConfirmModActionCommand}" Margin="0,0,8,0"/><Button Content="{loc:Loc t2cd0f3be8738a86c}" Command="{Binding CancelModActionCommand}"/></WrapPanel></StackPanel></Border>
-            <Border Name="ModDetailsPanel" Classes="card" IsVisible="{Binding HasModDetail}"><StackPanel Spacing="8"><TextBlock Text="{Binding ModDetail}" TextWrapping="Wrap"/><Button Content="{loc:Loc t9071cfe7cd010bb1}" Command="{Binding CloseModDetailsCommand}" HorizontalAlignment="Left"/></StackPanel></Border>
+            <Border Name="ModDetailsPanel" Classes="card" IsVisible="{Binding HasModDetail}"><StackPanel Spacing="8"><TextBlock Text="{Binding ModDetail}" TextWrapping="Wrap"/><WrapPanel><Button Name="OpenInstalledResourceProjectButton" Content="{loc:Loc taf9ab85222e0c4a2}" Command="{Binding OpenContentProjectCommand}" IsVisible="{Binding CanOpenContentProject}" Margin="0,0,8,0"/><Button Content="{loc:Loc t9071cfe7cd010bb1}" Command="{Binding CloseModDetailsCommand}"/></WrapPanel></StackPanel></Border>
             <Border Name="InstanceResourceListCard" Classes="card" Padding="14,12" IsVisible="{Binding IsContentList}"><StackPanel Spacing="7">
               <Grid Name="InstanceResourceListHeader" ColumnDefinitions="*,Auto">
                 <ItemsControl Name="InstanceModFilters" ItemsSource="{Binding ModFilters}"><ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel><ItemsControl.ItemTemplate><DataTemplate><ToggleButton Classes="resourceFilter" Content="{Binding Title}" IsVisible="{Binding Shown}" IsChecked="{Binding Active, Mode=OneWay}" Command="{Binding SelectCommand}" Margin="0,0,4,0"/></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
@@ -184,7 +188,7 @@
                   <Button Name="InstanceResourceMoreButton" Content="⋯" Classes="resourceIcon" ToolTip.Tip="{loc:Loc t9f07d2ce4115f575}" AutomationProperties.Name="{loc:Loc t9f07d2ce4115f575}"><Button.Flyout><MenuFlyout>
                     <MenuItem Header="{loc:Loc tdf7392cc96bedc51}" Command="{Binding RefreshContentCommand}"/>
                     <MenuItem Header="{loc:Loc tbd50eff4af4697ff}" Command="{Binding OpenModChangelogCommand}" IsVisible="{Binding IsResourceBrowserSection}"/>
-                    <MenuItem Name="ReadModTrashButton" Header="{loc:Loc tba35dc23b245e61e}" Command="{Binding RefreshModTrashCommand}" IsVisible="{Binding IsModsSection}"/>
+                    <MenuItem Name="ReadModTrashButton" Header="{loc:Loc tba35dc23b245e61e}" Command="{Binding RefreshModTrashCommand}" IsVisible="{Binding CanReadContentTrash}"/>
                   </MenuFlyout></Button.Flyout></Button>
                 </StackPanel>
               </Grid>
@@ -203,7 +207,7 @@
                     <Button Name="ContentRowDetailsButton" Classes="resourceIcon" Command="{Binding DetailsCommand}" ToolTip.Tip="{loc:Loc ta748cc074f78de00}" AutomationProperties.Name="{loc:Loc ta748cc074f78de00}"><views:ClubIcon Kind="info" Width="16" Height="16"/></Button>
                     <Button Name="ContentRowRevealButton" Classes="resourceIcon" Command="{Binding RevealCommand}" ToolTip.Tip="{loc:Loc tfe76e31d24ddf33c}" AutomationProperties.Name="{loc:Loc tfe76e31d24ddf33c}"><views:ClubIcon Kind="folder-open" Width="16" Height="16"/></Button>
                     <Button Name="ContentRowToggleButton" Classes="resourceIcon" Command="{Binding ToggleCommand}" IsVisible="{Binding IsMod}" IsEnabled="{Binding #InstancePage.DataContext.CanManageMods}" ToolTip.Tip="{Binding ToggleCaption}" AutomationProperties.Name="{Binding ToggleCaption}"><views:ClubIcon Kind="{Binding ToggleIcon}" Width="16" Height="16"/></Button>
-                    <Button Name="ContentRowTrashButton" Classes="resourceIcon" Command="{Binding TrashCommand}" IsVisible="{Binding IsMod}" IsEnabled="{Binding #InstancePage.DataContext.CanTrashMods}" ToolTip.Tip="{loc:Loc t6a5b1cb18fb64c5c}" AutomationProperties.Name="{loc:Loc t6a5b1cb18fb64c5c}"><views:ClubIcon Kind="trash-2" Width="16" Height="16"/></Button>
+                    <Button Name="ContentRowTrashButton" Classes="resourceIcon" Command="{Binding TrashCommand}" IsVisible="{Binding #InstancePage.DataContext.CanReadContentTrash}" IsEnabled="{Binding #InstancePage.DataContext.CanTrashContent}" ToolTip.Tip="{loc:Loc t6a5b1cb18fb64c5c}" AutomationProperties.Name="{loc:Loc t6a5b1cb18fb64c5c}"><views:ClubIcon Kind="trash-2" Width="16" Height="16"/></Button>
                   </StackPanel>
                 </Grid></Border>
               </DataTemplate></ListBox.ItemTemplate></ListBox>
@@ -246,7 +250,7 @@
               <Button Name="UpdateSelectedModsButton" Content="{loc:Loc t99f8f4f97cfdbdf1}" Command="{Binding UpdateSelectedModsCommand}" IsVisible="{Binding CanShowModUpdates}" Margin="0,0,6,0"/>
               <Button Content="{loc:Loc t26008950621fcb56}" Command="{Binding EnableSelectedModsCommand}" IsVisible="{Binding IsModsSection}" Margin="0,0,6,0"/>
               <Button Name="DisableSelectedModsButton" Content="{loc:Loc tc35ebeed062b488a}" Command="{Binding DisableSelectedModsCommand}" IsVisible="{Binding IsModsSection}" Margin="0,0,6,0"/>
-              <Button Name="TrashSelectedModsButton" Content="{loc:Loc t435bf8a234fde6f2}" Command="{Binding TrashSelectedModsCommand}" IsVisible="{Binding IsModsSection}" Margin="0,0,6,0"/>
+              <Button Name="TrashSelectedModsButton" Content="{loc:Loc t435bf8a234fde6f2}" Command="{Binding TrashSelectedModsCommand}" IsVisible="{Binding CanReadContentTrash}" Margin="0,0,6,0"/>
               <Button Content="{loc:Loc ta083aef147108081}" Click="ExportContentInfo_Click" Margin="0,0,6,0"/>
               <Button Content="{loc:Loc t74966e20df2ea9fd}" Command="{Binding ClearModSelectionCommand}"/>
             </WrapPanel></Border>

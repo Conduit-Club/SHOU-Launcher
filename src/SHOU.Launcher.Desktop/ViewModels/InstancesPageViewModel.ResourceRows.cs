@@ -59,7 +59,7 @@ public sealed partial class InstancesPageViewModel
     {
         if (paths.Count == 0) return;
         pendingModUpdates = []; pendingModPaths = paths.ToArray();
-        ModActionSummary = Localization.UiLocalization.Instance.Text("将所选模组移到实例回收站？") + "\n" + string.Join("\n", pendingModPaths);
+        ModActionSummary = Localization.UiLocalization.Instance.Text(IsModsSection ? "将所选模组移到实例回收站？" : "将所选资源移到实例回收站？") + "\n" + string.Join("\n", pendingModPaths);
         OnPropertyChanged(nameof(ModActionCaption)); NotifyModActions();
     }
     private async Task ReadResourceMetadataAsync()
