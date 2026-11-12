@@ -104,7 +104,8 @@ public sealed class ModWorkspaceParityTests
         public Task<string> ExportInstanceAsync(string id, bool worlds, CancellationToken ct = default) => Task.FromResult("/fixture/export.zip");
         public async Task<InstanceModUpdateCheck> CheckInstanceModUpdatesAsync(string id, CancellationToken ct = default)
         {
-            Scans++; if (Gate is not null) await Gate.Task; return new(rows.Take(2).Where(r => !Applied.Contains(r.Name)).Select(r => new InstanceModUpdate(r.Name, id, r.RelativePath, r.ModName!, "1", "2", 10)).ToArray(), 3, []);
+            Scans++; if (Gate is not null) await Gate.Task; return new(rows.Take(2).Where(r => !Applied.Contains(r.Name)).Select(r => new InstanceModUpdate(r.Name, id, r.RelativePath, r.ModName!, "1", "2", 10)).ToArray(), 3, [],
+                [new("mods/alpha.jar", new("project", "alpha", "Alpha online", "Description", "Author", 1, "mod", null, new Uri("https://modrinth.com/mod/alpha")))]);
         }
         public Task<InstanceModUpdateResult> ApplyInstanceModUpdateAsync(string token, CancellationToken ct = default)
         { Applied.Add(token); if (FailFirst && token == "alpha.jar") throw new IOException("fixture failure"); return Task.FromResult(new InstanceModUpdateResult("/fixture/backup", 1)); }

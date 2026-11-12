@@ -176,7 +176,8 @@ public sealed partial class InstancesPageViewModel
     private void MarkDuplicateMods()
     {
         foreach (var row in Rows()) row.Duplicate = false;
-        foreach (var group in Rows().Where(r => r.Project is not null || r.Entry.ModId is not null).GroupBy(r => r.Project?.Id ?? "local:" + r.Entry.ModId).Where(g => g.Count() > 1)) foreach (var row in group) row.Duplicate = true;
+        foreach (var group in Rows().Where(r => r.Entry.ModId is not null).GroupBy(r => r.Entry.ModId, StringComparer.OrdinalIgnoreCase).Where(g => g.Count() > 1)) foreach (var row in group) row.Duplicate = true;
+        foreach (var group in Rows().Where(r => r.Project is not null).GroupBy(r => r.Project!.Id, StringComparer.Ordinal).Where(g => g.Count() > 1)) foreach (var row in group) row.Duplicate = true;
     }
     private void DiagnoseMods()
     {
