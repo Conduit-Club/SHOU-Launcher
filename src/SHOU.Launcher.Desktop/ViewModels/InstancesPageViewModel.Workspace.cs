@@ -71,7 +71,8 @@ public sealed partial class InstancesPageViewModel
     public bool IsContentEmpty => IsContentList ? FilteredContentEntries.Count == 0 : ContentEntries.Count == 0;
     public bool CanImportContent => IsFileSection && SelectedSection.Key != "worlds" && !ModsUnsupported && CanEdit && !IsSelectedInstanceRunning && Service is IInstanceWorkspaceService;
     public string SectionTitle => SelectedSection?.Title ?? "实例";
-    public string ContentEmptyTitle => ModsUnsupported ? "该实例不可使用模组" : ContentSearchText.Trim().Length > 0 && ContentEntries.Count > 0 ? "没有匹配搜索的资源" : "尚未发现" + SectionTitle;
+    public string ContentEmptyTitle => ModsUnsupported ? "该实例不可使用模组" : ContentSearchText.Trim().Length > 0 && ContentEntries.Count > 0 ? "没有匹配搜索的资源"
+        : ContentEntries.Count > 0 && contentFilter != "全部" ? Localization.UiLocalization.Instance.Text(contentFilter == "可更新" ? "当前筛选下没有可更新的资源" : "当前筛选下没有资源") : "尚未发现" + SectionTitle;
     public string CapabilityReason => SelectedSection?.Key switch
     {
         "servers" => "服务器列表的 NBT 编辑与单实例连接仍待移植，可直接在游戏内管理；原文件保持。",

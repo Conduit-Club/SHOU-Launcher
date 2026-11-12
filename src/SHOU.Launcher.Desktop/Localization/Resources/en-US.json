@@ -3151,5 +3151,13 @@
   "td27ec7c9359c3ba6": "Checked {0} resources; found {1} release updates for this game version.",
   "t0fc9e0c979426199": " {0} could not be verified and are not marked up to date.",
   "t2b8756c51d6bef60": "Could not verify resource updates: ",
-  "td10cf31d6f2c6ff2": "Updated {0}/{1} resources. Original files were backed up."
+  "td10cf31d6f2c6ff2": "Updated {0}/{1} resources. Original files were backed up.",
+  "t5392c3d1e9da59c2": "No updatable resources match this filter",
+  "t43e6c7570b77f609": "No resources match this filter",
+  "t72e80862791a8109": "This release declares dependencies. Review its details; only the selected file was updated.",
+  "t430446a51dcd8554": "Files go in shaderpacks; enabling shaders requires a compatible rendering mod.",
+  "tf5347d661a21ee12": "Resource release dependencies: ",
+  "t92707d3318b3d04f": "Required",
+  "t537352400c495fb8": "Optional",
+  "t975f9da19eee1b16": "Embedded"
 }

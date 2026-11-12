@@ -43,7 +43,7 @@ public sealed class ResourceUpdateTests
                 Downloads++; DuringDownload?.Invoke(); if (CancelDownload) throw new OperationCanceledException();
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(BadDownload ? Old : Next) });
             }
-            object Release(bool next) => new { id = next ? "next" : "old", project_id = next && Mode == "project" ? "wrong" : "project", name = "Resource", version_number = next ? "2" : "1", date_published = next ? "2026-11-02T00:00:00Z" : "2026-11-01T00:00:00Z", version_type = next && Mode == "beta" ? "beta" : "release", game_versions = new[] { next && Mode == "game" ? "1.20.1" : "1.21.1" }, loaders = new[] { "minecraft" }, dependencies = Array.Empty<object>(), files = new[] { new { filename = next ? "new-official-name.zip" : "old-official-name.zip", url = "https://cdn.modrinth.com/data/project/versions/" + (next ? "next/new-official-name.zip" : "old/old-official-name.zip"), size = (next ? Next : Old).Length + (!next && Mode == "size" ? 1 : 0), primary = true, hashes = new { sha1 = Hash(next && Mode != "same" ? Next : Old), sha512 = Hash512(next ? Next : Old) } } } };
+            object Release(bool next) => new { id = next ? "next" : "old", project_id = next && Mode == "project" ? "wrong" : "project", name = "Resource", version_number = next ? "2" : "1", date_published = next ? "2026-11-02T00:00:00Z" : "2026-11-01T00:00:00Z", version_type = next && Mode == "beta" ? "beta" : "release", game_versions = new[] { next && Mode == "game" ? "1.20.1" : "1.21.1" }, loaders = new[] { "minecraft" }, dependencies = next && Mode == "dependency" ? new object[] { new { dependency_type = "required", project_id = "other-mod" } } : Array.Empty<object>(), files = new[] { new { filename = next ? "new-official-name.zip" : "old-official-name.zip", url = "https://cdn.modrinth.com/data/project/versions/" + (next ? "next/new-official-name.zip" : "old/old-official-name.zip"), size = (next ? Next : Old).Length + (!next && Mode == "size" ? 1 : 0), primary = true, hashes = new { sha1 = Hash(next && Mode != "same" ? Next : Old), sha512 = Hash512(next ? Next : Old) } } } };
             object body;
             if (path.EndsWith("/version_files")) body = new Dictionary<string, object> { [Hash(Old)] = Release(false) };
             else if (path.Contains("/version_file/")) body = Release(false);
@@ -104,6 +104,16 @@ public sealed class ResourceUpdateTests
         CollectionAssert.AreEqual(options, await File.ReadAllBytesAsync(Path.Combine(f.Root, "options.txt"))); CollectionAssert.AreEqual(shaderOptions, await File.ReadAllBytesAsync(Path.Combine(f.Root, "optionsshaders.txt"))); Assert.HasCount(1, Directory.GetFiles(Path.Combine(f.Root, f.Folder)));
     }
     [TestMethod]
+    [DataRow("resourcepacks")]
+    [DataRow("shaders")]
+    public async Task UpdatingAResourceDoesNotInstallOrModifyItsDeclaredModDependencies(string section)
+    {
+        await using var f = await Fixture.Create(section, "dependency"); var scan = await f.Check(); Assert.AreEqual("other-mod", scan.OnlineInfo!.Single().Requirements!.Single().ProjectId);
+        var result = await f.Service.ApplyInstanceResourceUpdateAsync(scan.Updates.Single().Token);
+        Assert.IsFalse(Directory.Exists(Path.Combine(f.Root, "mods"))); Assert.AreEqual(1, result.InstalledFiles); Assert.IsNotEmpty(result.Notices!);
+        CollectionAssert.AreEqual(f.Next, await File.ReadAllBytesAsync(f.File)); Assert.HasCount(1, (await ContentInstallFiles.ReadManifestAsync(f.Instance)).Files);
+    }
+    [TestMethod]
     [DataRow("beta")]
     [DataRow("game")]
     [DataRow("project")]
@@ -132,6 +142,15 @@ public sealed class ResourceUpdateTests
         if (mode == "file") Assert.AreEqual("external file", await File.ReadAllTextAsync(f.File)); else CollectionAssert.AreEqual(f.Old, await File.ReadAllBytesAsync(f.File));
         if (mode == "manifest") Assert.AreEqual("external manifest", await File.ReadAllTextAsync(f.Manifest)); else CollectionAssert.AreEqual(originalManifest, await File.ReadAllBytesAsync(f.Manifest));
         Assert.IsEmpty(Directory.GetDirectories(f.Root, ".shou-resource-update-stage-*"));
+    }
+    [TestMethod]
+    public async Task AResourceTransactionRejectsAdditionalFilesBeforeDownloading()
+    {
+        await using var f = await Fixture.Create("resourcepacks"); var old = (await ContentInstallFiles.ReadManifestAsync(f.Instance)).Files.Single(); var manifest = await File.ReadAllBytesAsync(f.Manifest);
+        var file = new ContentFile("new.zip", new("https://cdn.modrinth.com/data/project/versions/next/new.zip"), Fixture.Hash(f.Next), f.Next.Length, true);
+        var plan = new ContentInstallPlan(f.Instance.Id, "1.21.1", "fabric", [new("project", "next", f.Kind, old.RelativePath, file, false), new("other", "dep", "mod", "mods/extra.jar", file, true)], []);
+        await Assert.ThrowsAsync<InvalidDataException>(() => ModUpdateFiles.ApplyAsync(f.Instance, old, plan, (_, _, _) => throw new AssertFailedException("Must not download extra files"), () => { }));
+        CollectionAssert.AreEqual(f.Old, await File.ReadAllBytesAsync(f.File)); CollectionAssert.AreEqual(manifest, await File.ReadAllBytesAsync(f.Manifest));
     }
     [TestMethod]
     [DataRow("resourcepacks")]

@@ -174,7 +174,7 @@ public sealed partial class InstancesPageViewModel
             if (!Current() || result is null) return;
             ModUpdates.Clear(); foreach (var update in result.Updates) ModUpdates.Add(update); SelectedModUpdate = ModUpdates.FirstOrDefault();
             foreach (var row in Rows()) row.Update = ModUpdates.FirstOrDefault(u => u.RelativePath == row.Entry.RelativePath);
-            foreach (var online in result.OnlineInfo ?? []) if (contentRows.TryGetValue(online.RelativePath, out var row)) { row.Project = online.Project; if (resource) row.Entry = row.Entry with { ModVersion = online.Version }; else row.Refresh(); }
+            foreach (var online in result.OnlineInfo ?? []) if (contentRows.TryGetValue(online.RelativePath, out var row)) { row.Project = online.Project; if (resource) { row.ResourceRequirements = online.Requirements ?? []; row.Entry = row.Entry with { ModVersion = online.Version }; } else row.Refresh(); }
             MarkDuplicateMods(); NotifyContentFilter(); OnPropertyChanged(nameof(HasModUpdates));
             ModUpdateStatus = resource ? Localization.UiLocalization.Instance.Format("已检查 {0} 项资源，发现 {1} 项同游戏版本的正式版更新。", result.CheckedFiles, result.Updates.Count)
                 : $"已检查 {result.CheckedFiles} 个模组，发现 {result.Updates.Count} 项同游戏版本/加载器的正式版更新。";

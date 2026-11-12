@@ -22,7 +22,7 @@ public sealed partial class InstancesPageViewModel
         var valid = updates.Where(u => u.InstanceId == SelectedInstance?.Id && ModUpdates.Any(known => known.Token == u.Token) && current.Any(r => r.Update?.Token == u.Token)).ToArray();
         if (IsModsSection) { RequestModUpdate(valid); return; }
         if (valid.Length == 0 || SelectedInstance is not { } instance || Service is not IInstanceResourceUpdateService service) return;
-        var section = SelectedSection.Key; var completed = 0; var failures = new List<string>();
+        var section = SelectedSection.Key; var completed = 0; var failures = new List<string>(); var notices = new HashSet<string>();
         await Owner.RunAsync("更新资源并备份", async ct =>
         {
             await StopModScanAsync();
@@ -30,13 +30,13 @@ public sealed partial class InstancesPageViewModel
             {
                 ct.ThrowIfCancellationRequested();
                 if (SelectedInstance?.Id != instance.Id || SelectedSection.Key != section) break;
-                try { await service.ApplyInstanceResourceUpdateAsync(update.Token, ct); completed++; }
+                try { var result = await service.ApplyInstanceResourceUpdateAsync(update.Token, ct); completed++; foreach (var notice in result.Notices ?? []) notices.Add(Localization.UiLocalization.Instance.Text(notice)); }
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or HttpRequestException or AggregateException)
                 { failures.Add(update.Name + "：" + UiPrivacy.Redact(ex.Message)); }
             }
         });
-        Feedback = Localization.UiLocalization.Instance.Format("已更新 {0}/{1} 项资源，原文件已备份。", completed, valid.Length) + (failures.Count > 0 ? "\n" + string.Join("\n", failures) : "");
+        Feedback = Localization.UiLocalization.Instance.Format("已更新 {0}/{1} 项资源，原文件已备份。", completed, valid.Length) + (failures.Count > 0 ? "\n" + string.Join("\n", failures) : "") + (notices.Count > 0 ? "\n" + string.Join("\n", notices) : "");
         if (SelectedInstance?.Id == instance.Id && SelectedSection.Key == section) await RefreshContentCommand.ExecuteAsync(null);
     }
     private bool CurrentContentRow(InstanceContentRowViewModel row) => !_workspaceDisposed && ReferenceEquals(Owner.SelectedPage, this) && IsContentList && SelectedInstance is not null && SelectedSection.Key == row.Entry.Kind && contentRows.TryGetValue(row.Entry.RelativePath, out var current) && ReferenceEquals(current, row);

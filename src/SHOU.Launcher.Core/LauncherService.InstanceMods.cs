@@ -142,7 +142,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
                         catch (OperationCanceledException) { }
                         catch (Exception ex) when (ex is IOException or HttpRequestException or AggregateException or InvalidOperationException) { }
                     }
-                    if (projectInfo is not null && projectInfo.Id == project) info.Add(new(row.RelativePath, projectInfo, current.Version));
+                    if (projectInfo is not null && projectInfo.Id == project) info.Add(new(row.RelativePath, projectInfo, current.Version, kind == "mod" ? null : (next ?? current).Dependencies));
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (OperationCanceledException) { if (!verified) notices.Add(row.Name + "：在线检查超时，尚未核实更新；未改动此文件。"); }

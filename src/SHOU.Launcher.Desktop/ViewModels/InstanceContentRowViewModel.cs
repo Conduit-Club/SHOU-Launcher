@@ -26,6 +26,7 @@ public sealed class InstanceContentRowViewModel : ObservableObject
     public bool Duplicate { get => duplicate; internal set { SetProperty(ref duplicate, value); Refresh(); } }
     public InstanceModUpdate? Update { get => update; internal set { SetProperty(ref update, value); Refresh(); } }
     public ContentProject? Project { get; internal set; }
+    public IReadOnlyList<ContentDependency> ResourceRequirements { get; internal set; } = [];
     public bool HasUpdate => Update is not null;
     public bool HasError => Entry.MetadataError is not null;
     public string StateText => HasError ? Localization.UiLocalization.Instance.Text(Entry.MetadataError!) : string.Join(" · ", new[] { Entry.Enabled ? "" : Localization.UiLocalization.Instance.Text("已禁用"), Duplicate ? Localization.UiLocalization.Instance.Text("重复项目") : "", Update is { } u ? Localization.UiLocalization.Instance.Format("可更新至 {0}", u.NewVersion) : "" }.Where(s => s.Length > 0));
@@ -41,7 +42,8 @@ public sealed class InstanceContentRowViewModel : ObservableObject
     public string ToggleCaption => Localization.UiLocalization.Instance.Text(Entry.Enabled ? "禁用模组" : "启用模组");
     public string ToggleIcon => Entry.Enabled ? "circle-minus" : "circle-check";
     public string UpdateCaption => Localization.UiLocalization.Instance.Text(IsMod ? "更新模组" : "更新资源");
-    public string Detail => string.Join("\n", new[] { Title, Entry.VersionLabel, Entry.Name, Description, Entry.ModId is { } id ? "ID: " + id : "", "必需依赖：" + string.Join(", ", Entry.Dependencies ?? []), "内嵌 JAR：" + string.Join(", ", Entry.EmbeddedMods ?? []), StateText }.Where(s => s.Length > 0));
+    public string Detail => string.Join("\n", new[] { Title, Entry.VersionLabel, Entry.Name, Description, Entry.ModId is { } id ? "ID: " + id : "", IsMod ? "必需依赖：" + string.Join(", ", Entry.Dependencies ?? []) : "", IsMod ? "内嵌 JAR：" + string.Join(", ", Entry.EmbeddedMods ?? []) : "",
+        ResourceRequirements.Count == 0 ? "" : Localization.UiLocalization.Instance.Text("资源版本依赖：") + string.Join(", ", ResourceRequirements.Select(d => Localization.UiLocalization.Instance.Text(d.Type switch { "required" => "必需", "incompatible" => "不兼容", "optional" => "可选", "embedded" => "内嵌", _ => d.Type }) + ": " + (d.ProjectId ?? d.VersionId ?? d.FileName ?? "?") + (d.ProjectId is not null && d.VersionId is not null ? " @ " + d.VersionId : ""))), StateText }.Where(s => s.Length > 0));
     public IAsyncRelayCommand UpdateCommand { get; }
     public IRelayCommand DetailsCommand { get; }
     public IAsyncRelayCommand RevealCommand { get; }

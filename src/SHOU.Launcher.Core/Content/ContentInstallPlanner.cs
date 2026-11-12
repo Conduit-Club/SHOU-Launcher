@@ -56,6 +56,12 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
             active.Add(projectId);
             foreach (var dependency in release.Dependencies ?? [])
             {
+                // WPF resource updates replace selected archives; updating a texture must not install or change mods.
+                if (replacingResourcePath is not null)
+                {
+                    if (dependency.Type is "required" or "incompatible") warnings.Add("资源版本声明了依赖，请在资源详情核对；本次仅更新所选文件。");
+                    continue;
+                }
                 if (dependency.Type == "incompatible") { incompatibilities.Add(dependency); continue; }
                 if (dependency.Type is "optional" or "embedded") { if (dependency.Type == "optional") warnings.Add("可选依赖未自动安装：" + (dependency.ProjectId ?? dependency.VersionId ?? dependency.FileName ?? "未命名")); continue; }
                 if (dependency.Type != "required") throw new InvalidDataException("未知依赖类型，无法保证完整安装。");

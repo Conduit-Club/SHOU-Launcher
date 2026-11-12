@@ -15,7 +15,7 @@ public static class ModUpdateFiles
             (!resource && f.Kind != "mod") || !f.RelativePath.StartsWith(ContentInstallPlanner.Folder(f.Kind) + "/", StringComparison.Ordinal))) throw new InvalidDataException("资源更新计划无效。");
         if (!old.RelativePath.StartsWith(folder + "/", StringComparison.Ordinal) || old.RelativePath[(folder.Length + 1)..].Contains('/')) throw new InvalidDataException("原资源路径无效。");
         var rootFile = plan.Files.SingleOrDefault(f => !f.Dependency && f.ProjectId == old.ProjectId && f.Kind == old.Kind) ?? throw new InvalidDataException("更新缺少唯一主资源。");
-        if (resource && rootFile.RelativePath != old.RelativePath) throw new InvalidDataException("资源更新须保留原文件名及其启用引用。");
+        if (resource && (plan.Files.Count != 1 || rootFile.RelativePath != old.RelativePath)) throw new InvalidDataException("资源更新须仅替换所选文件，并保留原文件名及其启用引用。");
         var root = instance.GameDirectory; var manifestPath = ContentInstallFiles.Literal(root, ContentInstallFiles.ManifestName);
         var previous = await ContentInstallFiles.ReadManifestAsync(instance, ct).ConfigureAwait(false);
         var previousBytes = File.Exists(manifestPath) ? await File.ReadAllBytesAsync(manifestPath, ct).ConfigureAwait(false) : null;
@@ -76,7 +76,7 @@ public static class ModUpdateFiles
             }
             await VerifyManifest(ct).ConfigureAwait(false); validateTarget(); ct.ThrowIfCancellationRequested();
             File.Move(nextManifest, manifestPath, true); committed = true;
-            return new(backup, completed.Count);
+            return new(backup, completed.Count, plan.Warnings);
         }
         finally
         {
