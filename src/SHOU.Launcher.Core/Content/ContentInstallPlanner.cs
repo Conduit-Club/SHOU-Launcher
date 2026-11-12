@@ -8,8 +8,11 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
     public const int MaximumProjects = 64, MaximumDepth = 16;
     public const long MaximumTotalBytes = 2L * 1024 * 1024 * 1024;
     public async Task<ContentInstallPlan> PlanAsync(GameInstance instance, string gameVersion, ContentInstallRequest request, CancellationToken ct = default, bool worldDatapacks = false, bool updatingDatapacks = false,
-        IReadOnlySet<string>? replacingModPaths = null, ContentInstallManifest? installedMods = null)
+        IReadOnlySet<string>? replacingModPaths = null, ContentInstallManifest? installedMods = null, string? replacingResourcePath = null)
     {
+        if (replacingResourcePath is not null && (request.Kind is not ("resourcepack" or "shader") || replacingModPaths is not null || worldDatapacks || updatingDatapacks ||
+            !replacingResourcePath.StartsWith(Folder(request.Kind) + "/", StringComparison.Ordinal) || replacingResourcePath[(Folder(request.Kind).Length + 1)..].Contains('/')))
+            throw new InvalidDataException("资源更新须明确当前类别的一个原文件。");
         if (replacingModPaths is not null && (request.Kind != "mod" || worldDatapacks || updatingDatapacks || replacingModPaths.Count != 1)) throw new InvalidOperationException("模组更新须明确一个原文件。");
         if (updatingDatapacks && !worldDatapacks) throw new InvalidOperationException("替换模式仅用于显式存档数据包更新预检。");
         if (request.Kind == "datapack" && !worldDatapacks) throw new NotSupportedException("数据包须明确选择存档目标。");
@@ -80,7 +83,8 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
                 await Visit(child, dependency.ProjectId, dependency.FileName, depth + 1).ConfigureAwait(false);
             }
             active.Remove(projectId); resolved.Add(projectId, release);
-            files.Add(new(projectId, release.Id, project.Kind, folder + "/" + selected.FileName, selected, depth > 0));
+            // Game selections refer to installed filenames. Retain custom names and enabled pack/shader selections.
+            files.Add(new(projectId, release.Id, project.Kind, depth == 0 && replacingResourcePath is not null ? replacingResourcePath : folder + "/" + selected.FileName, selected, depth > 0));
         }
         var root = await dependencies.GetContentReleaseAsync(request.ReleaseId, ct).ConfigureAwait(false);
         if (root.Id != request.ReleaseId) throw new InvalidDataException("资源版本身份不一致。");
@@ -93,11 +97,12 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
         {
             if (incompatibilities.Any(d => Matches(item.ProjectId, item.ReleaseId, d)) ||
                 (!updatingDatapacks || files.All(f => f.ProjectId != item.ProjectId)) && !(replacingModPaths?.Contains(item.RelativePath) ?? false)
-                && files.Any(f => f.ProjectId == item.ProjectId && f.ReleaseId != item.ReleaseId))
+                && item.RelativePath != replacingResourcePath && files.Any(f => f.ProjectId == item.ProjectId && f.ReleaseId != item.ReleaseId))
                 throw new InvalidDataException("安装清单存在其他版本或不兼容资源，请先显式处理旧文件。");
         }
         IReadOnlyList<ContentInstallFile> checkedFiles = updatingDatapacks ? files.Where(f => !installed.Files.Any(old => old.RelativePath == f.RelativePath && files.Any(next => next.ProjectId == old.ProjectId))).ToArray()
-            : replacingModPaths is not null ? files.Where(f => !replacingModPaths.Contains(f.RelativePath)).ToArray() : files;
+            : replacingModPaths is not null ? files.Where(f => !replacingModPaths.Contains(f.RelativePath)).ToArray()
+            : replacingResourcePath is not null ? files.Where(f => f.RelativePath != replacingResourcePath).ToArray() : files;
         await ContentInstallFiles.CheckConflictsAsync(instance.GameDirectory, checkedFiles, ct).ConfigureAwait(false);
         if (request.Kind == "shader") warnings.Add("文件装入shaderpacks；启用光影仍需实例具备相应渲染模组。");
         return new(instance.Id, gameVersion, instance.Loader, files, warnings.Distinct().ToArray());

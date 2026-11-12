@@ -199,5 +199,5 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         RefreshWorkspaceSnapshot(snapshot);
         base.Refresh(snapshot);
     }
-    public override void NotifyCommands() { base.NotifyCommands(); foreach (var image in ScreenshotPreviews) image.RemoveCommand.NotifyCanExecuteChanged(); OnPropertyChanged(nameof(IsSelectedInstanceRunning)); OnPropertyChanged(nameof(CanPrepareSelectedInstance)); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(LaunchCaption)); OnPropertyChanged(nameof(ConcurrentPlayHint)); OnPropertyChanged(nameof(CanImportContent)); ScheduleContentRefresh(); NotifyWorldWorkspace(); }
+    public override void NotifyCommands() { base.NotifyCommands(); foreach (var image in ScreenshotPreviews) image.RemoveCommand.NotifyCanExecuteChanged(); OnPropertyChanged(nameof(IsSelectedInstanceRunning)); OnPropertyChanged(nameof(CanUpdateContent)); OnPropertyChanged(nameof(CanPrepareSelectedInstance)); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(LaunchCaption)); OnPropertyChanged(nameof(ConcurrentPlayHint)); OnPropertyChanged(nameof(CanImportContent)); ScheduleContentRefresh(); NotifyWorldWorkspace(); }
 }

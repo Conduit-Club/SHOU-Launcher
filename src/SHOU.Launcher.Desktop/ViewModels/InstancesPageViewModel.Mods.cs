@@ -34,7 +34,7 @@ public sealed partial class InstancesPageViewModel
     public string ModUpdateSummary => ModUpdateStatus.Split('\n', 2)[0];
     public string ModUpdateDetails => ModUpdateStatus.Contains('\n') ? ModUpdateStatus.Split('\n', 2)[1] : "";
     public bool HasModUpdateDetails => ModUpdateDetails.Length > 0;
-    public bool HasModUpdateStatus => ModUpdateStatus.Length > 0 && Owner.IsFeatureVisible("mod-updates");
+    public bool HasModUpdateStatus => ModUpdateStatus.Length > 0 && (!IsModsSection || Owner.IsFeatureVisible("mod-updates"));
     public bool HasModUpdates => ModUpdates.Count > 0;
     public string ModDetail { get => modDetail; private set { SetProperty(ref modDetail, value); OnPropertyChanged(nameof(HasModDetail)); } }
     public bool HasModDetail => ModDetail.Length > 0;
@@ -49,7 +49,7 @@ public sealed partial class InstancesPageViewModel
     private InstanceContentRowViewModel Row(InstanceContentEntry entry)
     {
         if (contentRows.TryGetValue(entry.RelativePath, out var existing)) return existing;
-        var row = new InstanceContentRowViewModel(entry, NotifyModActions, r => RequestModUpdate(r.Update is { } u ? [u] : []), r => ModDetail = r.Detail,
+        var row = new InstanceContentRowViewModel(entry, NotifyModActions, RequestContentRowUpdateAsync, r => ModDetail = r.Detail,
             RevealContentRowAsync, ToggleContentRowAsync, r => { if (CanTrashMods && CurrentContentRow(r)) RequestModTrash([r.Entry.RelativePath]); });
         contentRows.Add(entry.RelativePath, row); return row;
     }
@@ -80,7 +80,7 @@ public sealed partial class InstancesPageViewModel
     public RelayCommand CancelModScanCommand { get; private set; } = null!;
     public RelayCommand SelectAllModsCommand { get; private set; } = null!;
     public RelayCommand ClearModSelectionCommand { get; private set; } = null!;
-    public RelayCommand UpdateSelectedModsCommand { get; private set; } = null!;
+    public AsyncRelayCommand UpdateSelectedModsCommand { get; private set; } = null!;
     public AsyncRelayCommand EnableSelectedModsCommand { get; private set; } = null!;
     public AsyncRelayCommand DisableSelectedModsCommand { get; private set; } = null!;
     public RelayCommand TrashSelectedModsCommand { get; private set; } = null!;
@@ -96,12 +96,12 @@ public sealed partial class InstancesPageViewModel
         foreach (var key in new[] { "全部", "启用", "禁用", "可更新", "错误", "重复" }) ModFilters.Add(new(key, k => { contentFilter = k; NotifyContentFilter(); }));
         ContentEntries.CollectionChanged += (_, _) => { if (!refreshingContentRows) NotifyContentFilter(); };
         DownloadInstanceResourcesCommand = Command(() => { Owner.Downloads.OpenInstanceResourceBrowser(SelectedInstance!, SelectedSection.Key); Owner.SelectedPage = Owner.Downloads; }, () => CanEdit && SelectedInstance is not null && SelectedSection.Key is "mods" or "resourcepacks" or "shaders");
-        CheckModUpdatesCommand = AsyncCommand(() => CheckModUpdatesAsync(false), () => CanEdit && !IsModScanBusy && IsModsSection && SelectedInstance is not null && Service is IInstanceModUpdateService);
-        CancelModScanCommand = Command(() => { StopModScan(); ModUpdateStatus = "检查已取消，未修改模组文件。"; }, () => IsModScanBusy);
-        ApplyModUpdateCommand = AsyncCommand(() => { RequestModUpdate(SelectedModUpdate is { } u ? [u] : []); return Task.CompletedTask; }, () => CanManageMods && SelectedModUpdate is not null);
+        CheckModUpdatesCommand = AsyncCommand(() => CheckModUpdatesAsync(false), () => CanEdit && !IsModScanBusy && SelectedInstance is not null && (IsModsSection && Service is IInstanceModUpdateService || IsResourceUpdateSection && Service is IInstanceResourceUpdateService));
+        CancelModScanCommand = Command(() => { StopModScan(); ModUpdateStatus = Localization.UiLocalization.Instance.Text(IsModsSection ? "检查已取消，未修改模组文件。" : "检查已取消，未修改资源文件。"); }, () => IsModScanBusy);
+        ApplyModUpdateCommand = AsyncCommand(() => RequestContentUpdatesAsync(SelectedModUpdate is { } u ? [u] : []), () => CanUpdateContent && SelectedModUpdate is not null);
         SelectAllModsCommand = Command(() => { var visible = FilteredContentRows; var value = visible.Any(r => !r.Selected); foreach (var row in visible) row.Selected = value; }, () => IsContentList);
         ClearModSelectionCommand = Command(() => { foreach (var row in Rows()) row.Selected = false; }, () => HasModSelection);
-        UpdateSelectedModsCommand = Command(() => RequestModUpdate(Rows().Where(r => r.Selected && r.Update is not null).Select(r => r.Update!).ToArray()), () => CanManageMods && Rows().Any(r => r.Selected && r.HasUpdate));
+        UpdateSelectedModsCommand = AsyncCommand(() => RequestContentUpdatesAsync(Rows().Where(r => r.Selected && r.Update is not null).Select(r => r.Update!).ToArray()), () => CanUpdateContent && Rows().Any(r => r.Selected && r.HasUpdate));
         EnableSelectedModsCommand = AsyncCommand(() => ToggleSelectedModsAsync(true), () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);
         DisableSelectedModsCommand = AsyncCommand(() => ToggleSelectedModsAsync(false), () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);
         TrashSelectedModsCommand = Command(() => RequestModTrash(Rows().Where(r => r.Selected).Select(r => r.Entry.RelativePath).ToArray()), () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);
@@ -115,7 +115,7 @@ public sealed partial class InstancesPageViewModel
     }
     private void NotifyModActions()
     {
-        OnPropertyChanged(nameof(HasModSelection)); OnPropertyChanged(nameof(HasSelectedMods)); OnPropertyChanged(nameof(ResourceListBottomMargin)); OnPropertyChanged(nameof(ModSelectionSummary)); OnPropertyChanged(nameof(CanManageMods)); OnPropertyChanged(nameof(CanTrashMods)); if (_workspaceReady && !_workspaceDisposed) NotifyCommands();
+        OnPropertyChanged(nameof(HasModSelection)); OnPropertyChanged(nameof(HasSelectedMods)); OnPropertyChanged(nameof(ResourceListBottomMargin)); OnPropertyChanged(nameof(ModSelectionSummary)); OnPropertyChanged(nameof(CanManageMods)); OnPropertyChanged(nameof(CanUpdateContent)); OnPropertyChanged(nameof(CanTrashMods)); OnPropertyChanged(nameof(CheckContentUpdatesCaption)); if (_workspaceReady && !_workspaceDisposed) NotifyCommands();
     }
     internal void StopModScan() { ++modCheckGeneration; modScanCancellation?.Cancel(); IsModScanBusy = false; }
     private async Task StopModScanAsync()
@@ -123,7 +123,7 @@ public sealed partial class InstancesPageViewModel
         StopModScan();
         StopModRelations();
         // In particular on Windows, allow all cancelled readers to close their JAR handles before a move.
-        var readers = modReads.Where(t => !t.IsCompleted).ToArray();
+        var readers = modReads.Append(CheckModUpdatesCommand?.ExecutionTask ?? Task.CompletedTask).Where(t => !t.IsCompleted).ToArray();
         if (readers.Length > 0) await Task.WhenAll(readers);
         var relationTasks = relationReads.Append(RefreshModRelationsCommand?.ExecutionTask ?? Task.CompletedTask).Where(t => !t.IsCompleted).ToArray();
         if (relationTasks.Length > 0) await Task.WhenAll(relationTasks);
@@ -144,6 +144,8 @@ public sealed partial class InstancesPageViewModel
     }
     private void StartAutoModScan()
     {
+        if (!_workspaceDisposed && ReferenceEquals(Owner.SelectedPage, this) && IsResourceUpdateSection && Service is IInstanceResourceUpdateService && !IsModScanBusy)
+        { modReads.RemoveAll(t => t.IsCompleted); modReads.Add(CheckModUpdatesAsync(true)); return; }
         if (!_workspaceDisposed && ReferenceEquals(Owner.SelectedPage, this) && IsResourceBrowserSection && !IsModsSection && Service is IInstanceContentMetadataService && !IsModScanBusy)
         { modReads.RemoveAll(t => t.IsCompleted); modReads.Add(ReadResourceMetadataAsync()); return; }
         if (_workspaceDisposed || !ReferenceEquals(Owner.SelectedPage, this) || !IsModsSection || !Owner.IsFeatureVisible("mod-updates") || Service is not IInstanceModUpdateService || IsModScanBusy) return;
@@ -152,26 +154,31 @@ public sealed partial class InstancesPageViewModel
     }
     private async Task CheckModUpdatesAsync(bool automatic)
     {
-        StopModScan(); var instance = SelectedInstance!; var generation = ++modCheckGeneration; var source = new CancellationTokenSource(); modScanCancellation = source;
-        IsModScanBusy = true; ModUpdateStatus = "正在核对已安装模组及其官方更新，可随时取消。";
-        bool Current() => !_workspaceDisposed && generation == modCheckGeneration && SelectedInstance?.Id == instance.Id && IsModsSection && (!automatic || ReferenceEquals(Owner.SelectedPage, this));
-        var progress = new Progress<PackInstallProgress>(p => { if (Current()) ModUpdateStatus = $"已检查 {p.CompletedFiles}/{p.TotalFiles} 个模组" + (p.CurrentFile is { } name ? " · " + UiPrivacy.Redact(name) : "") + "；未修改文件。"; });
+        StopModScan(); var instance = SelectedInstance!; var section = SelectedSection.Key; var resource = section != "mods"; var generation = ++modCheckGeneration; var source = new CancellationTokenSource(); modScanCancellation = source;
+        if (resource) { ModUpdates.Clear(); SelectedModUpdate = null; foreach (var row in Rows()) row.Update = null; NotifyContentFilter(); }
+        IsModScanBusy = true; ModUpdateStatus = Localization.UiLocalization.Instance.Text(resource ? "正在核对已安装资源及其官方更新，可随时取消。" : "正在核对已安装模组及其官方更新，可随时取消。");
+        bool Current() => !_workspaceDisposed && generation == modCheckGeneration && SelectedInstance?.Id == instance.Id && SelectedInstance.GameDirectory == instance.GameDirectory && SelectedSection.Key == section && ReferenceEquals(Owner.SelectedPage, this);
+        var progress = new Progress<PackInstallProgress>(p => { if (Current()) ModUpdateStatus = Localization.UiLocalization.Instance.Format(resource ? "已检查 {0}/{1} 项资源" : "已检查 {0}/{1} 个模组", p.CompletedFiles, p.TotalFiles) + (p.CurrentFile is { } name ? " · " + UiPrivacy.Redact(name) : "") + "；未修改文件。"; });
         try
         {
             InstanceModUpdateCheck? result = null;
             async Task Read(CancellationToken ct)
             {
                 using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, source.Token);
-                result = !automatic && Service is IInstanceModRefreshService refresh ? await refresh.RefreshInstanceModUpdatesAsync(instance.Id, progress, linked.Token) : Service is IInstanceModUpdateProgressService tracked ? await tracked.CheckInstanceModUpdatesWithProgressAsync(instance.Id, progress, linked.Token) : await ((IInstanceModUpdateService)Service).CheckInstanceModUpdatesAsync(instance.Id, linked.Token);
+                result = resource ? await ((IInstanceResourceUpdateService)Service).CheckInstanceResourceUpdatesAsync(instance.Id, section, !automatic, progress, linked.Token)
+                    : !automatic && Service is IInstanceModRefreshService refresh ? await refresh.RefreshInstanceModUpdatesAsync(instance.Id, progress, linked.Token) : Service is IInstanceModUpdateProgressService tracked ? await tracked.CheckInstanceModUpdatesWithProgressAsync(instance.Id, progress, linked.Token) : await ((IInstanceModUpdateService)Service).CheckInstanceModUpdatesAsync(instance.Id, linked.Token);
             }
             if (automatic) await Read(source.Token);
-            else if (!await Owner.RunAsync("检查模组更新", Read)) { if (Current()) ModUpdateStatus = "检查已取消或失败，未修改模组文件。"; return; }
+            else if (!await (resource ? Owner.RunInlineAsync("检查资源更新", Read) : Owner.RunAsync("检查模组更新", Read)))
+            { if (Current()) ModUpdateStatus = Localization.UiLocalization.Instance.Text(resource ? "检查已取消或失败，未修改资源文件。" : "检查已取消或失败，未修改模组文件。"); return; }
             if (!Current() || result is null) return;
             ModUpdates.Clear(); foreach (var update in result.Updates) ModUpdates.Add(update); SelectedModUpdate = ModUpdates.FirstOrDefault();
             foreach (var row in Rows()) row.Update = ModUpdates.FirstOrDefault(u => u.RelativePath == row.Entry.RelativePath);
-            foreach (var online in result.OnlineInfo ?? []) if (contentRows.TryGetValue(online.RelativePath, out var row)) { row.Project = online.Project; row.Refresh(); }
+            foreach (var online in result.OnlineInfo ?? []) if (contentRows.TryGetValue(online.RelativePath, out var row)) { row.Project = online.Project; if (resource) row.Entry = row.Entry with { ModVersion = online.Version }; else row.Refresh(); }
             MarkDuplicateMods(); NotifyContentFilter(); OnPropertyChanged(nameof(HasModUpdates));
-            ModUpdateStatus = $"已检查 {result.CheckedFiles} 个模组，发现 {result.Updates.Count} 项同游戏版本/加载器的正式版更新。" + (result.Notices.Count > 0 ? $" {result.Notices.Count} 项未能核实，未计为最新版。\n" + string.Join("\n", result.Notices.Take(5)) : "");
+            ModUpdateStatus = resource ? Localization.UiLocalization.Instance.Format("已检查 {0} 项资源，发现 {1} 项同游戏版本的正式版更新。", result.CheckedFiles, result.Updates.Count)
+                : $"已检查 {result.CheckedFiles} 个模组，发现 {result.Updates.Count} 项同游戏版本/加载器的正式版更新。";
+            if (result.Notices.Count > 0) ModUpdateStatus += Localization.UiLocalization.Instance.Format(" {0} 项未能核实，未计为最新版。", result.Notices.Count) + "\n" + string.Join("\n", result.Notices.Take(5));
             IsModScanBusy = false;
             if (Service is ILauncherCatalogService icons)
                 foreach (var row in Rows().Where(r => !r.Entry.HasIcon && r.Project?.IconUrl is not null))
@@ -182,8 +189,8 @@ public sealed partial class InstancesPageViewModel
                     catch (Exception ex) when (ex is IOException or HttpRequestException or InvalidOperationException or AggregateException) { }
                 }
         }
-        catch (OperationCanceledException) { if (Current()) ModUpdateStatus = "检查已取消，未修改模组文件。"; }
-        catch (Exception ex) { if (Current()) ModUpdateStatus = "暂未能核实模组更新：" + UiPrivacy.Redact(ex.Message); }
+        catch (OperationCanceledException) { if (Current()) ModUpdateStatus = Localization.UiLocalization.Instance.Text(IsModsSection ? "检查已取消，未修改模组文件。" : "检查已取消，未修改资源文件。"); }
+        catch (Exception ex) { if (Current()) ModUpdateStatus = Localization.UiLocalization.Instance.Text(resource ? "暂未能核实资源更新：" : "暂未能核实模组更新：") + UiPrivacy.Redact(ex.Message); }
         finally { if (generation == modCheckGeneration) { ++modCheckGeneration; IsModScanBusy = false; } if (ReferenceEquals(modScanCancellation, source)) modScanCancellation = null; source.Dispose(); }
     }
     private void MarkDuplicateMods()

@@ -9,12 +9,12 @@ public sealed class InstanceContentRowViewModel : ObservableObject
     private InstanceContentEntry entry;
     private bool selected, duplicate;
     private InstanceModUpdate? update;
-    public InstanceContentRowViewModel(InstanceContentEntry value, Action changed, Action<InstanceContentRowViewModel> requestUpdate, Action<InstanceContentRowViewModel> details,
+    public InstanceContentRowViewModel(InstanceContentEntry value, Action changed, Func<InstanceContentRowViewModel, Task> requestUpdate, Action<InstanceContentRowViewModel> details,
         Func<InstanceContentRowViewModel, Task>? reveal = null, Func<InstanceContentRowViewModel, Task>? toggle = null, Action<InstanceContentRowViewModel>? trash = null)
     {
         entry = value;
         PropertyChanged += (_, e) => { if (e.PropertyName == nameof(Selected)) changed(); };
-        UpdateCommand = new RelayCommand(() => requestUpdate(this)); DetailsCommand = new RelayCommand(() => details(this));
+        UpdateCommand = new AsyncRelayCommand(() => requestUpdate(this)); DetailsCommand = new RelayCommand(() => details(this));
         RevealCommand = new AsyncRelayCommand(() => reveal?.Invoke(this) ?? Task.CompletedTask);
         ToggleCommand = new AsyncRelayCommand(() => toggle?.Invoke(this) ?? Task.CompletedTask);
         TrashCommand = new RelayCommand(() => trash?.Invoke(this));
@@ -40,8 +40,9 @@ public sealed class InstanceContentRowViewModel : ObservableObject
     public string FallbackIcon => Entry.Kind switch { "resourcepacks" => "layers", "shaders" => "sparkles", "schematics" => "file-box", _ => "puzzle" };
     public string ToggleCaption => Localization.UiLocalization.Instance.Text(Entry.Enabled ? "禁用模组" : "启用模组");
     public string ToggleIcon => Entry.Enabled ? "circle-minus" : "circle-check";
+    public string UpdateCaption => Localization.UiLocalization.Instance.Text(IsMod ? "更新模组" : "更新资源");
     public string Detail => string.Join("\n", new[] { Title, Entry.VersionLabel, Entry.Name, Description, Entry.ModId is { } id ? "ID: " + id : "", "必需依赖：" + string.Join(", ", Entry.Dependencies ?? []), "内嵌 JAR：" + string.Join(", ", Entry.EmbeddedMods ?? []), StateText }.Where(s => s.Length > 0));
-    public IRelayCommand UpdateCommand { get; }
+    public IAsyncRelayCommand UpdateCommand { get; }
     public IRelayCommand DetailsCommand { get; }
     public IAsyncRelayCommand RevealCommand { get; }
     public IAsyncRelayCommand ToggleCommand { get; }

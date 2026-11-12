@@ -7,7 +7,7 @@ using SHOU.Launcher.Core.Instances;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService : IInstanceModUpdateService, IInstanceModUpdateProgressService, IInstanceModRefreshService
+public sealed partial class LauncherService : IInstanceModUpdateService, IInstanceModUpdateProgressService, IInstanceModRefreshService, IInstanceResourceUpdateService
 {
     private sealed record ModUpdateState(GameInstance Instance, ContentInstalledFile Old, ContentRelease Release, ContentFile File, DateTimeOffset Expires);
     private readonly ConcurrentDictionary<string, ModUpdateState> modUpdates = new();
@@ -19,19 +19,29 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
     public Task<InstanceModUpdateCheck> RefreshInstanceModUpdatesAsync(string instanceId, IProgress<PackInstallProgress>? progress = null, CancellationToken cancellationToken = default)
         => CheckInstanceModUpdatesAsync(instanceId, TimeSpan.FromMinutes(4), cancellationToken, progress is null ? null : new PackProgressReporter(progress), true);
     internal async Task<InstanceModUpdateCheck> CheckInstanceModUpdatesAsync(string instanceId, TimeSpan budget, CancellationToken cancellationToken = default, IProgress<PackInstallProgress>? progress = null, bool refresh = false)
+        => await CheckInstanceFileUpdatesAsync(instanceId, "mods", budget, cancellationToken, progress, refresh).ConfigureAwait(false);
+    public Task<InstanceModUpdateCheck> CheckInstanceResourceUpdatesAsync(string instanceId, string kind, bool refresh = false,
+        IProgress<PackInstallProgress>? progress = null, CancellationToken cancellationToken = default)
     {
+        if (kind is not ("resourcepacks" or "shaders")) throw new ArgumentException("请选择资源包或光影包。");
+        return CheckInstanceFileUpdatesAsync(instanceId, kind, TimeSpan.FromMinutes(4), cancellationToken, progress is null ? null : new PackProgressReporter(progress), refresh);
+    }
+    private async Task<InstanceModUpdateCheck> CheckInstanceFileUpdatesAsync(string instanceId, string section, TimeSpan budget,
+        CancellationToken cancellationToken, IProgress<PackInstallProgress>? progress, bool refresh)
+    {
+        var kind = section == "mods" ? "mod" : section == "resourcepacks" ? "resourcepack" : "shader";
         await InitializeAsync(cancellationToken).ConfigureAwait(false);
         var instance = ContentTarget(instanceId, false);
         var manifest = await ContentInstallFiles.ReadManifestAsync(instance, cancellationToken).ConfigureAwait(false);
-        var rows = InstanceWorkspace.List(instance, "mods", cancellationToken);
+        var rows = await Task.Run(() => InstanceWorkspace.List(instance, section, cancellationToken), cancellationToken).ConfigureAwait(false);
         var updates = new ConcurrentBag<InstanceModUpdate>(); var notices = new ConcurrentBag<string>(); var info = new ConcurrentBag<InstanceModOnlineInfo>();
         var files = new ConcurrentBag<ScanFile>(); var attempted = new ConcurrentDictionary<string, byte>(StringComparer.Ordinal);
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken); timeout.CancelAfter(budget);
         using var transport = ContentTransport(); var curseForge = new CurseForgeCatalog(transport, build.CurseForgeApiKey);
         foreach (var item in modUpdates.Where(p => p.Value.Expires < DateTimeOffset.UtcNow || p.Value.Instance.Id == instanceId)) modUpdates.TryRemove(item.Key, out _);
-        var checkedFiles = 0; progress?.Report(new("核对模组更新", 0, rows.Count));
+        var checkedFiles = 0; progress?.Report(new(kind == "mod" ? "核对模组更新" : "核对资源更新", 0, rows.Count));
         var configuration = Snapshot.Settings.DownloadSourcesJson + ":" + (Snapshot.Settings.Downloads?.SourcePreference.ToString() ?? "") + ":" + !string.IsNullOrWhiteSpace(build.CurseForgeApiKey);
-        void Complete(InstanceContentEntry row) { if (attempted.TryAdd(row.RelativePath, 0)) progress?.Report(new("核对模组更新", Interlocked.Increment(ref checkedFiles), rows.Count, row.Name)); }
+        void Complete(InstanceContentEntry row) { if (attempted.TryAdd(row.RelativePath, 0)) progress?.Report(new(kind == "mod" ? "核对模组更新" : "核对资源更新", Interlocked.Increment(ref checkedFiles), rows.Count, row.Name)); }
         try
         {
             await Parallel.ForEachAsync(rows, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = timeout.Token }, async (row, ct) =>
@@ -45,7 +55,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
                     var tracked = manifest.Files.SingleOrDefault(f => EnabledModPath(f.RelativePath) == EnabledModPath(row.RelativePath));
                     if (tracked is not null && (tracked.Size != size || tracked.Sha1 != sha1 || tracked.Sha512 != sha512)) throw new IOException("文件已被修改，请先核对来源。");
                     var origin = tracked is null ? null : NormalizeModOrigin(tracked);
-                    var key = sha1 + ":" + size + ":" + InstanceIdentity.GameVersion(instance) + ":" + instance.Loader + ":" + origin?.ProjectId + ":" + origin?.ReleaseId + ":" + configuration;
+                    var key = (kind == "mod" ? "" : "resource-update-v1:" + kind + ":") + sha1 + ":" + size + ":" + InstanceIdentity.GameVersion(instance) + ":" + (kind == "mod" ? instance.Loader : "") + ":" + origin?.ProjectId + ":" + origin?.ReleaseId + ":" + configuration;
                     files.Add(new(row, size, sha1, sha512, origin, key, refresh ? null : await ModOnlineCache.ReadAsync(Paths.CacheDirectory, key, ct)));
                 }
                 catch (OperationCanceledException) { throw; }
@@ -92,11 +102,16 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
                     if (current.ProjectId is not { } project || !current.Files.Any(f => f.Sha1 == file.Sha1 && f.Size == file.Size)) throw new InvalidDataException("本地文件与在线身份不符。");
                     fromCurseForge = IsNumericCfProject(project);
                     ContentRelease? next; ContentProject? projectInfo = file.Cached?.Project;
+                    if (kind != "mod")
+                    {
+                        projectInfo ??= fromCurseForge ? await curseForge.ProjectAsync(project, ct) : await Catalog.ProjectAsync(project, ct);
+                        if (projectInfo.Id != project || projectInfo.Kind != kind) throw new InvalidDataException("资源项目身份或类别不符。");
+                    }
                     if (file.Cached is { } cached) next = cached.Next;
                     else
                     {
-                        var releases = await releaseQueries.GetOrAdd(project, _ => fromCurseForge ? curseForge.ReleasesAsync(project, InstanceIdentity.GameVersion(instance), instance.Loader, ct) : Catalog.ReleasesAsync(project, InstanceIdentity.GameVersion(instance), instance.Loader, ct));
-                        next = releases.Where(r => r.ProjectId == project && r.ReleaseChannel == "release" && r.Published > current.Published && ContentInstallPlanner.Compatible(r, "mod", InstanceIdentity.GameVersion(instance), instance.Loader))
+                        var releases = await releaseQueries.GetOrAdd(project, _ => fromCurseForge ? curseForge.ReleasesAsync(project, InstanceIdentity.GameVersion(instance), kind == "mod" ? instance.Loader : null, ct) : Catalog.ReleasesAsync(project, InstanceIdentity.GameVersion(instance), kind == "mod" ? instance.Loader : null, ct));
+                        next = releases.Where(r => r.ProjectId == project && r.ReleaseChannel == "release" && r.Published > current.Published && ContentInstallPlanner.Compatible(r, kind, InstanceIdentity.GameVersion(instance), instance.Loader))
                             .OrderByDescending(r => r.Published).FirstOrDefault(r => r.Files.Count(f => f.Primary) == 1 || r.Files.Count == 1);
                     }
                     verified = true;
@@ -104,15 +119,15 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
                     try { await ModOnlineCache.WriteAsync(Paths.CacheDirectory, file.CacheKey, new(1, checkedAt, current, next, projectInfo), ct); }
                     catch (IOException) { }
 
-                    if (next is not null && next.ProjectId == project && next.ReleaseChannel == "release" && next.Published > current.Published && ContentInstallPlanner.Compatible(next, "mod", InstanceIdentity.GameVersion(instance), instance.Loader))
+                    if (next is not null && next.ProjectId == project && next.ReleaseChannel == "release" && next.Published > current.Published && ContentInstallPlanner.Compatible(next, kind, InstanceIdentity.GameVersion(instance), instance.Loader))
                     {
                         var target = next.Files.Count == 1 ? next.Files[0] : next.Files.Single(f => f.Primary);
                         if (target.Sha1 != file.Sha1)
                         {
                             ContentInstallFiles.ValidateFile(target);
-                            var token = Guid.NewGuid().ToString("N"); var old = new ContentInstalledFile(project, current.Id, "mod", row.RelativePath, file.Sha1, file.Sha512, file.Size, Client: origin?.Client ?? "required", Server: origin?.Server ?? "unsupported");
+                            var token = Guid.NewGuid().ToString("N"); var old = new ContentInstalledFile(project, current.Id, kind, row.RelativePath, file.Sha1, file.Sha512, file.Size, Client: origin?.Client ?? "required", Server: origin?.Server ?? "unsupported");
                             modUpdates[token] = new(instance, old, next, target, DateTimeOffset.UtcNow.AddMinutes(15));
-                            var page = fromCurseForge ? new Uri("https://www.curseforge.com/projects/" + project[3..] + "/files") : new Uri("https://modrinth.com/mod/" + project + "/changelog");
+                            var page = fromCurseForge ? new Uri("https://www.curseforge.com/projects/" + project[3..] + "/files") : new Uri("https://modrinth.com/" + kind + "/" + project + "/changelog");
                             updates.Add(new(token, instance.Id, row.RelativePath, row.DisplayName, row.ModVersion ?? current.Version, next.Version, target.Size, page, project));
                         }
                     }
@@ -127,7 +142,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
                         catch (OperationCanceledException) { }
                         catch (Exception ex) when (ex is IOException or HttpRequestException or AggregateException or InvalidOperationException) { }
                     }
-                    if (projectInfo is not null && projectInfo.Id == project) info.Add(new(row.RelativePath, projectInfo));
+                    if (projectInfo is not null && projectInfo.Id == project) info.Add(new(row.RelativePath, projectInfo, current.Version));
                 }
                 catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
                 catch (OperationCanceledException) { if (!verified) notices.Add(row.Name + "：在线检查超时，尚未核实更新；未改动此文件。"); }
@@ -140,9 +155,14 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
         cancellationToken.ThrowIfCancellationRequested(); progress?.Report(new("检查结束", checkedFiles, rows.Count));
         return new(updates.OrderBy(u => u.Name, StringComparer.OrdinalIgnoreCase).ToArray(), checkedFiles, notices.Order(StringComparer.Ordinal).ToArray(), info.ToArray());
     }
-    public async Task<InstanceModUpdateResult> ApplyInstanceModUpdateAsync(string token, CancellationToken cancellationToken = default)
+    public Task<InstanceModUpdateResult> ApplyInstanceModUpdateAsync(string token, CancellationToken cancellationToken = default)
+        => ApplyInstanceFileUpdateAsync(token, false, cancellationToken);
+    public Task<InstanceModUpdateResult> ApplyInstanceResourceUpdateAsync(string token, CancellationToken cancellationToken = default)
+        => ApplyInstanceFileUpdateAsync(token, true, cancellationToken);
+    private async Task<InstanceModUpdateResult> ApplyInstanceFileUpdateAsync(string token, bool resource, CancellationToken cancellationToken)
     {
         if (!modUpdates.TryGetValue(token, out var state) || state.Expires < DateTimeOffset.UtcNow) throw new InvalidOperationException("更新检查已过期，请重新检查。");
+        if (resource != (state.Old.Kind is "resourcepack" or "shader")) throw new InvalidOperationException("更新令牌不属于当前资源类别。");
         InstanceModUpdateResult? result = null;
         await ExecuteAsync("Installing", async ct =>
         {
@@ -151,11 +171,13 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
             var previous = await ContentInstallFiles.ReadManifestAsync(instance, ct).ConfigureAwait(false);
             var normalized = previous with { Files = previous.Files.Select(NormalizeModOrigin).ToArray() };
             var paths = new HashSet<string>(StringComparer.Ordinal) { state.Old.RelativePath, EnabledModPath(state.Old.RelativePath) };
-            var request = new ContentInstallRequest(instance.Id, state.Old.ProjectId, state.Release.Id, state.File.FileName, "mod");
+            var request = new ContentInstallRequest(instance.Id, state.Old.ProjectId, state.Release.Id, state.File.FileName, state.Old.Kind);
             var replacing = new HashSet<string>(StringComparer.Ordinal) { EnabledModPath(state.Old.RelativePath) };
             normalized = normalized with { Files = normalized.Files.Where(f => !paths.Contains(f.RelativePath)).ToArray() };
-            var plan = await new ContentInstallPlanner(this, this).PlanAsync(instance, InstanceIdentity.GameVersion(instance), request, ct, replacingModPaths: replacing, installedMods: normalized).ConfigureAwait(false);
-            await RunContentTransferAsync("mod-update:" + instance.Id, retry => ApplyInstanceModUpdateAsync(token, retry), async transfer =>
+            var plan = await new ContentInstallPlanner(this, this).PlanAsync(instance, InstanceIdentity.GameVersion(instance), request, ct, replacingModPaths: resource ? null : replacing, installedMods: normalized, replacingResourcePath: resource ? state.Old.RelativePath : null).ConfigureAwait(false);
+            if (resource && !plan.Files.Any(f => !f.Dependency && f.ReleaseId == state.Release.Id && f.File == state.File))
+                throw new IOException("在线资源文件在检查后发生变化，请重新检查更新。");
+            await RunContentTransferAsync((resource ? "resource-update:" : "mod-update:") + instance.Id, retry => ApplyInstanceFileUpdateAsync(token, resource, retry), async transfer =>
                 result = await ModUpdateFiles.ApplyAsync(instance, state.Old, plan, DownloadInstallFileAsync, () => EnsureInstanceNotRunning(instance), transfer).ConfigureAwait(false), ct).ConfigureAwait(false);
         }, cancellationToken).ConfigureAwait(false);
         modUpdates.TryRemove(token, out _); return result!;
@@ -174,7 +196,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
                 return file with { ReleaseId = file.ProjectId + "-" + number.ToString(System.Globalization.CultureInfo.InvariantCulture) };
             return file;
         }
-        if (!file.RelativePath.StartsWith("mods/", StringComparison.Ordinal) || file.DownloadUrl is null || !Uri.TryCreate(file.DownloadUrl, UriKind.Absolute, out var uri) || !ContentInstallFiles.AllowedUri(uri)) return file;
+        if (!(file.RelativePath.StartsWith("mods/", StringComparison.Ordinal) || file.RelativePath.StartsWith("resourcepacks/", StringComparison.Ordinal) || file.RelativePath.StartsWith("shaderpacks/", StringComparison.Ordinal)) || file.DownloadUrl is null || !Uri.TryCreate(file.DownloadUrl, UriKind.Absolute, out var uri) || !ContentInstallFiles.AllowedUri(uri)) return file;
         var parts = uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries);
         return parts.Length == 5 && parts[0] == "data" && parts[2] == "versions" ? file with { ProjectId = parts[1], ReleaseId = parts[3] } : file;
     }

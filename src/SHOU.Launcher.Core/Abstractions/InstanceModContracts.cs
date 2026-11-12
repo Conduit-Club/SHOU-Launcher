@@ -2,7 +2,7 @@ namespace SHOU.Launcher.Core.Abstractions;
 
 public sealed record InstanceModUpdate(string Token, string InstanceId, string RelativePath, string Name,
     string CurrentVersion, string NewVersion, long DownloadBytes, Uri? ChangelogUri = null, string? ProjectId = null);
-public sealed record InstanceModOnlineInfo(string RelativePath, ContentProject Project);
+public sealed record InstanceModOnlineInfo(string RelativePath, ContentProject Project, string? Version = null);
 public sealed record InstanceModUpdateCheck(IReadOnlyList<InstanceModUpdate> Updates, int CheckedFiles, IReadOnlyList<string> Notices, IReadOnlyList<InstanceModOnlineInfo>? OnlineInfo = null);
 public sealed record InstanceModUpdateResult(string BackupDirectory, int InstalledFiles);
 public interface IInstanceModUpdateService

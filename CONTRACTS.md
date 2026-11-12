@@ -45,3 +45,9 @@ Keychain operations are noninteractive. The existing authentication-UI query fla
 ## R41 resource display metadata
 
 `IInstanceContentMetadataService` is an optional read-only enrichment service for resource packs and shaders. It verifies SHA-1/size, release/project identity and project kind before returning display names, current versions and categories; it never creates update tokens or changes instance files. The UI keeps local rows available, discards stale page results, loads local pack icons/descriptions first, and shares cancellation/draining with mod reads before any import/write.
+
+## R42 resource pack and shader updates
+
+`IInstanceResourceUpdateService` is additive and accepts only `resourcepacks` and `shaders`. It shares the existing file-update DTOs and backup result with mod management; `InstanceModOnlineInfo.Version` is optional for older callers. Checks verify installed hashes, project kind and compatible release identity, use no mod-loader filter, and issue short-lived kind-bound tokens. Automatic checks use the six-hour cache; explicit refresh bypasses it. No instance file is changed by a check.
+
+Resource row and selected updates execute directly, while mod update warnings remain. The existing download/backup/rollback transaction now supports resource kinds, preserves installed resource filenames so game enablement references survive, and backs up exact original bytes and receipts below `.shou-resource-backups`. Apply rechecks the instance, running sessions, original hashes, manifest, and selected online file. UI navigation/cancellation rejects late results; writes drain automatic and manual readers first. Unsupported older services retain read-only metadata enrichment.

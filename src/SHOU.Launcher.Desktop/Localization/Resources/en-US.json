@@ -3140,5 +3140,16 @@
   "tc63c900816036798": "High",
   "tf31c4407739e6a75": "Ultra",
   "t891f1255618481d9": "Bloom",
-  "ta0fb1c62d0e8ce9e": "Shadows"
+  "ta0fb1c62d0e8ce9e": "Shadows",
+  "t73f33d69d8a6d5dd": "Check resource updates",
+  "t9caca24bf3f774c1": "Update resource",
+  "tad98c42548d7e004": "Update resources and back up",
+  "t6c0974f8b3ae5502": "Check cancelled. Resource files are unchanged.",
+  "tff3224023f2754e4": "Check cancelled or failed. Resource files are unchanged.",
+  "t8b0baeea2637137b": "Checking installed resources and official updates. You can cancel at any time.",
+  "tda0eb8e6126419f1": "Checked {0}/{1} resources",
+  "td27ec7c9359c3ba6": "Checked {0} resources; found {1} release updates for this game version.",
+  "t0fc9e0c979426199": " {0} could not be verified and are not marked up to date.",
+  "t2b8756c51d6bef60": "Could not verify resource updates: ",
+  "td10cf31d6f2c6ff2": "Updated {0}/{1} resources. Original files were backed up."
 }

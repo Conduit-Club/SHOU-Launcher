@@ -4,14 +4,18 @@ using SHOU.Launcher.Core.Downloads;
 
 namespace SHOU.Launcher.Core.Content;
 
-/// <summary>Downloads before publishing; retains the original JAR and manifest in an instance-local backup.</summary>
+/// <summary>Downloads before publishing; retains the original resource and manifest in an instance-local backup.</summary>
 public static class ModUpdateFiles
 {
     public static async Task<InstanceModUpdateResult> ApplyAsync(GameInstance instance, ContentInstalledFile old,
         ContentInstallPlan plan, Func<ContentFile, string, CancellationToken, Task> download, Action validateTarget, CancellationToken ct = default)
     {
-        if (plan.InstanceId != instance.Id || plan.Files.Count is 0 or > 64 || plan.Files.Any(f => f.Kind != "mod" || !f.RelativePath.StartsWith("mods/", StringComparison.Ordinal))) throw new InvalidDataException("模组更新计划无效。");
-        if (!old.RelativePath.StartsWith("mods/", StringComparison.Ordinal) || old.RelativePath[5..].Contains('/')) throw new InvalidDataException("原模组路径无效。");
+        var folder = ContentInstallPlanner.Folder(old.Kind); var resource = old.Kind is "resourcepack" or "shader";
+        if (plan.InstanceId != instance.Id || plan.Files.Count is 0 or > 64 || plan.Files.Any(f =>
+            (!resource && f.Kind != "mod") || !f.RelativePath.StartsWith(ContentInstallPlanner.Folder(f.Kind) + "/", StringComparison.Ordinal))) throw new InvalidDataException("资源更新计划无效。");
+        if (!old.RelativePath.StartsWith(folder + "/", StringComparison.Ordinal) || old.RelativePath[(folder.Length + 1)..].Contains('/')) throw new InvalidDataException("原资源路径无效。");
+        var rootFile = plan.Files.SingleOrDefault(f => !f.Dependency && f.ProjectId == old.ProjectId && f.Kind == old.Kind) ?? throw new InvalidDataException("更新缺少唯一主资源。");
+        if (resource && rootFile.RelativePath != old.RelativePath) throw new InvalidDataException("资源更新须保留原文件名及其启用引用。");
         var root = instance.GameDirectory; var manifestPath = ContentInstallFiles.Literal(root, ContentInstallFiles.ManifestName);
         var previous = await ContentInstallFiles.ReadManifestAsync(instance, ct).ConfigureAwait(false);
         var previousBytes = File.Exists(manifestPath) ? await File.ReadAllBytesAsync(manifestPath, ct).ConfigureAwait(false) : null;
@@ -30,13 +34,12 @@ public static class ModUpdateFiles
         await VerifyOld(ct).ConfigureAwait(false); validateTarget();
         var disabledSuffix = old.RelativePath.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) ? ".disabled" : old.RelativePath.EndsWith(".old", StringComparison.OrdinalIgnoreCase) ? ".old" : "";
         var disabled = disabledSuffix.Length > 0;
-        var rootFile = plan.Files.SingleOrDefault(f => !f.Dependency && f.ProjectId == old.ProjectId) ?? throw new InvalidDataException("更新缺少唯一主模组。");
         var files = plan.Files.Select(f => disabled && f == rootFile ? f with { RelativePath = f.RelativePath + ".disabled" } : f).ToArray();
         if (files.Select(f => ContentInstallFiles.PathKey(f.RelativePath)).Distinct(StringComparer.Ordinal).Count() != files.Length) throw new InvalidDataException("更新目标文件路径冲突。");
         var untouched = files.Where(f => ContentInstallFiles.PathKey(f.RelativePath) != ContentInstallFiles.PathKey(old.RelativePath)).ToArray();
         await ContentInstallFiles.CheckConflictsAsync(root, untouched, ct).ConfigureAwait(false);
-        var suffix = Guid.NewGuid().ToString("N"); var stage = ContentInstallFiles.Literal(root, ".shou-mod-update-stage-" + suffix);
-        var backup = ContentInstallFiles.Literal(root, ".shou-mod-backups/" + DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + suffix);
+        var suffix = Guid.NewGuid().ToString("N"); var stage = ContentInstallFiles.Literal(root, (resource ? ".shou-resource-update-stage-" : ".shou-mod-update-stage-") + suffix);
+        var backup = ContentInstallFiles.Literal(root, (resource ? ".shou-resource-backups/" : ".shou-mod-backups/") + DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + suffix);
         var backupOld = ContentInstallFiles.Literal(backup, old.RelativePath);
         var completed = new List<ContentInstalledFile>(); var published = new List<ContentInstalledFile>(); var movedOld = false; var committed = false;
         Directory.CreateDirectory(stage);
@@ -49,7 +52,8 @@ public static class ModUpdateFiles
                 await download(file.File, target, ct).ConfigureAwait(false);
                 if (!await ContentInstallFiles.MatchesAsync(target, file.File.Sha1, file.File.Size, ct).ConfigureAwait(false)) throw new InvalidDataException("更新文件校验失败，原文件保留。");
                 await using var input = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
-                completed.Add(new(file.ProjectId, file.ReleaseId, "mod", file.RelativePath, file.File.Sha1, Convert.ToHexStringLower(await SHA512.HashDataAsync(input, ct).ConfigureAwait(false)), file.File.Size, file.File.Uri.AbsoluteUri, file == rootFile ? old.Client : "required", file == rootFile ? old.Server : "unsupported"));
+                var primary = !file.Dependency && file.ProjectId == old.ProjectId;
+                completed.Add(new(file.ProjectId, file.ReleaseId, file.Kind, file.RelativePath, file.File.Sha1, Convert.ToHexStringLower(await SHA512.HashDataAsync(input, ct).ConfigureAwait(false)), file.File.Size, file.File.Uri.AbsoluteUri, primary ? old.Client : "required", primary ? old.Server : "unsupported"));
             }
             var oldEnabledPath = disabled ? old.RelativePath[..^disabledSuffix.Length] : old.RelativePath;
             var merged = previous.Files.Where(f => f.RelativePath != old.RelativePath && f.RelativePath != oldEnabledPath && f.RelativePath != oldEnabledPath + ".disabled" && completed.All(n => ContentInstallFiles.PathKey(n.RelativePath) != ContentInstallFiles.PathKey(f.RelativePath))).Concat(completed).ToArray();

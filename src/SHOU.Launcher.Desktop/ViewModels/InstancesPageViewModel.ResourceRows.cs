@@ -8,8 +8,38 @@ public sealed partial class InstancesPageViewModel
     public bool IsResourceBrowserSection => IsContentList && SelectedSection.Key is "mods" or "resourcepacks" or "shaders";
     public int ResourceToolbarColumns => IsModsSection ? 6 : IsResourceBrowserSection ? 5 : 4;
     public bool HasSelectedMods => IsModsSection && HasModSelection;
+    public bool IsResourceUpdateSection => IsResourceBrowserSection && !IsModsSection;
+    public bool CanUpdateContent => !_workspaceDisposed && ReferenceEquals(Owner.SelectedPage, this) && CanEdit && !IsSelectedInstanceRunning && !IsModScanBusy &&
+        (IsModsSection && Service is IInstanceModUpdateService || IsResourceUpdateSection && Service is IInstanceResourceUpdateService);
+    public string CheckContentUpdatesCaption => Localization.UiLocalization.Instance.Text(IsModsSection ? "检查模组更新" : "检查资源更新");
     public bool CanTrashMods => CanManageMods && Service is IInstanceModManagementService;
-    private bool CurrentContentRow(InstanceContentRowViewModel row) => IsContentList && SelectedInstance is not null && SelectedSection.Key == row.Entry.Kind && contentRows.TryGetValue(row.Entry.RelativePath, out var current) && ReferenceEquals(current, row);
+    private Task RequestContentRowUpdateAsync(InstanceContentRowViewModel row)
+        => CurrentContentRow(row) ? RequestContentUpdatesAsync(row.Update is { } u ? [u] : []) : Task.CompletedTask;
+    private async Task RequestContentUpdatesAsync(IReadOnlyList<InstanceModUpdate> updates)
+    {
+        if (!CanUpdateContent) return;
+        var current = Rows();
+        var valid = updates.Where(u => u.InstanceId == SelectedInstance?.Id && ModUpdates.Any(known => known.Token == u.Token) && current.Any(r => r.Update?.Token == u.Token)).ToArray();
+        if (IsModsSection) { RequestModUpdate(valid); return; }
+        if (valid.Length == 0 || SelectedInstance is not { } instance || Service is not IInstanceResourceUpdateService service) return;
+        var section = SelectedSection.Key; var completed = 0; var failures = new List<string>();
+        await Owner.RunAsync("更新资源并备份", async ct =>
+        {
+            await StopModScanAsync();
+            foreach (var update in valid)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (SelectedInstance?.Id != instance.Id || SelectedSection.Key != section) break;
+                try { await service.ApplyInstanceResourceUpdateAsync(update.Token, ct); completed++; }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) when (ex is IOException or InvalidDataException or InvalidOperationException or HttpRequestException or AggregateException)
+                { failures.Add(update.Name + "：" + UiPrivacy.Redact(ex.Message)); }
+            }
+        });
+        Feedback = Localization.UiLocalization.Instance.Format("已更新 {0}/{1} 项资源，原文件已备份。", completed, valid.Length) + (failures.Count > 0 ? "\n" + string.Join("\n", failures) : "");
+        if (SelectedInstance?.Id == instance.Id && SelectedSection.Key == section) await RefreshContentCommand.ExecuteAsync(null);
+    }
+    private bool CurrentContentRow(InstanceContentRowViewModel row) => !_workspaceDisposed && ReferenceEquals(Owner.SelectedPage, this) && IsContentList && SelectedInstance is not null && SelectedSection.Key == row.Entry.Kind && contentRows.TryGetValue(row.Entry.RelativePath, out var current) && ReferenceEquals(current, row);
     public void ToggleContentSelection(InstanceContentRowViewModel row)
     { if (CurrentContentRow(row)) row.Selected = !row.Selected; }
     private Task RevealContentRowAsync(InstanceContentRowViewModel row)

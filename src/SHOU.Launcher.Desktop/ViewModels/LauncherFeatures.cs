@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
@@ -54,6 +55,6 @@ public sealed partial class SettingsPageViewModel
 }
 public sealed partial class InstancesPageViewModel
 {
-    public bool CanShowModUpdates => IsModsSection && Root.IsFeatureVisible("mod-updates");
+    public bool CanShowModUpdates => IsModsSection && Root.IsFeatureVisible("mod-updates") || IsResourceUpdateSection && Service is IInstanceResourceUpdateService;
     internal void NotifyFeatureNavigation() { OnPropertyChanged(nameof(GameSections)); OnPropertyChanged(nameof(ResourceSections)); OnPropertyChanged(nameof(HasModUpdateStatus)); OnPropertyChanged(nameof(CanShowModUpdates)); }
 }
