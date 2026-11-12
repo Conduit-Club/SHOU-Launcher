@@ -33,7 +33,10 @@ public static class ClubStatusProbe
             int? maximum = json?["players"]?["max"] is JsonValue maxValue && maxValue.TryGetValue<int>(out var max) && max >= 0 ? max : null;
             var favicon = json?["favicon"] is JsonValue iconValue && iconValue.TryGetValue<string>(out var iconText) ? iconText : null;
             var queryMilliseconds = elapsed.ElapsedMilliseconds;
-            var ping = await PingAsync(stream, timeout.Token).ConfigureAwait(false);
+            long? ping = null;
+            try { ping = await PingAsync(stream, timeout.Token).ConfigureAwait(false); }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested) { /* Keep the valid status if only the query deadline expired while awaiting Pong. */ }
+            ct.ThrowIfCancellationRequested();
             return server with { Status = "在线", OnlinePlayers = online, MaximumPlayers = maximum, Motd = PlainMotd(json?["description"]), GameVersion = version is null ? null : version[..Math.Min(128, version.Length)], ResponseMilliseconds = queryMilliseconds, PingMilliseconds = ping, IconPng = Icon(favicon) };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
