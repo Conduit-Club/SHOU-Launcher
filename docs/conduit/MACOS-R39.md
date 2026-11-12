@@ -32,24 +32,37 @@
 
 ## 验证
 
-Core 最终全量 **802 通过 / 5 条件跳过 / 0 失败**，Desktop **295 全通过**，Windows x64 交叉编译通过，0 构建警告/错误。日志/TRX 为 `.shou-dev/reports/macos-r39-20261112/core-final2.*`、`desktop-final3.*` 和 `windows-final2.*`。五项沿用跳过为 Windows 目录句柄及外部真实 Java/证书环境用例。
+Core 最终全量 **802 通过 / 5 条件跳过 / 0 失败**，Desktop **295 全通过**，Windows x64 交叉编译通过，0 构建警告/错误。日志/TRX 为 `.shou-dev/reports/macos-r39-20261112/core-final2.*`、`desktop-rc3.*` 和 `windows-rc3.*`（RC3 仅调整 Desktop 布局，Core 结果沿用未变的 Core 源码）。五项沿用跳过为 Windows 目录句柄及外部真实 Java/证书环境用例。
 
-新增 Core 16 项、Desktop 12 项回归，包含路由、选择目标变化、自动查询与取消、筛选/排序、一次确认批量更新、部分失败继续、回收恢复、原文件/清单变化、同名模组替换、超过 2,000 项列表、嵌套元数据、官方指纹向量和身份匹配、六小时缓存与手动重查、最小窗口及等待扫描释放后才写入。
+新增 Core 16 项、Desktop 12 项回归，包含路由、选择目标变化、自动查询与取消、筛选/排序、一次确认批量更新、部分失败继续、回收恢复、原文件/清单变化、同名模组替换、超过 2,000 项列表、嵌套元数据、官方指纹向量和身份匹配、六小时缓存与手动重查、最小窗口及等待扫描释放后才写入。RC3 加强已有最小窗口用例：长条未核实信息默认折叠、展开后可见，880×560 下首行模组保持可见。
 
 使用空间门禁串行执行构建/测试，预算保持 35 GiB、系统预留 20 GiB。回收的仅为已通过运行时间窗口内的 GUID 合成夹具及已核对 ZIP 内容、没有运行进程的旧展开候选；对应 ZIP、全部日志/TRX、个人应用和实例保留。
 
 ## 实窗与候选状态
 
-最终 RC2 源码 `c4a2d4e1ee65cd2e2380f24fc936d04822c73d79`（主体功能 `2c8853e9`），.NET SDK 10.0.403，Release / osx-arm64；显式使用本地 `.env`，未输出或提交凭据值。
+最终 RC3 源码 `e81480b9045d083849a99be194c72b2e09fd808a`（主体功能 `2c8853e9`，重复判定修复 `c4a2d4e1`），.NET SDK 10.0.403，Release / osx-arm64；显式使用本地 `.env`，未输出或提交凭据值。
 
-- ZIP：`.shou-dev/dist/MACOS-R39-20261112/rc2/SHOU-Launcher-osx-arm64-v1.5.0-dev.gc4a2d4e1.zip`。
-- SHA-256：`a30c1c324fd087dac9fd49543942a18b4e1df96e256d0be5177fec0cb2c35761`。
-- ZIP CRC、标准/QA 应用签名及 Core/Desktop 程序集一致性均通过。QA 仅修改 bundle 身份与根签名。首次 RC2 验证脚本误指向旧 QA 副本，一致性断言正确拦截；改用独立 QA RC2 后通过，失败记录保留。
-- RC1 尝试启动时发生原生渲染初始化失败，随后 CUA 明确确认 **Mac 锁屏**；已请求用户手动解锁，未输入系统密码。此条记录不是实窗验收通过，未反复启动候选。隔离 GUI 样本保持原样，未操作个人应用或实例。
+- ZIP：`.shou-dev/dist/MACOS-R39-20261112/rc3/SHOU-Launcher-osx-arm64-v1.5.0-dev.ge81480b9.zip`。
+- SHA-256：`9b49290681866b0ed01c5b00c0040c8f9e9c17875b70e8a1a52ecd5c0c49d4f8`。
+- ZIP CRC、标准/QA 应用签名及 Core/Desktop 程序集一致性均通过。QA 仅修改 bundle 身份与根签名。RC1 锁屏初始化失败及 RC2 验证脚本曾误指旧 QA 的拦截记录保留；解锁后未再复现初始化失败。
 
-锁屏期间，以另一份无账户的隔离数据直接调用**最终 RC2 生产程序集**：真实在线核对 4 个模组，识别 Sodium 0.8.12 → `mc1.21.1-0.8.13-fabric` 并完成更新；三个合成未知文件保持“未核实”。新 JAR 大小/SHA-1/SHA-512、原 JAR 及精确清单备份一致；Sodium 与合成模组批量禁用 → 回收 → 恢复 → 启用通过，恢复后文件哈希不变，耗时约 5.44 秒。证据为 `production-service.json`、`production-service-run.*`。**这是服务/API 验收，不是 GUI 或真实拖入验收。**
+锁屏期间，另一份无账户隔离数据直接调用 RC2 生产程序集：在线检查 4 个模组，识别 Sodium 0.8.12 → `mc1.21.1-0.8.13-fabric` 并完成更新。新 JAR 大小/SHA-1/SHA-512、原 JAR 及精确清单备份一致；批量禁用 → 回收 → 恢复 → 启用通过，恢复哈希不变。证据为 `production-service.json`、`production-service-run.*`；这是服务/API 验收。
 
-解锁后仍需验收真实拖入、自动更新标记/筛选/行内更新、批量操作与恢复的实窗反馈、正常退出。当前未启动 Minecraft；未覆盖个人安装，未称 GUI 验收完成。
+用户解锁后，完成以下真实界面验收：
+
+| 候选 | 操作与观察 | 证据 |
+|---|---|---|
+| RC2 | 进入模组页自动检查，4 项中找到 Sodium 一项更新；“可更新”筛选原列表为一行。行内更新经一次提示后成功，旧 JAR/精确清单备份和新文件双哈希一致，再查变为零项更新 | `native-auto-complete.ax.txt`、`native-sodium-updated.ax.txt`、`native-update-trash-integrity.json` |
+| RC2 | 重复项筛选选中 Alpha/Beta 两项，批量禁用、回收到实例内回收站、恢复、启用；计数/文件后缀随操作变化，恢复字节不变，诊断收据保留 | `native-trash.ax.txt`、`native-update-trash-integrity.json` |
+| RC2 | 错误筛选只显示损坏归档；检查模组展示基础重复/依赖/内嵌信息。文件选择器安装资源包留在当前页，文件字节一致 | `native-update-trash-integrity.json` |
+| RC3 | 真实 Finder 多选并拖入两项 JAR，当前模组列表从 4 变 6，并显示“已导入 2 个文件”；资源包和光影 ZIP 分别直接进入当前实例对应目录及列表 | `native-drag-mods.ax.txt`、`native-drag-resource.ax.txt`、`native-drag-shader.ax.txt`、`native-drag-integrity.json` |
+| RC3 | MRpack 拖入自动解析后，因存在客户端可选文件而停留面板，默认未勾选该文件。关闭本次样本的游戏准备选项后，创建独立实例成功；可选文件未下载。这是合成包的可选项/文件导入验收，没有覆盖无选择时全自动游戏文件准备 | `native-drag-mrpack.ax.txt`、`native-mrpack-installed.ax.txt`、`native-drag-integrity.json` |
+| RC3 | 去掉大块快捷操作卡片，状态摘要与默认折叠详情分开，筛选使用启动器配色；展开/收回信息正常，未知文件保持未核实。鼠标拖边实测 880×560，首行完整可见，列表及侧栏保留滚动入口 | `native-rc3-minimum.png`、`native-rc3-final.ax.txt`、`native-resize.json` |
+| RC2/RC3 | 原生窗口建立成功，两轮均经 Cmd-Q 正常退出，包装脚本退出 0 | `native-result-2.json`、`native-result-3.json`、`native-rc2.*`、`native-rc3.*` |
+
+CUA 能操作大部分控件，但滚动报告 `noWindowsAvailable`，未提供跨应用拖入坐标。用户明确授权后，限定本轮 QA 可执行文件与 `samples` Finder 窗口，使用 macOS 官方窗口/辅助功能/拖动接口补验；QA 程序及样本文件均在隔离根下。辅助功能设置尺寸虽返回成功但实际尺寸未改变，随后用窗口边缘实际拖动并查询窗口边界确认 880×560。未操作个人应用、账户或游戏实例；未启动 Minecraft。样本 Finder 窗口和两轮 QA 已关闭。
+
+所有原始证据位于 `.shou-dev/reports/macos-r39-20261112/`。最终布局修正后 Desktop 全量 295 通过、Windows x64 交叉编译再次通过，0 警告/错误；新增布局测试第一次编译缺少命名空间引用，修正后通过，初次失败日志保留。
 
 ## 保留的差距
 
