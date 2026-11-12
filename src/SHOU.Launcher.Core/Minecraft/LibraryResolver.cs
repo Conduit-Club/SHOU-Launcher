@@ -7,12 +7,13 @@ namespace SHOU.Launcher.Core.Minecraft;
 
 public sealed record LibraryFile(string Name, string RelativePath, Uri Url, string? Sha1, long? Size,
     bool LegacyNative = false, IReadOnlyList<string>? Excludes = null, bool Generated = false);
-public sealed record LibraryResolution(IReadOnlyList<LibraryFile> Files, IReadOnlyList<string> ClasspathRelativePaths);
+public sealed record LibraryResolution(IReadOnlyList<LibraryFile> Files, IReadOnlyList<string> ClasspathRelativePaths, string? CompatibilityProfile = null);
 
 public static class LibraryResolver
 {
     public static LibraryResolution Resolve(JsonObject metadata, RuleContext context)
     {
+        var profile = MacRuntimeCompatibility.Resolve(metadata, context); metadata = profile.Metadata;
         var files = new List<LibraryFile>();
         var classpath = new List<string>();
         if (metadata["libraries"] is not JsonArray libraries) throw new InvalidDataException("Version has no library list.");
@@ -22,7 +23,8 @@ public static class LibraryResolver
             if (!MinecraftRuleEvaluator.Allows(lib, context)) continue;
             var name = (string?)lib["name"] ?? throw new InvalidDataException("Library name missing.");
             var downloads = lib["downloads"] as JsonObject;
-            if (lib["natives"] is JsonObject declaredNatives && declaredNatives[context.OSName] is null)
+            if (lib["natives"] is JsonObject declaredNatives && declaredNatives[context.OSName] is null
+                && !(context.OSName == "osx" && name.StartsWith("com.mojang:text2speech:", StringComparison.Ordinal)))
                 throw new PlatformNotSupportedException($"{name} does not declare native support for {context.OSName}.");
             if (downloads?["artifact"] is JsonObject artifact)
             {
@@ -54,7 +56,7 @@ public static class LibraryResolver
                 files.Add(ParseFile(name + ":" + classifier, native, true) with { Excludes = excludes });
             }
         }
-        return new(files.DistinctBy(f => (f.RelativePath, f.LegacyNative)).ToArray(), classpath.Distinct(StringComparer.Ordinal).ToArray());
+        return new(files.DistinctBy(f => (f.RelativePath, f.LegacyNative)).ToArray(), classpath.Distinct(StringComparer.Ordinal).ToArray(), profile.Id);
     }
     private static LibraryFile ParseFile(string name, JsonObject file, bool native)
     {

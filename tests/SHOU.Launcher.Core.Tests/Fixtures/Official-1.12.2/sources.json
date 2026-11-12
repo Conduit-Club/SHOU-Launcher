@@ -1,0 +1,8 @@
+{
+  "minecraft": "https://piston-meta.mojang.com/mc/game/version_manifest_v2.json",
+  "minecraft_metadata_sha1": "832d95b9f40699d4961394dcf6cf549e65f15dc5",
+  "forge_installer": "https://maven.minecraftforge.net/net/minecraftforge/forge/1.12.2-14.23.5.2860/forge-1.12.2-14.23.5.2860-installer.jar",
+  "forge_installer_sha1": "5e8a91f71ef3d1f77de3f8d3261aedcc2f551c9d",
+  "forge_version_json_sha256": "317d0e4227b341be93c82082347b35d7bc080569c8d4b0dd5bd0e615145f96f6",
+  "description": "Official metadata only; Forge fixture is formatted version.json from hash-verified vendor installer. No game or Prism code is included."
+}

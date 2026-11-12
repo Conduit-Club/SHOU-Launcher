@@ -16,7 +16,8 @@ public sealed record LoaderInstallReceipt(string InstallerSha1, string ProfileSh
 
 /// <summary>Runs the hash-verified vendor client installer in a private staging root. Never opens a vendor GUI or a user's official-launcher profile.</summary>
 public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader downloader, IProcessRunner processes,
-    string cache, string temporaryRoot, Func<IReadOnlyList<DownloadSource>> sources, Func<ProxySettings> proxySettings)
+    string cache, string temporaryRoot, Func<IReadOnlyList<DownloadSource>> sources, Func<ProxySettings> proxySettings,
+    LauncherOS hostOS = LauncherOS.Unknown)
 {
     private const long MaximumStagedBytes = 2L * 1024 * 1024 * 1024;
     private LoaderCatalog Catalog => new(http);
@@ -48,7 +49,7 @@ public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader
         if ((string?)install["minecraft"] != gameVersion || (string?)version["inheritsFrom"] != gameVersion) throw new InvalidDataException("官方安装器中的Minecraft版本不匹配。");
         var id = SafePath.Identifier((string?)version["id"] ?? throw new InvalidDataException("安装器没有版本标识。"));
         if (id != (loader == "forge" ? gameVersion + "-forge-" + loaderVersion : loader == "cleanroom" ? "Cleanroom-" + loaderVersion : "neoforge-" + loaderVersion)) throw new InvalidDataException("安装器加载器版本标识不匹配。");
-        ValidateMainClass(version, loader);
+        ValidateMainClass(version, loader, gameVersion, hostOS);
         _ = VersionMetadataResolver.ParseVersion(version.ToJsonString(), id);
         var recipe = new LoaderRecipe(loader, gameVersion, loaderVersion, id, relative, sha.ToLowerInvariant());
         var path = Profile(id); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
@@ -128,7 +129,7 @@ public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader
                     throw new InvalidDataException("Cleanroom 客户端身份与官方 Minecraft 不一致。");
             }
             if ((string?)generated["inheritsFrom"] != vanilla.Id) throw new InvalidDataException("处理器输出的父版本不匹配。");
-            ValidateMainClass(generated, recipe.Loader);
+            ValidateMainClass(generated, recipe.Loader, recipe.GameVersion, hostOS);
             var hashes = await ImportLibrariesAsync(stage, ct);
             foreach (var library in generated["libraries"] as JsonArray ?? [])
             {
@@ -191,12 +192,24 @@ public sealed class OfficialLoaderInstaller(HttpClient http, IVerifiedDownloader
     private string Profile(string id) => ContentInstallFiles.Literal(cache, "versions/" + SafePath.Identifier(id) + "/" + id + ".json");
     private string RecipePath(string id) => ContentInstallFiles.Literal(cache, "versions/" + SafePath.Identifier(id) + "/loader-recipe.json");
     private string ReceiptPath(string id) => ContentInstallFiles.Literal(cache, "versions/" + SafePath.Identifier(id) + "/loader-installed.json");
-    private static void ValidateMainClass(JsonObject profile, string loader)
+    internal static void ValidateMainClass(JsonObject profile, string loader, string gameVersion, LauncherOS os)
     {
         var main = (string?)profile["mainClass"];
         if (loader == "cleanroom" && main == "top.outlands.foundation.boot.Foundation") return;
+        if (loader == "forge" && IsLegacyMacForge(profile, gameVersion, os)) return;
         if (main != "cpw.mods.bootstraplauncher.BootstrapLauncher" && !(loader == "forge" && main is "cpw.mods.modlauncher.Launcher" or "net.minecraftforge.bootstrap.ForgeBootstrap"))
             throw new InvalidDataException("此官方安装器的启动主类尚未支持，未记入已安装缓存。");
+    }
+    internal static bool IsLegacyMacForge(JsonObject profile, string gameVersion, LauncherOS os)
+    {
+        if (os != LauncherOS.MacOS || gameVersion != "1.12.2" || (string?)profile["mainClass"] != "net.minecraft.launchwrapper.Launch"
+            || (string?)profile["id"] is not { } id || !id.StartsWith("1.12.2-forge-14.23.5.", StringComparison.Ordinal)) return false;
+        var libraries = (profile["libraries"] as JsonArray)?.OfType<JsonObject>().Select(l => (string?)l["name"]).ToArray() ?? [];
+        if (!libraries.Contains("net.minecraftforge:forge:" + id.Replace("-forge-", "-", StringComparison.Ordinal), StringComparer.Ordinal)
+            || !libraries.Contains("net.minecraft:launchwrapper:1.12", StringComparer.Ordinal)) return false;
+        var arguments = LaunchPlanBuilder.TokenizeLegacy((string?)profile["minecraftArguments"] ?? "");
+        var tweakers = arguments.Select((a, i) => (a, i)).Where(p => p.a == "--tweakClass").ToArray();
+        return tweakers.Length == 1 && tweakers[0].i + 1 < arguments.Count && arguments[tweakers[0].i + 1] == "net.minecraftforge.fml.common.launcher.FMLTweaker";
     }
     private static void NormalizeCleanroom(JsonObject profile, string game, string version)
     {

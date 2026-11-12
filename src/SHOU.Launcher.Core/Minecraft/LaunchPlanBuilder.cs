@@ -70,7 +70,9 @@ public static class LaunchPlanBuilder
         var jvm = input.Version.Metadata["arguments"]?["jvm"] is JsonArray modernJvm
             ? ExpandArguments(modernJvm, input.Context).Select(ExpandJvm).ToList()
             : new List<string> { "-Djava.library.path=" + input.NativesDirectory, "-cp", values["classpath"] };
-        if (input.Context.OSName == "osx" && !jvm.Contains("-XstartOnFirstThread", StringComparer.Ordinal)) jvm.Add("-XstartOnFirstThread");
+        var legacyMac = input.Context.OSName == "osx" && MacRuntimeCompatibility.UsesLwjgl2(input.Version.Metadata, input.Context);
+        if (legacyMac) jvm.RemoveAll(a => a == "-XstartOnFirstThread");
+        else if (input.Context.OSName == "osx" && !jvm.Contains("-XstartOnFirstThread", StringComparer.Ordinal)) jvm.Add("-XstartOnFirstThread");
         if (jvm.Count(a => a == "-XstartOnFirstThread") > 1) throw new InvalidDataException("Duplicate -XstartOnFirstThread.");
         if (!jvm.Any(a => a.StartsWith("-Xmx", StringComparison.Ordinal))) jvm.Add("-Xmx" + input.MemoryMiB + "M");
         if (input.MinimumMemoryMiB is { } initialMemory)
@@ -126,6 +128,7 @@ public static class LaunchPlanBuilder
             $"ClasspathEntries={classpath.Length}; LegacyNativeArchives={resolved.Files.Count(f => f.LegacyNative)}; ArgvCount={argv.Length}",
             "Arguments and environment are omitted from this report; account credentials are runtime-only."
         };
+        if (resolved.CompatibilityProfile is { } profile) diagnostics.Add("MacRuntimeProfile=" + profile);
         // Do not copy argv into diagnostics. Extra JVM arguments may contain secrets unknown to identity redaction.
         return new(input.Java.ExecutablePath, input.Java.RuntimeArchitecture, Path.GetFullPath(input.GameDirectory), argv,
             environment, classpath,

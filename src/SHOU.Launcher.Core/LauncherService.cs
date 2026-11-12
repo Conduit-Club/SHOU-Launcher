@@ -308,6 +308,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         }
         var memory = GameSettingsPolicy.MemoryMiB(instance, Snapshot.Settings, ReadMemoryStatus(), java.RuntimeArchitecture);
         var launchContext = Context(java) with { Features = new Dictionary<string, bool> { ["is_demo_user"] = false, ["has_custom_resolution"] = options.WindowWidth is not null || Snapshot.Settings.GameWindowWidth is not null, ["has_quick_plays_support"] = false } };
+        if (MacRuntimeCompatibility.UsesLwjgl2(installed.Version.Metadata, launchContext)) MacNativeLibraries.ValidateMcMouser(instance.GameDirectory, launchContext);
         return LaunchPlanBuilder.Build(new(installed.Version, java, launchContext, identity, instance.GameDirectory,
             installed.LibrariesDirectory, installed.AssetsDirectory, installed.NativesDirectory, installed.ClientJar,
             installed.Assets.Id, memory, installed.LegacyExtractions, ExtraJvmArguments: extraJvm, TemporaryDirectory: temporary,

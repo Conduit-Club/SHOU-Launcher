@@ -10,7 +10,7 @@ namespace SHOU.Launcher.Core;
 
 public sealed partial class LauncherService : ILoaderInstanceService
 {
-    private static void ValidateLoaderProfile(GameInstance instance, ResolvedVersion resolved)
+    private void ValidateLoaderProfile(GameInstance instance, ResolvedVersion resolved)
     {
         if (instance.Loader == "vanilla") return;
         var game = Instances.InstanceIdentity.GameVersion(instance);
@@ -21,14 +21,15 @@ public sealed partial class LauncherService : ILoaderInstanceService
         {
             "fabric" or "legacyfabric" => main is "net.fabricmc.loader.impl.launch.knot.KnotClient" or "net.fabricmc.loader.launch.knot.KnotClient",
             "quilt" => main == "org.quiltmc.loader.impl.launch.knot.KnotClient",
-            "forge" => main is "cpw.mods.bootstraplauncher.BootstrapLauncher" or "cpw.mods.modlauncher.Launcher" or "net.minecraftforge.bootstrap.ForgeBootstrap",
+            "forge" => main is "cpw.mods.bootstraplauncher.BootstrapLauncher" or "cpw.mods.modlauncher.Launcher" or "net.minecraftforge.bootstrap.ForgeBootstrap"
+                || OfficialLoaderInstaller.IsLegacyMacForge(resolved.Metadata, game, Snapshot.Platform.OS),
             "neoforge" => main == "cpw.mods.bootstraplauncher.BootstrapLauncher",
             "cleanroom" => main == "top.outlands.foundation.boot.Foundation" && game == "1.12.2" && resolved.RequiredJavaMajor == 25,
             _ => false
         };
         if (!valid) throw new InvalidDataException("加载器主类与实例类型不匹配，未按原版启动。");
     }
-    private OfficialLoaderInstaller OfficialLoaders => new(http, downloader, platform.Processes, Paths.CacheDirectory, Paths.TempDirectory, Sources, () => network.Capture().Proxy);
+    private OfficialLoaderInstaller OfficialLoaders => new(http, downloader, platform.Processes, Paths.CacheDirectory, Paths.TempDirectory, Sources, () => network.Capture().Proxy, Snapshot.Platform.OS);
     private async Task<string> CacheLoaderProfileAsync(string loader, string game, string? version, CancellationToken ct)
     {
         if (PortableVendorInstaller.Supports(loader)) return await CacheVendorProfileAsync(loader, game, version ?? throw new InvalidDataException("加载器版本缺失。"), ct).ConfigureAwait(false);

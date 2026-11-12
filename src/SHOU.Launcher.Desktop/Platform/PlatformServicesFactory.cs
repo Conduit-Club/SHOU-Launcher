@@ -20,8 +20,9 @@ public static class PlatformServicesFactory
         var discovery = new JavaDiscovery(processes, info.Context, options, managedRuntimeDirectory: paths.RuntimesDirectory);
         var installer = new MojangJavaRuntimeInstaller(downloader, discovery, paths.RuntimesDirectory,
             Path.Combine(paths.CacheDirectory, "java-metadata"));
+        IJavaRuntimeInstaller runtimeInstaller = OperatingSystem.IsMacOS() ? new MacJava8RuntimeInstaller(installer, downloader, discovery, paths.RuntimesDirectory, paths.CacheDirectory) : installer;
         return new PlatformServices(info, paths, new Capabilities(info.Context), new ExternalLauncher(processes, info.Context),
-            credentials, processes, discovery, installer, new DataDirectoryLock())
+            credentials, processes, discovery, runtimeInstaller, new DataDirectoryLock())
         {
             MemoryInfo = new NativeMemoryInfo(),
             LegacyMicrosoftAccounts = OperatingSystem.IsWindows()

@@ -63,7 +63,7 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
             phases?.Report(new("检查游戏资源", Interlocked.Increment(ref completedAssets), objects.Length, asset.Hash));
         }).ConfigureAwait(false);
         if (!preserveGameData) AssetResolver.MaterializeLegacyLayout(assets, assetsDirectory, gameDirectory);
-        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(metadata.ToJsonString())))[..16].ToLowerInvariant();
+        var fingerprint = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(metadata.ToJsonString() + (libraries.CompatibilityProfile is null ? "" : "\n" + libraries.CompatibilityProfile))))[..16].ToLowerInvariant();
         var nativesDirectory = SafePath.Within(gameDirectory, $".shou/natives/{SafePath.Identifier(version.Id)}/{context.OSName}/{context.JavaArchitecture}/{fingerprint}");
         if (nativeSession is not null) nativesDirectory = SafePath.Within(nativesDirectory, SafePath.Identifier(nativeSession));
         Directory.CreateDirectory(nativesDirectory);
@@ -72,6 +72,8 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
         foreach (var native in libraries.Files.Where(f => f.LegacyNative))
             extracted.AddRange(await LibraryResolver.ExtractLegacyNativesAsync(SafePath.Within(librariesDirectory, native.RelativePath), nativesDirectory, native.Excludes, ct).ConfigureAwait(false));
         // A completion marker is written only after every verified download and native extraction succeeds.
+        if (libraries.CompatibilityProfile is not null && context.OSName == "osx")
+            extracted = MacNativeLibraries.ValidateAndAlias(extracted, context).ToList();
         if (!preserveGameData)
         {
             phases?.Report(new("写入安装完成清单", 0, 0));
