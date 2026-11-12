@@ -30,6 +30,7 @@ public sealed partial class DownloadsPageViewModel
     private LocalPackInspection? _localPackInspection;
     private IReadOnlyList<string> _packImportDetails = [];
     private int _packRevision;
+    private bool _packPreflightSucceeded;
     public bool PreparePackAfterImport { get; set; }
     public ObservableCollection<ContentTargetChoice> ContentInstallTargets { get; } = [];
     public ContentTargetChoice? SelectedInstallTarget
@@ -49,13 +50,16 @@ public sealed partial class DownloadsPageViewModel
     public LocalPackInspection? DetectedLocalPack => _localPackInspection;
     public bool HasPackInspection => _localPackInspection is not null || _packInspection is not null;
     public string PackDetails => string.Join(Environment.NewLine,
-        (_localPackInspection?.Warnings ?? _packInspection?.Warnings ?? []).Concat(_packImportDetails).Distinct(StringComparer.Ordinal));
+        (_packPreflightSucceeded ? _localPackInspection?.Warnings ?? _packInspection?.Warnings ?? [] : []).Concat(_packImportDetails).Distinct(StringComparer.Ordinal));
     public bool HasPackDetails => PackDetails.Length > 0;
-    private bool CanImportLocalPack => _localPackInspection?.CanImport ?? _packInspection?.CanImport ?? false;
+    private bool CanImportLocalPack => _packPreflightSucceeded && (_localPackInspection?.CanImport ?? _packInspection?.CanImport ?? false);
+    public ObservableCollection<PackManualFileRowViewModel> LocalPackManualFiles { get; } = [];
+    public bool HasLocalPackManualFiles => LocalPackManualFiles.Count > 0;
     public ObservableCollection<PackOptionalFileViewModel> OptionalPackFiles { get; } = [];
     public bool HasOptionalPackFiles => OptionalPackFiles.Count > 0;
     public AsyncRelayCommand ImportLocalPackCommand { get; private set; } = null!;
     public AsyncRelayCommand ReadCachedPackCommand { get; private set; } = null!;
+    public AsyncRelayCommand RecheckLocalPackCommand { get; private set; } = null!;
     private void InitializeContentInstallation(IContentInstallationService? installation, IModrinthPackService? packs, ILocalPackService? localPacks)
     {
         _contentInstall = installation ?? Service as IContentInstallationService; _packs = packs ?? Service as IModrinthPackService;
@@ -65,6 +69,8 @@ public sealed partial class DownloadsPageViewModel
         ImportLocalPackCommand = AsyncCommand(ImportLocalPackAsync, () => CanEdit && PackServiceAvailable && CanImportLocalPack && !string.IsNullOrWhiteSpace(PackInstanceName) && PackInstanceName.Length <= 80);
         ReadCachedPackCommand = AsyncCommand(() => ReadLocalPackAsync(LastDownloadPath), () => CanEdit && PackServiceAvailable && HasDownloadedFile &&
             (LastDownloadPath.EndsWith(".mrpack", StringComparison.OrdinalIgnoreCase) || LastDownloadPath.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)));
+        RecheckLocalPackCommand = AsyncCommand(() => ReadLocalPackCoreAsync(_localPackPath, preserveDraft: true),
+            () => CanEdit && !_disposed && PackServiceAvailable && _localPackPath.Length > 0);
         if (!PackServiceAvailable) PackStatus = "当前后端未提供整合包导入能力。";
     }
     private void RefreshContentTargets(LauncherSnapshot snapshot)
@@ -109,36 +115,95 @@ public sealed partial class DownloadsPageViewModel
         ResourceInstallStatus = success ? $"已装入 {target.Instance.Name}：{installed!.Files.Count} 个资源文件，新增 {installed.AddedFiles} 个。安装清单已保存。" +
             (installed.Warnings.Count > 0 ? " " + string.Join(" ", installed.Warnings) : "") : Owner.ErrorMessage ?? "安装已取消，已有不同文件未被覆盖。";
     }
-    public async Task ReadLocalPackAsync(string path)
+    public Task ReadLocalPackAsync(string path) => ReadLocalPackCoreAsync(path, preserveDraft: false);
+    private async Task ReadLocalPackCoreAsync(string path, bool preserveDraft, string? expectedSha256 = null)
     {
-        if (!PackServiceAvailable || !CanEdit) return;
-        var revision = ++_packRevision; _localPackPath = path; _packInspection = null; _localPackInspection = null; _packImportDetails = []; OptionalPackFiles.Clear();
-        OnPropertyChanged(nameof(LocalPackPath)); OnPropertyChanged(nameof(ShowLocalPackPanel)); OnPropertyChanged(nameof(PackInspection)); OnPropertyChanged(nameof(HasPackInspection)); OnPropertyChanged(nameof(HasOptionalPackFiles));
-        OnPropertyChanged(nameof(PackDetails)); OnPropertyChanged(nameof(HasPackDetails));
+        if (!PackServiceAvailable || !CanEdit || _disposed) return;
+        var name = PackInstanceName; var previousLocal = preserveDraft ? _localPackInspection : null;
+        var previousMr = preserveDraft ? _packInspection : null;
+        var selected = OptionalPackFiles.Where(f => f.Selected).Select(f => f.Path).ToHashSet(StringComparer.Ordinal);
+        var revision = ++_packRevision; _localPackPath = path; _packInspection = null; _localPackInspection = null;
+        _packPreflightSucceeded = false; _packImportDetails = []; OptionalPackFiles.Clear(); LocalPackManualFiles.Clear();
+        PackStatus = preserveDraft ? "正在重新预检整合包与补充文件…" : "正在读取本机整合包…";
+        NotifyLocalPackInspection();
         ModrinthPackInspection? inspected = null;
         LocalPackInspection? local = null;
         var success = await Owner.RunAsync("读取本机整合包", async ct =>
         {
             if (_localPacks is not null) { local = await _localPacks.InspectLocalPackAsync(path, ct); inspected = local.Modrinth; }
             else inspected = await _packs!.InspectModrinthPackAsync(path, ct);
+            ct.ThrowIfCancellationRequested();
         });
         if (revision != _packRevision || _disposed) return;
         if (success)
         {
-            _packInspection = inspected; _localPackInspection = local; PackInstanceName = local?.Name ?? inspected!.Name;
-            foreach (var file in inspected?.Files.Where(f => f.Client == "optional") ?? []) OptionalPackFiles.Add(new(file.Path));
+            var hash = local?.ArchiveSha256 ?? inspected!.ArchiveSha256;
+            if (expectedSha256 is not null && !hash.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase))
+            {
+                PackStatus = "整合包在补充文件后已改变，请重新选择并预检，再确认安装。";
+                NotifyLocalPackInspection(); return;
+            }
+            _packPreflightSucceeded = true; _packInspection = inspected; _localPackInspection = local;
+            PackInstanceName = preserveDraft ? name : local?.Name ?? inspected!.Name;
+            var previousHash = previousLocal?.ArchiveSha256 ?? previousMr?.ArchiveSha256;
+            foreach (var file in inspected?.Files.Where(f => f.Client == "optional") ?? [])
+                OptionalPackFiles.Add(new(file.Path) { Selected = preserveDraft && hash == previousHash && selected.Contains(file.Path) });
+            if (preserveDraft && previousHash is not null && hash != previousHash)
+                _packImportDetails = ["整合包文件已改变，本次已按新文件重新预检，请核对内容后安装。"];
             PackStatus = local is not null
                 ? local.CanImport ? $"{(local.Format == LocalPackFormat.CurseForge ? "CurseForge ZIP" : "Modrinth .mrpack")} · Minecraft {local.GameVersion} · {local.Loader} {local.LoaderVersion}。"
                     : local.CapabilityReason ?? "此整合包暂不支持导入。"
                 : inspected!.CanImport ? $"{inspected.GameVersion} · {inspected.Loader} · {inspected.Files.Count} 项清单文件 · {inspected.Overrides.Count} 项客户端覆盖文件。" + string.Join(" ", inspected.Warnings) : inspected.CapabilityReason ?? "此整合包暂不支持导入。";
         }
-        else PackStatus = Owner.ErrorMessage ?? "整合包读取已取消。";
-        OnPropertyChanged(nameof(PackInspection)); OnPropertyChanged(nameof(DetectedLocalPack)); OnPropertyChanged(nameof(HasPackInspection)); OnPropertyChanged(nameof(HasOptionalPackFiles)); NotifyCommands();
-        OnPropertyChanged(nameof(PackDetails)); OnPropertyChanged(nameof(HasPackDetails));
+        else
+        {
+            _localPackInspection = previousLocal; _packInspection = previousMr;
+            foreach (var file in previousMr?.Files.Where(f => f.Client == "optional") ?? [])
+                OptionalPackFiles.Add(new(file.Path) { Selected = selected.Contains(file.Path) });
+            PackStatus = Owner.ErrorMessage ?? "整合包预检已取消；可重新预检后继续。";
+        }
+        PopulateLocalManualFiles(revision);
+        NotifyLocalPackInspection();
+    }
+    private void PopulateLocalManualFiles(int revision)
+    {
+        LocalPackManualFiles.Clear();
+        foreach (var file in _localPackInspection?.ManualFiles ?? [])
+            LocalPackManualFiles.Add(new(Owner, file, ProvideLocalManualFileAsync,
+                row => !_disposed && revision == _packRevision && LocalPackManualFiles.Contains(row),
+                () => _localPacks is ILocalPackManualFileService));
+    }
+    private async Task ProvideLocalManualFileAsync(PackManualFileRowViewModel row, string path)
+    {
+        if (!CanEdit || !row.IsCurrent || _localPackInspection is not { } inspection || _localPacks is not ILocalPackManualFileService manual) return;
+        var revision = _packRevision; var archive = _localPackPath;
+        PackStatus = "正在按官方版本校验补充文件…";
+        var success = await Owner.RunAsync("校验补充文件", async ct =>
+        {
+            await manual.ProvideLocalPackFileAsync(archive, inspection.ArchiveSha256, row.File.ProjectId, row.File.FileId, path, ct);
+            ct.ThrowIfCancellationRequested();
+        });
+        if (_disposed || revision != _packRevision) return;
+        if (!success)
+        {
+            _packPreflightSucceeded = false;
+            PackStatus = Owner.ErrorMessage ?? "补充文件已取消；待补文件保留，可重试或重新预检。";
+            NotifyLocalPackInspection(); return;
+        }
+        LocalPackManualFiles.Remove(row);
+        _localPackInspection = inspection with { ManualFiles = LocalPackManualFiles.Select(f => f.File).ToArray() };
+        await ReadLocalPackCoreAsync(archive, preserveDraft: true, expectedSha256: inspection.ArchiveSha256);
+    }
+    private void NotifyLocalPackInspection()
+    {
+        foreach (var property in new[] { nameof(LocalPackPath), nameof(ShowLocalPackPanel), nameof(PackInspection), nameof(DetectedLocalPack),
+            nameof(HasPackInspection), nameof(HasOptionalPackFiles), nameof(HasLocalPackManualFiles), nameof(PackDetails), nameof(HasPackDetails) }) OnPropertyChanged(property);
+        foreach (var row in LocalPackManualFiles) row.Refresh();
+        NotifyCommands();
     }
     private async Task ImportLocalPackAsync()
     {
-        if (!CanImportLocalPack || !PackServiceAvailable) return;
+        if (!CanEdit || _disposed || !CanImportLocalPack || !PackServiceAvailable) return;
         var hash = _localPackInspection?.ArchiveSha256 ?? _packInspection!.ArchiveSha256;
         var selected = OptionalPackFiles.Where(f => f.Selected).Select(f => f.Path).ToArray();
         var request = new ModrinthPackImportRequest(_localPackPath, hash, PackInstanceName, selected, PreparePackAfterImport);
@@ -149,7 +214,7 @@ public sealed partial class DownloadsPageViewModel
         PackStatus = "正在校验文件并导入独立新实例…";
         var success = await Owner.RunAsync("导入整合包", async ct =>
         {
-            if (_localPacks is not null) local = await _localPacks.ImportLocalPackAsync(new(_localPackPath, hash, PackInstanceName, selected, PreparePackAfterImport), ct);
+            if (_localPacks is not null) local = await _localPacks.ImportLocalPackAsync(new(request.ArchivePath, hash, request.InstanceName, selected, request.PrepareAfterImport), ct);
             else imported = await _packs!.ImportModrinthPackAsync(request, ct);
         });
         if (revision != _packRevision || _disposed) return;

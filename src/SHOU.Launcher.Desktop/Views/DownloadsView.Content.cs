@@ -14,14 +14,14 @@ public partial class DownloadsView
 {
     private async void ProvidePackManualFile_Click(object? sender, RoutedEventArgs e)
     {
-        if (sender is not Button { DataContext: PackManualFileRowViewModel row }) return;
+        if (sender is not Button { DataContext: PackManualFileRowViewModel row } || !row.CanProvide) return;
         try
         {
             var storage = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境不支持本机文件选择。");
             var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "选择已下载的 " + row.Name, AllowMultiple = false });
-            if (files.FirstOrDefault()?.TryGetLocalPath() is { } path) await row.Task.ProvideManualFileAsync(row, path);
+            if (files.FirstOrDefault()?.TryGetLocalPath() is { } path) await row.ProvideFileAsync(path);
         }
-        catch (Exception ex) { row.Task.Root.ShowError("补充文件失败：" + UiPrivacy.Redact(ex.Message)); }
+        catch (Exception ex) { if (row.IsCurrent) row.Root.ShowError("补充文件失败：" + UiPrivacy.Redact(ex.Message)); }
     }
     private void DownloadsView_KeyDown(object? sender, KeyEventArgs e)
     {

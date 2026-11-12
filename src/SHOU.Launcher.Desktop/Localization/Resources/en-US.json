@@ -594,7 +594,7 @@
   "tdf2763b431451fbb": "NeoForge is a mod loader for Minecraft 1.20.1+. You must install it before using any NeoForge mods. Additionally, it is compatible with some Forge mods.\nThis page offers the NeoForge installer for download. After downloading, you need to complete the installation process manually through the installer.",
   "tfe40d869db01db47": "Introduction of NeoForge",
   "tb15f809730dbada9": "Getting NeoForge list...",
-  "t2a387b9dca2585fc": "Official website",
+  "t2a387b9dca2585fc": "Open website",
   "t695c01fd8329830e": "Compatible with Forge {0}",
   "t7854340185c3ac0b": "Incompatible with Forge",
   "tdf694f1474ba2f41": "OptiFine allows you to install shaders, use HD resource packs, and improve game performance significantly.",
@@ -3045,5 +3045,16 @@
   "t4d5b21631fe5f50b": "Settings saved automatically.",
   "t778ba19ffb5befef": "Address changed. Valid input is saved automatically.",
   "t370446e738783d11": "Secret changed. Valid input is saved automatically.",
-  "te53967ca1ff3a96a": "No WAV, MP3 or M4A files in the music folder."
+  "te53967ca1ff3a96a": "No WAV, MP3 or M4A files in the music folder.",
+  "t4f078f908f8c3017": "Select downloaded file…",
+  "t75e2fabcb4a0f801": "Check again",
+  "tacf2725262be5b6a": "Some files must be downloaded from the author’s website. Select the specified files to verify them, then confirm the instance name and install.",
+  "tb577306338735d2a": "{0:0.##} MiB · Official file {1}",
+  "t936bcd6c422aeee8": "Checking the pack and supplied files again…",
+  "tbf228f4caebf121f": "Reading the local modpack…",
+  "td336f829b21272c6": "The pack changed after a file was supplied. Select and check it again before installing.",
+  "t8fd6c3c0f5c02fc8": "Pack checking was cancelled. Check again to continue.",
+  "t92acca5c8bbcd8b2": "Verifying the supplied file against the official version…",
+  "t0a20c4da3cfd03e3": "Supplying the file was cancelled. Pending files are kept; retry or check the pack again.",
+  "tf5ea7220cf203860": "The archive changed and the new file has been checked. Review its contents before installing."
 }

@@ -655,7 +655,8 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public override void NotifyCommands()
     {
         foreach (var task in Tasks) { task.CancelCommand.NotifyCanExecuteChanged(); task.RetryCommand.NotifyCanExecuteChanged(); }
-        foreach (var task in PackTasks) { task.RetryCommand.NotifyCanExecuteChanged(); task.OpenInstanceCommand.NotifyCanExecuteChanged(); }
+        foreach (var task in PackTasks) { task.RetryCommand.NotifyCanExecuteChanged(); task.OpenInstanceCommand.NotifyCanExecuteChanged(); foreach (var row in task.ManualFiles) row.Refresh(); }
+        foreach (var row in LocalPackManualFiles) row.Refresh();
         foreach (var row in LatestVersions.Concat(VersionGroups.SelectMany(g => g.Versions))) row.SelectCommand.NotifyCanExecuteChanged();
         foreach (var row in Projects.Concat(FavoriteProjects)) row.OpenCommand.NotifyCanExecuteChanged();
         foreach (var file in ReleaseGroups.SelectMany(g => g.Releases).SelectMany(r => r.Files)) { file.DownloadCommand.NotifyCanExecuteChanged(); file.InstallCommand.NotifyCanExecuteChanged(); }

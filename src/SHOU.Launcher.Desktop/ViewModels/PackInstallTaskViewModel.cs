@@ -108,7 +108,9 @@ public sealed class PackInstallTaskViewModel : ObservableObject
                     if (!(inspected?.CanImport ?? mr?.CanImport ?? false))
                     {
                         manualArchiveSha = inspected?.ArchiveSha256;
-                        foreach (var missing in inspected?.ManualFiles ?? []) ManualFiles.Add(new(this, missing));
+                        foreach (var missing in inspected?.ManualFiles ?? [])
+                            ManualFiles.Add(new(owner, missing, ProvideManualFileAsync, row => ManualFiles.Contains(row),
+                                () => localPacks is ILocalPackManualFileService && !IsActive));
                         state = "需要补充文件";
                         error = (inspected?.CapabilityReason ?? mr?.CapabilityReason ?? "此整合包不能安装。") + Environment.NewLine +
                             string.Join(Environment.NewLine, inspected?.Warnings ?? mr?.Warnings ?? []);
@@ -191,19 +193,30 @@ public sealed class PackInstallTaskViewModel : ObservableObject
     private void Changed()
     {
         foreach (var p in new[] { nameof(State), nameof(Detail), nameof(Error), nameof(HasError), nameof(HasManualFiles), nameof(IsActive), nameof(IsCompleted), nameof(RemainingFiles), nameof(RemainingFileText), nameof(BytesPerSecond), nameof(OverallProgress) }) OnPropertyChanged(p);
+        foreach (var row in ManualFiles) row.Refresh();
         RetryCommand.NotifyCanExecuteChanged(); CancelCommand.NotifyCanExecuteChanged(); OpenInstanceCommand.NotifyCanExecuteChanged(); page.NotifyPackTasks();
     }
 }
 
-public sealed class PackManualFileRowViewModel
+public sealed class PackManualFileRowViewModel : ObservableObject
 {
-    internal PackInstallTaskViewModel Task { get; }
+    private readonly MainWindowViewModel owner;
+    private readonly Func<PackManualFileRowViewModel, string, Task> provide;
+    private readonly Func<PackManualFileRowViewModel, bool> current;
+    private readonly Func<bool> supported;
+    internal MainWindowViewModel Root => owner;
+    internal bool IsCurrent => current(this);
+    public bool CanProvide => owner.CanMutate && IsCurrent && supported();
     public CurseForgeManualFile File { get; }
     public string Name => File.FileName;
+    public string Detail => Localization.UiLocalization.Instance.Format("{0:0.##} MiB · 官方文件 {1}", File.Size / 1048576d, File.FileId);
     public AsyncRelayCommand OpenPageCommand { get; }
-    internal PackManualFileRowViewModel(PackInstallTaskViewModel task, CurseForgeManualFile file)
+    internal PackManualFileRowViewModel(MainWindowViewModel owner, CurseForgeManualFile file,
+        Func<PackManualFileRowViewModel, string, Task> provide, Func<PackManualFileRowViewModel, bool> current, Func<bool> supported)
     {
-        Task = task; File = file;
-        OpenPageCommand = new(() => task.Root.RunControlAsync("打开文件官网", ct => task.Root.ExternalLauncher.OpenUriAsync(file.PageUri, ct)));
+        this.owner = owner; this.provide = provide; this.current = current; this.supported = supported; File = file;
+        OpenPageCommand = new(() => IsCurrent ? owner.RunControlAsync("打开文件官网", ct => owner.ExternalLauncher.OpenUriAsync(file.PageUri, ct)) : Task.CompletedTask, () => IsCurrent);
     }
+    public Task ProvideFileAsync(string path) => CanProvide ? provide(this, path) : Task.CompletedTask;
+    internal void Refresh() { OnPropertyChanged(nameof(CanProvide)); OnPropertyChanged(nameof(Detail)); OpenPageCommand.NotifyCanExecuteChanged(); }
 }
