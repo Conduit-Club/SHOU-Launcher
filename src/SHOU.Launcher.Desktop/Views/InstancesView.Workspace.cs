@@ -122,7 +122,7 @@ public partial class InstancesView
         if (DataContext is not InstancesPageViewModel vm || TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage) return;
         try
         {
-            using var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "导出资源信息", SuggestedFileName = "mods.csv", DefaultExtension = "csv", FileTypeChoices = [new FilePickerFileType("CSV") { Patterns = ["*.csv"] }, new FilePickerFileType("Text") { Patterns = ["*.txt"] }] });
+            using var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "导出资源信息", SuggestedFileName = vm.SelectedSection.Key + ".csv", DefaultExtension = "csv", FileTypeChoices = [new FilePickerFileType("CSV") { Patterns = ["*.csv"] }, new FilePickerFileType("Text") { Patterns = ["*.txt"] }] });
             if (file is null) return;
             var text = vm.ExportContentInformation(file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase));
             await using var stream = await file.OpenWriteAsync(); stream.SetLength(0); await using var writer = new StreamWriter(stream); await writer.WriteAsync(text);

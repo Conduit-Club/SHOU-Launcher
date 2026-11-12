@@ -41,3 +41,7 @@ Keychain operations are noninteractive. The existing authentication-UI query fla
 ## R40 read-only mod declarations
 
 `IInstanceModRelationsService` is an optional additive service for the instance relationship page. It returns physical hosts, recursive declaration nodes, dependency requirements and provider paths. Presence states describe declarations found in enabled/disabled files; they do not claim loader candidate selection or version compatibility. Reads support cancellation, never extract or execute JAR contents, and report incomplete analysis explicitly. Navigation discards stale results, and mod writes await cancelled relationship readers before moving files.
+
+## R41 resource display metadata
+
+`IInstanceContentMetadataService` is an optional read-only enrichment service for resource packs and shaders. It verifies SHA-1/size, release/project identity and project kind before returning display names, current versions and categories; it never creates update tokens or changes instance files. The UI keeps local rows available, discards stale page results, loads local pack icons/descriptions first, and shares cancellation/draining with mod reads before any import/write.

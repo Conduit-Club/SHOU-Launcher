@@ -49,7 +49,8 @@ public sealed partial class InstancesPageViewModel
     private InstanceContentRowViewModel Row(InstanceContentEntry entry)
     {
         if (contentRows.TryGetValue(entry.RelativePath, out var existing)) return existing;
-        var row = new InstanceContentRowViewModel(entry, NotifyModActions, r => RequestModUpdate(r.Update is { } u ? [u] : []), r => ModDetail = r.Detail);
+        var row = new InstanceContentRowViewModel(entry, NotifyModActions, r => RequestModUpdate(r.Update is { } u ? [u] : []), r => ModDetail = r.Detail,
+            RevealContentRowAsync, ToggleContentRowAsync, r => { if (CanTrashMods && CurrentContentRow(r)) RequestModTrash([r.Entry.RelativePath]); });
         contentRows.Add(entry.RelativePath, row); return row;
     }
     private InstanceContentRowViewModel[] Rows() => ContentEntries.Select(Row).ToArray();
@@ -57,19 +58,20 @@ public sealed partial class InstancesPageViewModel
     {
         get
         {
-            var rows = Rows().Where(r => (ContentSearchText.Trim().Length == 0 || (r.Title + " " + r.Entry.Name + " " + r.Entry.VersionLabel + " " + r.Description).Contains(ContentSearchText.Trim(), StringComparison.OrdinalIgnoreCase)) &&
-                (!IsModsSection || contentFilter switch { "可更新" => r.HasUpdate, "启用" => r.Entry.Enabled, "禁用" => !r.Entry.Enabled, "错误" => r.HasError, "重复" => r.Duplicate, _ => true }));
+            var rows = Rows().Where(r => (ContentSearchText.Trim().Length == 0 || (r.Title + " " + r.Entry.Name + " " + r.Entry.VersionLabel + " " + r.Description + " " + r.SearchTags).Contains(ContentSearchText.Trim(), StringComparison.OrdinalIgnoreCase)) &&
+                (contentFilter switch { "可更新" => r.HasUpdate, "启用" => r.Entry.Enabled, "禁用" => !r.Entry.Enabled, "错误" => r.HasError, "重复" => r.Duplicate, _ => true }));
             return (ContentSort switch { "文件名" => rows.OrderBy(r => r.Name, StringComparer.CurrentCultureIgnoreCase), "添加时间" => rows.OrderByDescending(r => r.Entry.Created ?? r.Entry.Modified), "文件大小" => rows.OrderByDescending(r => r.Entry.Bytes), "标签数量" => rows.OrderByDescending(r => r.Project?.Categories?.Count ?? 0), _ => rows.OrderBy(r => r.Title, StringComparer.CurrentCultureIgnoreCase) }).ToArray();
         }
     }
     private void NotifyContentFilter()
     {
         OnPropertyChanged(nameof(FilteredContentEntries)); OnPropertyChanged(nameof(FilteredContentRows)); OnPropertyChanged(nameof(IsContentEmpty)); OnPropertyChanged(nameof(ContentEmptyTitle));
-        var rows = Rows();
+        var rows = Rows().Where(r => ContentSearchText.Trim().Length == 0 || (r.Title + " " + r.Name + " " + r.Version + " " + r.Description + " " + r.SearchTags).Contains(ContentSearchText.Trim(), StringComparison.OrdinalIgnoreCase)).ToArray();
         foreach (var filter in ModFilters)
         {
             var count = filter.Key switch { "可更新" => rows.Count(r => r.HasUpdate), "启用" => rows.Count(r => r.Entry.Enabled), "禁用" => rows.Count(r => !r.Entry.Enabled), "错误" => rows.Count(r => r.HasError), "重复" => rows.Count(r => r.Duplicate), _ => rows.Length };
             filter.Title = Localization.UiLocalization.Instance.Format("{0}（{1}）", Localization.UiLocalization.Instance.Text(filter.Key), count); filter.Active = contentFilter == filter.Key;
+            filter.Shown = filter.Active || filter.Key == "全部" || (filter.Key switch { "启用" => IsModsSection && count > 0 && count < rows.Length, "禁用" or "可更新" or "错误" or "重复" => count > 0, _ => false });
         }
     }
     public RelayCommand DownloadInstanceResourcesCommand { get; private set; } = null!;
@@ -97,12 +99,12 @@ public sealed partial class InstancesPageViewModel
         CheckModUpdatesCommand = AsyncCommand(() => CheckModUpdatesAsync(false), () => CanEdit && !IsModScanBusy && IsModsSection && SelectedInstance is not null && Service is IInstanceModUpdateService);
         CancelModScanCommand = Command(() => { StopModScan(); ModUpdateStatus = "检查已取消，未修改模组文件。"; }, () => IsModScanBusy);
         ApplyModUpdateCommand = AsyncCommand(() => { RequestModUpdate(SelectedModUpdate is { } u ? [u] : []); return Task.CompletedTask; }, () => CanManageMods && SelectedModUpdate is not null);
-        SelectAllModsCommand = Command(() => { var visible = FilteredContentRows; var value = visible.Any(r => !r.Selected); foreach (var row in visible) row.Selected = value; }, () => IsModsSection);
+        SelectAllModsCommand = Command(() => { var visible = FilteredContentRows; var value = visible.Any(r => !r.Selected); foreach (var row in visible) row.Selected = value; }, () => IsContentList);
         ClearModSelectionCommand = Command(() => { foreach (var row in Rows()) row.Selected = false; }, () => HasModSelection);
         UpdateSelectedModsCommand = Command(() => RequestModUpdate(Rows().Where(r => r.Selected && r.Update is not null).Select(r => r.Update!).ToArray()), () => CanManageMods && Rows().Any(r => r.Selected && r.HasUpdate));
         EnableSelectedModsCommand = AsyncCommand(() => ToggleSelectedModsAsync(true), () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);
         DisableSelectedModsCommand = AsyncCommand(() => ToggleSelectedModsAsync(false), () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);
-        TrashSelectedModsCommand = Command(() => { pendingModUpdates = []; pendingModPaths = Rows().Where(r => r.Selected).Select(r => r.Entry.RelativePath).ToArray(); ModActionSummary = Localization.UiLocalization.Instance.Text("将所选模组移到实例回收站？") + "\n" + string.Join("\n", pendingModPaths); OnPropertyChanged(nameof(ModActionCaption)); NotifyModActions(); }, () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);
+        TrashSelectedModsCommand = Command(() => RequestModTrash(Rows().Where(r => r.Selected).Select(r => r.Entry.RelativePath).ToArray()), () => CanManageMods && HasModSelection && Service is IInstanceModManagementService);
         ConfirmModActionCommand = AsyncCommand(ConfirmModActionAsync, () => CanManageMods && HasModAction);
         CancelModActionCommand = Command(() => { ModActionSummary = ""; pendingModUpdates = []; }, () => HasModAction);
         CloseModDetailsCommand = Command(() => ModDetail = "");
@@ -113,7 +115,7 @@ public sealed partial class InstancesPageViewModel
     }
     private void NotifyModActions()
     {
-        OnPropertyChanged(nameof(HasModSelection)); OnPropertyChanged(nameof(ModSelectionSummary)); OnPropertyChanged(nameof(CanManageMods)); if (_workspaceReady && !_workspaceDisposed) NotifyCommands();
+        OnPropertyChanged(nameof(HasModSelection)); OnPropertyChanged(nameof(HasSelectedMods)); OnPropertyChanged(nameof(ResourceListBottomMargin)); OnPropertyChanged(nameof(ModSelectionSummary)); OnPropertyChanged(nameof(CanManageMods)); OnPropertyChanged(nameof(CanTrashMods)); if (_workspaceReady && !_workspaceDisposed) NotifyCommands();
     }
     internal void StopModScan() { ++modCheckGeneration; modScanCancellation?.Cancel(); IsModScanBusy = false; }
     private async Task StopModScanAsync()
@@ -132,16 +134,18 @@ public sealed partial class InstancesPageViewModel
     {
         ClearModRelations();
         StopModScan(); ModUpdates.Clear(); SelectedModUpdate = null; ModUpdateStatus = ""; contentRows.Clear(); contentFilter = "全部";
-        ModDetail = ""; ModActionSummary = ""; pendingModUpdates = []; OnPropertyChanged(nameof(HasModUpdates));
+        ModDetail = ""; ModActionSummary = ""; pendingModUpdates = []; OnPropertyChanged(nameof(HasModUpdates)); NotifyModActions();
     }
     internal void ModWorkspaceNavigationChanged()
     {
         if (!ReferenceEquals(Owner.SelectedPage, this)) { StopModScan(); StopModRelations(); }
-        else if (IsModsSection) { _pendingContentRefresh = true; ScheduleContentRefresh(); }
+        else if (IsContentList) { _pendingContentRefresh = true; ScheduleContentRefresh(); }
         else if (IsRelationsSection) ScheduleModRelations();
     }
     private void StartAutoModScan()
     {
+        if (!_workspaceDisposed && ReferenceEquals(Owner.SelectedPage, this) && IsResourceBrowserSection && !IsModsSection && Service is IInstanceContentMetadataService && !IsModScanBusy)
+        { modReads.RemoveAll(t => t.IsCompleted); modReads.Add(ReadResourceMetadataAsync()); return; }
         if (_workspaceDisposed || !ReferenceEquals(Owner.SelectedPage, this) || !IsModsSection || !Owner.IsFeatureVisible("mod-updates") || Service is not IInstanceModUpdateService || IsModScanBusy) return;
         modReads.RemoveAll(t => t.IsCompleted);
         modReads.Add(CheckModUpdatesAsync(true));
@@ -206,7 +210,7 @@ public sealed partial class InstancesPageViewModel
     public string ExportContentInformation(bool csv)
     {
         static string Quote(string text) => "\"" + text.Replace("\"", "\"\"") + "\"";
-        var rows = FilteredContentRows;
+        IReadOnlyList<InstanceContentRowViewModel> rows = HasModSelection ? Rows().Where(r => r.Selected).ToArray() : FilteredContentRows;
         return csv ? "Name,Version,File,State\n" + string.Join("\n", rows.Select(r => string.Join(",", new[] { r.Title, r.Entry.VersionLabel, r.Name, r.StateText }.Select(Quote))))
             : string.Join("\n\n", rows.Select(r => r.Detail));
     }

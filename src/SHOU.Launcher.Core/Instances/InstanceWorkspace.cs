@@ -27,11 +27,12 @@ public static class InstanceWorkspace
             var file = SafePath.Within(folder, item.Name);
             var relative = kind switch { "worlds" => "saves/", "shaders" => "shaderpacks/", _ => kind + "/" } + item.Name;
             var metadata = kind == "mods" ? ModArchiveMetadata.Read(file, iconBytes < 16 * 1024 * 1024) : null;
-            iconBytes += metadata?.Icon?.Length ?? 0;
+            var resource = kind is "resourcepacks" or "shaders" ? ResourceArchiveMetadata.Read(file, iconBytes < 16 * 1024 * 1024, ct) : null;
+            iconBytes += metadata?.Icon?.Length ?? resource?.Icon?.Length ?? 0;
             entries.Add(new(item.Name, relative, file, kind, directory ? 0 : ((FileInfo)item).Length,
                 item.LastWriteTimeUtc, !item.Name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) && !item.Name.EndsWith(".old", StringComparison.OrdinalIgnoreCase), directory,
-                metadata?.Name, metadata?.Version, metadata?.Icon, metadata?.Id, metadata?.Description,
-                metadata?.Dependencies, metadata?.Embedded, metadata?.Error, item.CreationTimeUtc));
+                metadata?.Name ?? resource?.Name, metadata?.Version, metadata?.Icon ?? resource?.Icon, metadata?.Id, metadata?.Description ?? resource?.Description,
+                metadata?.Dependencies, metadata?.Embedded, metadata?.Error ?? resource?.Error, item.CreationTimeUtc));
         }
         return entries;
     }
