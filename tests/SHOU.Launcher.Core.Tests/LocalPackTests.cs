@@ -276,12 +276,14 @@ public sealed partial class LocalPackTests
     public async Task LargeClientPackKeepsGameScriptsAndPresetsAndItsManifestRemainsReadable()
     {
         var gameFiles = new[] { "kubejs/server_scripts/recipes.js", "scripts/recipes.zs", "datapacks/ftb/data/ftb/function/start.mcfunction",
-            "ftbteambases/pregen_initial/region/r.0.0.mca", "configureddefaults/config/options.json", "schematics/base.nbt", "default-server.properties" };
+            "ftbteambases/pregen_initial/region/r.0.0.mca", "configureddefaults/config/options.json", "schematics/base.nbt", "default-server.properties",
+            "resources/mainmenu/rlcraft_logo.png", "resources/mainmenu/images/background.jpg", "structures/active/tower.rcst" };
         var payload = Enumerable.Range(0, 6500).Select(i => ($"overrides/config/fixture-{i}.json", "{}"))
             .Concat(gameFiles.Select(p => ("overrides/" + p, "fixture-game-data")))
-            .Concat(new[] { ("overrides/kubejs/execute.sh", "no"), ("overrides/config/run.js", "no"), ("overrides/launcher_accounts.json", "no"), ("overrides/saves/user/level.dat", "no") }).ToArray();
+            .Concat(new[] { ("overrides/kubejs/execute.sh", "no"), ("overrides/config/run.js", "no"), ("overrides/launcher_accounts.json", "no"), ("overrides/saves/user/level.dat", "no"),
+                ("overrides/resources/execute.command", "no"), ("overrides/resources/run.js", "no"), ("overrides/structures/plugin.dylib", "no") }).ToArray();
         var path = Archive(Manifest(), payload); var archive = new LocalPackArchive(); var read = await archive.ReadAsync(path);
-        Assert.AreEqual(6500 + gameFiles.Length, read.OverrideEntries.Count); Assert.AreEqual(4, read.Inspection.SkippedFiles);
+        Assert.AreEqual(6500 + gameFiles.Length, read.OverrideEntries.Count); Assert.AreEqual(7, read.Inspection.SkippedFiles);
         var stage = Path.Combine(TestFiles.Root(), "stage");
         await archive.StageCurseForgeAsync(path, read.Inspection.ArchiveSha256, stage, [], (_, _, _) => throw new AssertFailedException("No remote files in this fixture."));
         foreach (var file in gameFiles) Assert.AreEqual("fixture-game-data", await File.ReadAllTextAsync(Path.Combine(stage, file)));

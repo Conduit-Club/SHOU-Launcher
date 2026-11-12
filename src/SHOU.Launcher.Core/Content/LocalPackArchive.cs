@@ -132,7 +132,8 @@ public sealed class LocalPackArchive
     {
         ModrinthPackArchive.SafeRelative(path); var root = path.Split('/')[0];
         if (path is "options.txt" or "icon.png" or "pack.png" or "default-server.properties") return true;
-        if (root is not ("mods" or "resourcepacks" or "shaderpacks" or "config" or "defaultconfigs" or "configureddefaults" or "kubejs" or "scripts" or "datapacks" or "ftbteambases" or "schematics") || !path.Contains('/')) return false;
+        // Resource Loader assets and Recurrent Complex structures are required game data in packs such as RLCraft.
+        if (root is not ("mods" or "resourcepacks" or "shaderpacks" or "config" or "defaultconfigs" or "configureddefaults" or "kubejs" or "scripts" or "datapacks" or "ftbteambases" or "schematics" or "resources" or "structures") || !path.Contains('/')) return false;
         var extension = Path.GetExtension(path).ToLowerInvariant();
         if (extension == ".js") return root is "kubejs" or "scripts";
         return extension is not (".exe" or ".com" or ".bat" or ".cmd" or ".ps1" or ".sh" or ".command" or ".dll" or ".so" or ".dylib" or ".vbs");
