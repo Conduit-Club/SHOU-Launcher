@@ -49,6 +49,24 @@ public sealed class ResourceListPresentationTests
         finally { w.Close(); }
     }
     [AvaloniaFact]
+    public async Task PackAndShaderCategoryLabelsUseTheSelectedLanguageAndKeepRawSearchTags()
+    {
+        using var root = Open(new MetadataService { Categories = ["colored-lighting", "vanilla-like", "potato"] }, "resourcepacks");
+        await Wait(() => root.Instances.FilteredContentRows.Any(r => r.Project is not null) && !root.Instances.IsModScanBusy);
+        var row = root.Instances.FilteredContentRows.Single(r => r.Entry.RelativePath == "resourcepacks/file0.zip");
+        try
+        {
+            foreach (var language in new[] { "zh-CN", "zh-TW", "en-US" })
+            {
+                SHOU.Launcher.Desktop.Localization.UiLocalization.Instance.SetLanguage(language);
+                Assert.Contains(language == "zh-CN" ? "彩色光照" : language == "zh-TW" ? "彩色光照" : "Colored lighting", row.Tags);
+                Assert.Contains(language == "zh-CN" ? "原版风" : language == "zh-TW" ? "原版風" : "Vanilla-like", row.Tags);
+                Assert.Contains("colored-lighting", row.SearchTags);
+            }
+        }
+        finally { SHOU.Launcher.Desktop.Localization.UiLocalization.Instance.SetLanguage("zh-CN"); }
+    }
+    [AvaloniaFact]
     public async Task SearchIncludesOnlineTagsAndSelectedExportUsesTheActualSelection()
     {
         using var root = Open(new Service(), "mods"); var vm = root.Instances; await Wait(() => vm.ModUpdates.Count == 1 && !vm.IsModScanBusy);
@@ -137,11 +155,12 @@ public sealed class ResourceListPresentationTests
     }
     private sealed class MetadataService : Service, IInstanceContentMetadataService
     {
+        public string[] Categories = ["optimization"];
         public TaskCompletionSource? Gate; public int MetadataReads; public CancellationToken ReadToken;
         public async Task<InstanceContentInfoCheck> ReadInstanceContentMetadataAsync(string id, string kind, CancellationToken ct = default)
         {
             MetadataReads++; ReadToken = ct; if (Gate is not null) await Gate.Task;
-            return kind == "resourcepacks" ? new([new("resourcepacks/file0.zip", new("p", "p", "Verified pack", "Local description", "Author", 1, "resourcepack", null, new Uri("https://modrinth.com/resourcepack/p"), Categories: ["optimization"]), "2.1")], []) : new([], []);
+            return kind == "resourcepacks" ? new([new("resourcepacks/file0.zip", new("p", "p", "Verified pack", "Local description", "Author", 1, "resourcepack", null, new Uri("https://modrinth.com/resourcepack/p"), Categories: Categories), "2.1")], []) : new([], []);
         }
     }
 }

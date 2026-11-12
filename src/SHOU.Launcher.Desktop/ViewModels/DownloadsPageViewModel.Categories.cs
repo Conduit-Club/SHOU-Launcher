@@ -47,6 +47,10 @@ public sealed partial class DownloadsPageViewModel
         "optimization" => "性能优化", "library" => "支持库", "adventure" => "冒险", "decoration" => "装饰",
         "worldgen" => "世界生成", "technology" => "科技", "magic" => "魔法", "utility" => "实用", "management" => "管理",
         "storage" => "存储", "mobs" => "生物", "equipment" => "装备", "transportation" => "交通", "food" => "食物",
-        "game-mechanics" => "游戏机制", "social" => "社交", _ => id
+        "game-mechanics" => "游戏机制", "social" => "社交",
+        "vanilla-like" => "原版风", "modded" => "兼容模组", "locale" => "含语言", "cursed" => "奇趣",
+        "colored-lighting" => "彩色光照", "fantasy" => "幻想风", "semi-realistic" => "半写实", "realistic" => "写实",
+        "potato" => "极低配", "low" => "低配", "medium" => "中配", "high" => "高配", "ultra" => "高画质",
+        "bloom" => "泛光", "cartoon" => "卡通风", "shadows" => "阴影", _ => id
     };
 }
