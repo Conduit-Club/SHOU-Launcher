@@ -6,7 +6,8 @@ using SHOU.Launcher.Core.IO;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
-public sealed record FavoriteFolder(string Id, string Name, string[] Projects);
+public sealed record FavoriteFolder(string Id, string Name, string[] Projects)
+{ public override string ToString() => Name; }
 public sealed record FavoriteDocument(int Version, ContentProject[] Projects, FavoriteFolder[] Folders);
 public sealed partial class DownloadsPageViewModel
 {
@@ -19,7 +20,8 @@ public sealed partial class DownloadsPageViewModel
     public string FavoriteShareCode { get => favoriteShareCode; set => SetProperty(ref favoriteShareCode, value ?? ""); }
     public string FavoriteQuery { get => favoriteQuery; set { if (SetProperty(ref favoriteQuery, value ?? "")) NotifyFavoriteFilter(); } }
     public IReadOnlyList<ContentProjectRowViewModel> FilteredFavoriteProjects => FavoriteProjects.Where(p => (SelectedFavoriteFolder?.Projects.Contains(p.Project.Id) ?? true) && string.Join(" ", p.Project.Title, p.Project.Slug, p.Project.Author, p.Project.Description, p.Project.Kind, p.Project.Source).Contains(FavoriteQuery.Trim(), StringComparison.OrdinalIgnoreCase)).ToArray();
-    public bool HasNoFavoriteMatches => FilteredFavoriteProjects.Count == 0;
+    public bool IsFavoriteFolderEmpty => !FavoriteProjects.Any(p => SelectedFavoriteFolder?.Projects.Contains(p.Project.Id) ?? true);
+    public bool HasNoFavoriteMatches => !IsFavoriteFolderEmpty && FavoriteQuery.Trim().Length > 0 && FilteredFavoriteProjects.Count == 0;
     public AsyncRelayCommand CreateFavoriteFolderCommand { get; private set; } = null!;
     public AsyncRelayCommand RenameFavoriteFolderCommand { get; private set; } = null!;
     public AsyncRelayCommand DeleteFavoriteFolderCommand { get; private set; } = null!;
@@ -37,7 +39,7 @@ public sealed partial class DownloadsPageViewModel
         SelectAllFavoritesCommand = new(() => { var rows = FilteredFavoriteProjects; var select = rows.Any(r => !r.IsSelected); foreach (var row in rows) row.IsSelected = select; });
     }
     private string FolderName() => string.IsNullOrWhiteSpace(FavoriteFolderName) ? Localization.UiLocalization.Instance.Text("新收藏夹") : FavoriteFolderName.Trim();
-    private void NotifyFavoriteFilter() { OnPropertyChanged(nameof(FilteredFavoriteProjects)); OnPropertyChanged(nameof(HasNoFavoriteMatches)); }
+    private void NotifyFavoriteFilter() { OnPropertyChanged(nameof(FilteredFavoriteProjects)); OnPropertyChanged(nameof(HasNoFavoriteMatches)); OnPropertyChanged(nameof(IsFavoriteFolderEmpty)); }
     private void LoadFavorites()
     {
         try

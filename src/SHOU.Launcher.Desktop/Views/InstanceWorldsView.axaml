@@ -105,7 +105,7 @@
             <TextBlock Name="ServerListStatusText" Text="{Binding ServerListStatus}" Classes="worldHint" />
             <Button Name="RefreshInstanceServerStatusButton" Content="{loc:Loc tf06fb3f71f88681b}" Command="{Binding RefreshInstanceServerStatusCommand}" HorizontalAlignment="Left"/>
             <ListBox Name="InstanceServerList" Classes="worldFiles" ItemsSource="{Binding InstanceServerRows}" SelectedItem="{Binding SelectedInstanceServer}">
-              <ListBox.ItemTemplate><DataTemplate><Border Classes="card" Padding="10,8" Margin="0,3"><Grid ColumnDefinitions="44,*,Auto" ColumnSpacing="8"><Grid.ContextMenu><ContextMenu><MenuItem Header="{loc:Loc t4c6de01bbe86b3d8}" Click="CopyInstanceServerAddress_Click"/></ContextMenu></Grid.ContextMenu>
+              <ListBox.ItemTemplate><DataTemplate><Border Classes="card" Padding="10,8" Margin="0,3"><Border.ContextMenu><ContextMenu><MenuItem Header="{loc:Loc t4c6de01bbe86b3d8}" Click="CopyInstanceServerAddress_Click"/></ContextMenu></Border.ContextMenu><Grid ColumnDefinitions="44,*,Auto" ColumnSpacing="8">
                 <Grid Width="40" Height="40"><Image Source="{Binding StatusIcon}" IsVisible="{Binding HasStatusIcon}"/><views:ClubIcon Kind="server" Width="26" Height="26" IsVisible="{Binding !HasStatusIcon}"/></Grid>
                 <StackPanel Grid.Column="1" Spacing="3"><TextBlock Text="{Binding Name}"/><TextBlock Text="{Binding Address}" Classes="worldHint"/><TextBlock Text="{Binding Motd}" IsVisible="{Binding HasMotd}" TextTrimming="CharacterEllipsis" MaxLines="2"/><TextBlock Text="{Binding StatusSummary}" Classes="worldHint"/></StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">

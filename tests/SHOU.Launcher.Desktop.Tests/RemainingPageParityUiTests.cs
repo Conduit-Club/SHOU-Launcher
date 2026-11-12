@@ -22,7 +22,7 @@ public sealed class RemainingPageParityUiTests
         using (var vm = new DownloadsPageViewModel(root, service, path))
         {
             Assert.Single(vm.FavoriteFolders); Assert.Equal(new[] { "42" }, JsonSerializer.Deserialize<string[]>(vm.GetFavoriteShareCode()));
-            vm.FavoriteFolderName = "Shaders"; await vm.CreateFavoriteFolderCommand.ExecuteAsync(null); Assert.Equal("Shaders", vm.SelectedFavoriteFolder!.Name); Assert.Empty(vm.FilteredFavoriteProjects);
+            vm.FavoriteFolderName = "Shaders"; await vm.CreateFavoriteFolderCommand.ExecuteAsync(null); Assert.Equal("Shaders", vm.SelectedFavoriteFolder!.Name); Assert.Empty(vm.FilteredFavoriteProjects); Assert.True(vm.IsFavoriteFolderEmpty); Assert.False(vm.HasNoFavoriteMatches); Assert.Equal("Shaders", vm.SelectedFavoriteFolder.ToString());
             await vm.OpenProjectAsync(first); Assert.False(vm.IsProjectFavorite); await vm.ToggleFavoriteCommand.ExecuteAsync(null); Assert.Single(vm.FavoriteProjects); Assert.Single(vm.FilteredFavoriteProjects);
             vm.FavoriteShareCode = "[\"AANobbMI\",\"missing\"]"; await vm.ImportFavoriteShareCommand.ExecuteAsync(null); Assert.Equal(2, vm.FilteredFavoriteProjects.Count); Assert.Contains("missing", vm.FavoriteStatus);
             vm.FavoriteQuery = "Sodium"; Assert.Single(vm.FilteredFavoriteProjects); vm.SelectAllFavoritesCommand.Execute(null); Assert.Equal(new[] { "AANobbMI" }, JsonSerializer.Deserialize<string[]>(vm.GetFavoriteShareCode()));

@@ -1,4 +1,7 @@
+using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Headless;
+using Avalonia.Input;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
@@ -27,6 +30,10 @@ public sealed class InterfaceParityFollowupTests
         {
             var copy = window.GetVisualDescendants().OfType<Button>().Single(b => b.Name == "CopyInstanceServerAddressButton"); copy.RaiseEvent(new RoutedEventArgs(Button.ClickEvent));
             Assert.Equal(row.Address, await window.Clipboard!.TryGetTextAsync()); await window.Clipboard!.ClearAsync();
+            var target = copy.GetVisualAncestors().OfType<Control>().Single(g => g.ContextMenu is not null);
+            var point = target.TranslatePoint(new Point(100, 20), window)!.Value; window.MouseMove(point); window.MouseDown(point, MouseButton.Right); window.MouseUp(point, MouseButton.Right); Dispatcher.UIThread.RunJobs();
+            var menu = target.ContextMenu!; Assert.True(menu.IsOpen); var item = menu.Items.OfType<MenuItem>().Single(); Assert.Same(row, item.DataContext); item.RaiseEvent(new RoutedEventArgs(MenuItem.ClickEvent));
+            Assert.Equal(row.Address, await window.Clipboard!.TryGetTextAsync()); menu.Close(); await window.Clipboard!.ClearAsync();
         }
         finally { window.Close(); }
         service.Gate = new(TaskCreationOptions.RunContinuationsAsynchronously); var read = vm.RefreshInstanceServerStatusCommand.ExecuteAsync(null); await Wait(() => service.QueryCalls == 3);

@@ -78,7 +78,7 @@
       </Button>
     </DataTemplate>
     <DataTemplate x:Key="ContentProjectTemplate">
-      <Button Classes="flat contentProjectRow" Command="{Binding OpenCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="5,6" MinHeight="64" ToolTip.Tip="{Binding Detail}">
+      <Button Classes="flat contentProjectRow" AutomationProperties.Name="{Binding Title}" Command="{Binding OpenCommand}" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch" Padding="5,6" MinHeight="64" ToolTip.Tip="{Binding Detail}">
         <Grid ColumnDefinitions="52,*">
           <Border Width="42" Height="42" CornerRadius="5" Background="{DynamicResource ClubSelection}" ClipToBounds="True" VerticalAlignment="Center"><Grid><TextBlock Text="{Binding Tile}" FontSize="22" Foreground="{DynamicResource ClubSelectionForeground}" HorizontalAlignment="Center" VerticalAlignment="Center" IsVisible="{Binding !HasIcon}"/><Image Source="{Binding Icon}" Stretch="Uniform" IsVisible="{Binding HasIcon}"/></Grid></Border>
           <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
@@ -207,6 +207,7 @@
             <TextBlock Text="{Binding FavoriteStatus}" Classes="muted" TextWrapping="Wrap"/>
             <TextBox Name="FavoriteSearchQuery" Text="{Binding FavoriteQuery}" PlaceholderText="{loc:Loc t728b49f9cdb72476}"/>
             <WrapPanel><Button Content="{loc:Loc t9f4c783b28cc94e0}" Command="{Binding SelectAllFavoritesCommand}" Margin="0,0,8,0"/><Button Content="{loc:Loc t1113af786ccfd852}" Command="{Binding RemoveSelectedFavoritesCommand}"/></WrapPanel>
+            <TextBlock Name="EmptyFavoriteFolder" IsVisible="{Binding IsFavoriteFolderEmpty}" Text="{loc:Loc t69575bb70908edff}" Classes="muted"/>
             <TextBlock Name="NoFavoriteMatches" IsVisible="{Binding HasNoFavoriteMatches}" Text="{loc:Loc t0d6324caf8aa6c05}" Classes="muted"/>
             <ItemsControl Name="FavoriteResources" ItemsSource="{Binding FilteredFavoriteProjects}"><ItemsControl.ItemTemplate><DataTemplate><Grid ColumnDefinitions="Auto,*"><CheckBox IsChecked="{Binding IsSelected}" VerticalAlignment="Center" AutomationProperties.Name="{Binding Title}" Margin="0,0,8,0"/><ContentControl Grid.Column="1" Content="{Binding}" ContentTemplate="{StaticResource ContentProjectTemplate}" HorizontalContentAlignment="Stretch"/></Grid></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
           </StackPanel></Border>
