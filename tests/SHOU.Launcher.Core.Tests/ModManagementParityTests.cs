@@ -157,7 +157,7 @@ public sealed class ModManagementParityTests
         var instance = new GameInstance("fixture", "Fixture", "1.21.1", game, Loader: "fabric", GameVersionId: "1.21.1");
         await using (var store = new ConfigurationStore(platform.Paths)) await store.SaveAsync(new(new(), [instance], []));
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions()); await service.InitializeAsync();
-        var first = await service.CheckInstanceModUpdatesAsync(instance.Id); Assert.HasCount(1, first.Updates); Assert.AreEqual("Online title", first.OnlineInfo!.Single().Project.Title); Assert.HasCount(2, first.OnlineInfo.Single().Project.Categories!); var before = calls;
+        var first = await service.CheckInstanceModUpdatesAsync(instance.Id); Assert.HasCount(1, first.Updates); Assert.IsNotNull(first.OnlineInfo); Assert.AreEqual("Online title", first.OnlineInfo.Single().Project.Title); Assert.HasCount(2, first.OnlineInfo.Single().Project.Categories!); var before = calls;
         var second = await service.CheckInstanceModUpdatesAsync(instance.Id); Assert.HasCount(1, second.Updates); Assert.AreEqual(before, calls); Assert.AreNotEqual(first.Updates[0].Token, second.Updates[0].Token);
         var forced = await service.RefreshInstanceModUpdatesAsync(instance.Id); Assert.HasCount(1, forced.Updates); Assert.IsTrue(calls > before); before = calls;
         await File.WriteAllTextAsync(Path.Combine(game, "mods/fixture.jar"), "changed"); var third = await service.CheckInstanceModUpdatesAsync(instance.Id); Assert.HasCount(0, third.Updates); Assert.IsTrue(calls > before); Assert.AreEqual(3, batches);

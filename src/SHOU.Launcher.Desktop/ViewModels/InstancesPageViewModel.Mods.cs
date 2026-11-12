@@ -119,20 +119,26 @@ public sealed partial class InstancesPageViewModel
     private async Task StopModScanAsync()
     {
         StopModScan();
+        StopModRelations();
         // In particular on Windows, allow all cancelled readers to close their JAR handles before a move.
         var readers = modReads.Where(t => !t.IsCompleted).ToArray();
         if (readers.Length > 0) await Task.WhenAll(readers);
+        var relationTasks = relationReads.Append(RefreshModRelationsCommand?.ExecutionTask ?? Task.CompletedTask).Where(t => !t.IsCompleted).ToArray();
+        if (relationTasks.Length > 0) await Task.WhenAll(relationTasks);
+        relationReads.RemoveAll(t => t.IsCompleted);
         modReads.RemoveAll(t => t.IsCompleted);
     }
     private void ClearModUpdates()
     {
+        ClearModRelations();
         StopModScan(); ModUpdates.Clear(); SelectedModUpdate = null; ModUpdateStatus = ""; contentRows.Clear(); contentFilter = "全部";
         ModDetail = ""; ModActionSummary = ""; pendingModUpdates = []; OnPropertyChanged(nameof(HasModUpdates));
     }
     internal void ModWorkspaceNavigationChanged()
     {
-        if (!ReferenceEquals(Owner.SelectedPage, this)) StopModScan();
+        if (!ReferenceEquals(Owner.SelectedPage, this)) { StopModScan(); StopModRelations(); }
         else if (IsModsSection) { _pendingContentRefresh = true; ScheduleContentRefresh(); }
+        else if (IsRelationsSection) ScheduleModRelations();
     }
     private void StartAutoModScan()
     {
@@ -184,6 +190,7 @@ public sealed partial class InstancesPageViewModel
     }
     private void DiagnoseMods()
     {
+        if (Service is IInstanceModRelationsService) { SelectedSection = Sections.Single(s => s.Key == "relations"); return; }
         MarkDuplicateMods(); NotifyContentFilter();
         var rows = Rows(); var ids = rows.Where(r => r.Entry.Enabled && r.Entry.ModId is not null).Select(r => r.Entry.ModId!).ToHashSet(StringComparer.OrdinalIgnoreCase);
         ids.UnionWith(["minecraft", "java", "forge", "neoforge", "fabricloader", "quilt_loader", "liteloader"]);

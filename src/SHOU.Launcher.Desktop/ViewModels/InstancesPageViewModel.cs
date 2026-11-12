@@ -61,6 +61,7 @@ public sealed partial class InstancesPageViewModel : PageViewModel
             if (!_refreshing && !Owner.CanMutate) { OnPropertyChanged(nameof(SelectedInstance)); return; }
             if (!SetProperty(ref _selectedInstance, value)) return;
             ClearModUpdates();
+            ScheduleModRelations();
             OnPropertyChanged(nameof(InstanceSummary));
             OnPropertyChanged(nameof(LaunchPrerequisite));
             NotifyCommands();

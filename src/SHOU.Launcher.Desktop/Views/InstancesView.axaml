@@ -173,6 +173,23 @@
               <StackPanel Grid.Column="4" Orientation="Horizontal" Spacing="5" VerticalAlignment="Center" Margin="8,0,0,0"><Button Name="ModRowUpdate" Content="{loc:Loc t3055a035f0eb7a8b}" IsVisible="{Binding HasUpdate}" Command="{Binding UpdateCommand}" IsEnabled="{Binding #InstancePage.DataContext.CanManageMods}"/><Button Content="{loc:Loc t979a332955c855bf}" Command="{Binding DetailsCommand}"/></StackPanel>
             </Grid></DataTemplate></ListBox.ItemTemplate></ListBox>
           </StackPanel>
+          <StackPanel Name="ModRelationsWorkspace" IsVisible="{Binding IsRelationsSection}" Spacing="10">
+            <WrapPanel><Button Name="BackToModListButton" Content="{loc:Loc t4d91f7765d314387}" Command="{Binding BackToModsCommand}" Margin="0,0,8,0"/><Button Name="RefreshModRelationsButton" Content="{loc:Loc tdf7392cc96bedc51}" Command="{Binding RefreshModRelationsCommand}" Margin="0,0,8,0"/><Button Name="CancelModRelationsButton" Content="取消" Command="{Binding CancelModRelationsCommand}" IsVisible="{Binding IsModRelationsBusy}"/></WrapPanel>
+            <TextBlock Text="{loc:Loc t1b81f418a6111381}" Classes="muted" TextWrapping="Wrap"/>
+            <TextBox Name="ModRelationsSearch" Text="{Binding ModRelationSearch}" PlaceholderText="{loc:Loc t5d8e40ab8b8f94b5}"/>
+            <CheckBox Name="ModRelationsIssuesOnly" Content="{loc:Loc t89a97de8a0609e18}" IsChecked="{Binding ModRelationIssuesOnly}"/>
+            <TextBlock Name="ModRelationsSummary" Text="{Binding ModRelationSummary}" FontWeight="SemiBold"/>
+            <TextBlock Name="ModRelationsStatus" Text="{Binding ModRelationStatus}" Classes="muted" TextWrapping="Wrap"/>
+            <TextBlock Name="ModRelationsEmpty" Text="{loc:Loc t9c94bd277ebaa24f}" IsVisible="{Binding ModRelationsEmpty}" Classes="muted"/>
+            <ComboBox Name="ModRelationHostSelector" ItemsSource="{Binding FilteredModRelationHosts}" SelectedItem="{Binding SelectedModRelationHost}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><StackPanel><TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis"/><TextBlock Text="{Binding File}" Classes="muted" FontSize="11"/></StackPanel></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+            <Border IsVisible="{Binding HasSelectedModRelationHost}"><StackPanel DataContext="{Binding SelectedModRelationHost}" Spacing="10">
+              <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding File}" Classes="muted" TextTrimming="CharacterEllipsis"/><TextBlock Grid.Column="1" Text="{Binding State}" Foreground="{DynamicResource ClubAccent}" Margin="10,0,0,0"/></Grid>
+              <TextBlock Text="{loc:Loc t8459c09fb5eaedee}" Classes="sectionTitle" IsVisible="{Binding HasDependencies}"/>
+              <ItemsControl Name="ModDependencyDeclarations" ItemsSource="{Binding Dependencies}"><ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,0,0,1" Padding="0,8"><StackPanel Spacing="4"><TextBlock Text="{Binding Description}" TextWrapping="Wrap"/><TextBlock Text="{Binding Presence}" Foreground="{DynamicResource ClubAccent}"/><TextBlock Text="{Binding Providers}" IsVisible="{Binding HasProviders}" Classes="muted" FontSize="11" TextWrapping="Wrap"/></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+              <TextBlock Text="{loc:Loc t71c172084904b191}" Classes="sectionTitle"/>
+              <ItemsControl Name="ModDeclarationTree" ItemsSource="{Binding Nodes}"><ItemsControl.ItemTemplate><DataTemplate><Border BorderBrush="{DynamicResource ClubBorder}" BorderThickness="2,0,0,0" Padding="10,5" Margin="{Binding Indent}"><StackPanel Spacing="3"><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/><TextBlock Text="{Binding Ids}" Foreground="{DynamicResource ClubAccent}" TextWrapping="Wrap"/><TextBlock Text="{Binding Path}" Classes="muted" FontSize="11" TextWrapping="Wrap"/><TextBlock Text="{Binding Notices}" IsVisible="{Binding HasNotices}" Foreground="{DynamicResource ClubAccent}" TextWrapping="Wrap"/></StackPanel></Border></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+            </StackPanel></Border>
+          </StackPanel>
           <Border Classes="card" IsVisible="{Binding IsOtherSection}"><StackPanel Spacing="10"><TextBlock Text="{Binding SectionTitle}" Classes="sectionTitle" ToolTip.Tip="{Binding CapabilityReason}"/><Button Content="{loc:Loc ta1ca2a6b2f93b4d6}" Command="{Binding OpenInstanceDirectoryCommand}"/></StackPanel></Border>
           <TextBlock Name="InstanceFeedback" IsVisible="{Binding HasFeedback}" Text="{loc:Translate Feedback}" TextWrapping="Wrap" Classes="muted"/>
         </StackPanel>

@@ -58,6 +58,7 @@ public sealed partial class InstancesPageViewModel
             _pendingContentRefresh = IsFileSection;
             ScheduleContentRefresh();
             ScheduleComponentRefresh();
+            ScheduleModRelations();
         }
     }
     public bool IsOverview => !IsSelection && SelectedSection?.Key == "overview";
@@ -65,7 +66,7 @@ public sealed partial class InstancesPageViewModel
     public bool IsModify => !IsSelection && SelectedSection?.Key == "modify";
     public bool IsExport => !IsSelection && SelectedSection?.Key == "export";
     public bool IsFileSection => !IsSelection && SelectedSection?.Key is "screenshots" or "mods" or "resourcepacks" or "shaders" or "schematics";
-    public bool IsOtherSection => !IsSelection && !IsOverview && !IsInstanceSettings && !IsModify && !IsExport && !IsFileSection && SelectedSection?.Key is not ("worlds" or "servers");
+    public bool IsOtherSection => !IsSelection && !IsOverview && !IsInstanceSettings && !IsModify && !IsExport && !IsFileSection && !IsRelationsSection && SelectedSection?.Key is not ("worlds" or "servers");
     public bool ModsUnsupported => SelectedSection?.Key == "mods" && SelectedInstance is { } instance && !InstanceIdentity.SupportsModDirectory(instance.Loader);
     public bool IsContentEmpty => IsContentList ? FilteredContentEntries.Count == 0 : ContentEntries.Count == 0;
     public bool CanImportContent => IsFileSection && SelectedSection.Key != "worlds" && !ModsUnsupported && CanEdit && !IsSelectedInstanceRunning && Service is IInstanceWorkspaceService;
@@ -74,7 +75,7 @@ public sealed partial class InstancesPageViewModel
     public string CapabilityReason => SelectedSection?.Key switch
     {
         "servers" => "服务器列表的 NBT 编辑与单实例连接仍待移植，可直接在游戏内管理；原文件保持。",
-        "relations" => "模组依赖关系的解析与图形视图仍待移植。",
+        "relations" => "只读展示独立与内嵌模组声明及依赖来源。",
         "modify" => "可重新校验原版、Fabric、Quilt、Forge 与 NeoForge。切换加载器请创建独立实例，保留当前文件。",
         _ when ModsUnsupported => "此实例尚未安装模组加载器，请先选择支持模组的实例。",
         _ => "列表来自当前实例目录。可打开文件夹，或导入支持的本机文件。"
@@ -127,6 +128,7 @@ public sealed partial class InstancesPageViewModel
         ExportInstanceCommand = AsyncCommand(ExportAsync, () => CanEdit && !IsSelectedInstanceRunning && SelectedInstance is not null && Service is IInstanceWorkspaceService);
         _workspaceReady = true;
         InitializeModManagement();
+        InitializeModRelations();
         InitializeExistingInstances();
     }
     private void ScheduleContentRefresh()
@@ -175,7 +177,7 @@ public sealed partial class InstancesPageViewModel
     }
     private void NotifyWorkspace()
     {
-        foreach (var name in new[] { nameof(ContextTitle), nameof(IsOverview), nameof(IsInstanceSettings), nameof(IsModify), nameof(IsExport), nameof(IsFileSection), nameof(IsOtherSection),
+        foreach (var name in new[] { nameof(ContextTitle), nameof(IsOverview), nameof(IsInstanceSettings), nameof(IsModify), nameof(IsExport), nameof(IsFileSection), nameof(IsOtherSection), nameof(IsRelationsSection),
                      nameof(SectionTitle), nameof(ContentEmptyTitle), nameof(CapabilityReason), nameof(ModsUnsupported), nameof(IsContentEmpty), nameof(CanImportContent), nameof(IsScreenshots), nameof(IsContentList), nameof(ScreenshotSummary), nameof(HasTruncatedScreenshots), nameof(IsModsSection), nameof(CanShowModUpdates), nameof(OpenContentFolderCaption), nameof(GameVersionLabel), nameof(HasModLoader), nameof(LoaderLabel), nameof(GameDirectorySummary) }) OnPropertyChanged(name);
         if (_workspaceReady) NotifyCommands();
     }
