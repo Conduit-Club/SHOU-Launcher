@@ -39,7 +39,7 @@ public static class InstanceWorkspace
     public static bool Accepts(string kind, string name)
     {
         var extension = Path.GetExtension(name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) ? name[..^9] : name.EndsWith(".old", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name).ToLowerInvariant();
-        return kind switch { "mods" => extension is ".jar" or ".litemod", "screenshots" => extension is ".png" or ".jpg" or ".jpeg",
+        return kind switch { "mods" => extension is ".jar" or ".litemod", "screenshots" => extension is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".webp" or ".tif" or ".tiff",
             "resourcepacks" or "shaders" => extension == ".zip", "schematics" => extension is ".litematic" or ".schematic" or ".schem" or ".nbt", _ => false };
     }
     public static async Task ImportAsync(GameInstance instance, string kind, string source, CancellationToken ct)

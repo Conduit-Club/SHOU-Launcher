@@ -18,6 +18,7 @@ public sealed partial class InstancesPageViewModel
     public RelayCommand OpenPackImportCommand { get; private set; } = null!;
     private void InitializePackExport()
     {
+        InitializeExportSelection();
         ExportCurseForgePackCommand = AsyncCommand(async () =>
         {
             var instance = SelectedInstance!; var paths = new List<string>();
@@ -27,7 +28,7 @@ public sealed partial class InstancesPageViewModel
             if (ExportPackLocalFiles) foreach (var path in new[] { "mods", "resourcepacks", "shaderpacks" }) Add(path);
             string? output = null;
             if (await Owner.RunAsync("导出 CurseForge 整合包", async ct => output = await ((ICurseForgeExportService)Service).ExportCurseForgePackAsync(instance.Id,
-                new(ExportPackName.Trim(), ExportPackVersion.Trim(), paths, ExportPackLocalFiles), ct))) Feedback = "已导出客户端整合包至 " + output;
+                new(ExportPackName.Trim(), ExportPackVersion.Trim(), MergeExportPaths(paths), ExportPackLocalFiles), ct))) Feedback = "已导出客户端整合包至 " + output;
         }, () => CanEdit && !IsSelectedInstanceRunning && SelectedInstance?.Loader is "vanilla" or "fabric" or "quilt" or "forge" or "neoforge" && Service is ICurseForgeExportService);
         OpenPackImportCommand = Command(() => { Owner.Downloads.SelectCategory("modpack"); Owner.SelectedPage = Owner.Downloads; }, () => CanEdit && Service is IModrinthPackService);
         ExportModrinthPackCommand = AsyncCommand(async () =>
@@ -41,11 +42,11 @@ public sealed partial class InstancesPageViewModel
         if (ExportPackConfig) AddExisting("config");
         if (ExportPackOptions) AddExisting("options.txt");
         if (ExportPackLocalFiles) foreach (var path in new[] { "mods", "resourcepacks", "shaderpacks" }) AddExisting(path);
-        var options = new ModrinthPackExportOptions(ExportPackName.Trim(), ExportPackVersion.Trim(), selected, ExportPackLocalFiles);
+        var options = new ModrinthPackExportOptions(ExportPackName.Trim(), ExportPackVersion.Trim(), MergeExportPaths(selected), ExportPackLocalFiles);
         string? output = null;
         if (await Owner.RunAsync("导出Modrinth整合包", async ct => output = await ((IModrinthPackService)Service).ExportModrinthPackAsync(instance.Id, options, ct)))
             Feedback = "已导出客户端整合包至 " + output;
-    }, () => CanEdit && (SelectedInstance?.Loader is "vanilla" or "fabric" or "quilt" or "forge" or "neoforge") && Service is IModrinthPackService);
+    }, () => CanEdit && !IsSelectedInstanceRunning && (SelectedInstance?.Loader is "vanilla" or "fabric" or "quilt" or "forge" or "neoforge") && Service is IModrinthPackService);
     }
     private void RefreshPackExport()
     {

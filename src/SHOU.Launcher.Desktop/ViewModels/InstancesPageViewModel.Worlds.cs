@@ -39,7 +39,6 @@ public sealed class InstanceDatapackRowViewModel(WorldDatapackFile file) : Obser
     public string Status => Details is { } data ? (data.Enabled switch { true => "已启用", false => "已禁用", _ => "未列入世界配置" }) + (data.PackFormat is { } format ? $" · 格式 {format}" : "") + " · " + data.Capability : File.Status;
 }
 
-public sealed record InstanceServerDraftViewModel(Guid DraftId, int? ExistingIndex, string Name, string Address);
 
 public sealed partial class InstancesPageViewModel
 {
@@ -177,12 +176,12 @@ public sealed partial class InstancesPageViewModel
         CancelInstanceServerEditorCommand = Command(() => { _worldDraft.EditorOpen = false; NotifyWorldPresentation(); });
         foreach (var command in new[] { RefreshWorldsCommand, RefreshInstanceServersCommand, RefreshWorldDatapacksCommand })
             command.PropertyChanged += (_, args) => { if (args.PropertyName == nameof(AsyncRelayCommand.IsRunning) && !command.IsRunning) ScheduleUnreadWorldSection(); };
-        _worldWorkspaceReady = true; InitializeWorldEditing(); InitializeWorldActions(); InitializeLocalWorldImport(); InitializeDatapackManagement(); NotifyWorldWorkspace();
+        InitializeServerStatus(); _worldWorkspaceReady = true; InitializeWorldEditing(); InitializeWorldActions(); InitializeLocalWorldImport(); InitializeDatapackManagement(); NotifyWorldWorkspace();
     }
     public void ActivateWorldWorkspace(string sectionKey)
     {
         if (!_worldWorkspaceReady) return;
-        _worldSectionKey = sectionKey; NotifyWorldWorkspace();
+        _worldSectionKey = sectionKey; NotifyWorldWorkspace(); ServerStatusNavigationChanged();
     }
     public void NotifyWorldWorkspace()
     {
@@ -309,10 +308,11 @@ public sealed partial class InstancesPageViewModel
         if (completed && result is not null) LoadServerList(draft, result);
         else { draft.ServersPhase = WorldReadPhase.Error; draft.Feedback = "读取未完成，已有草稿仍保留。"; }
         if (ReferenceEquals(draft, _worldDraft)) NotifyWorldPresentation();
+        if (ReferenceEquals(draft, _worldDraft) && completed) await RefreshInstanceServerStatusAsync();
     }
     private static void LoadServerList(InstanceWorldDraft draft, InstanceServerList list)
     {
-        draft.Servers.Clear(); foreach (var row in list.Entries) draft.Servers.Add(new(Guid.NewGuid(), row.ExistingIndex, row.Name, row.Address));
+        foreach (var row in draft.Servers) row.Dispose(); draft.Servers.Clear(); foreach (var row in list.Entries) draft.Servers.Add(new(Guid.NewGuid(), row.ExistingIndex, row.Name, row.Address));
         draft.ServerRevision = list.Revision; draft.ServerDirty = false; draft.ServerConflict = false; draft.ServersPhase = WorldReadPhase.Ready; draft.EditorOpen = false; draft.EditingServer = null; draft.SelectedServer = null;
         if (list.BackupPath is not null) draft.Backup = list.BackupPath;
     }

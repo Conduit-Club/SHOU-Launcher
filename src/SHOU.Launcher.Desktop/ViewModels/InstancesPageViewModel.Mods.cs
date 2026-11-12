@@ -140,6 +140,8 @@ public sealed partial class InstancesPageViewModel
     }
     internal void ModWorkspaceNavigationChanged()
     {
+        ExportNavigationChanged();
+        ServerStatusNavigationChanged();
         if (!ReferenceEquals(Owner.SelectedPage, this)) { StopModScan(); StopModRelations(); }
         else if (IsContentList) { _pendingContentRefresh = true; ScheduleContentRefresh(); }
         else if (IsRelationsSection) ScheduleModRelations();

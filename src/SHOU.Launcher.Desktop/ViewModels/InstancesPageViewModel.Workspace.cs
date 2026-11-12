@@ -59,6 +59,7 @@ public sealed partial class InstancesPageViewModel
             ScheduleContentRefresh();
             ScheduleComponentRefresh();
             ScheduleModRelations();
+            ExportNavigationChanged();
         }
     }
     public bool IsOverview => !IsSelection && SelectedSection?.Key == "overview";
@@ -151,6 +152,7 @@ public sealed partial class InstancesPageViewModel
         if (!_workspaceReady) return;
         RefreshPresentation();
         RefreshPackExport();
+        ExportNavigationChanged();
         FilterInstances();
         if (SelectedInstance is { } selected && (_draftInstanceId != selected.Id || !_instanceDraftDirty))
         {

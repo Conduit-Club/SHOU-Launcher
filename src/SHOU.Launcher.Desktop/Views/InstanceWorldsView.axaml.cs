@@ -12,6 +12,13 @@ namespace SHOU.Launcher.Desktop.Views;
 
 public partial class InstanceWorldsView : UserControl
 {
+    private async void CopyInstanceServerAddress_Click(object? sender, RoutedEventArgs args)
+    {
+        if (DataContext is not InstancesPageViewModel vm || sender is not Control { DataContext: InstanceServerDraftViewModel row } || !vm.IsCurrentServerRow(row)) return;
+        try { var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。"); await clipboard.SetTextAsync(row.Address); }
+        catch (Exception ex) { vm.Root.ShowError(UiPrivacy.Redact(ex.Message)); }
+    }
+
     private InstancesPageViewModel? subscribed;
     private bool editorWasOpen;
     public InstanceWorldsView()

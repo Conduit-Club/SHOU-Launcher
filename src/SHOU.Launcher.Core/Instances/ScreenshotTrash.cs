@@ -18,7 +18,7 @@ public static class ScreenshotTrash
     private static void ValidateOriginal(string relative)
     {
         var parts = relative.Split('/');
-        if (parts.Length != 2 || parts[0] != "screenshots" || !parts[1].EndsWith(".png", StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("仅可移动当前实例的PNG截图。");
+        if (parts.Length != 2 || parts[0] != "screenshots" || parts[1].Contains('\\') || !InstanceWorkspace.Accepts("screenshots", parts[1])) throw new ArgumentException("请选择当前实例的截图图片。");
     }
     public static async Task<IReadOnlyList<ScreenshotTrashEntry>> ListAsync(GameInstance instance, CancellationToken ct = default)
     {

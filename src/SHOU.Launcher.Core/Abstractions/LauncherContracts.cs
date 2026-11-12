@@ -30,7 +30,8 @@ public enum AccountKind { Offline, Microsoft, Yggdrasil }
 public sealed record AccountProfile(string Id, AccountKind Kind, string DisplayName, string PlayerUuid,
     string? AuthenticationServer = null, bool Persisted = false, string Status = "本地档案",
     DateTimeOffset? ExpiresAt = null);
-public sealed record ClubServer(string Id, string Name, string Address, string Status = "尚未查询", int? OnlinePlayers = null);
+public sealed record ClubServer(string Id, string Name, string Address, string Status = "尚未查询", int? OnlinePlayers = null,
+    string? Motd = null, int? MaximumPlayers = null, long? ResponseMilliseconds = null, string? GameVersion = null, byte[]? IconPng = null);
 public sealed record DownloadTaskSnapshot(string Id, string Name, string State, long BytesReceived = 0,
     long? TotalBytes = null, string? Source = null, string? Error = null, double BytesPerSecond = 0,
     string? Backend = null, string? Detail = null, DateTimeOffset UpdatedAt = default, int Connections = 0);

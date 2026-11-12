@@ -33,6 +33,10 @@ public interface IPlatformCapabilities
     bool SupportsRevealFile { get; }
     IReadOnlyList<string> Limitations { get; }
 }
+public interface ILocalFileLauncher
+{
+    Task OpenFileAsync(string file, CancellationToken cancellationToken = default);
+}
 public interface IExternalLauncher
 {
     Task OpenUriAsync(Uri uri, CancellationToken cancellationToken = default);

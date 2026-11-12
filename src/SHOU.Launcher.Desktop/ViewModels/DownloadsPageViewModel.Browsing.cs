@@ -140,4 +140,11 @@ public sealed partial class DownloadsPageViewModel
         _ = ReadBrowseAsync("读取资源图标", revision, ct => Task.WhenAll(rows.Select(p => p.LoadIconAsync(_catalog, _imageGate, ct))),
             "cached-icons", page: false, failure: _ => { });
     }
+    private void RestoreFavoriteIcons()
+    {
+        if (_catalog is null || !CanQuery || !IsFavoritesPage || _browseReads.ContainsKey("favorite-icons")) return;
+        var rows = FavoriteProjects.Where(p => !p.HasIcon && !string.IsNullOrWhiteSpace(p.Project.IconUrl)).ToArray();
+        if (rows.Length == 0) return;
+        _ = ReadBrowseAsync("读取收藏图标", _requestRevision, ct => Task.WhenAll(rows.Select(p => p.LoadIconAsync(_catalog, _imageGate, ct))), "favorite-icons", page: false, failure: _ => { });
+    }
 }

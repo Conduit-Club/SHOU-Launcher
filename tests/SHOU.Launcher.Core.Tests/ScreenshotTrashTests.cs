@@ -8,12 +8,19 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class ScreenshotTrashTests
 {
     [TestMethod]
-    public async Task MoveRestoreRoundTripRefusesCollisionAndTamperedRecoveryBytes()
+    [DataRow("png")]
+    [DataRow("jpg")]
+    [DataRow("jpeg")]
+    [DataRow("bmp")]
+    [DataRow("webp")]
+    [DataRow("tif")]
+    [DataRow("tiff")]
+    public async Task MoveRestoreRoundTripRefusesCollisionAndTamperedRecoveryBytes(string extension)
     {
         var instance = new GameInstance("fixture", "fixture", "1.21.1", TestFiles.Root());
-        var original = Path.Combine(instance.GameDirectory, "screenshots/fixture.png"); Directory.CreateDirectory(Path.GetDirectoryName(original)!);
+        var relative = "screenshots/fixture." + extension; var original = Path.Combine(instance.GameDirectory, relative); Directory.CreateDirectory(Path.GetDirectoryName(original)!);
         var bytes = new byte[] { 1, 2, 3, 4 }; await File.WriteAllBytesAsync(original, bytes);
-        var receipt = await ScreenshotTrash.MoveAsync(instance, "screenshots/fixture.png");
+        var receipt = await ScreenshotTrash.MoveAsync(instance, relative);
         Assert.IsFalse(File.Exists(original)); Assert.AreEqual(receipt, (await ScreenshotTrash.ListAsync(instance)).Single());
         await File.WriteAllTextAsync(original, "new same-name screenshot");
         await Assert.ThrowsAsync<IOException>(() => ScreenshotTrash.RestoreAsync(instance, receipt.Id));

@@ -462,7 +462,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     {
         ++_requestRevision; CancelBrowseReads(); _isConfiguration = false; _isResourceDetail = false; _isPackageDetail = false;
         SetRequestStatus(IsCatalogPage ? _catalogStatus : _searchCompleted ? $"已返回 {Projects.Count} 项资源。" : "输入条件后点击搜索。", IsCatalogPage && _catalogMessageVisible);
-        NotifyPage();
+        NotifyPage(); RestoreFavoriteIcons();
         ReturnToInstanceResource();
     }
     private async Task RefreshFabricAsync()
@@ -575,6 +575,9 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     private string FavoritesPath => _favoritesPathOverride ?? SHOU.Launcher.Core.IO.SafePath.Within(Service.Paths.DataDirectory, "preferences/download-favorites.json");
+    private string favoriteQuery = "";
+    public string FavoriteQuery { get => favoriteQuery; set { if (SetProperty(ref favoriteQuery, value ?? "")) OnPropertyChanged(nameof(FilteredFavoriteProjects)); } }
+    public IReadOnlyList<ContentProjectRowViewModel> FilteredFavoriteProjects => FavoriteProjects.Where(p => string.Join(" ", p.Project.Title, p.Project.Slug, p.Project.Author, p.Project.Description, p.Project.Kind, p.Project.Source).Contains(FavoriteQuery.Trim(), StringComparison.OrdinalIgnoreCase)).ToArray();
     private void LoadFavorites()
     {
         try
@@ -593,6 +596,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         ClearProjectRows(FavoriteProjects); foreach (var project in _favorites) FavoriteProjects.Add(new(this, project));
         FavoriteStatus = _favorites.Count == 0 ? "尚未收藏任何资源。" : $"已保存 {_favorites.Count} 项收藏。";
         OnPropertyChanged(nameof(HasFavorites)); OnPropertyChanged(nameof(IsProjectFavorite)); OnPropertyChanged(nameof(FavoriteAction));
+        OnPropertyChanged(nameof(FilteredFavoriteProjects)); RestoreFavoriteIcons();
     }
     private async Task ToggleFavoriteAsync()
     {

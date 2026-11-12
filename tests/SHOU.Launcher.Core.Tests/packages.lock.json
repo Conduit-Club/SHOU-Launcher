@@ -148,6 +148,11 @@
           "Avalonia.Skia": "12.1.5"
         }
       },
+      "BitMiracle.LibTiff.NET": {
+        "type": "Transitive",
+        "resolved": "2.4.660",
+        "contentHash": "Drd0fDFVrR3v19IJtqiDVnjgcVZoGlzFw/CYni1OQ5/xVYvjPNp18E9eu+dH/RmpIUw6Pn/JhE/H+Yc3kHI89A=="
+      },
       "BouncyCastle.Cryptography": {
         "type": "Transitive",
         "resolved": "2.7.0",
@@ -327,6 +332,7 @@
         "dependencies": {
           "Avalonia.Desktop": "[12.1.5, )",
           "Avalonia.Themes.Fluent": "[12.1.5, )",
+          "BitMiracle.LibTiff.NET": "[2.4.660, )",
           "BouncyCastle.Cryptography": "[2.7.0, )",
           "CommunityToolkit.Mvvm": "[8.4.2, )",
           "PlainToolkit.CngProtectedData": "[2.1.0, )",

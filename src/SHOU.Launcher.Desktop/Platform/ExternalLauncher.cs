@@ -3,7 +3,7 @@ using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Desktop.Platform;
 
-public sealed class ExternalLauncher(IProcessRunner processes, PlatformContext context) : IExternalLauncher
+public sealed class ExternalLauncher(IProcessRunner processes, PlatformContext context) : IExternalLauncher, ILocalFileLauncher
 {
     public Task OpenUriAsync(Uri uri, CancellationToken cancellationToken = default)
     {
@@ -24,6 +24,13 @@ public sealed class ExternalLauncher(IProcessRunner processes, PlatformContext c
         ValidatePath(file);
         if (!File.Exists(file)) throw new FileNotFoundException("The requested file does not exist.");
         return OpenAsync(Path.GetFullPath(file), true, cancellationToken);
+    }
+
+    public Task OpenFileAsync(string file, CancellationToken cancellationToken = default)
+    {
+        ValidatePath(file); SHOU.Launcher.Core.IO.SafePath.RejectLinks(file);
+        if (!File.Exists(file)) throw new FileNotFoundException("The requested file does not exist.");
+        return OpenAsync(Path.GetFullPath(file), false, cancellationToken);
     }
 
     private async Task OpenAsync(string target, bool reveal, CancellationToken cancellationToken)

@@ -28,6 +28,7 @@ public sealed partial class DownloadsPageViewModel
         if (IsSearchPage && (!_searchCompleted || DateTimeOffset.UtcNow - _searchFetched > TimeSpan.FromMinutes(5))) _searchRequested = true;
         TryStartSearchRequest();
         if (IsSearchPage && !IsPageLoading) RestoreSearchIcons();
+        if (IsFavoritesPage) RestoreFavoriteIcons();
         if (IsSearchPage && !SearchSupported) SetRequestStatus(SearchCapabilityReason);
         if (IsConfiguration) StartAutomaticLoaders();
         if (IsInstallerPage) StartInstallerCatalog();

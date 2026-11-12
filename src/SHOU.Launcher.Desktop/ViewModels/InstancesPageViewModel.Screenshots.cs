@@ -1,5 +1,4 @@
 using System.Collections.ObjectModel;
-using System.Buffers.Binary;
 using Avalonia.Media.Imaging;
 using Avalonia.Input;
 using Avalonia.Input.Platform;
@@ -8,7 +7,7 @@ using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
-public sealed class InstanceScreenshotPreview(string instanceId, InstanceContentEntry file, Bitmap? preview, AsyncRelayCommand reveal, AsyncRelayCommand remove) : IDisposable
+public sealed class InstanceScreenshotPreview(string instanceId, InstanceContentEntry file, Bitmap? preview, AsyncRelayCommand reveal, AsyncRelayCommand remove, AsyncRelayCommand open) : IDisposable
 {
     public string InstanceId => instanceId;
     public string RelativePath => file.RelativePath;
@@ -17,6 +16,7 @@ public sealed class InstanceScreenshotPreview(string instanceId, InstanceContent
     public bool HasPreview => Preview is not null;
     public AsyncRelayCommand RevealCommand { get; } = reveal;
     public AsyncRelayCommand RemoveCommand { get; } = remove;
+    public AsyncRelayCommand OpenCommand { get; } = open;
     public void Dispose() => Preview?.Dispose();
 }
 
@@ -31,17 +31,28 @@ public sealed partial class InstancesPageViewModel : IDisposable
     public ObservableCollection<InstanceScreenshotPreview> ScreenshotPreviews { get; } = [];
     public bool IsScreenshots => IsFileSection && SelectedSection.Key == "screenshots";
     public bool IsContentList => IsFileSection && !IsScreenshots;
-    public bool HasTruncatedScreenshots => ContentEntries.Count > 60;
+    private IReadOnlyList<InstanceContentEntry> screenshotFiles = [];
+    private CancellationTokenSource? screenshotCancellation;
+    private bool loadingScreenshots;
+    public bool HasMoreScreenshots => ScreenshotPreviews.Count < screenshotFiles.Count;
+    public bool HasTruncatedScreenshots => HasMoreScreenshots;
+    public bool IsLoadingScreenshots => loadingScreenshots;
+    public AsyncRelayCommand LoadMoreScreenshotsCommand { get; private set; } = null!;
     public bool IsModsSection => IsFileSection && SelectedSection.Key == "mods";
     public string OpenContentFolderCaption => "打开" + SectionTitle + "文件夹";
-    public string ScreenshotSummary => ContentEntries.Count > 60 ? $"共 {ContentEntries.Count} 张截图，预览前 60 张；其余可在文件夹中查看。" : $"共 {ContentEntries.Count} 张截图";
+    public string ScreenshotSummary => Localization.UiLocalization.Instance.Format("已显示 {0}/{1} 张截图", ScreenshotPreviews.Count, screenshotFiles.Count);
 
     private void ClearScreenshotPreviews()
     {
-        _screenshotGeneration++;
+        _screenshotGeneration++; screenshotCancellation?.Cancel(); screenshotCancellation?.Dispose(); screenshotCancellation = null; screenshotFiles = []; loadingScreenshots = false;
         Interlocked.Increment(ref _screenshotCopyTicket);
         foreach (var item in ScreenshotPreviews) item.Dispose();
-        ScreenshotPreviews.Clear();
+        ScreenshotPreviews.Clear(); NotifyScreenshotPaging();
+    }
+    private void NotifyScreenshotPaging()
+    {
+        foreach (var name in new[] { nameof(ScreenshotSummary), nameof(HasMoreScreenshots), nameof(HasTruncatedScreenshots), nameof(IsLoadingScreenshots) }) OnPropertyChanged(name);
+        LoadMoreScreenshotsCommand?.NotifyCanExecuteChanged();
     }
     private async Task LoadScreenshotPreviewsAsync(string instanceId, IReadOnlyList<InstanceContentEntry> files, CancellationToken ct)
     {
@@ -49,29 +60,51 @@ public sealed partial class InstancesPageViewModel : IDisposable
         var trashEntries = Service is IScreenshotTrashService trash ? await trash.ListScreenshotTrashAsync(instanceId, ct) : [];
         if (generation != _screenshotGeneration || SelectedInstance?.Id != instanceId || !IsScreenshots) return;
         _screenshotTrash = trashEntries; _trashInstanceId = instanceId; RestoreScreenshotCommand.NotifyCanExecuteChanged();
-        foreach (var file in files.Where(f => !f.Directory).Take(60))
+        screenshotFiles = files.Where(f => !f.Directory).OrderByDescending(f => f.Created ?? f.Modified).ThenBy(f => f.Name, StringComparer.OrdinalIgnoreCase).ToArray();
+        screenshotCancellation = new(); using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, screenshotCancellation.Token);
+        await AppendScreenshotsAsync(linked.Token);
+    }
+    private async Task AppendScreenshotsAsync(CancellationToken ct)
+    {
+        if (loadingScreenshots || SelectedInstance is not { } instance || !IsScreenshots) return;
+        var generation = _screenshotGeneration; var batch = screenshotFiles.Skip(ScreenshotPreviews.Count).Take(20).ToArray();
+        bool Current() => !_workspaceDisposed && generation == _screenshotGeneration && SelectedInstance?.Id == instance.Id && SelectedInstance.GameDirectory == instance.GameDirectory && IsScreenshots && ReferenceEquals(Owner.SelectedPage, this);
+        loadingScreenshots = true; NotifyScreenshotPaging();
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            if (generation != _screenshotGeneration || SelectedInstance?.Id != instanceId || !IsScreenshots) return;
-            var preview = await Task.Run(() => DecodeScreenshot(file), ct);
-            if (ct.IsCancellationRequested) { preview?.Dispose(); ct.ThrowIfCancellationRequested(); }
-            if (generation != _screenshotGeneration || SelectedInstance?.Id != instanceId || !IsScreenshots) { preview?.Dispose(); return; }
-            ScreenshotPreviews.Add(new(instanceId, file, preview, new AsyncRelayCommand(() => Owner.RunControlAsync("在文件夹中显示截图", async token =>
+            foreach (var file in batch)
             {
-                var current = await ((IInstanceWorkspaceService)Service).ListInstanceContentAsync(instanceId, "screenshots", token);
-                var found = current.SingleOrDefault(f => f.RelativePath == file.RelativePath) ?? throw new FileNotFoundException("截图已移动，请刷新列表。");
-                await Owner.ExternalLauncher.RevealFileAsync(found.FullPath, token);
-            })), new AsyncRelayCommand(async () =>
-            {
-                if (SelectedInstance?.Id != instanceId || !IsScreenshots || Service is not IScreenshotTrashService trashService) return;
-                if (await Owner.RunAsync("移入截图回收站", token => trashService.MoveScreenshotToTrashAsync(instanceId, file.RelativePath, token)))
-                { Feedback = "截图已移入实例回收站，可恢复最近删除。"; await RefreshContentCommand.ExecuteAsync(null); }
-            }, () => CanEdit && Service is IScreenshotTrashService && SelectedInstance?.Id == instanceId)));
+                ct.ThrowIfCancellationRequested(); if (!Current()) return;
+                var preview = await Task.Run(() => ScreenshotImages.Read(file, true, ct), ct);
+                if (ct.IsCancellationRequested || !Current()) { preview?.Dispose(); ct.ThrowIfCancellationRequested(); return; }
+                async Task ReadFile(Func<InstanceContentEntry, CancellationToken, Task> action)
+                {
+                    if (!Current()) return;
+                    await Owner.RunControlAsync("打开截图", async token =>
+                    {
+                        var files = await ((IInstanceWorkspaceService)Service).ListInstanceContentAsync(instance.Id, "screenshots", token);
+                        if (!Current()) return;
+                        var found = files.SingleOrDefault(f => f.RelativePath == file.RelativePath) ?? throw new FileNotFoundException("截图已移动，请刷新列表。");
+                        await action(found, token);
+                    });
+                }
+                ScreenshotPreviews.Add(new(instance.Id, file, preview,
+                    new AsyncRelayCommand(() => ReadFile((found, token) => Owner.ExternalLauncher.RevealFileAsync(found.FullPath, token))),
+                    new AsyncRelayCommand(async () =>
+                    {
+                        if (!Current() || Service is not IScreenshotTrashService trashService) return;
+                        if (await Owner.RunAsync("移入截图回收站", token => trashService.MoveScreenshotToTrashAsync(instance.Id, file.RelativePath, token)) && Current())
+                        { Feedback = "截图已移入实例回收站，可恢复最近删除。"; await RefreshContentCommand.ExecuteAsync(null); }
+                    }, () => CanEdit && Service is IScreenshotTrashService && Current()),
+                    new AsyncRelayCommand(() => ReadFile((found, token) => ((ILocalFileLauncher)Owner.ExternalLauncher).OpenFileAsync(found.FullPath, token)), () => Current() && Owner.ExternalLauncher is ILocalFileLauncher)));
+            }
         }
-        OnPropertyChanged(nameof(ScreenshotSummary));
+        finally { if (generation == _screenshotGeneration) { loadingScreenshots = false; NotifyScreenshotPaging(); } }
     }
     private void InitializeScreenshotActions()
     {
+        LoadMoreScreenshotsCommand = AsyncCommand(async () =>
+        { try { if (screenshotCancellation is { } source) await AppendScreenshotsAsync(source.Token); } catch (OperationCanceledException) { } }, () => !_workspaceDisposed && IsScreenshots && HasMoreScreenshots && !loadingScreenshots && ReferenceEquals(Owner.SelectedPage, this));
         RestoreScreenshotCommand = AsyncCommand(async () =>
         {
             var instanceId = _trashInstanceId!; var entry = _screenshotTrash[0];
@@ -114,22 +147,6 @@ public sealed partial class InstancesPageViewModel : IDisposable
         IReadOnlyList<IDataTransferItem> IDataTransfer.Items => ((IDataTransfer)data).Items;
         public void Dispose() => Interlocked.Exchange(ref bitmap, null)?.Dispose();
     }
-    private static Bitmap? DecodeScreenshot(InstanceContentEntry file, bool thumbnail = true)
-    {
-        try
-        {
-            var info = new FileInfo(file.FullPath);
-            if (!info.Exists || info.Length is <= 0 or > 32 * 1024 * 1024 || info.LinkTarget is not null || info.Attributes.HasFlag(FileAttributes.ReparsePoint)) return null;
-            using var stream = new FileStream(file.FullPath, FileMode.Open, FileAccess.Read, FileShare.Read);
-            // Minecraft screenshots are PNG. Bound both preview axes before invoking the decoder.
-            Span<byte> header = stackalloc byte[24];
-            if (stream.Read(header) != header.Length || !header[..8].SequenceEqual(new byte[] { 137, 80, 78, 71, 13, 10, 26, 10 }) || !header[12..16].SequenceEqual("IHDR"u8)) return null;
-            var width = BinaryPrimitives.ReadUInt32BigEndian(header[16..20]); var height = BinaryPrimitives.ReadUInt32BigEndian(header[20..24]);
-            if (width is 0 or > 16384 || height is 0 or > 16384 || (long)width * height > 64 * 1024 * 1024) return null;
-            stream.Position = 0;
-            return !thumbnail ? new Bitmap(stream) : (long)width * 270 >= (long)height * 480 ? Bitmap.DecodeToWidth(stream, 480) : Bitmap.DecodeToHeight(stream, 270);
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException) { return null; }
-    }
-    public void Dispose() { _workspaceDisposed = true; StopModScan(); StopModRelations(); _pendingContentRefresh = false; DisposeComponents(); ClearScreenshotPreviews(); }
+    private static Bitmap? DecodeScreenshot(InstanceContentEntry file, bool thumbnail = true) => ScreenshotImages.Read(file, thumbnail);
+    public void Dispose() { _workspaceDisposed = true; CancelExportBrowse(); CancelServerStatus(); foreach (var draft in _worldDrafts.Values) foreach (var row in draft.Servers) row.Dispose(); StopModScan(); StopModRelations(); _pendingContentRefresh = false; DisposeComponents(); ClearScreenshotPreviews(); }
 }

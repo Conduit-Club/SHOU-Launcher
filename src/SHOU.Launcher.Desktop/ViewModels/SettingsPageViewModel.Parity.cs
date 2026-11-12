@@ -6,7 +6,7 @@ using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
-public sealed record SettingsLogFile(string Name, string Modified, string Size, string Path);
+public sealed record SettingsLogFile(string Name, string Modified, string Size, string Path, AsyncRelayCommand? OpenCommand = null);
 
 public sealed partial class SettingsPageViewModel
 {
@@ -170,7 +170,8 @@ public sealed partial class SettingsPageViewModel
         {
             if (!Directory.Exists(LogsDirectory)) { LogFilesSummary = "尚无启动器日志文件。"; return; }
             foreach (var file in new DirectoryInfo(LogsDirectory).EnumerateFiles().Where(f => f.Extension is ".log" or ".txt").OrderByDescending(f => f.LastWriteTimeUtc).Take(200))
-                LogFiles.Add(new(UiPrivacy.Redact(file.Name), file.LastWriteTime.ToString("g", Localization.UiLocalization.Instance.FormattingCulture), $"{file.Length / 1024d:0.#} KiB", UiPrivacy.Redact(file.FullName)));
+                LogFiles.Add(new(UiPrivacy.Redact(file.Name), file.LastWriteTime.ToString("g", Localization.UiLocalization.Instance.FormattingCulture), $"{file.Length / 1024d:0.#} KiB", UiPrivacy.Redact(file.FullName),
+                    new AsyncRelayCommand(() => Owner.RunControlAsync("打开日志文件", ct => ((ILocalFileLauncher)Owner.ExternalLauncher).OpenFileAsync(file.FullName, ct)), () => Owner.ExternalLauncher is ILocalFileLauncher)));
             LogFilesSummary = LogFiles.Count == 0 ? "尚无启动器日志文件。" : "";
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { LogFilesSummary = "无法读取日志目录：" + UiPrivacy.Redact(ex.Message); }

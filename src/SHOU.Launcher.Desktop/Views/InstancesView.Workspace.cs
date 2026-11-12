@@ -61,6 +61,11 @@ public partial class InstancesView
         catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
     }
     private InstancesPageViewModel? _workspaceVm;
+    private void ScreenshotScrollChanged(object? sender, ScrollChangedEventArgs e)
+    {
+        if (e.OffsetDelta.Y <= 0 || DataContext is not InstancesPageViewModel { IsScreenshots: true } vm || sender is not ScrollViewer scroll) return;
+        if (scroll.Offset.Y + scroll.Viewport.Height >= scroll.Extent.Height - 80 && vm.LoadMoreScreenshotsCommand.CanExecute(null)) _ = vm.LoadMoreScreenshotsCommand.ExecuteAsync(null);
+    }
     private bool _workspaceAttached;
     private void WorkspaceAttached(object? sender, VisualTreeAttachmentEventArgs e) { _workspaceAttached = true; BindWorkspace(); }
     private void WorkspaceDetached(object? sender, VisualTreeAttachmentEventArgs e) { _workspaceAttached = false; UnbindWorkspace(); }
