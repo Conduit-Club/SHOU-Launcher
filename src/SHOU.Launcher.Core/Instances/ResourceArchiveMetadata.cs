@@ -20,7 +20,7 @@ internal static class ResourceArchiveMetadata
             // A malformed description must not suppress a valid local pack icon or file row.
             if (zip.GetEntry("pack.mcmeta") is { } metadata)
             {
-                try { description = Flatten(JsonNode.Parse(Read(metadata, 128 * 1024, ct))?["pack"]?["description"]); }
+                try { description = Flatten(LocalDisplayJson.Parse(Read(metadata, 128 * 1024, ct))?["pack"]?["description"]); }
                 catch (Exception ex) when (ex is System.Text.Json.JsonException or InvalidOperationException or InvalidDataException) { }
             }
             if (includeIcon && (zip.GetEntry("pack.png") ?? zip.GetEntry("icon.png")) is { } image)

@@ -22,7 +22,7 @@ internal static partial class ModArchiveMetadata
             var dependencies = new List<string>(); var embedded = new List<string>();
             if (zip.GetEntry("fabric.mod.json") is { } fabric)
             {
-                var root = JsonNode.Parse(Read(fabric, 128 * 1024));
+                var root = LocalDisplayJson.Parse(Read(fabric, 128 * 1024));
                 name = (string?)root?["name"]; version = (string?)root?["version"];
                 id = (string?)root?["id"]; description = (string?)root?["description"];
                 dependencies.AddRange((root?["depends"] as JsonObject ?? []).Select(p => p.Key));
@@ -32,7 +32,7 @@ internal static partial class ModArchiveMetadata
             }
             else if (zip.GetEntry("quilt.mod.json") is { } quilt)
             {
-                var root = JsonNode.Parse(Read(quilt, 128 * 1024))?["quilt_loader"];
+                var root = LocalDisplayJson.Parse(Read(quilt, 128 * 1024))?["quilt_loader"];
                 name = (string?)root?["metadata"]?["name"]; version = (string?)root?["version"]; icon = (string?)root?["metadata"]?["icon"];
                 id = (string?)root?["id"]; description = (string?)root?["metadata"]?["description"];
                 foreach (var dep in root?["depends"] as JsonArray ?? []) if (dep is JsonValue value) dependencies.Add(value.GetValue<string>()); else if ((string?)dep?["id"] is { } key && (bool?)dep?["optional"] != true) dependencies.Add(key);
@@ -48,14 +48,14 @@ internal static partial class ModArchiveMetadata
             }
             else if (zip.GetEntry("mcmod.info") is { } legacy)
             {
-                var root = JsonNode.Parse(Read(legacy, 128 * 1024));
+                var root = LocalDisplayJson.Parse(Read(legacy, 128 * 1024));
                 var mod = root is JsonArray array ? array.FirstOrDefault() : (root?["modList"] as JsonArray)?.FirstOrDefault();
                 name = (string?)mod?["name"]; version = (string?)mod?["version"]; icon = (string?)mod?["logoFile"];
                 id = (string?)mod?["modid"]; description = (string?)mod?["description"];
                 if (mod?["requiredMods"] is JsonArray required) dependencies.AddRange(required.Select(d => (string?)d ?? "").Select(d => d.Split('@')[0]));
             }
             if (zip.GetEntry("META-INF/jarjar/metadata.json") is { } jarjar)
-                foreach (var item in JsonNode.Parse(Read(jarjar, 128 * 1024))?["jars"] as JsonArray ?? [])
+                foreach (var item in LocalDisplayJson.Parse(Read(jarjar, 128 * 1024))?["jars"] as JsonArray ?? [])
                     if ((string?)item?["path"] is { } nested) embedded.Add(NestedName(zip, nested));
             byte[]? png = null;
             if (includeIcon && icon is { Length: > 0 and <= 256 } && !icon.StartsWith('/') && !icon.Contains('\\') && !icon.Split('/').Any(p => p is ".." or "." or "") && zip.GetEntry(icon) is { } entry)
@@ -66,7 +66,7 @@ internal static partial class ModArchiveMetadata
                     && BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(20)) is > 0 and <= 2048) png = bytes;
             }
             return new(Label(name), Label(version)?.Contains("${", StringComparison.Ordinal) == true ? null : Label(version), png,
-                Label(id), Label(description), dependencies.Where(d => Label(d) is not null).Distinct(StringComparer.Ordinal).ToArray(), embedded.Distinct(StringComparer.Ordinal).ToArray());
+                Label(id), LocalDisplayJson.Description(description), dependencies.Where(d => Label(d) is not null).Distinct(StringComparer.Ordinal).ToArray(), embedded.Distinct(StringComparer.Ordinal).ToArray());
         }
         catch (Exception ex) when (ex is IOException or InvalidDataException or System.Text.Json.JsonException or InvalidOperationException or ArgumentException)
         { return new(null, null, null, Error: "无法读取模组归档或元数据。"); }
@@ -79,7 +79,7 @@ internal static partial class ModArchiveMetadata
         using var bytes = new MemoryStream(Read(entry, 16 * 1024 * 1024)); using var nested = new ZipArchive(bytes, ZipArchiveMode.Read);
         var metadata = nested.GetEntry("fabric.mod.json") ?? nested.GetEntry("quilt.mod.json");
         if (metadata is null) return Path.GetFileName(path);
-        var json = JsonNode.Parse(Read(metadata, 128 * 1024)); var root = json?["quilt_loader"] ?? json;
+        var json = LocalDisplayJson.Parse(Read(metadata, 128 * 1024)); var root = json?["quilt_loader"] ?? json;
         var name = Label((string?)root?["name"] ?? (string?)root?["id"]); var version = Label((string?)root?["version"]);
         return name is null ? Path.GetFileName(path) : name + (version is null ? "" : " " + version);
     }

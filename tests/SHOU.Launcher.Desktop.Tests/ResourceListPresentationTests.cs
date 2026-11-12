@@ -1,8 +1,11 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Controls.Presenters;
+using Avalonia.Controls.Primitives;
 using Avalonia.Headless;
 using Avalonia.Headless.XUnit;
 using Avalonia.Input;
+using Avalonia.Media;
 using Avalonia.Threading;
 using Avalonia.VisualTree;
 using SHOU.Launcher.Core.Abstractions;
@@ -37,6 +40,9 @@ public sealed class ResourceListPresentationTests
             Assert.All(rows, row => Assert.InRange(row.Bounds.Height, 40, 48));
             Assert.True(rows.Count(row => row.TranslatePoint(new Point(0, row.Bounds.Height), w)!.Value.Y < w.ClientSize.Height) >= 6, string.Join("; ", rows.Select(row => $"top={row.TranslatePoint(default, w)!.Value.Y} height={row.Bounds.Height}")));
             Assert.Equal(section == "mods" ? 6 : 5, vm.ResourceToolbarColumns);
+            var filter = controls.OfType<ToggleButton>().Single(c => c.Classes.Contains("resourceFilter") && c.IsChecked == true);
+            var presenter = filter.GetVisualDescendants().OfType<ContentPresenter>().Single(c => c.Name == "PART_ContentPresenter" && ReferenceEquals(c.TemplatedParent, filter));
+            Assert.Equal(Assert.IsAssignableFrom<ISolidColorBrush>(filter.Background).Color, Assert.IsAssignableFrom<ISolidColorBrush>(presenter.Background).Color);
             var first = vm.FilteredContentRows[0]; Assert.Contains("Local description", first.SecondaryText); Assert.Equal(section switch { "resourcepacks" => "layers", "shaders" => "sparkles", _ => "puzzle" }, first.FallbackIcon);
             Assert.DoesNotContain(vm.ModFilters, f => f.Key == "禁用" && f.Shown); Assert.DoesNotContain(vm.ModFilters, f => f.Key == "启用" && f.Shown);
         }

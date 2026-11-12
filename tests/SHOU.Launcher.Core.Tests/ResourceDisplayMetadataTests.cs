@@ -26,6 +26,12 @@ public sealed class ResourceDisplayMetadataTests
         CollectionAssert.AreEqual(before, File.ReadAllBytes(path)); Assert.HasCount(1, Directory.GetFiles(i.GameDirectory, "*", SearchOption.AllDirectories)); Assert.IsNull(row.MetadataError);
     }
     [TestMethod]
+    public void LocalPackDescriptionAcceptsBomCommentsTrailingCommaAndLiteralNewline()
+    {
+        var i = Pack("resourcepacks", "\uFEFF{/*display only*/\"pack\":{\"description\":\"First\nsecond\",},}");
+        var row = InstanceWorkspace.List(i, "resourcepacks").Single(); Assert.AreEqual("First second", row.Description); Assert.IsTrue(row.HasIcon); Assert.IsNull(row.MetadataError);
+    }
+    [TestMethod]
     [DataRow("resourcepacks", "pack.png")]
     [DataRow("shaders", "icon.png")]
     public void MalformedDescriptionDoesNotSuppressValidIconOrTheUsableFileRow(string kind, string icon)

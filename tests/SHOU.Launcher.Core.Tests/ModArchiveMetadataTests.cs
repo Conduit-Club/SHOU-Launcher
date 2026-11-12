@@ -10,6 +10,28 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class ModArchiveMetadataTests
 {
     [TestMethod]
+    [DataRow("\uFEFF{/* local comment */\"id\":\"readable\",\"name\":\"Readable\",\"description\":\"First\nsecond\tline\",\"version\":\"1\",}")]
+    [DataRow("{\"id\":\"readable\",\"name\":\"Readable\",\"description\":\"First\\nsecond\\tline\",\"version\":\"1\"}")]
+    public void LocalMultilineDescriptionKeepsDisplayAndRelationIdentityWithoutRewritingArchive(string text)
+    {
+        var root = TestFiles.Root(); Directory.CreateDirectory(Path.Combine(root, "mods")); var path = Path.Combine(root, "mods", "readable.jar");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create)) using (var output = zip.CreateEntry("fabric.mod.json").Open()) output.Write(Encoding.UTF8.GetBytes(text));
+        var bytes = File.ReadAllBytes(path); var instance = new GameInstance("fixture", "Fixture", "1.21.1", root, Loader: "fabric");
+        var row = InstanceWorkspace.List(instance, "mods").Single(); Assert.IsNull(row.MetadataError); Assert.AreEqual("Readable", row.DisplayName); Assert.AreEqual("readable", row.ModId); Assert.AreEqual("First second line", row.Description);
+        var relations = ModRelations.Read(instance); Assert.IsEmpty(relations.Notices); Assert.AreEqual("readable", relations.Hosts.Single().Declaration.Ids.Single());
+        CollectionAssert.AreEqual(bytes, File.ReadAllBytes(path));
+    }
+    [TestMethod]
+    public void DisplayCompatibilityDoesNotAcceptBrokenStructureOrControlCharactersInIdentity()
+    {
+        var root = TestFiles.Root(); Directory.CreateDirectory(Path.Combine(root, "mods"));
+        foreach (var pair in new[] { ("broken.jar", "{\"id\":\"broken\", "), ("control.jar", "{\"id\":\"bad\nid\",\"name\":\"bad\nname\",\"version\":\"1\"}") })
+            using (var zip = ZipFile.Open(Path.Combine(root, "mods", pair.Item1), ZipArchiveMode.Create)) using (var output = zip.CreateEntry("fabric.mod.json").Open()) output.Write(Encoding.UTF8.GetBytes(pair.Item2));
+        var instance = new GameInstance("fixture", "Fixture", "1.21.1", root, Loader: "fabric"); var rows = InstanceWorkspace.List(instance, "mods");
+        Assert.IsNotNull(rows.Single(r => r.Name == "broken.jar").MetadataError); var control = rows.Single(r => r.Name == "control.jar"); Assert.IsNull(control.ModId); Assert.AreEqual("control.jar", control.DisplayName);
+        Assert.IsEmpty(ModRelations.Read(instance).Hosts.Single(h => h.RelativePath.EndsWith("control.jar")).Declaration.Ids);
+    }
+    [TestMethod]
     [DataRow("fabric.mod.json", "{\"name\":\"Fabric display\",\"version\":\"2.1\",\"icon\":\"assets/icon.png\"}", "Fabric display")]
     [DataRow("META-INF/mods.toml", "[[mods]]\ndisplayName=\"Forge display\"\nversion=\"2.1\"\nlogoFile=\"assets/icon.png\"", "Forge display")]
     [DataRow("mcmod.info", "[{\"name\":\"Legacy display\",\"version\":\"2.1\",\"logoFile\":\"assets/icon.png\"}]", "Legacy display")]

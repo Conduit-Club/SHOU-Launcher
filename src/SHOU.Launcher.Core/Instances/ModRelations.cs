@@ -82,7 +82,7 @@ public static class ModRelations
         var name = Path.GetFileName(path); string? version = null, loader = null;
         var ids = new List<string>(); var deps = new List<ModDeclaredDependency>(); var nested = new List<string>(); var notices = new List<string>();
         string Text(ZipArchiveEntry entry) { using var content = ReadEntry(entry, 128 * 1024, budget, ct); return Encoding.UTF8.GetString(content.ToArray()); }
-        JsonNode? Json(ZipArchiveEntry entry) => JsonNode.Parse(Text(entry));
+        JsonNode? Json(ZipArchiveEntry entry) => LocalDisplayJson.Parse(Text(entry));
         try
         {
             var fabric = zip.GetEntry("fabric.mod.json"); var quilt = zip.GetEntry("quilt.mod.json");
