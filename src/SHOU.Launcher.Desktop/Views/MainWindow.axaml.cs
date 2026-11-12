@@ -94,6 +94,18 @@ public partial class MainWindow : Window
         var navigation = this.FindControl<StackPanel>("PrimaryNavigation")!;
         navigation.HorizontalAlignment = Avalonia.Layout.HorizontalAlignment.Center;
         navigation.Margin = new Thickness(0);
+        var brandLabel = this.FindControl<TextBlock>("WindowBrandTitle")!;
+        void FitBrand()
+        {
+            var width = this.FindControl<Grid>("TitleBarLayout")!.ColumnDefinitions[2].ActualWidth - brand.Margin.Right;
+            if (width <= 0) return;
+            var visible = brand.Children.Where(c => c.IsVisible).ToArray();
+            var fixedWidth = visible.Where(c => !ReferenceEquals(c, brandLabel)).Sum(c => c.DesiredSize.Width) + Math.Max(0, visible.Length - 1) * brand.Spacing;
+            brandLabel.MaxWidth = Math.Clamp(width - fixedWidth, 0, 150);
+        }
+        brand.SizeChanged += (_, _) => FitBrand();
+        navigation.SizeChanged += (_, _) => FitBrand();
+
         var context = this.FindControl<Grid>("ContextHeader")!;
         Grid.SetColumnSpan(context, 3);
         context.Margin = new Thickness(80, 0, 16, 0);

@@ -188,6 +188,40 @@ public sealed class SettingsAutoSaveParityTests
         }
         finally { window.Close(); }
     }
+    [Fact]
+    public void MacBundleReadsItsExistingResourceDocumentsWithoutRecursingRuntimeCatalog()
+    {
+        var root = FixturePaths.Create("bundled-licenses"); var contents = Path.Combine(root, "SHOU.app", "Contents");
+        var executable = Path.Combine(contents, "MacOS"); var resources = Path.Combine(contents, "Resources");
+        try
+        {
+            Directory.CreateDirectory(executable); Directory.CreateDirectory(Path.Combine(resources, "licenses", "runtime-package"));
+            File.WriteAllText(Path.Combine(resources, "LICENSE"), "project license fixture");
+            File.WriteAllText(Path.Combine(resources, "LICENCE"), "historical license fixture");
+            File.WriteAllText(Path.Combine(resources, "licenses", "NOTICE.TXT"), "bundled notice fixture");
+            File.WriteAllText(Path.Combine(resources, "licenses", "runtime-package", "nested.txt"), "catalog stays outside the bounded UI list");
+            var documents = BundledLicenseDocuments.Read(executable);
+            Assert.Equal(3, documents.Count); Assert.Contains(documents, d => d.Name == "LICENSE" && d.Text == "project license fixture");
+            Assert.Contains(documents, d => d.Name == "LICENCE"); Assert.Contains(documents, d => d.Name == "NOTICE.TXT"); Assert.DoesNotContain(documents, d => d.Name == "nested.txt");
+            Assert.Equal(documents, BundledLicenseDocuments.Read(executable + Path.DirectorySeparatorChar));
+        }
+        finally { if (Directory.Exists(root)) Directory.Delete(root, true); }
+    }
+    [AvaloniaFact]
+    public async Task MacBrandKeepsTheLogoInsideTheMinimumWindowWithEnglishNavigation()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        using var root = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
+        root.Settings.Language = "en-US"; Assert.True(await root.Settings.FlushAutoSaveAsync());
+        var window = new MainWindow { Width = 880, Height = 560, DataContext = root }; window.Show();
+        try
+        {
+            for (var i=0;i<4;i++) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); }
+            var logo = Find<Image>(window, "BrandLogo"); var right = logo.TranslatePoint(new Point(logo.Bounds.Width,0),window)!.Value.X;
+            Assert.True(logo.IsEffectivelyVisible); Assert.True(right <= window.Bounds.Width - 8, $"Logo extends outside the window: {right}.");
+        }
+        finally { window.Close(); }
+    }
     private sealed class DelayedSaveService : FakeLauncherService
     {
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

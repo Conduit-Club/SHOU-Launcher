@@ -134,11 +134,7 @@ public sealed partial class SettingsPageViewModel
     { var path = SHOU.Launcher.Core.IO.SafePath.Within(DataDirectory, "appearance/" + kind); SHOU.Launcher.Core.IO.SafePath.RejectLinks(path); Directory.CreateDirectory(path); await Owner.ExternalLauncher.OpenDirectoryAsync(path, ct); }));
     private void LoadLicenses()
     {
-        var root = Path.Combine(AppContext.BaseDirectory, "licenses");
-        var files = (Directory.Exists(root) ? new DirectoryInfo(root).EnumerateFiles() : [])
-            .Concat(new[] { "LICENSE", "LICENSE.txt", "ThirdPartyNotices.txt", "THIRDPARTYNOTICES.txt" }.Select(n => new FileInfo(Path.Combine(AppContext.BaseDirectory, n))).Where(f => f.Exists));
-        foreach (var file in files.Where(f => f.Length <= 1024 * 1024 && f.LinkTarget is null && f.Extension is ".txt" or ".md" or "").OrderBy(f => f.Name).DistinctBy(f => f.FullName).Take(100))
-        { try { Licenses.Add(new(file.Name, File.ReadAllText(file.FullName))); } catch (IOException) { } }
+        foreach (var document in BundledLicenseDocuments.Read(AppContext.BaseDirectory)) Licenses.Add(document);
     }
     private void FilterFeedback() { FeedbackItems.Clear(); foreach (var item in allFeedback.Where(f => f.Title.Contains(FeedbackQuery, StringComparison.CurrentCultureIgnoreCase) || f.Body.Contains(FeedbackQuery, StringComparison.CurrentCultureIgnoreCase))) FeedbackItems.Add(item); }
     private async Task RunSettingsWork(Func<CancellationToken, Task> work)
