@@ -1,5 +1,16 @@
 # 双端完善清单
 
+## R35：macOS 原生旧版运行兼容（2026-11-12）
+
+- [x] R35-MAC01：在加载器合并后按 macOS/实际 Java ARM64 应用已知版本运行库覆盖；匹配 LWJGL 2/JInput/OpenAL/JNA/TTS/ObjC bridge，哈希与架构校验、JNI 别名、原生缓存/会话隔离；旧 LWJGL 2 与现代 LWJGL 3 的首线程参数分别处理。Windows 不接收覆盖。
+- [x] R35-JAVA8：补官方 Azul ARM64 Java 8 管理安装、强校验/路径链接保护/预算/原子发布/版本架构探测，真实 8u512 ARM64 通过；其它系统和版本保留 Mojang 路径，默认 JAVA_HOME 25 与个人 Java 不变。
+- [x] R35-FORGE：macOS 严格限定 1.12.2 / Forge 14.23.5 的官方 LaunchWrapper/FMLTweaker 入口；RLCraft 2.9.3 完成 187 项必需文件核实、3,562 项导入及官方 Forge/基础游戏准备（补回 816 资源/338 结构文件）。Windows 新增入口关闭。
+- [x] R35-AUTO：Core 765 通过/5 沿用跳过，Desktop 261 全通过；21 项新增定向回归；R35 最终 RC2 源码 `0cb94d64`，显式 `.env`、ZIP/签名/QA 程序集一致性通过。
+- [x] R35-NATIVE：RC2 真实完整主菜单、普通世界建档、创意放置/破坏与生存移动/跳跃/背包通过；McMouser Ctrl＋左键、滚轮/Shift＋滚轮及 Button 4/5 识别通过，Jump 恢复原值。保存后重新读回，NBT 玩家模式/物品/位置核对；游戏菜单退出 code=0，QA 启动器 normal_close，进程均消失。仅本轮隔离窗口，未改个人实例。
+- [ ] R35-NEXT：Windows 真机、Intel Mac、其它版本/加载器、实体鼠标驱动、长期内存/世界切换及旧模组告警仍待验；Mac 游戏 Dock 仍显示 Java bootstrap 名称，后续补名称/图标。已被旧导入漏掉资源的实例需从原包重新导入；未自动覆盖现有包或安装 McMouser。
+
+详见 [R35 报告](docs/conduit/MACOS-R35.md)。
+
 ## R34：个性化、软件信息、自动保存与三语言（2026-11-11）
 
 - [x] R34-UI01：对照正式 WPF v1.5.0 与用户截图，补六种经典浅/深配色、全局/MOTD 字体、三张社团实景、九种适应/透明度/模糊/间隔、背景音乐参数、空白主页和分组隐藏/F12 恢复；不恢复已取消的大厅、视频或自动更新。
@@ -44,8 +55,8 @@
 - [ ] R31-UI-NEXT：Mac 实例长列表滚动后 CUA 几何/双击不可靠；本轮官方接口选中后 Enter 可进入，需独立核对真实鼠标双击、搜索和键盘导航，不将驱动失准直接记作产品故障。Minecraft 文本输入自动化丢字亦需单独修整。
 - [ ] R31-PROC-CLEANUP：单次启动的原生库/临时目录已独立；关闭启动器后游戏仍使用它们，后续清理须核对会话 PID/创建时间，游戏结束后再回收，不能启动器一关就删除。
 
-- [ ] R31-RLC01：已阅读用户提供的 [GPT Pro 分享](https://chatgpt.com/share/6af44d44-d1a4-83ee-9270-65c1938f48e5)。纠正 R29 将 LWJGL 2 直接等同于必须 x64/Rosetta 的过度推断；RLCraft 的 ARM64 Java 8 + 匹配 LWJGL 2 bindings/natives 有可调查路径。后续锁定原包/Forge 版本，核对 LWJGL 2.9.4 + MinecraftMachina 补丁、OpenAL、JInput、text2speech 和 Objective-C bridge 的完整组合，记录来源/哈希/架构，不能只替换一个 dylib 或把 LWJGL 2 升到 3。Prism 官方 Java 表确有旧 Minecraft/macOS ARM64 Java 8 组合；ManyMC 官方列有上述运行库兼容工作。分享给出的具体版本/补丁表仍须固定提交逐条核验，再验证原版→同 Forge 空实例→原包。此轮先记录方案，不宣称 RLCraft 已可玩，不自动安装 Rosetta。
-- [ ] R31-RLC02：集中生成运行方案，分别记录宿主 CPU、启动器进程、实际 Java 架构，按 Java 架构选择完整 natives（含 Universal slice）；原生优先，缺组件时才评估完整 x64 兼容路径，不在单个 JVM 混用 ARM64/x64。补丁在加载器合并后应用，缓存按坐标/平台/校验区分，原生解包目录按实例/架构/方案隔离；核对 `.jnilib` 命名、按运行库选择首线程参数、特定版本 JNA/LWJGL3 补丁及失败组件诊断。普通 Mod 先按 MC/加载器/依赖筛选，不因未写 ARM64 或 JAR 含其它平台库就误判；McMouser 等覆盖 natives 的模组另列规则。保持 Windows 回归。参考：[Prism Java](https://prismlauncher.org/wiki/getting-started/installing-java/)、[补丁规则](https://github.com/PrismLauncher/meta/blob/main/meta/common/mojang-library-patches.json)、[ManyMC ARM64](https://minecraftmachina.github.io/meta-multimc-arm64/)。
+- [x] R31-RLC01（R35 完成）：按 [GPT Pro 分享](https://chatgpt.com/share/6af44d44-d1a4-83ee-9270-65c1938f48e5) 线索重新核对官方 Prism/ManyMC 数据，纠正旧版必须 x64/Rosetta 的推断；完整 ARM64 Java 8 + LWJGL 2/JInput/OpenAL/JNA/TTS/ObjC bridge 已落地。RLCraft 2.9.3 / Forge 14.23.5.2860 完成实包安装、正常世界与创意/生存操作、McMouser、保存读回及退出 code=0，无需 Rosetta；详见 R35 报告。
+- [ ] R31-RLC02（R35 完成平台方案、架构/缓存/首线程/JNI/McMouser 检查、真实 RLCraft 验收和 Windows 门控回归，更多组合/长期矩阵仍待验）：集中生成运行方案，分别记录宿主 CPU、启动器进程、实际 Java 架构，按 Java 架构选择完整 natives（含 Universal slice）；原生优先，缺组件时才评估完整 x64 兼容路径，不在单个 JVM 混用 ARM64/x64。补丁在加载器合并后应用，缓存按坐标/平台/校验区分，原生解包目录按实例/架构/方案隔离；核对 `.jnilib` 命名、按运行库选择首线程参数、特定版本 JNA/LWJGL3 补丁及失败组件诊断。普通 Mod 先按 MC/加载器/依赖筛选，不因未写 ARM64 或 JAR 含其它平台库就误判；McMouser 等覆盖 natives 的模组另列规则。保持 Windows 回归。参考：[Prism Java](https://prismlauncher.org/wiki/getting-started/installing-java/)、[补丁规则](https://github.com/PrismLauncher/meta/blob/main/meta/common/mojang-library-patches.json)、[ManyMC ARM64](https://minecraftmachina.github.io/meta-multimc-arm64/)。
 
 ## R30：个人安装与下一轮下载体验补齐（2026-11-11）
 
