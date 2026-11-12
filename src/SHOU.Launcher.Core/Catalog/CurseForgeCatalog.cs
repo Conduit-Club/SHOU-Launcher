@@ -19,7 +19,7 @@ public sealed class CurseForgeCatalog(HttpClient http, string? apiKey)
         if (!int.TryParse(number, NumberStyles.None, CultureInfo.InvariantCulture, out var value) || value <= 0) throw new InvalidDataException("CurseForge 项目身份无效。");
         return value.ToString(CultureInfo.InvariantCulture);
     }
-    private async Task<JsonNode> ReadAsync(string path, CancellationToken ct)
+    private async Task<JsonNode> ReadAsync(string path, CancellationToken ct, object? body = null)
     {
         if (string.IsNullOrWhiteSpace(apiKey)) throw new InvalidOperationException("尚未配置 CurseForge API；可选择 Modrinth，或在项目构建配置中提供 API key。");
         if (apiKey.Length > 8192 || apiKey.Any(c => char.IsWhiteSpace(c) || char.IsControl(c))) throw new InvalidOperationException("CurseForge API 配置格式无效。");
@@ -27,7 +27,8 @@ public sealed class CurseForgeCatalog(HttpClient http, string? apiKey)
         var uri = new Uri("https://api.curseforge.com/v1/" + path);
         if (uri.Host != "api.curseforge.com" || !uri.IsDefaultPort || uri.UserInfo.Length != 0) throw new InvalidDataException("CurseForge API 地址无效。");
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(20));
-        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        using var request = new HttpRequestMessage(body is null ? HttpMethod.Get : HttpMethod.Post, uri);
+        if (body is not null) request.Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
         request.Headers.Add("x-api-key", apiKey); request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.5.0 (+https://github.com/Conduit-Club/SHOU-Launcher)");
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
@@ -88,6 +89,21 @@ public sealed class CurseForgeCatalog(HttpClient http, string? apiKey)
         var parts = releaseId.Split('-'); if (parts.Length != 3 || parts[0] != "cf") throw new InvalidDataException("CurseForge 文件身份无效。");
         var project = Id("cf-" + parts[1]); var file = Id("cf-" + parts[2]);
         return ParseRelease(await ReadAsync($"mods/{project}/files/{file}", ct).ConfigureAwait(false), int.Parse(project, CultureInfo.InvariantCulture));
+    }
+    public async Task<IReadOnlyDictionary<uint, ContentRelease>> MatchFingerprintsAsync(IReadOnlyList<uint> fingerprints, CancellationToken ct)
+    {
+        var result = new Dictionary<uint, ContentRelease>();
+        foreach (var group in fingerprints.Distinct().Chunk(100))
+        {
+            var data = await ReadAsync("fingerprints/432", ct, new { fingerprints = group });
+            foreach (var match in data["exactMatches"] as JsonArray ?? [])
+            {
+                var file = match?["file"]; var project = (int?)file?["modId"] ?? 0; var fingerprint = (uint?)file?["fileFingerprint"] ?? 0;
+                if (project <= 0 || (int?)match?["id"] != project || !group.Contains(fingerprint)) throw new InvalidDataException("CurseForge 指纹身份无效。");
+                result[fingerprint] = ParseRelease(file, project);
+            }
+        }
+        return result;
     }
     private static ContentRelease ParseRelease(JsonNode? n, int project)
     {

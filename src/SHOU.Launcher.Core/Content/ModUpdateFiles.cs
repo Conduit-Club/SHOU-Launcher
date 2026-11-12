@@ -28,7 +28,8 @@ public static class ModUpdateFiles
             if (!(previousBytes is null ? now is null : now is not null && previousBytes.AsSpan().SequenceEqual(now))) throw new IOException("安装清单已改变，请重新检查。");
         }
         await VerifyOld(ct).ConfigureAwait(false); validateTarget();
-        var disabled = old.RelativePath.EndsWith(".disabled", StringComparison.Ordinal);
+        var disabledSuffix = old.RelativePath.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) ? ".disabled" : old.RelativePath.EndsWith(".old", StringComparison.OrdinalIgnoreCase) ? ".old" : "";
+        var disabled = disabledSuffix.Length > 0;
         var rootFile = plan.Files.SingleOrDefault(f => !f.Dependency && f.ProjectId == old.ProjectId) ?? throw new InvalidDataException("更新缺少唯一主模组。");
         var files = plan.Files.Select(f => disabled && f == rootFile ? f with { RelativePath = f.RelativePath + ".disabled" } : f).ToArray();
         if (files.Select(f => ContentInstallFiles.PathKey(f.RelativePath)).Distinct(StringComparer.Ordinal).Count() != files.Length) throw new InvalidDataException("更新目标文件路径冲突。");
@@ -48,9 +49,9 @@ public static class ModUpdateFiles
                 await download(file.File, target, ct).ConfigureAwait(false);
                 if (!await ContentInstallFiles.MatchesAsync(target, file.File.Sha1, file.File.Size, ct).ConfigureAwait(false)) throw new InvalidDataException("更新文件校验失败，原文件保留。");
                 await using var input = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
-                completed.Add(new(file.ProjectId, file.ReleaseId, "mod", file.RelativePath, file.File.Sha1, Convert.ToHexStringLower(await SHA512.HashDataAsync(input, ct).ConfigureAwait(false)), file.File.Size, file.File.Uri.AbsoluteUri));
+                completed.Add(new(file.ProjectId, file.ReleaseId, "mod", file.RelativePath, file.File.Sha1, Convert.ToHexStringLower(await SHA512.HashDataAsync(input, ct).ConfigureAwait(false)), file.File.Size, file.File.Uri.AbsoluteUri, file == rootFile ? old.Client : "required", file == rootFile ? old.Server : "unsupported"));
             }
-            var oldEnabledPath = disabled ? old.RelativePath[..^9] : old.RelativePath;
+            var oldEnabledPath = disabled ? old.RelativePath[..^disabledSuffix.Length] : old.RelativePath;
             var merged = previous.Files.Where(f => f.RelativePath != old.RelativePath && f.RelativePath != oldEnabledPath && f.RelativePath != oldEnabledPath + ".disabled" && completed.All(n => ContentInstallFiles.PathKey(n.RelativePath) != ContentInstallFiles.PathKey(f.RelativePath))).Concat(completed).ToArray();
             var nextManifest = ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName);
             await File.WriteAllBytesAsync(nextManifest, ContentInstallFiles.SerializeManifest(new(1, instance.Id, merged)), ct).ConfigureAwait(false);

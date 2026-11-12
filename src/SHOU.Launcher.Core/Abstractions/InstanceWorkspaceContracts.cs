@@ -14,7 +14,9 @@ public sealed record InstanceEdit(string Name, string? JavaExecutable, int? Memo
     InstanceDirectoryMode? DirectoryMode = null, bool ConfirmDirectoryChange = false);
 public sealed record InstanceContentEntry(string Name, string RelativePath, string FullPath, string Kind,
     long Bytes, DateTimeOffset Modified, bool Enabled = true, bool Directory = false,
-    string? ModName = null, string? ModVersion = null, byte[]? IconPng = null)
+    string? ModName = null, string? ModVersion = null, byte[]? IconPng = null,
+    string? ModId = null, string? Description = null, IReadOnlyList<string>? Dependencies = null,
+    IReadOnlyList<string>? EmbeddedMods = null, string? MetadataError = null, DateTimeOffset? Created = null)
 {
     public string DisplayName => ModName ?? Name;
     public string VersionLabel => ModVersion is { Length: > 0 } ? ModVersion : "";

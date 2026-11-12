@@ -129,6 +129,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             if (leavingDownloads) Downloads.OnNavigatingAway();
             if (leavingTools) Tools.OnNavigatingAway();
             if (leavingSettings) Settings.OnNavigatingAway();
+            Instances.ModWorkspaceNavigationChanged();
             NotifyNavigation();
             if (ReferenceEquals(value, Downloads)) Downloads.OnNavigatedTo();
         }

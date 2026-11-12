@@ -31,8 +31,10 @@ public sealed class WpfParityInstanceTests
         var source = Path.Combine(root, "fixture.jar"); await File.WriteAllTextAsync(source, "new");
         var instance = new GameInstance("fixture", "fixture", "1.21.1", game, Loader: "fabric");
         await File.WriteAllTextAsync(Path.Combine(mods, "fixture.jar"), "original");
-        await Assert.ThrowsExactlyAsync<IOException>(() => InstanceWorkspace.ImportAsync(instance, "mods", source, default));
-        Assert.AreEqual("original", await File.ReadAllTextAsync(Path.Combine(mods, "fixture.jar")));
+        await InstanceWorkspace.ImportAsync(instance, "mods", source, default);
+        Assert.AreEqual("new", await File.ReadAllTextAsync(Path.Combine(mods, "fixture.jar")));
+        var backup = Directory.GetFiles(Path.Combine(game, ".shou-mod-backups"), "fixture.jar", SearchOption.AllDirectories).Single();
+        Assert.AreEqual("original", await File.ReadAllTextAsync(backup));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => InstanceWorkspace.ImportAsync(instance with { Loader = "vanilla" }, "mods", source, default));
         if (!OperatingSystem.IsWindows())
         {

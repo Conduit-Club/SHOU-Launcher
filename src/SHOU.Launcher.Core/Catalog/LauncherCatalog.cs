@@ -11,7 +11,7 @@ namespace SHOU.Launcher.Core.Catalog;
 public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<DownloadSource>> sources, bool preferCompleteCatalog = true)
 {
     private const int MaximumBytes = 8 * 1024 * 1024;
-    private async Task<(JsonNode Data, string Source, bool Partial)> ReadAsync(string url, bool modSource, CancellationToken ct, Func<JsonNode, bool> validate)
+    private async Task<(JsonNode Data, string Source, bool Partial)> ReadAsync(string url, bool modSource, CancellationToken ct, Func<JsonNode, bool> validate, object? body = null)
     {
         var candidates = modSource ? ModDownloadSources.Resolve(url, sources()).Select(u => new SourceAddress(u, "Modrinth", 0)).ToArray()
             : DownloadSources.Resolve([url], sources());
@@ -23,7 +23,8 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
             {
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 timeout.CancelAfter(TimeSpan.FromSeconds(20));
-                using var request = new HttpRequestMessage(HttpMethod.Get, candidate.Url);
+                using var request = new HttpRequestMessage(body is null ? HttpMethod.Get : HttpMethod.Post, candidate.Url);
+                if (body is not null) request.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
                 request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.5.0 (+https://github.com/Conduit-Club/SHOU-Launcher)");
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
@@ -144,6 +145,23 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
         if (!release.Files.Any(f => f.Sha1 == sha1)) throw new InvalidDataException("在线模组身份与本地哈希不符。");
         return release;
     }
+    public async Task<IReadOnlyDictionary<string, ContentRelease>> ReleasesFromHashesAsync(IReadOnlyList<string> hashes, CancellationToken ct)
+    {
+        if (hashes.Any(h => !Content.ContentInstallFiles.Hash(h, 40))) throw new ArgumentException("模组哈希无效。");
+        var result = new Dictionary<string, ContentRelease>(StringComparer.Ordinal);
+        foreach (var group in hashes.Distinct(StringComparer.Ordinal).Chunk(100))
+        {
+            var response = await ReadAsync("https://api.modrinth.com/v2/version_files", true, ct, n => n is JsonObject, new { hashes = group, algorithm = "sha1" });
+            foreach (var hash in group)
+                if (response.Data[hash] is { } node)
+                {
+                    var release = ParseRelease(node);
+                    if (!release.Files.Any(f => f.Sha1 == hash)) throw new InvalidDataException("批量模组身份与本地哈希不符。");
+                    result.Add(hash, release);
+                }
+        }
+        return result;
+    }
     public async Task<ContentProject> ProjectAsync(string projectId, CancellationToken ct = default)
     {
         SafePath.Identifier(projectId);
@@ -154,7 +172,8 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
         var kind = (string?)n["project_type"] ?? "";
         if (kind is not ("mod" or "modpack" or "resourcepack" or "shader" or "datapack")) throw new InvalidDataException("未知资源类型。");
         return new(id, slug, (string?)n["title"] ?? id, (string?)n["description"] ?? "", "", (long?)n["downloads"] ?? 0,
-            kind, (string?)n["icon_url"], new Uri("https://modrinth.com/" + kind + "/" + slug), (string?)n["client_side"] ?? "unknown");
+            kind, (string?)n["icon_url"], new Uri("https://modrinth.com/" + kind + "/" + slug), (string?)n["client_side"] ?? "unknown",
+            Categories: ReadStrings(n["categories"]), GameVersions: ReadStrings(n["game_versions"]));
     }
     private static ContentRelease ParseRelease(JsonNode? n)
     {

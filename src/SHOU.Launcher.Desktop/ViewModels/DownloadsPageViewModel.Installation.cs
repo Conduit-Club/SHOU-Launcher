@@ -35,7 +35,8 @@ public sealed partial class DownloadsPageViewModel
     private int _packRevision;
     private bool _packPreflightSucceeded;
     private bool _localPackSelectionDirty;
-    public bool PreparePackAfterImport { get; set; }
+    private bool preparePackAfterImport;
+    public bool PreparePackAfterImport { get => preparePackAfterImport; set => SetProperty(ref preparePackAfterImport, value); }
     public ObservableCollection<ContentTargetChoice> ContentInstallTargets { get; } = [];
     public ContentTargetChoice? SelectedInstallTarget
     {
@@ -121,6 +122,17 @@ public sealed partial class DownloadsPageViewModel
             (installed.Warnings.Count > 0 ? " " + string.Join(" ", installed.Warnings) : "") : Owner.ErrorMessage ?? "安装已取消，已有不同文件未被覆盖。";
     }
     public Task ReadLocalPackAsync(string path) => ReadLocalPackCoreAsync(path, preserveDraft: false);
+    public async Task InstallDroppedPackAsync(string path)
+    {
+        PreparePackAfterImport = true;
+        await ReadLocalPackAsync(path);
+        // A drop is an installation request. Stop only where the pack needs a real user choice.
+        if (!_disposed && LocalPackPath == path && !HasOptionalPackFiles && !HasLocalPackManualFiles && ImportLocalPackCommand.CanExecute(null))
+        {
+            PreparePackAfterImport = true;
+            await ImportLocalPackCommand.ExecuteAsync(null);
+        }
+    }
     private async Task ReadLocalPackCoreAsync(string path, bool preserveDraft, string? expectedSha256 = null)
     {
         if (!PackServiceAvailable || !CanEdit || _disposed) return;

@@ -131,5 +131,5 @@ public sealed partial class InstancesPageViewModel : IDisposable
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException or NotSupportedException) { return null; }
     }
-    public void Dispose() { _workspaceDisposed = true; _pendingContentRefresh = false; DisposeComponents(); ClearScreenshotPreviews(); }
+    public void Dispose() { _workspaceDisposed = true; StopModScan(); _pendingContentRefresh = false; DisposeComponents(); ClearScreenshotPreviews(); }
 }

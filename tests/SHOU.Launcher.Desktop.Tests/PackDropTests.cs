@@ -36,7 +36,7 @@ public sealed class PackDropTests
     [AvaloniaTheory]
     [InlineData("/fixture/中文 pack.mrpack", LocalPackFormat.Modrinth)]
     [InlineData("/fixture/中文 pack.zip", LocalPackFormat.CurseForge)]
-    public async Task FileDropOpensInspectionAndWaitsForExplicitInstall(string path, LocalPackFormat format)
+    public async Task FileDropInstallsUnlessThePackNeedsAnOptionalChoice(string path, LocalPackFormat format)
     {
         var fixture = new PackCatalog { Format = format };
         using var owner = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher(), fixture);
@@ -51,6 +51,7 @@ public sealed class PackDropTests
             Assert.Equal("modpack", owner.Downloads.SelectedCategory.Id);
             Assert.Equal(System.IO.Path.GetFileName(path), System.IO.Path.GetFileName(fixture.Inspected));
             Assert.Equal(format, owner.Downloads.DetectedLocalPack!.Format);
+            if (format == LocalPackFormat.CurseForge) { Assert.NotNull(fixture.Imported); Assert.True(fixture.Imported.PrepareAfterImport); return; }
             Assert.Null(fixture.Imported);
             owner.Downloads.PackInstanceName = "Explicit choice";
             if (format == LocalPackFormat.Modrinth)

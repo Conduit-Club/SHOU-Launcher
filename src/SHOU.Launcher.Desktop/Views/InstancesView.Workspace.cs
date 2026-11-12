@@ -111,9 +111,21 @@ public partial class InstancesView
         try
         {
             var provider = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境无法打开文件选择器。");
+            var instance = vm.SelectedInstance!; var section = vm.SelectedSection.Key;
             var files = await provider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "导入" + vm.SectionTitle, AllowMultiple = true });
-            foreach (var file in files)
-                await vm.ImportContentFileAsync(file.TryGetLocalPath() ?? throw new InvalidOperationException("请选择本机文件。"));
+            if (files.Count > 0) await vm.ImportDroppedContentAsync(instance, section, files.Select(file => file.TryGetLocalPath() ?? throw new InvalidOperationException("请选择本机文件。")).ToArray());
+        }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+    private async void ExportContentInfo_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not InstancesPageViewModel vm || TopLevel.GetTopLevel(this)?.StorageProvider is not { } storage) return;
+        try
+        {
+            using var file = await storage.SaveFilePickerAsync(new FilePickerSaveOptions { Title = "导出资源信息", SuggestedFileName = "mods.csv", DefaultExtension = "csv", FileTypeChoices = [new FilePickerFileType("CSV") { Patterns = ["*.csv"] }, new FilePickerFileType("Text") { Patterns = ["*.txt"] }] });
+            if (file is null) return;
+            var text = vm.ExportContentInformation(file.Name.EndsWith(".csv", StringComparison.OrdinalIgnoreCase));
+            await using var stream = await file.OpenWriteAsync(); stream.SetLength(0); await using var writer = new StreamWriter(stream); await writer.WriteAsync(text);
         }
         catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
     }

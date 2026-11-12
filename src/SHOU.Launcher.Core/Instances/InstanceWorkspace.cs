@@ -11,7 +11,7 @@ public static class InstanceWorkspace
     public static string Folder(string gameDirectory, string kind) => SafePath.Within(gameDirectory, kind switch
     { "worlds" => "saves", "screenshots" => "screenshots", "mods" => "mods", "resourcepacks" => "resourcepacks",
       "shaders" => "shaderpacks", "schematics" => "schematics", _ => throw new ArgumentException("未知实例内容类别。", nameof(kind)) });
-    public static IReadOnlyList<InstanceContentEntry> List(GameInstance instance, string kind)
+    public static IReadOnlyList<InstanceContentEntry> List(GameInstance instance, string kind, CancellationToken ct = default)
     {
         var folder = Folder(instance.GameDirectory, kind);
         if (!System.IO.Directory.Exists(folder)) return [];
@@ -19,7 +19,7 @@ public static class InstanceWorkspace
         var iconBytes = 0;
         foreach (var item in new DirectoryInfo(folder).EnumerateFileSystemInfos().OrderByDescending(i => i.LastWriteTimeUtc))
         {
-            if (entries.Count >= 2000) break;
+            ct.ThrowIfCancellationRequested();
             if (item.LinkTarget is not null || (item.Attributes & FileAttributes.ReparsePoint) != 0) continue;
             var directory = item is DirectoryInfo;
             if ((kind == "worlds") != directory) continue;
@@ -29,14 +29,15 @@ public static class InstanceWorkspace
             var metadata = kind == "mods" ? ModArchiveMetadata.Read(file, iconBytes < 16 * 1024 * 1024) : null;
             iconBytes += metadata?.Icon?.Length ?? 0;
             entries.Add(new(item.Name, relative, file, kind, directory ? 0 : ((FileInfo)item).Length,
-                item.LastWriteTimeUtc, !item.Name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase), directory,
-                metadata?.Name, metadata?.Version, metadata?.Icon));
+                item.LastWriteTimeUtc, !item.Name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) && !item.Name.EndsWith(".old", StringComparison.OrdinalIgnoreCase), directory,
+                metadata?.Name, metadata?.Version, metadata?.Icon, metadata?.Id, metadata?.Description,
+                metadata?.Dependencies, metadata?.Embedded, metadata?.Error, item.CreationTimeUtc));
         }
         return entries;
     }
     public static bool Accepts(string kind, string name)
     {
-        var extension = Path.GetExtension(name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) ? name[..^9] : name).ToLowerInvariant();
+        var extension = Path.GetExtension(name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) ? name[..^9] : name.EndsWith(".old", StringComparison.OrdinalIgnoreCase) ? name[..^4] : name).ToLowerInvariant();
         return kind switch { "mods" => extension is ".jar" or ".litemod", "screenshots" => extension is ".png" or ".jpg" or ".jpeg",
             "resourcepacks" or "shaders" => extension == ".zip", "schematics" => extension is ".litematic" or ".schematic" or ".schem" or ".nbt", _ => false };
     }
@@ -45,11 +46,13 @@ public static class InstanceWorkspace
         if (!Path.IsPathFullyQualified(source)) throw new ArgumentException("导入文件须为绝对路径。");
         var input = new FileInfo(source);
         if (!input.Exists || input.LinkTarget is not null || !Accepts(kind, input.Name)) throw new InvalidDataException("此文件不能导入所选类别。");
-        if (input.Length > 512L * 1024 * 1024) throw new InvalidDataException("单个导入文件超过512 MiB限制。");
-        if (kind == "mods" && (!InstanceIdentity.SupportsModDirectory(instance.Loader) || input.Name.EndsWith(".litemod", StringComparison.OrdinalIgnoreCase) && instance.Loader != "liteloader")) throw new InvalidOperationException("此实例的加载器不支持该模组目录或文件类型，未导入。");
+        var name = kind == "mods" ? input.Name.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) ? input.Name[..^9] : input.Name.EndsWith(".old", StringComparison.OrdinalIgnoreCase) ? input.Name[..^4] : input.Name : input.Name;
+        if (kind == "mods" && (!InstanceIdentity.SupportsModDirectory(instance.Loader) || name.EndsWith(".litemod", StringComparison.OrdinalIgnoreCase) && instance.Loader != "liteloader")) throw new InvalidOperationException("此实例的加载器不支持该模组目录或文件类型，未导入。");
         var folder = Folder(instance.GameDirectory, kind); System.IO.Directory.CreateDirectory(folder);
-        var target = SafePath.Within(folder, input.Name);
-        if (File.Exists(target)) throw new IOException("同名文件已存在，原文件保留。");
+        var target = SafePath.Within(folder, name);
+        if (Path.GetFullPath(source).Equals(target, OperatingSystem.IsWindows() || OperatingSystem.IsMacOS() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)) return;
+        if (File.Exists(target) && kind != "mods") throw new IOException("同名文件已存在，原文件保留。");
+        var sourceModified = input.LastWriteTimeUtc;
         var temporary = SafePath.Within(folder, ".import-" + Guid.NewGuid().ToString("N"));
         try
         {
@@ -60,8 +63,11 @@ public static class InstanceWorkspace
                 await from.CopyToAsync(to, ct).ConfigureAwait(false);
                 if (to.Length != input.Length) throw new IOException("导入文件复制不完整。");
             }
-            _ = SafePath.Within(instance.GameDirectory, kind == "shaders" ? "shaderpacks/" + input.Name : kind + "/" + input.Name);
-            File.Move(temporary, target, false);
+            input.Refresh();
+            if (!input.Exists || input.Length != new FileInfo(temporary).Length || input.LastWriteTimeUtc != sourceModified) throw new IOException("导入源在复制期间发生变化，未安装。");
+            _ = SafePath.Within(instance.GameDirectory, kind == "shaders" ? "shaderpacks/" + name : kind + "/" + name);
+            if (kind == "mods" && File.Exists(target)) await ModFileManagement.ReplaceImportedAsync(instance, "mods/" + name, temporary, ct).ConfigureAwait(false);
+            else File.Move(temporary, target, false);
         }
         finally { if (File.Exists(temporary)) File.Delete(temporary); }
     }
@@ -72,9 +78,10 @@ public static class InstanceWorkspace
         var source = SafePath.Within(instance.GameDirectory, relative);
         var file = new FileInfo(source);
         if (!file.Exists || file.LinkTarget is not null) throw new IOException("模组文件不存在或为链接。");
-        var isEnabled = !source.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase);
+        var oldSuffix = source.EndsWith(".old", StringComparison.OrdinalIgnoreCase);
+        var isEnabled = !source.EndsWith(".disabled", StringComparison.OrdinalIgnoreCase) && !oldSuffix;
         if (isEnabled == enabled) return;
-        var next = enabled ? relative[..^9] : relative + ".disabled";
+        var next = enabled ? relative[..^(oldSuffix ? 4 : 9)] : relative + ".disabled";
         var target = SafePath.Within(instance.GameDirectory, next);
         File.Move(source, target, false);
     }

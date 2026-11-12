@@ -194,26 +194,49 @@ public sealed partial class InstancesPageViewModel
     private async Task RefreshContentAsync()
     {
         var selected = SelectedInstance!; var section = SelectedSection.Key;
+        StopModScan(); contentRows.Clear();
         await Owner.RunAsync("读取实例" + SectionTitle, async ct =>
         {
             var rows = await ((IInstanceWorkspaceService)Service).ListInstanceContentAsync(selected.Id, section, ct);
             if (SelectedInstance?.Id != selected.Id || SelectedSection.Key != section) return;
-            ContentEntries.Clear(); foreach (var row in rows) ContentEntries.Add(row);
+            refreshingContentRows = true;
+            try { ContentEntries.Clear(); foreach (var row in rows) ContentEntries.Add(row); }
+            finally { refreshingContentRows = false; }
             SelectedContent = null; NotifyWorkspace();
             if (section == "screenshots") await LoadScreenshotPreviewsAsync(selected.Id, rows, ct);
+            MarkDuplicateMods(); NotifyContentFilter();
         }, true);
+        if (SelectedInstance?.Id == selected.Id && SelectedSection.Key == section) StartAutoModScan();
     }
     public async Task ImportContentFileAsync(string path)
     {
         if (!CanImportContent) return;
         var section = SelectedSection.Key;
-        if (await Owner.RunAsync("导入实例文件", ct => ((IInstanceWorkspaceService)Service).ImportInstanceContentAsync(SelectedInstance!.Id, section, path, ct)))
+        if (await Owner.RunAsync("导入实例文件", async ct => { await StopModScanAsync(); await ((IInstanceWorkspaceService)Service).ImportInstanceContentAsync(SelectedInstance!.Id, section, path, ct); }))
         { Feedback = "已导入文件。"; await RefreshContentCommand.ExecuteAsync(null); }
+    }
+    public async Task ImportDroppedContentAsync(GameInstance expected, string kind, IReadOnlyList<string> paths)
+    {
+        if (SelectedInstance != expected || !CanEdit || IsSelectedInstanceRunning || Service is not IInstanceWorkspaceService workspace) return;
+        var completed = 0;
+        var success = await Owner.RunAsync("导入实例文件", async ct =>
+        {
+            await StopModScanAsync();
+            foreach (var path in paths)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (SelectedInstance != expected) throw new IOException("目标实例已改变，剩余文件未导入。");
+                await workspace.ImportInstanceContentAsync(expected.Id, kind, path, ct); completed++;
+            }
+        });
+        Feedback = success ? $"已导入 {completed} 个文件。" : $"已导入 {completed}/{paths.Count} 个文件；其余未完成。";
+        if (ReferenceEquals(Owner.SelectedPage, this) && SelectedInstance == expected && SelectedSection.Key == kind)
+            await RefreshContentCommand.ExecuteAsync(null);
     }
     private async Task ToggleModAsync()
     {
         var selected = SelectedContent!;
-        if (await Owner.RunAsync(selected.Enabled ? "禁用模组" : "启用模组", ct => ((IInstanceWorkspaceService)Service).SetInstanceModEnabledAsync(SelectedInstance!.Id, selected.RelativePath, !selected.Enabled, ct)))
+        if (await Owner.RunAsync(selected.Enabled ? "禁用模组" : "启用模组", async ct => { await StopModScanAsync(); await ((IInstanceWorkspaceService)Service).SetInstanceModEnabledAsync(SelectedInstance!.Id, selected.RelativePath, !selected.Enabled, ct); }))
             await RefreshContentCommand.ExecuteAsync(null);
     }
     private Task OpenContentDirectoryAsync() => OpenInstanceFolderAsync(SelectedSection.Key);
