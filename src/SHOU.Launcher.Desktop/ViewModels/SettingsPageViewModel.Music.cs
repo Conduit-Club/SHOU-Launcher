@@ -10,6 +10,9 @@ public sealed partial class SettingsPageViewModel
 {
     private readonly BackgroundAudio backgroundAudio = new();
     private MusicTrack? selectedMusic, playingTrack;
+    private string musicFeedback = "";
+    public string MusicFeedback { get => musicFeedback; private set { if (SetProperty(ref musicFeedback, value)) OnPropertyChanged(nameof(HasMusicFeedback)); } }
+    public bool HasMusicFeedback => !string.IsNullOrWhiteSpace(MusicFeedback);
     private bool musicWanted, musicAutoWasEnabled, musicStoppedManually, previousMusicGameRunning;
     private decimal appliedVolume = -1;
     private readonly Avalonia.Threading.DispatcherTimer musicTimer = new() { Interval = TimeSpan.FromSeconds(.5) };
@@ -32,9 +35,9 @@ public sealed partial class SettingsPageViewModel
             {
                 SHOU.Launcher.Core.IO.SafePath.RejectLinks(root);
                 if (Directory.Exists(root)) foreach (var file in new DirectoryInfo(root).EnumerateFiles().Where(f => f.LinkTarget is null && f.Extension.ToLowerInvariant() is ".mp3" or ".wav" or ".m4a").OrderBy(f => f.Name).Take(200)) MusicTracks.Add(new(file.Name, file.FullName));
-                SelectedMusic = MusicTracks.FirstOrDefault(); LauncherFeedback = MusicTracks.Count == 0 ? "音乐目录中没有 WAV、MP3 或 M4A 文件。" : "";
+                SelectedMusic = MusicTracks.FirstOrDefault(); MusicFeedback = MusicTracks.Count == 0 ? "音乐目录中没有 WAV、MP3 或 M4A 文件。" : "";
             }
-            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { LauncherFeedback = UiPrivacy.Redact(ex.Message); }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { MusicFeedback = UiPrivacy.Redact(ex.Message); }
         });
         PlayMusicCommand = Command(() => { musicWanted = true; musicStoppedManually = false; playingTrack = null; backgroundAudio.Stop(); UpdateMusicPlayback(); }, () => SelectedMusic is not null);
         StopMusicCommand = Command(() => { musicWanted = false; musicStoppedManually = true; backgroundAudio.Stop(); playingTrack = null; });
@@ -67,7 +70,7 @@ public sealed partial class SettingsPageViewModel
             backgroundAudio.Play(track.Path, p.MusicVolume); playingTrack = track; appliedVolume = p.MusicVolume;
         }
         catch (Exception ex) when (ex is IOException or ArgumentException or InvalidOperationException)
-        { musicWanted = false; musicStoppedManually = true; backgroundAudio.Stop(); LauncherFeedback = UiPrivacy.Redact(ex.Message); }
+        { musicWanted = false; musicStoppedManually = true; backgroundAudio.Stop(); MusicFeedback = UiPrivacy.Redact(ex.Message); }
     }
 
     internal void DisposeLauncherSettings() { autoSaveTimer.Stop(); musicTimer.Stop(); DisposeAbout(); settingsLifetime.Cancel(); settingsWork?.Cancel(); backgroundAudio.Dispose(); }

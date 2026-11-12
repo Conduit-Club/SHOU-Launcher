@@ -156,6 +156,38 @@ public sealed class SettingsAutoSaveParityTests
         }
         finally { window.Close(); }
     }
+    [AvaloniaFact]
+    public async Task CategoryNavigationStartsAtTopWhileAutosaveRetainsCurrentScrollAndHeadingFits()
+    {
+        var service = new FakeLauncherService(); using var root = new MainWindowViewModel(service, new FakeExternalLauncher());
+        var window = new MainWindow { DataContext = root }; window.Show(); root.ShowSettingsCommand.Execute(null);
+        try
+        {
+            root.Settings.SelectedSection = "appearance"; Pump();
+            var scroller = Find<ScrollViewer>(window, "SettingsPageScroller");
+            scroller.Offset = new(0, 400); Pump(); var offset = scroller.Offset; Assert.True(offset.Y > 0);
+            root.Settings.BackgroundBlur = 5; Assert.True(await root.Settings.FlushAutoSaveAsync()); Pump(); Assert.Equal(offset, scroller.Offset);
+            root.Settings.SelectedSection = "about"; Pump(); Assert.Equal(0, scroller.Offset.Y);
+            var title = Find<TextBlock>(window, "AboutSoftwareName"); Assert.True(title.LineHeight >= title.FontSize * 1.3); Assert.True(title.Bounds.Height >= title.FontSize);
+        }
+        finally { window.Close(); }
+        void Pump() { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); }
+    }
+    [AvaloniaFact]
+    public void EmptyMusicFeedbackAppearsOnlyInsideTheMusicSection()
+    {
+        using var root = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
+        var window = new MainWindow { DataContext = root }; window.Show(); root.ShowSettingsCommand.Execute(null);
+        try
+        {
+            root.Settings.RefreshMusicCommand.Execute(null); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
+            Assert.True(root.Settings.HasMusicFeedback); Assert.Equal("", root.Settings.LauncherFeedback);
+            Assert.False(Find<TextBlock>(window, "MusicStatus").IsEffectivelyVisible);
+            root.Settings.SelectedSection = "appearance"; Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Assert.True(Find<TextBlock>(window, "MusicStatus").IsEffectivelyVisible);
+            root.Settings.SelectedSection = "about"; Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Assert.False(Find<TextBlock>(window, "MusicStatus").IsEffectivelyVisible);
+        }
+        finally { window.Close(); }
+    }
     private sealed class DelayedSaveService : FakeLauncherService
     {
         public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);

@@ -250,6 +250,7 @@
           </ComboBox.ItemTemplate>
         </ComboBox>
       </Grid>
+      <TextBlock Name="MusicStatus" Text="{loc:Translate MusicFeedback}" IsVisible="{Binding HasMusicFeedback}" Classes="muted"/>
       <ComboBox Name="MusicTrackSelector" ItemsSource="{Binding MusicTracks}" SelectedItem="{Binding SelectedMusic}">
         <ComboBox.ItemTemplate>
           <DataTemplate>
@@ -352,7 +353,7 @@
       <Grid ColumnDefinitions="48,*" ColumnSpacing="12">
         <Image Source="/Assets/Conduit/club-logo.png" Width="42" Height="42"/>
         <StackPanel Grid.Column="1" Spacing="8">
-          <TextBlock Text="{loc:Translate SoftwareName}" FontSize="24" FontWeight="SemiBold"/>
+          <TextBlock Name="AboutSoftwareName" Text="{loc:Translate SoftwareName}" FontSize="24" LineHeight="34" FontWeight="SemiBold"/>
           <TextBlock Text="{loc:Loc t2a2846c57eb53222}"/>
           <TextBlock Text="{loc:Loc t40a782d43a96162f}"/>
           <TextBlock Text="{loc:Translate SoftwareVersion}" Classes="muted"/>

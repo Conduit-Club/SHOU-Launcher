@@ -80,7 +80,18 @@ public partial class SettingsView : UserControl
         if (localeOwner is { } next) { next.PropertyChanged += LocaleLayoutChanged; this.FindControl<Grid>("SettingsLayout")!.ColumnDefinitions[0].Width = next.SidebarWidth; }
     }
     private void LocaleLayoutChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
-    { if (e.PropertyName == nameof(SettingsPageViewModel.SidebarWidth) && localeOwner is { } vm) this.FindControl<Grid>("SettingsLayout")!.ColumnDefinitions[0].Width = vm.SidebarWidth; }
+    {
+        if (localeOwner is not { } vm) return;
+        if (e.PropertyName == nameof(SettingsPageViewModel.SidebarWidth)) this.FindControl<Grid>("SettingsLayout")!.ColumnDefinitions[0].Width = vm.SidebarWidth;
+        if (e.PropertyName == nameof(SettingsPageViewModel.SelectedSection))
+        {
+            var section = vm.SelectedSection;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(localeOwner, vm) && vm.SelectedSection == section) this.FindControl<ScrollViewer>("SettingsPageScroller")!.Offset = default;
+            }, Avalonia.Threading.DispatcherPriority.Loaded);
+        }
+    }
     private async void PickGameRoot_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not SettingsPageViewModel vm) return;
