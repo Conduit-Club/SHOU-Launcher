@@ -47,12 +47,12 @@ public sealed partial class LauncherService : ILauncherInformationService
         if (remote)
         {
             if (!Uri.TryCreate(location, UriKind.Absolute, out var uri) || uri.Scheme != "https" || !string.IsNullOrEmpty(uri.UserInfo) || uri.IsLoopback) throw new ArgumentException("网络主页须为不含凭据的 HTTPS 文本地址。");
-            bytes = await ReadPublicDocumentAsync(uri, 262144, cancellationToken);
+            bytes = await ReadPublicDocumentAsync(uri, 262144, cancellationToken, "text/plain");
         }
         else
         {
-            if (!Path.IsPathFullyQualified(location) || Path.GetExtension(location).ToLowerInvariant() is not (".txt" or ".md")) throw new ArgumentException("本地主页支持 TXT / Markdown 文件。");
-            VerifiedDownloader.RejectLink(location);
+            if (!Path.IsPathFullyQualified(location) || Path.GetExtension(location).ToLowerInvariant() is not (".txt" or ".md" or ".xaml")) throw new ArgumentException("本地主页支持 TXT / Markdown / XAML 文件。");
+            SafePath.RejectLinks(location);
             if (new FileInfo(location).Length > 262144) throw new InvalidDataException("主页文件不能超过 256 KiB。");
             bytes = await File.ReadAllBytesAsync(location, cancellationToken);
         }

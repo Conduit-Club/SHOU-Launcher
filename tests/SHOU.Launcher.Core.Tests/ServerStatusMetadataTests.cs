@@ -31,6 +31,24 @@ public sealed class ServerStatusMetadataTests
         }
         finally { listener.Stop(); }
     }
+    [TestMethod, DataRow(false), DataRow(true)]
+    public async Task ProtocolPingChecksThePongNonceWithoutLosingAValidStatus(bool wrongNonce)
+    {
+        var listener = new TcpListener(IPAddress.Loopback, 0); listener.Start();
+        try
+        {
+            var server = Task.Run(async () =>
+            {
+                using var client = await listener.AcceptTcpClientAsync(); await using var stream = client.GetStream(); var length = new byte[1]; await stream.ReadExactlyAsync(length); var request = new byte[length[0] + 2]; await stream.ReadExactlyAsync(request);
+                var json = Encoding.UTF8.GetBytes("{\"players\":{\"online\":1},\"description\":\"Ping fixture\"}"); using var payload = new MemoryStream(); payload.WriteByte(0); VarInt(payload, json.Length); payload.Write(json); using var packet = new MemoryStream(); VarInt(packet, (int)payload.Length); payload.Position = 0; await payload.CopyToAsync(packet); await stream.WriteAsync(packet.ToArray());
+                var ping = new byte[10]; await stream.ReadExactlyAsync(ping); Assert.AreEqual(9, ping[0]); Assert.AreEqual(1, ping[1]); if (wrongNonce) ping[9] ^= 1; await stream.WriteAsync(ping);
+            });
+            var result = await ClubStatusProbe.ProbeAsync(new("fixture", "Fixture", "127.0.0.1:" + ((IPEndPoint)listener.LocalEndpoint).Port)); await server;
+            Assert.AreEqual("在线", result.Status); Assert.AreEqual("Ping fixture", result.Motd);
+            if (wrongNonce) Assert.IsNull(result.PingMilliseconds); else Assert.IsTrue(result.PingMilliseconds >= 0);
+        }
+        finally { listener.Stop(); }
+    }
     [TestMethod]
     public async Task ExplicitCancellationIsNotReportedAsAnOfflineServer()
     {

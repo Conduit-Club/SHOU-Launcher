@@ -76,6 +76,8 @@ public sealed record ContentSourceChoice(string Id, string Name);
 public sealed class ContentProjectRowViewModel : ObservableObject, IDisposable
 {
     private bool _disposed;
+    private bool selected;
+    public bool IsSelected { get => selected; set => SetProperty(ref selected, value); }
     private Avalonia.Media.Imaging.Bitmap? _icon;
     public Avalonia.Media.Imaging.Bitmap? Icon { get => _icon; private set { if (SetProperty(ref _icon, value)) OnPropertyChanged(nameof(HasIcon)); } }
     public bool HasIcon => Icon is not null;
@@ -294,7 +296,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public bool HasDownloadedFile => LastDownloadPath.Length > 0;
     public ObservableCollection<ContentProjectRowViewModel> FavoriteProjects { get; } = [];
     public bool HasFavorites => FavoriteProjects.Count > 0;
-    public bool IsProjectFavorite => _selectedProject is { } project && _favorites.Any(p => p.Id == project.Id);
+    public bool IsProjectFavorite => _selectedProject is { } project && _favorites.Any(p => p.Id == project.Id) && (SelectedFavoriteFolder?.Projects.Contains(project.Id) ?? true);
     public string FavoriteAction => IsProjectFavorite ? "取消收藏" : "收藏";
     public string FavoriteStatus { get => _favoriteStatus; private set { SetProperty(ref _favoriteStatus, value); OnPropertyChanged(nameof(ShowProjectFavoriteStatus)); } }
     public bool ShowProjectFavoriteStatus => _favoritesLoadFailed;
@@ -376,6 +378,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
             var uri = InstallerPageUri;
             return Owner.RunControlAsync("打开官方网站", ct => Owner.ExternalLauncher.OpenUriAsync(uri, ct));
         }, () => IsInstallerPage);
+        InitializeFavorites();
         LoadFavorites();
     }
 
@@ -402,7 +405,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     }
     private void NotifyPage()
     {
-        OnPropertyChanged(nameof(ShowRequestStatus));
+        OnPropertyChanged(nameof(ShowRequestStatus)); OnPropertyChanged(nameof(CanTranslateDescription)); OnPropertyChanged(nameof(HasWikiReference));
         OnPropertyChanged(nameof(InstallerIntroduction));
         OnPropertyChanged(nameof(ContentSourceChoices)); OnPropertyChanged(nameof(SelectedSource));
         foreach (var category in Categories) category.RefreshSelection();
@@ -537,7 +540,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         projectHeaderRow = new(this, project); projectHeaderRow.PropertyChanged += ProjectHeaderIconChanged;
         OnPropertyChanged(nameof(ProjectIcon)); OnPropertyChanged(nameof(HasProjectIcon));
         _ = LoadProjectHeaderIconAsync(projectHeaderRow);
-        ResetResourceInstallStatus();
+        ResetResourceInstallStatus(); ResetProjectDescription();
         OnPropertyChanged(nameof(ProjectSourceName));
         ReleaseGroups.Clear(); LastDownloadPath = "";
         foreach (var name in new[] { nameof(SelectedProject), nameof(ProjectTitle), nameof(ProjectDescription), nameof(ProjectDetail), nameof(ProjectTile), nameof(IsProjectFavorite), nameof(FavoriteAction), nameof(HasReleases) }) OnPropertyChanged(name);
@@ -574,52 +577,6 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     }
     private static string? NullIfBlank(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
-    private string FavoritesPath => _favoritesPathOverride ?? SHOU.Launcher.Core.IO.SafePath.Within(Service.Paths.DataDirectory, "preferences/download-favorites.json");
-    private string favoriteQuery = "";
-    public string FavoriteQuery { get => favoriteQuery; set { if (SetProperty(ref favoriteQuery, value ?? "")) { OnPropertyChanged(nameof(FilteredFavoriteProjects)); OnPropertyChanged(nameof(HasNoFavoriteMatches)); } } }
-    public IReadOnlyList<ContentProjectRowViewModel> FilteredFavoriteProjects => FavoriteProjects.Where(p => string.Join(" ", p.Project.Title, p.Project.Slug, p.Project.Author, p.Project.Description, p.Project.Kind, p.Project.Source).Contains(FavoriteQuery.Trim(), StringComparison.OrdinalIgnoreCase)).ToArray();
-    public bool HasNoFavoriteMatches => HasFavorites && FavoriteQuery.Trim().Length > 0 && FilteredFavoriteProjects.Count == 0;
-    private void LoadFavorites()
-    {
-        try
-        {
-            var path = FavoritesPath;
-            if (!File.Exists(path)) { FavoriteStatus = "尚未收藏任何资源。"; return; }
-            if (new FileInfo(path).Length > 1048576) throw new IOException("收藏文件超过大小限制。");
-            var items = System.Text.Json.JsonSerializer.Deserialize<List<ContentProject>>(File.ReadAllText(path)) ?? [];
-            if (items.Count > 1000 || items.Any(p => string.IsNullOrWhiteSpace(p.Id) || p.PageUri.Scheme != "https" || !p.PageUri.IsDefaultPort || p.PageUri.UserInfo.Length != 0 || (p.Source == "curseforge" ? !p.Id.StartsWith("cf-", StringComparison.Ordinal) || p.PageUri.Host is not ("www.curseforge.com" or "curseforge.com") : p.PageUri.Host != "modrinth.com"))) throw new IOException("收藏文件格式无效。");
-            _favorites.AddRange(items.DistinctBy(p => p.Id)); RefreshFavorites();
-        }
-        catch (Exception ex) { _favoritesLoadFailed = true; FavoriteStatus = "收藏读取失败，原文件已保留：" + UiPrivacy.Redact(ex.Message); }
-    }
-    private void RefreshFavorites()
-    {
-        ClearProjectRows(FavoriteProjects); foreach (var project in _favorites) FavoriteProjects.Add(new(this, project));
-        FavoriteStatus = _favorites.Count == 0 ? "尚未收藏任何资源。" : $"已保存 {_favorites.Count} 项收藏。";
-        OnPropertyChanged(nameof(HasFavorites)); OnPropertyChanged(nameof(IsProjectFavorite)); OnPropertyChanged(nameof(FavoriteAction));
-        OnPropertyChanged(nameof(FilteredFavoriteProjects)); OnPropertyChanged(nameof(HasNoFavoriteMatches)); RestoreFavoriteIcons();
-    }
-    private async Task ToggleFavoriteAsync()
-    {
-        if (_selectedProject is not { } project) return;
-        var next = _favorites.Where(p => p.Id != project.Id).ToList();
-        if (!IsProjectFavorite) next.Add(project);
-        if (next.Count > 1000) { Owner.ShowError("最多保存 1000 项收藏。"); return; }
-        if (await Owner.RunAsync("保存收藏", async ct =>
-        {
-            var path = FavoritesPath;
-            Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-            if (_favoritesPathOverride is null) path = FavoritesPath;
-            var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
-            try
-            {
-                await File.WriteAllTextAsync(temporary, System.Text.Json.JsonSerializer.Serialize(next), ct);
-                ct.ThrowIfCancellationRequested(); File.Move(temporary, path, true);
-            }
-            finally { if (File.Exists(temporary)) File.Delete(temporary); }
-        })) { _favorites.Clear(); _favorites.AddRange(next); RefreshFavorites(); }
-        else FavoriteStatus = Owner.ErrorMessage ?? "保存收藏已取消。";
-    }
     private static void ClearProjectRows(ObservableCollection<ContentProjectRowViewModel> rows)
     {
         foreach (var row in rows) row.Dispose();
@@ -659,6 +616,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         RefreshContentTargets(snapshot);
         foreach (var task in PackTasks) task.Refresh(snapshot);
         NotifyPackTasks();
+        OnPropertyChanged(nameof(CanTranslateDescription)); OnPropertyChanged(nameof(HasWikiReference));
         OnPropertyChanged(nameof(IsEmpty)); OnPropertyChanged(nameof(Summary)); NotifyInstallDraft(); base.Refresh(snapshot);
     }
     public override void NotifyCommands()
@@ -672,6 +630,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         ImportLocalPackCommand?.NotifyCanExecuteChanged(); ReadCachedPackCommand?.NotifyCanExecuteChanged();
         ConfirmWorldContentInstallCommand?.NotifyCanExecuteChanged(); CancelWorldContentPreviewCommand?.NotifyCanExecuteChanged(); RefreshWorldContentTargetsCommand?.NotifyCanExecuteChanged();
         foreach (var loader in AdditionalLoaders) loader.NotifyState();
+        foreach (var command in new[] { CreateFavoriteFolderCommand, RenameFavoriteFolderCommand, DeleteFavoriteFolderCommand, RemoveSelectedFavoritesCommand, ImportFavoriteShareCommand }) command?.NotifyCanExecuteChanged();
         base.NotifyCommands(); OnPropertyChanged(nameof(CanQuery));
         TryStartCatalogRequest(); TryStartSearchRequest();
     }

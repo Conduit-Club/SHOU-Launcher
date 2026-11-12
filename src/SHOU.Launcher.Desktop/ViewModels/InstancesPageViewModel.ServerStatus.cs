@@ -17,7 +17,7 @@ public sealed class InstanceServerDraftViewModel(Guid draftId, int? existingInde
     public string Motd => result?.Motd ?? "";
     public bool HasMotd => Motd.Length > 0;
     public string StatusSummary => querying ? Localization.UiLocalization.Instance.Text("正在查询…") : result is null ? Localization.UiLocalization.Instance.Text("尚未查询") :
-        string.Join(" · ", new[] { Localization.UiLocalization.Instance.Text(result.Status), result.OnlinePlayers is { } online ? online + (result.MaximumPlayers is { } maximum ? " / " + maximum : "") : "", result.GameVersion ?? "", result.ResponseMilliseconds is { } elapsed ? Localization.UiLocalization.Instance.Format("响应 {0} ms", elapsed) : "" }.Where(x => x.Length > 0));
+        string.Join(" · ", new[] { Localization.UiLocalization.Instance.Text(result.Status), result.OnlinePlayers is { } online ? online + (result.MaximumPlayers is { } maximum ? " / " + maximum : "") : "", result.GameVersion ?? "", result.PingMilliseconds is { } ping ? $"Ping {ping} ms" : result.ResponseMilliseconds is { } elapsed ? Localization.UiLocalization.Instance.Format("响应 {0} ms", elapsed) : "" }.Where(x => x.Length > 0));
     internal void SetQuerying(bool value) { querying = value; OnPropertyChanged(nameof(StatusSummary)); }
     internal void SetStatus(ClubServer value)
     {

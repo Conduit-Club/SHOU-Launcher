@@ -42,6 +42,9 @@ public sealed partial class HomePageViewModel
     public Bitmap? HomeBackground => background;
     public bool IsCustomHome => presentation.HomeSource != "default";
     public bool ShowDefaultHome => !IsCustomHome;
+    public string HomeDocumentLocation => presentation.HomeLocation;
+    public bool ShowCustomHomeDocument => IsCustomHome && presentation.HomeSource != "empty";
+    public bool IsRemoteHome => presentation.HomeSource == "remote";
     public string HomeDocument { get => homeDocument; private set => SetProperty(ref homeDocument, value); }
     public bool ShowGameTip => presentation.ShowLaunchTips;
     public string GameTip => "你可以在实例设置中为每个实例选择独立的 Java 和内存。";
@@ -54,7 +57,7 @@ public sealed partial class HomePageViewModel
         backgroundTimer.Interval = TimeSpan.FromSeconds((double)settings.SlideshowSeconds);
         backgroundTimer.IsEnabled = settings.RotateHomeBackground && backgroundFiles.Length > 1;
         foreach (var field in new[] { nameof(HasHomeBackdrop), nameof(BackgroundBrush), nameof(PreviousBackgroundBrush), nameof(BackgroundImageOpacity), nameof(BackgroundImageBlur) }) OnPropertyChanged(field);
-        foreach (var name in new[] { nameof(IsCustomHome), nameof(ShowDefaultHome), nameof(ShowGameTip), nameof(ShowClubIntroduction), nameof(ShowClubServers) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(IsCustomHome), nameof(ShowCustomHomeDocument), nameof(ShowDefaultHome), nameof(HomeDocumentLocation), nameof(IsRemoteHome), nameof(ShowGameTip), nameof(ShowClubIntroduction), nameof(ShowClubServers) }) OnPropertyChanged(name);
         if (previousHome != settings.HomeSource + settings.HomeLocation) _ = ReadCustomHomeAsync();
     }
     public void RefreshBackgrounds()
@@ -94,9 +97,11 @@ public sealed partial class HomePageViewModel
         foreach (var field in new[] { nameof(HomeBackground), nameof(BackgroundBrush), nameof(PreviousBackgroundBrush) }) OnPropertyChanged(field);
         Dispatcher.UIThread.Post(() => BackgroundFade = 1);
     }
+    public CommunityToolkit.Mvvm.Input.AsyncRelayCommand RefreshCustomHomeCommand => refreshCustomHomeCommand ??= new(ReadCustomHomeAsync);
+    private CommunityToolkit.Mvvm.Input.AsyncRelayCommand? refreshCustomHomeCommand;
     private async Task ReadCustomHomeAsync()
     {
-        customHomeRead?.Cancel(); var generation = ++homeGeneration;
+        customHomeRead?.Cancel(); var generation = ++homeGeneration; HomeDocument = "";
         if (!IsCustomHome || presentation.HomeSource == "empty" || Service is not ILauncherInformationService info) { HomeDocument = ""; return; }
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(communityLifetime.Token); customHomeRead = cts;
         try { var text = await info.ReadHomeDocumentAsync(presentation.HomeLocation, presentation.HomeSource == "remote", cts.Token); if (generation == homeGeneration && !cts.IsCancellationRequested) HomeDocument = text; }

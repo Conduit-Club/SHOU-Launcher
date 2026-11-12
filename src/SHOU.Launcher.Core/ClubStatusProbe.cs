@@ -32,11 +32,27 @@ public static class ClubStatusProbe
             var version = json?["version"]?["name"] is JsonValue versionValue && versionValue.TryGetValue<string>(out var versionText) ? versionText : null;
             int? maximum = json?["players"]?["max"] is JsonValue maxValue && maxValue.TryGetValue<int>(out var max) && max >= 0 ? max : null;
             var favicon = json?["favicon"] is JsonValue iconValue && iconValue.TryGetValue<string>(out var iconText) ? iconText : null;
-            return server with { Status = "在线", OnlinePlayers = online, MaximumPlayers = maximum, Motd = PlainMotd(json?["description"]), GameVersion = version is null ? null : version[..Math.Min(128, version.Length)], ResponseMilliseconds = elapsed.ElapsedMilliseconds, IconPng = Icon(favicon) };
+            var queryMilliseconds = elapsed.ElapsedMilliseconds;
+            var ping = await PingAsync(stream, timeout.Token).ConfigureAwait(false);
+            return server with { Status = "在线", OnlinePlayers = online, MaximumPlayers = maximum, Motd = PlainMotd(json?["description"]), GameVersion = version is null ? null : version[..Math.Min(128, version.Length)], ResponseMilliseconds = queryMilliseconds, PingMilliseconds = ping, IconPng = Icon(favicon) };
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
         catch (Exception ex) when (ex is IOException or InvalidDataException or SocketException or OperationCanceledException or System.Text.Json.JsonException or UriFormatException or InvalidOperationException or FormatException)
-        { return server with { Status = "状态暂不可用", OnlinePlayers = null, MaximumPlayers = null, Motd = null, ResponseMilliseconds = null, GameVersion = null, IconPng = null }; }
+        { return server with { Status = "状态暂不可用", OnlinePlayers = null, MaximumPlayers = null, Motd = null, PingMilliseconds = null, ResponseMilliseconds = null, GameVersion = null, IconPng = null }; }
+    }
+    private static async Task<long?> PingAsync(Stream stream, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromMilliseconds(750));
+        try
+        {
+            var nonce = Stopwatch.GetTimestamp(); var packet = new byte[10]; packet[0] = 9; packet[1] = 1; BinaryPrimitives.WriteInt64BigEndian(packet.AsSpan(2), nonce);
+            var elapsed = Stopwatch.StartNew(); await stream.WriteAsync(packet, timeout.Token).ConfigureAwait(false);
+            if (await ReadVarIntAsync(stream, timeout.Token).ConfigureAwait(false) != 9 || await ReadVarIntAsync(stream, timeout.Token).ConfigureAwait(false) != 1) return null;
+            var reply = new byte[8]; await stream.ReadExactlyAsync(reply, timeout.Token).ConfigureAwait(false);
+            return BinaryPrimitives.ReadInt64BigEndian(reply) == nonce ? elapsed.ElapsedMilliseconds : null;
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+        catch (Exception ex) when (ex is IOException or OperationCanceledException or SocketException) { return null; }
     }
     private static string PlainMotd(JsonNode? value)
     {

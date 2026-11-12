@@ -13,6 +13,10 @@ public sealed partial class SettingsPageViewModel
     private DownloadSourcePreference sourcePreference;
     private string gameTitle = "", jvmArguments = "";
     private string gameArguments = "", beforeLaunchExecutable = "", beforeLaunchArguments = "";
+    private bool debugLogging;
+    private string classpathPrepend = "";
+    public bool DebugLogging { get => debugLogging; set { if (SetProperty(ref debugLogging, value)) MarkDirty(); } }
+    public string ClasspathPrepend { get => classpathPrepend; set { if (SetProperty(ref classpathPrepend, value ?? "")) MarkDirty(); } }
     private bool useConsoleJava;
     public bool UseConsoleJava { get => useConsoleJava; set { if (SetProperty(ref useConsoleJava, value)) MarkDirty(); } }
     public bool CanUseConsoleJava => Owner.Snapshot.Platform.OS == LauncherOS.Windows;
@@ -50,14 +54,14 @@ public sealed partial class SettingsPageViewModel
     public decimal DisplayMemoryMiB { get => AutomaticMemory ? EffectiveMemoryMiB : MemoryMiB; set { if (!AutomaticMemory) MemoryMiB = value; } }
     private GameLaunchOptions BuildGameOptions() => (Owner.Snapshot.Settings.LaunchOptions ?? new()) with
     { AutomaticMemory = AutomaticMemory, Isolation = Isolation, Visibility = Visibility, Priority = Priority, IpPreference = IpPreference, WindowTitle = GameTitle.Trim(), JvmArguments = JvmArguments.Trim(), LockMemory = LockMemory,
-      GameArguments = GameArguments.Trim(), BeforeLaunchExecutable = BeforeLaunchExecutable.Trim(), BeforeLaunchArguments = BeforeLaunchArguments.Trim(), UseConsoleJava = UseConsoleJava };
+      GameArguments = GameArguments.Trim(), BeforeLaunchExecutable = BeforeLaunchExecutable.Trim(), BeforeLaunchArguments = BeforeLaunchArguments.Trim(), UseConsoleJava = UseConsoleJava, DebugLogging = DebugLogging, ClasspathPrepend = ClasspathPrepend.Trim() };
     private DownloadBehavior BuildDownloadOptions() => new((int)MaximumConnections, (int)MaximumKiBPerSecond, HttpsOnly, SourcePreference, PreferOfficialCatalog, SelectInstalledInstance);
     private void LoadGameOptions(LauncherSettings settings)
     {
         var options = settings.LaunchOptions ?? new();
         AutomaticMemory = options.AutomaticMemory; Isolation = options.Isolation; Visibility = options.Visibility; Priority = options.Priority; IpPreference = options.IpPreference; GameTitle = options.WindowTitle; JvmArguments = options.JvmArguments; LockMemory = options.LockMemory;
         GameArguments = options.GameArguments; BeforeLaunchExecutable = options.BeforeLaunchExecutable; BeforeLaunchArguments = options.BeforeLaunchArguments;
-        UseConsoleJava = options.UseConsoleJava; OnPropertyChanged(nameof(CanUseConsoleJava));
+        DebugLogging = options.DebugLogging; ClasspathPrepend = options.ClasspathPrepend; UseConsoleJava = options.UseConsoleJava; OnPropertyChanged(nameof(CanUseConsoleJava));
         var downloads = settings.Downloads ?? new();
         MaximumConnections = downloads.MaximumConnections; MaximumKiBPerSecond = downloads.MaximumKiBPerSecond; HttpsOnly = downloads.HttpsOnly; SourcePreference = downloads.SourcePreference; PreferOfficialCatalog = downloads.PreferOfficialCatalog; SelectInstalledInstance = downloads.SelectInstalledInstance;
         RefreshSystemMemory();

@@ -73,3 +73,12 @@ Instance server status uses the existing Minecraft status probe with additive op
 Local file selection and drops install into the captured schematic directory. A missing child directory fails rather than silently recreating it or redirecting to the category root. Supported files retain existing import/collision rules and running-instance protection. Schematic file trash/restore preserves full relative paths and exact original bytes through the existing receipt transaction; receipts and other categories remain compatible. Folders are navigation entries, excluded from file selection, update and trash operations. Folder-tree removal, directory-level imports and schematic format previews are not implemented. Mod, resource-pack and shader enumeration/update ranges are unchanged.
 
 Screenshot image buttons expose the actual filename as their accessible name. Favorites distinguish a nonempty saved collection with no search matches from an empty collection; filtering never rewrites favorites.
+
+## R47：主页组件、收藏协议与页面信息
+
+- `CustomHomeDocument` 解释本地/HTTPS 文档中的常用 WPF 展示组件（MyCard、TextBlock、Image、MyButton、StackPanel、WrapPanel，Grid 暂按纵向容器降级）；不调用运行时 XAML/CLR 加载器。按钮当前只适配 OpenUrl/打开网页；未适配的控件和事件明确报错。TXT/Markdown 继续作为纯文本显示。网络文档不能引用本地图片；读取/图片取消、大小预算和迟到结果保护生效。
+- `ICustomHomeImageService` 为展示组件读取本地或匿名 HTTPS 图片。`IContentDescriptionService` 仅由用户点击发起旧 WPF 的公开简介翻译请求；不带 CF/微软凭据，404 表示暂无翻译，换页取消/丢弃迟到结果。
+- `ContentReferenceIndex` 从本仓库原 `mcmod.buf` 可重复生成，不新抓取数据库。按资源来源的精确 slug 匹配 mod/datapack，只有找到真实 ID 时才显示 MC 百科入口。
+- 收藏文件从旧项目数组读取，首次修改写入 version 2 的项目/分组文档，并保留上一版本 `.bak`；损坏/未知版本保留原文件。分组可以共享项目，删除分组把项目移入其余分组而不删除收藏。分享码与 WPF `GetShareCode` 一致为 JSON 字符串 ID 数组（CF 去掉内部 `cf-` 前缀）；导入逐项目读取并验证官方身份，失败项明示，已成功项目可继续保存。分享所选项或当前完整分组，不因搜索而隐式缩减整个分组。
+- 全局 `DebugLogging`/`ClasspathPrepend` 接既有 `GameLaunchOptions` 与自动保存；Windows console Java 仍按平台显示。未移植的 WPF 渲染器/专用 agent、GPU 和自动崩溃分析不伪装成可用开关；已取消的自动发行提示不恢复。
+- `ClubServer.PingMilliseconds` 仅表示状态连接上的 Ping/Pong 往返，需精确 nonce 相符；无 Pong/错误 Pong 不丢弃已取得的在线状态。`ResponseMilliseconds` 仍为查询耗时，二者在 UI 中区分。此路径只发送状态查询，不连接游戏会话或写 `servers.dat`。

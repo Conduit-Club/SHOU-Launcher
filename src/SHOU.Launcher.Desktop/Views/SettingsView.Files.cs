@@ -29,7 +29,7 @@ public partial class SettingsView
     private async void ChooseHomeDocument_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not SettingsPageViewModel vm) return;
-        try { var files = await Files.OpenFilePickerAsync(new FilePickerOpenOptions { Title = Localization.UiLocalization.Instance.Text("选择本地主页"), AllowMultiple = false, FileTypeFilter = [new("TXT / Markdown") { Patterns = ["*.txt", "*.md"] }] }); if (files.Count > 0 && vm.CanEdit) { vm.HomeSource = "local"; vm.HomeLocation = files[0].TryGetLocalPath() ?? throw new IOException("请选择本机文件。"); } }
+        try { var files = await Files.OpenFilePickerAsync(new FilePickerOpenOptions { Title = Localization.UiLocalization.Instance.Text("选择本地主页"), AllowMultiple = false, FileTypeFilter = [new("XAML / TXT / Markdown") { Patterns = ["*.xaml", "*.txt", "*.md"] }] }); if (files.Count > 0 && vm.CanEdit) { vm.HomeSource = "local"; vm.HomeLocation = files[0].TryGetLocalPath() ?? throw new IOException("请选择本机文件。"); } }
         catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
     }
     private async void ExportSettings_Click(object? sender, RoutedEventArgs e)

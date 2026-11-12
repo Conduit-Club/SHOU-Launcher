@@ -92,6 +92,12 @@ public partial class DownloadsView
         }, DispatcherPriority.Loaded);
     }
 
+    private async void ShareFavorites_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DownloadsPageViewModel vm) return;
+        try { var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。"); await clipboard.SetTextAsync(vm.GetFavoriteShareCode()); }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
     private async void CopyProjectName_Click(object? sender, RoutedEventArgs e) => await CopyProjectTextAsync(link: false);
     private async void CopyProjectLink_Click(object? sender, RoutedEventArgs e) => await CopyProjectTextAsync(link: true);
     private async Task CopyProjectTextAsync(bool link)
