@@ -3056,5 +3056,15 @@
   "t8fd6c3c0f5c02fc8": "Pack checking was cancelled. Check again to continue.",
   "t92acca5c8bbcd8b2": "Verifying the supplied file against the official version…",
   "t0a20c4da3cfd03e3": "Supplying the file was cancelled. Pending files are kept; retry or check the pack again.",
-  "tf5ea7220cf203860": "The archive changed and the new file has been checked. Review its contents before installing."
+  "tf5ea7220cf203860": "The archive changed and the new file has been checked. Review its contents before installing.",
+  "t6474fb292922dfd9": "Select the optional downloads you want. Unchecked downloads will be skipped.",
+  "t7be8aae334cc8c1c": "Continue with this selection",
+  "t3370edc05677b48e": "Optional files",
+  "t6f8123ec68a2fe43": "Check selection and import",
+  "tfd1a09022fd5e712": "Optional choices changed. They will be checked again before importing.",
+  "t99d0c7ca04291297": "Optional choices changed. They will be checked again before continuing.",
+  "tef2ea260c348e6b1": "Choose optional files",
+  "t868e29a93bc2edbc": "Choose optional downloads, then continue. Unchecked downloads will be skipped.",
+  "t19a32d238fa54100": "Cancelled. Retry to review the optional files.",
+  "t531d746fbf2ba539": "Official name is not verified yet. Selecting this file will check its identity and availability."
 }

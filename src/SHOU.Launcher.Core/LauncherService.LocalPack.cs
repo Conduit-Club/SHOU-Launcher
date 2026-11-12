@@ -7,7 +7,7 @@ using SHOU.Launcher.Core.Minecraft;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService : ILocalPackProgressService, ILocalPackManualFileService
+public sealed partial class LauncherService : ILocalPackProgressService, ILocalPackManualFileService, ILocalPackSelectionService
 {
     private readonly CurseForgePackResolver? localPackResolver;
     private sealed record LocalPackPlan(IReadOnlyList<CurseForgePackFile> Files, IReadOnlyList<string> Warnings);
@@ -16,22 +16,36 @@ public sealed partial class LauncherService : ILocalPackProgressService, ILocalP
         => InspectLocalPackCoreAsync(archivePath, null, cancellationToken);
     public Task<LocalPackInspection> InspectLocalPackWithProgressAsync(string archivePath, IProgress<PackInstallProgress> progress, CancellationToken cancellationToken = default)
         => InspectLocalPackCoreAsync(archivePath, new PackProgressReporter(progress), cancellationToken);
-    private async Task<LocalPackInspection> InspectLocalPackCoreAsync(string archivePath, IProgress<PackInstallProgress>? progress, CancellationToken cancellationToken)
+    public Task<LocalPackInspection> InspectLocalPackSelectionAsync(string archivePath, IReadOnlyList<string> optionalFiles,
+        IProgress<PackInstallProgress>? progress = null, CancellationToken cancellationToken = default, string? expectedArchiveSha256 = null)
+        => InspectLocalPackCoreAsync(archivePath, progress is null ? null : new PackProgressReporter(progress), cancellationToken, optionalFiles.ToArray(), expectedArchiveSha256);
+    private async Task<LocalPackInspection> InspectLocalPackCoreAsync(string archivePath, IProgress<PackInstallProgress>? progress, CancellationToken cancellationToken, IReadOnlyList<string>? optionalFiles = null, string? expectedArchiveSha256 = null)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(false); var read = await new LocalPackArchive().ReadAsync(archivePath, cancellationToken).ConfigureAwait(false);
-        if (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge) return read.Inspection;
+        if (expectedArchiveSha256 is not null && !read.Inspection.ArchiveSha256.Equals(expectedArchiveSha256, StringComparison.OrdinalIgnoreCase)) optionalFiles = [];
+        if (read.Inspection.Format != LocalPackFormat.CurseForge)
+        {
+            if (optionalFiles is { Count: > 0 } && (read.Inspection.Modrinth is not { } mr || optionalFiles.Distinct(StringComparer.Ordinal).Count() != optionalFiles.Count ||
+                optionalFiles.Any(p => !mr.Files.Any(f => f.Path == p && f.Client == "optional")))) throw new InvalidDataException("可选文件选择已失效，请重新预检。");
+            return optionalFiles is null ? read.Inspection : read.Inspection with { SelectedOptionalFiles = optionalFiles.ToArray() };
+        }
+        var effective = CurseForgePackSelection.Apply(read.CurseForgeFiles, optionalFiles);
+        if (!read.CanResolveCurseForge) return read.Inspection;
         using var dedicated = localPackResolver is null ? new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false)) : null;
         var resolver = localPackResolver ?? new CurseForgePackResolver(dedicated!, build.CurseForgeApiKey, Paths.CacheDirectory, network);
         var identity = read.Inspection;
-        var resolution = await resolver.ResolveAsync(read.CurseForgeFiles, identity.GameVersion, identity.Loader, cancellationToken,
+        var resolution = await resolver.ResolveAsync(effective, identity.GameVersion, identity.Loader, cancellationToken,
             new(identity.Name, identity.PackVersion ?? "", identity.GameVersion, identity.Loader, identity.LoaderVersion), progress).ConfigureAwait(false);
+        var choices = await resolver.DescribeOptionalFilesAsync(read.CurseForgeFiles, cancellationToken).ConfigureAwait(false);
+        var inspection = read.Inspection with { OptionalFiles = choices, SelectedOptionalFiles = (optionalFiles ?? []).ToArray() };
         var warnings = read.Inspection.Warnings.Concat(resolution.Warnings).Concat(resolution.BlockedFiles.Select(item => "未完成：" + item)).ToArray();
-        if (resolution.BlockedFiles.Count > 0) return read.Inspection with { Warnings = warnings, ManualFiles = resolution.ManualFiles,
-            CapabilityReason = $"有 {resolution.BlockedFiles.Count} 项必需文件尚待补充或核实，未创建实例。" + (resolution.ManualFiles?.Count > 0 ? "请从官网获取指定文件，校验后继续安装。" : "请查看完整阻塞列表后重新预检。") };
+        if (resolution.BlockedFiles.Count > 0) return inspection with { Warnings = warnings, ManualFiles = resolution.ManualFiles,
+            CapabilityReason = $"本次安装有 {resolution.BlockedFiles.Count} 项文件尚待补充或核实，未创建实例。" + (resolution.ManualFiles?.Count > 0 ? "请从官网获取指定文件，校验后继续安装。" : "请查看完整阻塞列表后重新预检。") };
         ValidateLocalPackTargets(read, resolution.Files);
-        cancellationToken.ThrowIfCancellationRequested(); localPackPlans[read.Inspection.ArchiveSha256] = new(resolution.Files.ToArray(), warnings);
-        while (localPackPlans.Count > 8) { var other = localPackPlans.Keys.FirstOrDefault(k => k != read.Inspection.ArchiveSha256); if (other is null) break; localPackPlans.TryRemove(other, out _); }
-        return read.Inspection with { CanImport = true, CapabilityReason = null, Warnings = warnings, LocalFiles = resolution.Files.Select(f => f.Path).Concat(read.OverrideEntries.Keys).Distinct(StringComparer.Ordinal).ToArray() };
+        var key = CurseForgePackSelection.PlanKey(identity.ArchiveSha256, optionalFiles);
+        cancellationToken.ThrowIfCancellationRequested(); localPackPlans[key] = new(resolution.Files.ToArray(), warnings);
+        while (localPackPlans.Count > 8) { var other = localPackPlans.Keys.FirstOrDefault(k => k != key); if (other is null) break; localPackPlans.TryRemove(other, out _); }
+        return inspection with { CanImport = true, CapabilityReason = null, Warnings = warnings, LocalFiles = resolution.Files.Select(f => f.Path).Concat(read.OverrideEntries.Keys).Distinct(StringComparer.Ordinal).ToArray() };
     }
     public Task<LocalPackImportResult> ImportLocalPackAsync(LocalPackImportRequest request, CancellationToken cancellationToken = default)
         => ImportLocalPackCoreAsync(request, null, cancellationToken);
@@ -51,12 +65,14 @@ public sealed partial class LauncherService : ILocalPackProgressService, ILocalP
         }
         var isShou = read.Inspection.Format == LocalPackFormat.ShouExport && read.Inspection.CanImport;
         if (!isShou && (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge)) throw new NotSupportedException(read.Inspection.CapabilityReason ?? "此格式尚未支持导入。");
-        if (request.OptionalClientFiles is { Count: > 0 }) throw new NotSupportedException("本轮 CurseForge ZIP 仅导入 required 文件；可选文件不接受额外路径选择。");
+        if (isShou && request.OptionalClientFiles is { Count: > 0 }) throw new InvalidDataException("SHOU 整包未声明可选文件。");
+        if (!isShou) _ = CurseForgePackSelection.Apply(read.CurseForgeFiles, request.OptionalClientFiles);
+        var planKey = CurseForgePackSelection.PlanKey(request.ExpectedSha256, request.OptionalClientFiles);
         LocalPackPlan? plan = isShou ? new([], read.Inspection.Warnings) : null;
-        if (!isShou && !localPackPlans.TryGetValue(request.ExpectedSha256, out plan))
+        if (!isShou && !localPackPlans.TryGetValue(planKey, out plan))
         {
-            var inspection = await InspectLocalPackCoreAsync(request.ArchivePath, progress, cancellationToken).ConfigureAwait(false);
-            if (!inspection.CanImport || !localPackPlans.TryGetValue(request.ExpectedSha256, out plan)) throw new InvalidOperationException(inspection.CapabilityReason ?? "整合包文件尚未全部核实。");
+            var inspection = await InspectLocalPackCoreAsync(request.ArchivePath, progress, cancellationToken, request.OptionalClientFiles).ConfigureAwait(false);
+            if (!inspection.CanImport || !localPackPlans.TryGetValue(planKey, out plan)) throw new InvalidOperationException(inspection.CapabilityReason ?? "整合包文件尚未全部核实。");
         }
         var capturedPlan = plan!; LocalPackImportResult? imported = null;
         await ExecuteAsync("Installing", async ct =>
@@ -71,7 +87,7 @@ public sealed partial class LauncherService : ILocalPackProgressService, ILocalP
                 {
                     var inspection = isShou ? await ShouPackArchive.StageAsync(request.ArchivePath, request.ExpectedSha256, stage, token).ConfigureAwait(false)
                         : await new LocalPackArchive().StageCurseForgeAsync(request.ArchivePath, request.ExpectedSha256, stage, capturedPlan.Files,
-                        (file, path, transferToken) => resolver.DownloadAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), transferToken), token, progress, network.Capture().Downloads?.MaximumConnections ?? 8).ConfigureAwait(false);
+                        (file, path, transferToken) => resolver.DownloadAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), transferToken), token, progress, network.Capture().Downloads?.MaximumConnections ?? 8, request.OptionalClientFiles).ConfigureAwait(false);
                     var profile = await CacheLoaderProfileAsync(inspection.Loader, inspection.GameVersion, inspection.LoaderVersion, token).ConfigureAwait(false);
                     var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination, MemoryMiB: inspection.RecommendedMemoryMiB, Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);
                     var manifestPath = ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName); var manifest = JsonSerializer.Deserialize<ContentInstallManifest>(await File.ReadAllBytesAsync(manifestPath, token).ConfigureAwait(false)) ?? throw new InvalidDataException("整合包安装清单缺失。");

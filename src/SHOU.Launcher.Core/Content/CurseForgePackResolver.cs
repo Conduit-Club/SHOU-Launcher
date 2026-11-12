@@ -62,6 +62,28 @@ public sealed class CurseForgePackResolver
         return new(files, warnings, blocked, results.Where(r => r?.Manual is not null).Select(r => r!.Manual!).ToArray());
     }
     private sealed record Item(CurseForgePackFile? File, IReadOnlyList<string> Warnings, string? Reason = null, CurseForgeManualFile? Manual = null);
+    internal async Task<IReadOnlyList<LocalPackOptionalFile>> DescribeOptionalFilesAsync(IReadOnlyList<CurseForgePackReference> references, CancellationToken ct)
+    {
+        var files = references.Where(f => !f.Required).ToArray();
+        var choices = files.Select(f => CurseForgePackSelection.Choice(f, notice: "官方名称尚未核实；选中后会核实文件身份与可用性。")).ToArray();
+        if (apiKey is null) return choices;
+        await Parallel.ForEachAsync(Enumerable.Range(0, files.Length), new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = ct }, async (index, token) =>
+        {
+            var f = files[index];
+            try
+            {
+                using var response = await GetJsonAsync(new Uri($"https://api.curseforge.com/v1/mods/{f.ProjectId}/files/{f.FileId}"), true, token).ConfigureAwait(false);
+                var data = response.RootElement.GetProperty("data");
+                if (Number(data, "id") != f.FileId || Number(data, "modId") != f.ProjectId) return;
+                var name = Text(data, "fileName", 200);
+                choices[index] = CurseForgePackSelection.Choice(f, name);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (ex is LookupException or HttpRequestException or IOException or InvalidDataException or JsonException or KeyNotFoundException or InvalidOperationException or OperationCanceledException)
+            { /* An unselected optional file cannot block required files; selecting it runs full validation. */ }
+        }).ConfigureAwait(false);
+        return choices;
+    }
     private async Task<Item> ResolveOneAsync(CurseForgePackReference reference, string gameVersion, string loader, IReadOnlyList<CurseForgePackReference> all,
         IReadOnlyDictionary<(int, int), FtbPublishedFile> publishedFtb, CancellationToken ct)
     {

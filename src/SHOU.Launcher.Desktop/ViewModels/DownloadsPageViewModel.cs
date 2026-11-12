@@ -158,6 +158,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     private readonly CancellationToken _imageToken;
     private readonly SemaphoreSlim _imageGate = new(4, 4);
     private bool _disposed;
+    internal bool IsDisposed => _disposed;
     private readonly string? _favoritesPathOverride;
     private readonly List<ContentProject> _favorites = [];
     private DownloadCategoryViewModel _selectedCategory = null!;
@@ -655,7 +656,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
     public override void NotifyCommands()
     {
         foreach (var task in Tasks) { task.CancelCommand.NotifyCanExecuteChanged(); task.RetryCommand.NotifyCanExecuteChanged(); }
-        foreach (var task in PackTasks) { task.RetryCommand.NotifyCanExecuteChanged(); task.OpenInstanceCommand.NotifyCanExecuteChanged(); foreach (var row in task.ManualFiles) row.Refresh(); }
+        foreach (var task in PackTasks) { task.RetryCommand.NotifyCanExecuteChanged(); task.OpenInstanceCommand.NotifyCanExecuteChanged(); task.RefreshOptionalCommands(); foreach (var row in task.ManualFiles) row.Refresh(); }
         foreach (var row in LocalPackManualFiles) row.Refresh();
         foreach (var row in LatestVersions.Concat(VersionGroups.SelectMany(g => g.Versions))) row.SelectCommand.NotifyCanExecuteChanged();
         foreach (var row in Projects.Concat(FavoriteProjects)) row.OpenCommand.NotifyCanExecuteChanged();

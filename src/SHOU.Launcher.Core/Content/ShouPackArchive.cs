@@ -119,7 +119,7 @@ internal static class ShouPackArchive
                     await using var metadata = zip.CreateEntry("manifest.json").Open();
                     await JsonSerializer.SerializeAsync(metadata, new { manifestType = "minecraftModpack", manifestVersion = 1, name = cf.Name, version = cf.Version, author = "", overrides = "overrides",
                         minecraft = new { version = gameVersion, modLoaders = instance.Loader == "vanilla" ? Array.Empty<object>() : new object[] { new { id = instance.Loader + "-" + instance.LoaderVersion, primary = true } } },
-                        files = cf.References.Select(f => new { projectID = f.ProjectId, fileID = f.FileId, required = true }) }, cancellationToken: ct).ConfigureAwait(false);
+                        files = cf.References.Select(f => new { projectID = f.ProjectId, fileID = f.FileId, required = f.Required }) }, cancellationToken: ct).ConfigureAwait(false);
                 }
             }
             using (var validate = PackArchiveReader.Open(temp)) validate.Verify();

@@ -91,10 +91,12 @@ public sealed class LocalPackArchive
         PackArchiveReader.CheckTargets(overrides.Keys); archive.Verify();
         var warnings = new List<string> { "仅创建新的客户端实例；游戏本体将在首次启动时按官方安装流程准备。", "模组版本标签及元数据只做静态提示，完整依赖与实际兼容性由加载器最终验证。" };
         var reason = supported ? "尚需通过 CurseForge 官方 API 核实清单文件与下载可用性。" : "此 CurseForge ZIP 的加载器身份尚未支持；不猜测多个加载器组合。";
-        return new(new(LocalPackFormat.CurseForge, name, gameVersion, loaderKind, loaderVersionText, sha256, warnings, false, reason, LocalFiles: overrides.Keys.ToArray(), PackVersion: packVersion, RecommendedMemoryMiB: recommendedMemory), references, overrides, supported);
+        return new(new(LocalPackFormat.CurseForge, name, gameVersion, loaderKind, loaderVersionText, sha256, warnings, false, reason, LocalFiles: overrides.Keys.ToArray(), PackVersion: packVersion, RecommendedMemoryMiB: recommendedMemory,
+            OptionalFiles: references.Where(f => !f.Required).Select(f => CurseForgePackSelection.Choice(f)).ToArray()), references, overrides, supported);
     }
     public async Task<LocalPackInspection> StageCurseForgeAsync(string path, string expectedSha256, string directory,
-        IReadOnlyList<CurseForgePackFile> files, Func<CurseForgePackFile, string, CancellationToken, Task> download, CancellationToken ct = default, IProgress<PackInstallProgress>? progress = null, int maximumConnections = 8)
+        IReadOnlyList<CurseForgePackFile> files, Func<CurseForgePackFile, string, CancellationToken, Task> download, CancellationToken ct = default, IProgress<PackInstallProgress>? progress = null, int maximumConnections = 8,
+        IReadOnlyList<string>? optionalFiles = null)
     {
         if (!ContentInstallFiles.Hash(expectedSha256, 64)) throw new InvalidDataException("请先读取整合包并确认其 SHA-256。");
         VerifiedDownloader.RejectLink(directory); Directory.CreateDirectory(directory); if (Directory.EnumerateFileSystemEntries(directory).Any()) throw new IOException("整合包暂存目录须为空。");
@@ -106,7 +108,7 @@ public sealed class LocalPackArchive
             if (!actual.Equals(expectedSha256, StringComparison.OrdinalIgnoreCase)) throw new IOException("ZIP 自预检后已改变，请重新预检。");
             var read = await ReadAsync(copyPath, ct).ConfigureAwait(false);
             if (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge) throw new NotSupportedException("此 ZIP 不是支持的 CurseForge 客户端包。");
-            var required = read.CurseForgeFiles.Where(f => f.Required).ToArray();
+            var required = CurseForgePackSelection.Apply(read.CurseForgeFiles, optionalFiles).Where(f => f.Required).ToArray();
             if (files.Count != required.Length || required.Any(r => files.Count(f => f.ProjectId == r.ProjectId && f.FileId == r.FileId) != 1)) throw new InvalidDataException("已解析文件未完整匹配 required 清单，未创建实例。");
             if (files.Select(f => ContentInstallFiles.PathKey(f.Path)).Distinct(StringComparer.Ordinal).Count() != files.Count || files.Sum(f => f.Size) > 4L * 1024 * 1024 * 1024) throw new InvalidDataException("解析结果存在路径冲突或超过总大小预算。");
             PackArchiveReader.CheckTargets(files.Select(f => f.Path).Concat(read.OverrideEntries.Keys));
@@ -127,7 +129,8 @@ public sealed class LocalPackArchive
                 if (!await ContentInstallFiles.MatchesAsync(target, file.Sha1, file.Size, token).ConfigureAwait(false)) throw new InvalidDataException("CurseForge 模组 SHA-1 或大小校验失败。");
                 await using var bytes = new FileStream(target, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true); var sha512 = Convert.ToHexStringLower(await SHA512.HashDataAsync(bytes, token).ConfigureAwait(false));
                 if (file.Sha512 is not null && !sha512.Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("同哈希回退模组 SHA-512 校验失败。");
-                lock (installed) installed.Add(new("cf-" + file.ProjectId, "cf-" + file.FileId, targetKind, file.Path, file.Sha1, sha512, file.Size, file.FromModrinth ? file.DownloadUri.AbsoluteUri : null));
+                var optional = read.CurseForgeFiles.Any(f => f.ProjectId == file.ProjectId && f.FileId == file.FileId && !f.Required);
+                lock (installed) installed.Add(new("cf-" + file.ProjectId, "cf-" + file.FileId, targetKind, file.Path, file.Sha1, sha512, file.Size, file.FromModrinth ? file.DownloadUri.AbsoluteUri : null, Client: optional ? "optional" : "required"));
                 progress?.Report(new("安装整合包文件", Interlocked.Increment(ref done), total, file.Path));
                 foreach (var suffix in new[] { ".download.lock", ".part", ".part.resume.json" }) { var sidecar = ContentInstallFiles.Literal(directory, file.Path + suffix); if (File.Exists(sidecar)) File.Delete(sidecar); }
 

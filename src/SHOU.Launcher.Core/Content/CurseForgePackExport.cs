@@ -30,7 +30,7 @@ internal static class CurseForgePackExport
             guard.Verify();
             if (file.Kind is "mod" or "resourcepack" && file.ProjectId.StartsWith("cf-", StringComparison.Ordinal) && int.TryParse(file.ProjectId[3..], out var project) && project > 0
                 && file.ReleaseId.StartsWith("cf-", StringComparison.Ordinal) && int.TryParse(file.ReleaseId[3..], out var id) && id > 0)
-                references.Add(new(project, id, true));
+                references.Add(new(project, id, file.Client != "optional"));
             else if (options.BundleInstalledFiles) paths.Add(file.RelativePath);
             else if (!(options.OverridePaths ?? []).Any(p => file.RelativePath == p || file.RelativePath.StartsWith(p + "/", StringComparison.Ordinal)))
                 throw new InvalidOperationException("包含没有 CurseForge 文件身份的资源，请明确选择打包本地资源。");

@@ -28,6 +28,13 @@ public sealed class PackInstallTaskViewModel : ObservableObject
     public ObservableCollection<PackManualFileRowViewModel> ManualFiles { get; } = [];
     public bool HasManualFiles => ManualFiles.Count > 0;
     private string? manualArchiveSha;
+    private string? optionalArchiveSha;
+    private bool optionalConfirmed, awaitingOptionalSelection;
+    public ObservableCollection<PackOptionalFileViewModel> OptionalFiles { get; } = [];
+    public bool HasOptionalFiles => OptionalFiles.Count > 0 && importedInstance is null && state != "已取消";
+    public bool HasPendingOptionalSelection => awaitingOptionalSelection;
+    public bool CanChooseOptions => !page.IsDisposed && owner.CanMutate && !IsActive && importedInstance is null;
+    public AsyncRelayCommand ConfirmOptionalFilesCommand { get; }
     internal MainWindowViewModel Root => owner;
     private readonly MainWindowViewModel owner;
     private readonly DownloadsPageViewModel page;
@@ -74,7 +81,16 @@ public sealed class PackInstallTaskViewModel : ObservableObject
         if (instanceName.Length == 0) instanceName = "新整合包";
         Name = (project.Source == "curseforge" ? "CurseForge" : "Modrinth") + " 整合包下载：" + UiPrivacy.Redact(project.Title);
         RetryCommand = new(RunAsync, () => owner.CanMutate && state is "失败" or "已取消" or "需要补充文件");
-        CancelCommand = new(() => { if (ReferenceEquals(page.ActivePackTask, this)) owner.CancelOperationCommand.Execute(null); }, () => IsActive);
+        CancelCommand = new(() =>
+        {
+            if (ReferenceEquals(page.ActivePackTask, this)) owner.CancelOperationCommand.Execute(null);
+            else { state = "已取消"; detail = "已取消；可重试并重新确认可选文件。"; error = ""; awaitingOptionalSelection = false; optionalConfirmed = false; ManualFiles.Clear(); Changed(); }
+        }, () => IsActive || awaitingOptionalSelection || HasManualFiles);
+        ConfirmOptionalFilesCommand = new(async () =>
+        {
+            if (!CanChooseOptions || !awaitingOptionalSelection || page.ActivePackTask is not null) return;
+            optionalConfirmed = true; awaitingOptionalSelection = false; await RunAsync();
+        }, () => CanChooseOptions && awaitingOptionalSelection && page.ActivePackTask is null);
         OpenInstanceCommand = new(async () =>
         {
             if (importedInstance is null) return;
@@ -83,7 +99,8 @@ public sealed class PackInstallTaskViewModel : ObservableObject
     }
     internal async Task RunAsync()
     {
-        if (!owner.CanMutate || page.ActivePackTask is not null) return;
+        if (page.IsDisposed || !owner.CanMutate || page.ActivePackTask is not null) return;
+        var selected = OptionalFiles.Where(f => f.Selected).Select(f => f.Path).ToArray();
         page.ActivePackTask = this; var generation = ++runVersion;
         priorTransfers = owner.Snapshot.Downloads.Select(t => t.Id).ToHashSet(StringComparer.Ordinal);
         error = ""; state = "正在安装"; completedFiles = totalFiles = 0; speed = 0;
@@ -101,15 +118,28 @@ public sealed class PackInstallTaskViewModel : ObservableObject
                     LocalPackInspection? inspected = null;
                     ModrinthPackInspection? mr = null;
                     var readProgress = ProgressFor(generation, 1);
-                    if (localPacks is ILocalPackProgressService tracked) inspected = await tracked.InspectLocalPackWithProgressAsync(cachedPath, readProgress, ct);
+                    if (optionalConfirmed && localPacks is ILocalPackSelectionService choices) inspected = await choices.InspectLocalPackSelectionAsync(cachedPath, selected, readProgress, ct, optionalArchiveSha);
+                    else if (localPacks is ILocalPackProgressService tracked) inspected = await tracked.InspectLocalPackWithProgressAsync(cachedPath, readProgress, ct);
                     else if (localPacks is not null) inspected = await localPacks.InspectLocalPackAsync(cachedPath, ct);
                     else if (mrpacks is not null) mr = await mrpacks.InspectModrinthPackAsync(cachedPath, ct);
                     else throw new NotSupportedException("当前后端未提供整合包安装能力。");
+                    ct.ThrowIfCancellationRequested();
+                    if (page.IsDisposed || generation != runVersion)
+                    { state = page.IsDisposed ? "已取消" : "等待选择可选文件"; throw new PackBlockedException(); }
+                    var hash = inspected?.ArchiveSha256 ?? mr!.ArchiveSha256;
+                    if (optionalArchiveSha is not null && optionalArchiveSha != hash) optionalConfirmed = false;
+                    SetOptionalFiles(inspected, inspected?.Modrinth ?? mr, hash);
+                    if (OptionalFiles.Count > 0 && !optionalConfirmed)
+                    {
+                        awaitingOptionalSelection = true; state = "等待选择可选文件";
+                        detail = "勾选需要的可选下载后继续；未勾选的下载将跳过。";
+                        throw new PackBlockedException();
+                    }
                     if (!(inspected?.CanImport ?? mr?.CanImport ?? false))
                     {
                         manualArchiveSha = inspected?.ArchiveSha256;
                         foreach (var missing in inspected?.ManualFiles ?? [])
-                            ManualFiles.Add(new(owner, missing, ProvideManualFileAsync, row => ManualFiles.Contains(row),
+                            ManualFiles.Add(new(owner, missing, ProvideManualFileAsync, row => !page.IsDisposed && ManualFiles.Contains(row),
                                 () => localPacks is ILocalPackManualFileService && !IsActive));
                         state = "需要补充文件";
                         error = (inspected?.CapabilityReason ?? mr?.CapabilityReason ?? "此整合包不能安装。") + Environment.NewLine +
@@ -120,12 +150,12 @@ public sealed class PackInstallTaskViewModel : ObservableObject
                     var progress = ProgressFor(generation, 2);
                     if (localPacks is not null)
                     {
-                        var request = new LocalPackImportRequest(cachedPath, inspected!.ArchiveSha256, instanceName);
+                        var request = new LocalPackImportRequest(cachedPath, inspected!.ArchiveSha256, instanceName, selected);
                         var installed = localPacks is ILocalPackProgressService reporting
                             ? await reporting.ImportLocalPackWithProgressAsync(request, progress, ct) : await localPacks.ImportLocalPackAsync(request, ct);
                         importedInstance = installed.Instance;
                     }
-                    else importedInstance = (await mrpacks!.ImportModrinthPackAsync(new(cachedPath, mr!.ArchiveSha256, instanceName), ct)).Instance;
+                    else importedInstance = (await mrpacks!.ImportModrinthPackAsync(new(cachedPath, mr!.ArchiveSha256, instanceName, selected), ct)).Instance;
                     Steps[2].Update("已完成", 100);
                 }
                 Activate(3);
@@ -149,10 +179,35 @@ public sealed class PackInstallTaskViewModel : ObservableObject
         }
     }
     private sealed class PackBlockedException : Exception;
+    private void SetOptionalFiles(LocalPackInspection? local, ModrinthPackInspection? mr, string hash)
+    {
+        var keep = optionalArchiveSha == hash ? OptionalFiles.Where(f => f.Selected).Select(f => f.Path).ToHashSet(StringComparer.Ordinal) : [];
+        OptionalFiles.Clear(); optionalArchiveSha = hash;
+        var files = local?.Format == LocalPackFormat.CurseForge
+            ? (local.OptionalFiles ?? []).Select(f => new PackOptionalFileViewModel(f.Key, f.Name, f.Notice))
+            : (mr?.Files.Where(f => f.Client == "optional") ?? []).Select(f => new PackOptionalFileViewModel(f.Path));
+        foreach (var row in files)
+        {
+            row.Selected = keep.Contains(row.Path); OptionalFiles.Add(row);
+            row.PropertyChanged += (_, e) =>
+            {
+                if (e.PropertyName != nameof(row.Selected) || !OptionalFiles.Contains(row) || page.IsDisposed) return;
+                ++runVersion; optionalConfirmed = false; awaitingOptionalSelection = true; ManualFiles.Clear();
+                state = "等待选择可选文件"; error = ""; detail = "可选项目已更改，继续前会重新预检本次选择。"; Changed();
+            };
+        }
+    }
+    internal void RefreshOptionalCommands()
+    { OnPropertyChanged(nameof(CanChooseOptions)); ConfirmOptionalFilesCommand.NotifyCanExecuteChanged(); CancelCommand.NotifyCanExecuteChanged(); }
     public async Task ProvideManualFileAsync(PackManualFileRowViewModel row, string path)
     {
-        if (!owner.CanMutate || !ManualFiles.Contains(row) || cachedPath is null || manualArchiveSha is null || localPacks is not ILocalPackManualFileService manual) return;
-        if (!await owner.RunAsync("校验补充文件", ct => manual.ProvideLocalPackFileAsync(cachedPath, manualArchiveSha, row.File.ProjectId, row.File.FileId, path, ct))) return;
+        if (page.IsDisposed || !owner.CanMutate || !ManualFiles.Contains(row) || cachedPath is null || manualArchiveSha is null || localPacks is not ILocalPackManualFileService manual) return;
+        var generation = runVersion; var selected = OptionalFiles.Where(f => f.Selected).Select(f => f.Path).ToArray();
+        if (!await owner.RunAsync("校验补充文件", async ct => {
+            if (localPacks is ILocalPackSelectionService choices) await choices.ProvideSelectedLocalPackFileAsync(cachedPath, manualArchiveSha, selected, row.File.ProjectId, row.File.FileId, path, ct);
+            else await manual.ProvideLocalPackFileAsync(cachedPath, manualArchiveSha, row.File.ProjectId, row.File.FileId, path, ct);
+            ct.ThrowIfCancellationRequested();
+        }) || page.IsDisposed || generation != runVersion) return;
         ManualFiles.Remove(row); Changed();
         if (ManualFiles.Count == 0) await RunAsync();
     }
@@ -192,9 +247,9 @@ public sealed class PackInstallTaskViewModel : ObservableObject
     }
     private void Changed()
     {
-        foreach (var p in new[] { nameof(State), nameof(Detail), nameof(Error), nameof(HasError), nameof(HasManualFiles), nameof(IsActive), nameof(IsCompleted), nameof(RemainingFiles), nameof(RemainingFileText), nameof(BytesPerSecond), nameof(OverallProgress) }) OnPropertyChanged(p);
+        foreach (var p in new[] { nameof(State), nameof(Detail), nameof(Error), nameof(HasError), nameof(HasManualFiles), nameof(IsActive), nameof(IsCompleted), nameof(HasOptionalFiles), nameof(HasPendingOptionalSelection), nameof(CanChooseOptions), nameof(RemainingFiles), nameof(RemainingFileText), nameof(BytesPerSecond), nameof(OverallProgress) }) OnPropertyChanged(p);
         foreach (var row in ManualFiles) row.Refresh();
-        RetryCommand.NotifyCanExecuteChanged(); CancelCommand.NotifyCanExecuteChanged(); OpenInstanceCommand.NotifyCanExecuteChanged(); page.NotifyPackTasks();
+        RetryCommand.NotifyCanExecuteChanged(); CancelCommand.NotifyCanExecuteChanged(); ConfirmOptionalFilesCommand.NotifyCanExecuteChanged(); OpenInstanceCommand.NotifyCanExecuteChanged(); page.NotifyPackTasks();
     }
 }
 
