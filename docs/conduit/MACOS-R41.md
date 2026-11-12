@@ -33,7 +33,8 @@
 - 隔离样本为 13 个真实模组、4 个资源包、4 个光影，共 21 文件；使用已有嘉然配色（garnet）对照用户截图，不改变产品默认值或个人偏好。
 - RC2 已经 CUA 实窗验证：13 项模组显示与 8 项自动更新筛选、原始换行说明不再误报、右下多选条、详情不改变选择、单行禁用/恢复启用和回收精确目标后取消；资源包全部选择/取消；光影名称搜索。资源包 2 项在线核实/2 项本机保留，光影 4 项全部核实，图标与版本正确。
 - RC1、RC2 均以 Command–Q 正常退出；样本 21 文件复核 SHA-256 不变，未启动游戏、未改个人实例和账户。CUA 语义点击列表行只改变系统高亮，多选通过实际复选框/全选验收；普通鼠标行点击另有 Avalonia 实际指针回归，不能把系统高亮当作多选证据。
-- RC3 最终分类标签实窗核对正在等待系统解锁；源代码三语标签已通过桌面回归。此前实窗截图在 `.shou-dev/reports/macos-r41-20261112/native-rc2-{mods,resourcepacks,shaders}.png`，多选条见 `native-rc2-mods-selected.png`。
+- 解锁后重新打开同一 RC3（源码与 ZIP 哈希未变），CUA 补验三页最终画面：13 模组/8 更新，资源包 2 项核实/2 项本机保留，4 光影均核实；原版风、含语言、兼容模组、泛光、卡通风、低配、彩色光照、幻想风、极低配、半写实和阴影等中文分类显示正常。Command–Q 后 `normal_close`、进程消失，21 个样本文件 SHA-256 不变。最终截图为 `.shou-dev/reports/macos-r41-20261112/native-rc3-{mods,resourcepacks,shaders}.png`，多选条仍见 RC2 的 `native-rc2-mods-selected.png`。
+- 锁屏期间首个 RC3 QA 达到预设计时而退出，记录为 `exit_after`，不算交互验收通过；解锁后的运行 `r41-native-4` 才作为最终通过证据。原始限时退出、重启日志和验收结果均保留在 `native-rc3.*`、`native-rc3-resume.*`、`native-result-4.json` 与 `native-rc3-complete.json`。本次仅补实窗与文档，未修改产品代码或重编候选。
 
 ## 未完成
 
