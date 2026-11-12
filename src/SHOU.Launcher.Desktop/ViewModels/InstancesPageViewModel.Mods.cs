@@ -30,7 +30,10 @@ public sealed partial class InstancesPageViewModel
     public InstanceModUpdate? SelectedModUpdate { get => selectedModUpdate; set { SetProperty(ref selectedModUpdate, value); NotifyCommands(); } }
     public bool ConfirmModUpdate { get; set; }
     public bool IsModScanBusy { get => modScanBusy; private set { SetProperty(ref modScanBusy, value); NotifyModActions(); } }
-    public string ModUpdateStatus { get => modUpdateStatus; private set { SetProperty(ref modUpdateStatus, value); OnPropertyChanged(nameof(HasModUpdateStatus)); } }
+    public string ModUpdateStatus { get => modUpdateStatus; private set { SetProperty(ref modUpdateStatus, value); OnPropertyChanged(nameof(HasModUpdateStatus)); OnPropertyChanged(nameof(ModUpdateSummary)); OnPropertyChanged(nameof(ModUpdateDetails)); OnPropertyChanged(nameof(HasModUpdateDetails)); } }
+    public string ModUpdateSummary => ModUpdateStatus.Split('\n', 2)[0];
+    public string ModUpdateDetails => ModUpdateStatus.Contains('\n') ? ModUpdateStatus.Split('\n', 2)[1] : "";
+    public bool HasModUpdateDetails => ModUpdateDetails.Length > 0;
     public bool HasModUpdateStatus => ModUpdateStatus.Length > 0 && Owner.IsFeatureVisible("mod-updates");
     public bool HasModUpdates => ModUpdates.Count > 0;
     public string ModDetail { get => modDetail; private set { SetProperty(ref modDetail, value); OnPropertyChanged(nameof(HasModDetail)); } }

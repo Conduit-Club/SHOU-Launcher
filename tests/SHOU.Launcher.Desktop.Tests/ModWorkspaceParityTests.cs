@@ -1,3 +1,4 @@
+using Avalonia;
 using Avalonia.Controls;
 using Avalonia.Headless.XUnit;
 using Avalonia.Threading;
@@ -28,7 +29,7 @@ public sealed class ModWorkspaceParityTests
         vm.ContentSearchText = "Alpha"; Assert.Single(vm.FilteredContentRows); vm.ContentSearchText = "";
         vm.ModFilters.Single(f => f.Key == "禁用").SelectCommand.Execute(null); Assert.Single(vm.FilteredContentRows);
         vm.ModFilters.Single(f => f.Key == "重复").SelectCommand.Execute(null); Assert.Equal(2, vm.FilteredContentRows.Count);
-        vm.ModFilters.Single(f => f.Key == "错误").SelectCommand.Execute(null); Assert.Single(vm.FilteredContentRows); Assert.Equal(0, service.Applied.Count);
+        vm.ModFilters.Single(f => f.Key == "错误").SelectCommand.Execute(null); Assert.Single(vm.FilteredContentRows); Assert.Empty(service.Applied);
     }
     [AvaloniaFact]
     public async Task NavigatingAwayDiscardsLateResultsAndProgress()
@@ -59,11 +60,17 @@ public sealed class ModWorkspaceParityTests
     [AvaloniaFact]
     public async Task CompactWindowHasFiltersRowActionsDetailsAndSortingWithoutOldConfirmationCheckbox()
     {
-        var service = new Service(); using var owner = Open(service); var vm = owner.Instances; var window = new MainWindow { Width = 880, Height = 560, DataContext = owner }; window.Show();
+        var service = new Service { Notices = ["A long unresolved project notice.", "Another unresolved project notice.", "A third unresolved project notice."] }; using var owner = Open(service); var vm = owner.Instances; var window = new MainWindow { Width = 880, Height = 560, DataContext = owner }; window.Show();
         try
         {
             await Wait(() => vm.ModUpdates.Count == 2 && !vm.IsModScanBusy); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
             Assert.Contains(window.GetVisualDescendants().OfType<ItemsControl>(), c => c.Name == "InstanceModFilters");
+            var notices = window.GetVisualDescendants().OfType<Expander>().Single(c => c.Name == "ModUpdateNotices");
+            Assert.False(notices.IsExpanded); Assert.True(vm.HasModUpdateDetails); Assert.DoesNotContain('\n', vm.ModUpdateSummary);
+            var list = window.GetVisualDescendants().OfType<ListBox>().Single(c => c.Name == "InstanceContentList");
+            var listTop = list.TranslatePoint(default, window)!.Value.Y;
+            Assert.True(listTop + 74 < window.ClientSize.Height, $"The first mod row must remain visible at 880x560; list top: {listTop}.");
+            notices.IsExpanded = true; window.UpdateLayout(); Assert.True(notices.Bounds.Height > 50); notices.IsExpanded = false;
             Assert.DoesNotContain(window.GetVisualDescendants().OfType<CheckBox>(), c => c.Name == "ConfirmInstanceModUpdate");
             var row = vm.FilteredContentRows.First(r => r.HasUpdate); row.DetailsCommand.Execute(null); Assert.Contains("ID:", vm.ModDetail);
             row.UpdateCommand.Execute(null); Assert.True(vm.HasModAction); Assert.Empty(service.Applied);
@@ -88,7 +95,7 @@ public sealed class ModWorkspaceParityTests
     }
     private sealed class Service : FakeLauncherService, IInstanceWorkspaceService, IInstanceModUpdateService, IInstanceModManagementService
     {
-        public TaskCompletionSource? Gate; public int Scans; public bool FailFirst; public List<string> Applied = [], Toggled = [], Trashed = []; public string? Restored;
+        public TaskCompletionSource? Gate; public int Scans; public bool FailFirst; public List<string> Applied = [], Toggled = [], Trashed = []; public string? Restored; public IReadOnlyList<string> Notices = [];
         private IReadOnlyList<InstanceContentEntry> rows;
         public Service()
         {
@@ -104,7 +111,7 @@ public sealed class ModWorkspaceParityTests
         public Task<string> ExportInstanceAsync(string id, bool worlds, CancellationToken ct = default) => Task.FromResult("/fixture/export.zip");
         public async Task<InstanceModUpdateCheck> CheckInstanceModUpdatesAsync(string id, CancellationToken ct = default)
         {
-            Scans++; if (Gate is not null) await Gate.Task; return new(rows.Take(2).Where(r => !Applied.Contains(r.Name)).Select(r => new InstanceModUpdate(r.Name, id, r.RelativePath, r.ModName!, "1", "2", 10)).ToArray(), 3, [],
+            Scans++; if (Gate is not null) await Gate.Task; return new(rows.Take(2).Where(r => !Applied.Contains(r.Name)).Select(r => new InstanceModUpdate(r.Name, id, r.RelativePath, r.ModName!, "1", "2", 10)).ToArray(), 3, Notices,
                 [new("mods/alpha.jar", new("project", "alpha", "Alpha online", "Description", "Author", 1, "mod", null, new Uri("https://modrinth.com/mod/alpha")))]);
         }
         public Task<InstanceModUpdateResult> ApplyInstanceModUpdateAsync(string token, CancellationToken ct = default)
