@@ -39,8 +39,12 @@ public sealed partial class InstancesPageViewModel
     private void FilterModRelations()
     {
         var filtered = FilteredModRelationHosts;
-        if (selectedRelationHost is null || !filtered.Contains(selectedRelationHost)) SelectedModRelationHost = filtered.FirstOrDefault();
-        OnPropertyChanged(nameof(FilteredModRelationHosts)); OnPropertyChanged(nameof(ModRelationsEmpty)); OnPropertyChanged(nameof(ModRelationSummary));
+        var selection = filtered.FirstOrDefault(h => h.File == selectedRelationHost?.File) ?? filtered.FirstOrDefault();
+        // Populate the ComboBox before selecting: a selection published against its old items is discarded.
+        OnPropertyChanged(nameof(FilteredModRelationHosts));
+        SelectedModRelationHost = selection;
+        OnPropertyChanged(nameof(SelectedModRelationHost));
+        OnPropertyChanged(nameof(ModRelationsEmpty)); OnPropertyChanged(nameof(ModRelationSummary));
     }
     private void StopModRelations()
     {
@@ -97,6 +101,7 @@ public sealed class ModRelationHostViewModel
     public IReadOnlyList<ModRelationNodeViewModel> Nodes { get; }
     public IReadOnlyList<ModRelationDependencyViewModel> Dependencies { get; }
     public bool HasDependencies => Dependencies.Count > 0;
+    public override string ToString() => Name;
     private static IEnumerable<ModRelationNodeViewModel> Flatten(ModDeclaration node, int depth)
     { yield return new(node, depth); foreach (var child in node.Children) foreach (var row in Flatten(child, depth + 1)) yield return row; }
 }

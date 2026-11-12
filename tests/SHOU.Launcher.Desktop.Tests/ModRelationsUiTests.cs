@@ -74,8 +74,10 @@ public sealed class ModRelationsUiTests
             await Wait(() => !vm.IsModRelationsBusy && vm.FilteredModRelationHosts.Count == 4); Dispatcher.UIThread.RunJobs(); window.UpdateLayout();
             var controls = window.GetVisualDescendants().OfType<Control>().ToArray();
             var search = controls.OfType<TextBox>().Single(c => c.Name == "ModRelationsSearch"); var selector = controls.OfType<ComboBox>().Single(c => c.Name == "ModRelationHostSelector");
+            Assert.Same(vm.SelectedModRelationHost, selector.SelectedItem); Assert.NotNull(selector.SelectedItem);
             Assert.True(search.TranslatePoint(default, window)!.Value.Y > 0); Assert.True(selector.TranslatePoint(default, window)!.Value.Y + selector.Bounds.Height < window.ClientSize.Height);
-            vm.ModRelationSearch = "Consumer"; Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Assert.Single(vm.SelectedModRelationHost!.Dependencies);
+            vm.ModRelationSearch = "Consumer"; Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Assert.Single(vm.SelectedModRelationHost!.Dependencies); Assert.Same(vm.SelectedModRelationHost, selector.SelectedItem);
+            var selectedFile = vm.SelectedModRelationHost.File; await vm.RefreshModRelationsCommand.ExecuteAsync(null); Dispatcher.UIThread.RunJobs(); Assert.Equal(selectedFile, vm.SelectedModRelationHost!.File); Assert.Same(vm.SelectedModRelationHost, selector.SelectedItem);
             Assert.Equal(ModDeclarationPresence.Embedded, Report().Dependencies.First().Presence);
             vm.BackToModsCommand.Execute(null); vm.DiagnoseModsCommand.Execute(null); Assert.True(vm.IsRelationsSection);
         }
