@@ -44,7 +44,7 @@ public sealed class InterfaceParityFollowupTests
     {
         var service = new Service(); var external = new External(); var logs = service.Paths.LogsDirectory; Directory.CreateDirectory(logs); var path = Path.Combine(logs, "history.log"); await File.WriteAllTextAsync(path, "fixture log");
         using var root = new MainWindowViewModel(service, external); root.Settings.SelectedSection = "logs";
-        await root.Settings.LogFiles.Single(r => r.Name == "history.log").OpenCommand!.ExecuteAsync(null); Assert.Equal(path, external.Opened.Single());
+        await root.Settings.LogFiles.Single(r => r.Name == "history.log").OpenCommand!.ExecuteAsync(null); Assert.Equal(Path.GetFullPath(path), external.Opened.Single());
         root.Downloads.SelectCategory("resourcepack"); root.SelectedPage = root.Downloads; await root.Downloads.OpenProjectAsync(Service.Project); await root.Downloads.ToggleFavoriteCommand.ExecuteAsync(null); root.Downloads.BackToListCommand.Execute(null); root.Downloads.SelectCategory("favorites");
         await Wait(() => root.Downloads.FavoriteProjects.Single().HasIcon); Assert.True(service.IconCalls >= 2);
         root.Downloads.FavoriteQuery = "Author"; Assert.Single(root.Downloads.FilteredFavoriteProjects); root.Downloads.FavoriteQuery = "missing"; Assert.Empty(root.Downloads.FilteredFavoriteProjects); Assert.Single(root.Downloads.FavoriteProjects); Assert.True(root.Downloads.HasNoFavoriteMatches);
