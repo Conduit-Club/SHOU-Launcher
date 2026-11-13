@@ -21,7 +21,7 @@ on:
 jobs:
   build:
     name: Build
-    runs-on: ubuntu-latest
+    runs-on: windows-2025
     env:
       LANG: en_US.UTF-8
 
