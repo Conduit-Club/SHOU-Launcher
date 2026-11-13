@@ -15,6 +15,9 @@ public sealed partial class LauncherService
         if (platform.LegacyDesktopData is null || File.Exists(Path.Combine(Paths.LocalDataDirectory, "shou.desktop.v1.json"))) return state;
         var legacy = await platform.LegacyDesktopData.ReadAsync(ct).ConfigureAwait(false);
         foreach (var issue in legacy.Issues) Log("Warning", "旧数据接入：" + issue);
+        var settings = LegacyLaunchSettings.MapGlobalRuntimeSettings(legacy.LaunchSettings, state.Settings,
+            legacy.ExecutableDirectory, out var runtimeNotices);
+        foreach (var notice in runtimeNotices) Log("Warning", notice);
         var instances = state.Instances.ToList();
         foreach (var folder in legacy.GameFolders)
         {
@@ -25,9 +28,10 @@ public sealed partial class LauncherService
                 foreach (var candidate in inspection.Candidates)
                 {
                     if (instances.Any(i => i.Origin is { } origin && PathEquals(origin.VersionDirectory, candidate.Origin.VersionDirectory))) continue;
-                    instances.Add(new(Guid.NewGuid().ToString("N"), candidate.Name, candidate.VersionId, candidate.GameDirectory,
+                    var instance = new GameInstance(Guid.NewGuid().ToString("N"), candidate.Name, candidate.VersionId, candidate.GameDirectory,
                         Loader: candidate.Loader, LoaderVersion: candidate.LoaderVersion, Installed: true, GameVersionId: candidate.GameVersion,
-                        Origin: candidate.Origin, Presentation: candidate.Presentation));
+                        Origin: candidate.Origin, Presentation: candidate.Presentation);
+                    instances.Add(await ImportLegacyRuntimeSettingsAsync(instance, settings, legacy.ExecutableDirectory, ct).ConfigureAwait(false));
                 }
                 if (inspection.Issues.Count > 0) Log("Warning", "部分旧实例元数据无法核实；已保留原目录，未接入这些实例。");
             }
@@ -72,8 +76,8 @@ public sealed partial class LauncherService
                 }
                 accounts.Add(profile);
             }
-            if (instances.Count == state.Instances.Count && accounts.Count == state.Accounts.Count) return state;
-            var next = state with { Instances = instances, Accounts = accounts,
+            if (instances.Count == state.Instances.Count && accounts.Count == state.Accounts.Count && settings == state.Settings) return state;
+            var next = state with { Settings = settings, Instances = instances, Accounts = accounts,
                 SelectedAccountId = accounts.Any(a => a.Id == legacy.SelectedAccountId) ? legacy.SelectedAccountId : accounts.FirstOrDefault()?.Id,
                 SelectedInstanceId = instances.FirstOrDefault(i => i.Origin is { } o && legacy.SelectedVersionDirectory is { } selected && PathEquals(o.VersionDirectory, selected))?.Id ?? instances.FirstOrDefault()?.Id };
             await config.SaveAsync(next, ct).ConfigureAwait(false);

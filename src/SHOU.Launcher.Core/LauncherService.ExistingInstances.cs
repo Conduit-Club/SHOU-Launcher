@@ -29,8 +29,9 @@ public sealed partial class LauncherService : IExistingInstanceService, IExistin
                 ?? throw new IOException("实例目录已变化，请重新选择。");
             Downloads.VerifiedDownloader.RejectLink(refreshed.GameDirectory);
             if (Snapshot.Instances.Concat(attached).Any(i => i.Origin is { } origin && PathEquals(origin.VersionDirectory, refreshed.Origin.VersionDirectory) || PathEquals(i.GameDirectory, refreshed.GameDirectory) && i.VersionId == refreshed.VersionId)) throw new InvalidOperationException("此实例已经接入，请取消重复项后重试。");
-            attached.Add(new(Guid.NewGuid().ToString("N"), refreshed.Name, refreshed.VersionId, refreshed.GameDirectory,
-                Loader: refreshed.Loader, LoaderVersion: refreshed.LoaderVersion, Installed: true, GameVersionId: refreshed.GameVersion, Origin: refreshed.Origin, Presentation: refreshed.Presentation));
+            var instance = new GameInstance(Guid.NewGuid().ToString("N"), refreshed.Name, refreshed.VersionId, refreshed.GameDirectory,
+                Loader: refreshed.Loader, LoaderVersion: refreshed.LoaderVersion, Installed: true, GameVersionId: refreshed.GameVersion, Origin: refreshed.Origin, Presentation: refreshed.Presentation);
+            attached.Add(await ImportLegacyRuntimeSettingsAsync(instance, Snapshot.Settings, Paths.ResourcesDirectory, ct).ConfigureAwait(false));
             }
             ct.ThrowIfCancellationRequested();
             foreach (var instance in attached) _ = await ExistingInstanceReader.ResolveAsync(instance.Origin!, instance.VersionId, instance.GameVersionId!, ct);

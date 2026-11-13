@@ -16,6 +16,8 @@ public sealed class WindowsLegacyDesktopDataReader(string executableDirectory, s
         var ct = cancellationToken;
         var folders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var issues = new List<string>(); var accounts = new List<AuthSession>();
+        var launchSettings = new Dictionary<string, string>(StringComparer.Ordinal);
+        var runtimeKeys = new HashSet<string>(["LaunchArgumentJavaSelect", "LaunchRamType", "LaunchRamCustom", "LaunchRamCustomInitial"], StringComparer.Ordinal);
         string? selectedFolder = null, selectedVersion = null, selectedAccount = null;
         var executable = Path.GetFullPath(executableDirectory);
         void Add(string? path)
@@ -42,9 +44,12 @@ public sealed class WindowsLegacyDesktopDataReader(string executableDirectory, s
         try
         {
             shared = await ReadJsonAsync(Path.Combine(sharedDirectory, "config.v1.json"), ct);
+            foreach (var key in runtimeKeys)
+                if (shared?[key] is JsonValue value && value.ToJsonString().Length <= 32768)
+                    launchSettings[key] = value.TryGetValue<string>(out var text) ? text ?? "" : value.ToJsonString();
             if (Text(shared, "LaunchFolders") is { } configured)
                 foreach (var part in configured.Split('|').Take(1000)) { var separator = part.IndexOf('>'); if (separator >= 0) Add(part[(separator + 1)..]); }
-            // Local v1 YAML is a flat key/value file. Only these two public scalars are needed.
+            // Read only allowlisted public scalars; local runtime settings override the shared source.
             var local = Path.Combine(executable, "PCL", "config.v1.yml");
             if (File.Exists(local))
             {
@@ -53,10 +58,11 @@ public sealed class WindowsLegacyDesktopDataReader(string executableDirectory, s
                 {
                     var separator = line.IndexOf(':'); if (separator < 0) continue;
                     var key = line[..separator].Trim();
-                    if (key is not ("LaunchFolderSelect" or "LaunchInstanceSelect")) continue;
+                    if (key is not ("LaunchFolderSelect" or "LaunchInstanceSelect") && !runtimeKeys.Contains(key)) continue;
                     var value = Scalar(line[(separator + 1)..].Trim());
                     if (key == "LaunchFolderSelect") selectedFolder = value;
                     if (key == "LaunchInstanceSelect") selectedVersion = value;
+                    if (runtimeKeys.Contains(key)) launchSettings[key] = value;
                 }
             }
             // Older Setup.ini public keys remain read-only. Do not interpret login/cache fields.
@@ -72,6 +78,7 @@ public sealed class WindowsLegacyDesktopDataReader(string executableDirectory, s
                     if (key == "LaunchFolderSelect") selectedFolder ??= value;
                     if (key == "LaunchInstanceSelect") selectedVersion ??= value;
                     if (key == "LaunchFolders") foreach (var part in value.Split('|').Take(1000)) { var p = part.IndexOf('>'); if (p >= 0) Add(part[(p + 1)..]); }
+                    if (runtimeKeys.Contains(key)) launchSettings.TryAdd(key, value);
                 }
             }
             Add(selectedFolder);
@@ -124,7 +131,7 @@ public sealed class WindowsLegacyDesktopDataReader(string executableDirectory, s
             var root = selectedFolder.Replace("$", executable + Path.DirectorySeparatorChar, StringComparison.Ordinal);
             if (Path.IsPathFullyQualified(root)) selectedDirectory = Path.GetFullPath(Path.Combine(root, "versions", selectedVersion));
         }
-        return new(folders.ToArray(), accounts, selectedAccount, selectedDirectory, issues);
+        return new(folders.ToArray(), accounts, selectedAccount, selectedDirectory, issues, launchSettings, executable);
     }
     private static string Scalar(string value) => value.StartsWith('"') ? System.Text.Json.JsonSerializer.Deserialize<string>(value) ?? ""
         : value.StartsWith('\'') && value.EndsWith('\'') ? value[1..^1].Replace("''", "'") : value;

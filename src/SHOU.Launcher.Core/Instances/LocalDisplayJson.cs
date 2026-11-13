@@ -28,7 +28,31 @@ internal static class LocalDisplayJson
             else if (c == '/' && next is '/' or '*') { output.Append(c).Append(next); i++; lineComment = next == '/'; blockComment = next == '*'; continue; }
             output.Append(c);
         }
-        return JsonNode.Parse(output.ToString(), documentOptions: new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        using var document = JsonDocument.Parse(output.ToString(), new() { CommentHandling = JsonCommentHandling.Skip, AllowTrailingCommas = true });
+        using var normalized = new MemoryStream();
+        using (var writer = new Utf8JsonWriter(normalized)) WriteDisplayElement(document.RootElement, writer);
+        return JsonNode.Parse(normalized.ToArray());
+    }
+    private static void WriteDisplayElement(JsonElement element, Utf8JsonWriter writer)
+    {
+        if (element.ValueKind == JsonValueKind.Object)
+        {
+            writer.WriteStartObject();
+            foreach (var property in element.EnumerateObject())
+            {
+                // Some existing mod manifests use repeated empty-name fields as comments.
+                // They are never identities. Preserve all named fields, including duplicates,
+                // so conflicting id/version/dependency declarations still fail normally.
+                if (property.Name.Length == 0) continue;
+                writer.WritePropertyName(property.Name); WriteDisplayElement(property.Value, writer);
+            }
+            writer.WriteEndObject();
+        }
+        else if (element.ValueKind == JsonValueKind.Array)
+        {
+            writer.WriteStartArray(); foreach (var item in element.EnumerateArray()) WriteDisplayElement(item, writer); writer.WriteEndArray();
+        }
+        else element.WriteTo(writer);
     }
     internal static string? Description(string? text)
     {

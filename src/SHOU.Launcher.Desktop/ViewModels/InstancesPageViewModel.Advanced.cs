@@ -40,6 +40,8 @@ public sealed partial class InstancesPageViewModel
             var draft = await legacy.ReadLegacyInstanceSettingsAsync(instance.Id, ct);
             if (SelectedInstance?.Id != instance.Id) return;
             LoadInstanceLaunchOptions(instance with { LaunchOptions = draft.Options }, Service.Snapshot.Settings);
+            if (draft.JavaExecutable is { } java) { InstanceJavaExecutable = java; UseGlobalJava = false; }
+            if (draft.MemoryMiB is { } memory) { InstanceMemoryMiB = memory; UseGlobalMemory = false; }
             if (draft.DirectoryMode is { } mode) DirectoryMode = mode;
             _instanceDraftDirty = true;
             Feedback = draft.Warnings.Count == 0 ? "已读取为草稿，请核对后保存。" : string.Join("\n", draft.Warnings);

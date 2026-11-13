@@ -38,6 +38,16 @@ public sealed class InstanceAdvancedUiTests
         await vm.ReadLegacySettingsAsync();Assert.Equal("legacy title",vm.InstanceWindowTitle);Assert.Equal(InstanceDirectoryMode.Shared,vm.DirectoryMode);Assert.False(vm.UseGlobalLaunchOptions);Assert.Equal(0,service.Edits);Assert.Contains("manual review",vm.Feedback);
     }
     [AvaloniaFact]
+    public async Task LegacyRuntimeDraftPopulatesJavaAndMemoryWithoutWritingBeforeConfirmation()
+    {
+        var java=Path.Combine(Path.GetTempPath(),"controlled-java","java.exe");
+        var service=new AdvancedService{LegacyDraft=new(new(MinimumMemoryMiB:1024),null,[],java,8192)};
+        using var root=new MainWindowViewModel(service,new FakeExternalLauncher());var vm=root.Instances;
+        await vm.ReadLegacySettingsAsync();Assert.Equal(java,vm.InstanceJavaExecutable);Assert.False(vm.UseGlobalJava);Assert.Equal(8192,vm.InstanceMemoryMiB);Assert.False(vm.UseGlobalMemory);
+        Assert.True(vm.InstanceInitialMemory);Assert.Equal(1024,vm.InstanceInitialMemoryMiB);Assert.Equal(0,service.Edits);
+        await vm.SaveInstanceSettingsCommand.ExecuteAsync(null);Assert.Equal(1,service.Edits);Assert.Equal(java,service.LastEdit!.JavaExecutable);Assert.Equal(8192,service.LastEdit.MemoryMiB);
+    }
+    [AvaloniaFact]
     public async Task SavedInstanceRouteUsesCurrentAccountWithoutCreatingAnOfflineFallback()
     {
         var service=new FakeLauncherService();var id=service.Snapshot.Instances.Single().Id;await SavedInstanceLaunch.RunAsync(service,id,default);Assert.Equal("none",service.LastLaunchServerId);
@@ -53,9 +63,10 @@ public sealed class InstanceAdvancedUiTests
     {
         public int Edits,Exports;public InstanceEdit? LastEdit;
         public bool CreateDirectoryRequested;
+        public LegacyInstanceSettings LegacyDraft=new(new(WindowTitle:"legacy title"),InstanceDirectoryMode.Shared,["manual review"]);
         public Task<string> GetInstanceDirectoryAsync(string id,string? kind=null,bool createMissing=false,CancellationToken cancellationToken=default){CreateDirectoryRequested=createMissing;return Task.FromResult(Path.GetTempPath());}
         public Task UpdateInstanceAsync(string id,InstanceEdit edit,CancellationToken cancellationToken=default){Edits++;LastEdit=edit;return Task.CompletedTask;}
-        public Task<LegacyInstanceSettings> ReadLegacyInstanceSettingsAsync(string id,CancellationToken cancellationToken=default)=>Task.FromResult(new LegacyInstanceSettings(new(WindowTitle:"legacy title"),InstanceDirectoryMode.Shared,["manual review"]));
+        public Task<LegacyInstanceSettings> ReadLegacyInstanceSettingsAsync(string id,CancellationToken cancellationToken=default)=>Task.FromResult(LegacyDraft);
         public Task ExportLaunchScriptAsync(string id,string executable,string destination,bool overwrite=false,CancellationToken cancellationToken=default){Exports++;return Task.CompletedTask;}
         public Task<IReadOnlyList<InstanceContentEntry>> ListInstanceContentAsync(string id,string kind,CancellationToken cancellationToken=default)=>Task.FromResult<IReadOnlyList<InstanceContentEntry>>([]);
         public Task ImportInstanceContentAsync(string id,string kind,string source,CancellationToken cancellationToken=default)=>throw new NotSupportedException();

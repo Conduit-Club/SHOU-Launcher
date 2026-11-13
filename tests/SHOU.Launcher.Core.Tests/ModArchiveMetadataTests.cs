@@ -10,6 +10,24 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed class ModArchiveMetadataTests
 {
     [TestMethod]
+    [DataRow("{\"\":\"heading\",\"id\":\"readable\",\"name\":\"Readable\",\"version\":\"3.13.2\",\"\":\"footer\",\"custom\":{\"\":1,\"\":2}}", true)]
+    [DataRow("{\"id\":\"readable\",\"id\":\"conflict\",\"name\":\"Readable\"}", false)]
+    [DataRow("{\"id\":\"readable\",\"version\":\"1\",\"version\":\"2\"}", false)]
+    public void EmptyCommentKeysDoNotDiscardMetadataButConflictingIdentityKeysStillFail(string text, bool readable)
+    {
+        var root = TestFiles.Root(); Directory.CreateDirectory(Path.Combine(root, "mods")); var path = Path.Combine(root, "mods", "fixture.jar");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create)) using (var stream = zip.CreateEntry("fabric.mod.json").Open()) stream.Write(Encoding.UTF8.GetBytes(text));
+        var bytes = File.ReadAllBytes(path); var instance = new GameInstance("fixture", "Fixture", "1.21.1", root, Loader: "fabric");
+        var row = InstanceWorkspace.List(instance, "mods").Single();
+        if (readable)
+        {
+            Assert.IsNull(row.MetadataError); Assert.AreEqual("Readable", row.DisplayName); Assert.AreEqual("3.13.2", row.ModVersion); Assert.AreEqual("readable", row.ModId);
+            Assert.IsEmpty(ModRelations.Read(instance).Notices); Assert.AreEqual("readable", ModRelations.Read(instance).Hosts.Single().Declaration.Ids.Single());
+        }
+        else { Assert.IsNotNull(row.MetadataError); Assert.IsNull(row.ModId); Assert.IsEmpty(ModRelations.Read(instance).Hosts.Single().Declaration.Ids); }
+        CollectionAssert.AreEqual(bytes, File.ReadAllBytes(path));
+    }
+    [TestMethod]
     [DataRow("\uFEFF{/* local comment */\"id\":\"readable\",\"name\":\"Readable\",\"description\":\"First\nsecond\tline\",\"version\":\"1\",}")]
     [DataRow("{\"id\":\"readable\",\"name\":\"Readable\",\"description\":\"First\\nsecond\\tline\",\"version\":\"1\"}")]
     public void LocalMultilineDescriptionKeepsDisplayAndRelationIdentityWithoutRewritingArchive(string text)

@@ -18,7 +18,8 @@ public interface ILaunchScriptService
 {
     Task ExportLaunchScriptAsync(string instanceId, string executable, string destination, bool overwrite = false, CancellationToken cancellationToken = default);
 }
-public sealed record LegacyInstanceSettings(GameLaunchOptions Options, InstanceDirectoryMode? DirectoryMode, IReadOnlyList<string> Warnings);
+public sealed record LegacyInstanceSettings(GameLaunchOptions Options, InstanceDirectoryMode? DirectoryMode, IReadOnlyList<string> Warnings,
+    string? JavaExecutable = null, int? MemoryMiB = null);
 public interface ILegacyInstanceSettingsService
 {
     Task<LegacyInstanceSettings> ReadLegacyInstanceSettingsAsync(string instanceId, CancellationToken cancellationToken = default);

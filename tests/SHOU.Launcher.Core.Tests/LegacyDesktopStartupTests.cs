@@ -11,7 +11,7 @@ using SHOU.Launcher.Desktop.Platform.Windows;
 namespace SHOU.Launcher.Core.Tests;
 
 [TestClass]
-public sealed class LegacyDesktopStartupTests
+public sealed partial class LegacyDesktopStartupTests
 {
     private const string Uuid = "11111111222233334444555555555555";
     private const string Secret = "synthetic-legacy-startup-secret";
