@@ -55,7 +55,7 @@ public sealed class LegacyDesktopStartupTests
         var local = Path.Combine(root, "local"); var preview = Path.Combine(local, "SHOU-Launcher-Preview");
         Directory.CreateDirectory(Path.Combine(preview, "local")); File.WriteAllText(Path.Combine(preview, "local", "shou.desktop.v1.json"), "{}");
         Assert.AreEqual(preview, WindowsStartupPaths.ResolveDataDirectory(exe, local));
-        Directory.CreateDirectory(Path.Combine(exe, "PCL")); Assert.IsNull(WindowsStartupPaths.ResolveDataDirectory(exe, local));
+        Directory.CreateDirectory(Path.Combine(exe, "PCL")); Assert.AreEqual(preview, WindowsStartupPaths.ResolveDataDirectory(exe, local), "An update beside old WPF must not abandon the current desktop state or protected store.");
         Directory.CreateDirectory(Path.Combine(local, "PCLCE")); File.WriteAllText(Path.Combine(local, "PCLCE", "shou.desktop.v1.json"), "{}");
         Assert.IsNull(WindowsStartupPaths.ResolveDataDirectory(exe, local));
     }
