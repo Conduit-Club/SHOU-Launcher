@@ -76,7 +76,7 @@ public sealed class JavaTrustWorkflowTests
         public static async Task<Fixture> CreateAsync()
         {
             var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Workflow fixture must not use a network.")));
-            var downloader = new VerifiedDownloader(http); var native = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+            var downloader = new VerifiedDownloader(http); var native = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
             var sourceHome = TestFiles.Root();
             var discovery = new Discovery(new(Path.Combine(sourceHome, "bin/java"), sourceHome, "21.0.13", 21, "fixture", native.Info.Context.HardwareArchitecture, "fixture:source"));
             var trust = new Trust(discovery); var platform = native with { JavaDiscovery = discovery }; var lease = platform.DataLock.Acquire(platform.Paths);

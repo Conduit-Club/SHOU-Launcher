@@ -20,7 +20,7 @@ public sealed partial class LocalPackTests
     {
         var mod=Mod();var old=Resource();var newer=old with{Project=103,FileId=1003,Name="new-optional.zip"};
         using var handler=new FixtureApi(mod,old,newer);using var http=new HttpClient(handler);var downloader=new VerifiedDownloader(http);
-        var platform=PlatformServicesFactory.Create(new(TestFiles.Root()),downloader) with{Credentials=new EmptyCredentials()};
+        var platform=TestPlatformServices.Create(new(TestFiles.Root()),downloader) with{Credentials=new EmptyCredentials()};
         using var lease=platform.DataLock.Acquire(platform.Paths);await using var processes=(ProcessRunner)platform.Processes;
         await using var service=new LauncherService(platform,http,downloader,new NetworkOptions(),localPackResolver:new(http,FixtureKey));
         var path=Archive(OptionalManifest(mod,old));var initial=await service.InspectLocalPackAsync(path);var key=initial.OptionalFiles!.Single().Key;
@@ -34,7 +34,7 @@ public sealed partial class LocalPackTests
     public async Task OptionalChoicesUseOfficialNamesAndSelectionSpecificPlansNeverInstallAnUnselectedFile()
     {
         var mod = Mod(); var optional = Resource(); using var handler = new FixtureApi(mod, optional); using var http = new HttpClient(handler);
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader) with { Credentials = new EmptyCredentials() };
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader) with { Credentials = new EmptyCredentials() };
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         var resolver = new CurseForgePackResolver(http, FixtureKey, platform.Paths.CacheDirectory);
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions(), localPackResolver: resolver);
@@ -60,7 +60,7 @@ public sealed partial class LocalPackTests
     {
         var mod = Mod(); var optional = Resource(); using var handler = new FixtureApi(mod, optional); using var http = new HttpClient(handler);
         handler.Override = r => r.RequestUri!.AbsolutePath.EndsWith($"/mods/{optional.Project}/files/{optional.FileId}", StringComparison.Ordinal) ? new(HttpStatusCode.ServiceUnavailable) : null;
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader) with { Credentials = new EmptyCredentials() };
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader) with { Credentials = new EmptyCredentials() };
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions(), localPackResolver: new(http, FixtureKey, platform.Paths.CacheDirectory));
         var path = Archive(OptionalManifest(mod, optional)); var initial = await service.InspectLocalPackAsync(path); Assert.IsTrue(initial.CanImport);
@@ -74,7 +74,7 @@ public sealed partial class LocalPackTests
     {
         var required = Resource(); var optional = Mod(true); using var handler = new FixtureApi(required, optional); using var http = new HttpClient(handler);
         handler.Override = r => r.RequestUri!.Host == "api.modrinth.com" ? new(HttpStatusCode.NotFound) : null;
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader) with { Credentials = new EmptyCredentials() };
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader) with { Credentials = new EmptyCredentials() };
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions(), localPackResolver: new(http, FixtureKey, platform.Paths.CacheDirectory));
         var path = Archive(OptionalManifest(required, optional)); var initial = await service.InspectLocalPackAsync(path); var key = initial.OptionalFiles!.Single().Key;
@@ -95,7 +95,7 @@ public sealed partial class LocalPackTests
     public async Task OptionalSelectionRejectsUnknownRequiredAndDuplicateKeysBeforeRequests(string scenario)
     {
         var mod = Mod(); var optional = Resource(); using var handler = new FixtureApi(mod, optional); using var http = new HttpClient(handler);
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader) with { Credentials = new EmptyCredentials() };
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader) with { Credentials = new EmptyCredentials() };
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions(), localPackResolver: new(http, FixtureKey));
         var source = Archive(OptionalManifest(mod, optional)); var sha = (await new LocalPackArchive().ReadAsync(source)).Inspection.ArchiveSha256;

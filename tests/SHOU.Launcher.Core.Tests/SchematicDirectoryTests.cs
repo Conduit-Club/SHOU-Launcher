@@ -11,7 +11,7 @@ public sealed class SchematicDirectoryTests
     public async Task BrowsingStaysInTheSelectedDirectoryAndDoesNotFollowLinks()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Local browsing stays offline.")));
-        var downloader = new VerifiedDownloader(http); await using var service = new LauncherService(PlatformServicesFactory.Create(new(TestFiles.Root()), downloader), http, downloader, new());
+        var downloader = new VerifiedDownloader(http); await using var service = new LauncherService(TestPlatformServices.Create(new(TestFiles.Root()), downloader), http, downloader, new());
         var instance = await service.CreateInstanceAsync("folders", "1.21.1"); var root = Path.Combine(instance.GameDirectory, "schematics");
         Directory.CreateDirectory(Path.Combine(root, "builds/nested")); await File.WriteAllTextAsync(Path.Combine(root, "builds/a.litematic"), "nested"); await File.WriteAllTextAsync(Path.Combine(root, "a.litematic"), "root"); await File.WriteAllTextAsync(Path.Combine(root, "note.txt"), "unrelated");
         Directory.CreateSymbolicLink(Path.Combine(root, "alias"), TestFiles.Root());
@@ -27,7 +27,7 @@ public sealed class SchematicDirectoryTests
     public async Task NestedLocalImportTrashAndRestorePreserveTheRootFileAndOriginalPath()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Local management stays offline.")));
-        var downloader = new VerifiedDownloader(http); await using var service = new LauncherService(PlatformServicesFactory.Create(new(TestFiles.Root()), downloader), http, downloader, new());
+        var downloader = new VerifiedDownloader(http); await using var service = new LauncherService(TestPlatformServices.Create(new(TestFiles.Root()), downloader), http, downloader, new());
         var instance = await service.CreateInstanceAsync("manage", "1.21.1"); var root = Path.Combine(instance.GameDirectory, "schematics"); Directory.CreateDirectory(Path.Combine(root, "builds/nested"));
         var original = Path.Combine(root, "a.litematic"); await File.WriteAllTextAsync(original, "root original"); var source = Path.Combine(TestFiles.Root(), "a.litematic"); await File.WriteAllTextAsync(source, "nested original");
         await service.ImportInstanceContentToDirectoryAsync(instance.Id, "schematics", "builds/nested", source); var target = Path.Combine(root, "builds/nested/a.litematic"); Assert.AreEqual("nested original", await File.ReadAllTextAsync(target));
@@ -41,7 +41,7 @@ public sealed class SchematicDirectoryTests
     public async Task MissingOrLinkedDestinationsNeverFallBackToTheRootAndLateLinksPreventRestore()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Local management stays offline.")));
-        var downloader = new VerifiedDownloader(http); await using var service = new LauncherService(PlatformServicesFactory.Create(new(TestFiles.Root()), downloader), http, downloader, new());
+        var downloader = new VerifiedDownloader(http); await using var service = new LauncherService(TestPlatformServices.Create(new(TestFiles.Root()), downloader), http, downloader, new());
         var instance = await service.CreateInstanceAsync("boundaries", "1.21.1"); var root = Path.Combine(instance.GameDirectory, "schematics"); Directory.CreateDirectory(Path.Combine(root, "builds"));
         var source = Path.Combine(TestFiles.Root(), "sample.schem"); await File.WriteAllTextAsync(source, "unchanged source");
         await Assert.ThrowsAsync<DirectoryNotFoundException>(() => service.ImportInstanceContentToDirectoryAsync(instance.Id, "schematics", "missing", source));

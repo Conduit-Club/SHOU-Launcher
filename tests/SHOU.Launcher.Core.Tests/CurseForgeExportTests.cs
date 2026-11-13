@@ -16,7 +16,7 @@ public sealed class CurseForgeExportTests
     public async Task CancellationAfterArchiveCreationRemovesPartialOutput(string format)
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Export stays offline.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var runner = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
         var instance = await service.CreateInstanceAsync("cancel", "1.21.1"); Directory.CreateDirectory(Path.Combine(instance.GameDirectory, "resourcepacks"));
@@ -38,7 +38,7 @@ public sealed class CurseForgeExportTests
     public async Task ExportRoundtripIsExactAndFailedImportPublishesNothing(string scenario)
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Vanilla override roundtrip must stay offline.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var runner = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
         var source = await service.CreateInstanceAsync("中文 CF 源", "1.21.1");
@@ -91,7 +91,7 @@ public sealed class CurseForgeExportTests
                 : new { id = 101, gameId = 432, classId = 6 };
             return Task.FromResult(ScriptedHttpHandler.Json(JsonSerializer.Serialize(new { data })));
         }));
-        var downloads = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloads);
+        var downloads = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloads);
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var runner = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloads, new NetworkOptions(), localPackResolver: new(api, "synthetic-export-key"));
         var source = await service.CreateInstanceAsync("CF refs", "1.21.1"); Directory.CreateDirectory(Path.Combine(source.GameDirectory, "mods"));

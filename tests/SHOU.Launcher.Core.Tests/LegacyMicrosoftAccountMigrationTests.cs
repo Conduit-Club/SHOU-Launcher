@@ -134,7 +134,7 @@ public sealed class LegacyMicrosoftAccountMigrationTests
             var f = new Fixture(mode);
             f.http = new HttpClient(new ScriptedHttpHandler(f.ReplyAsync));
             var downloads = new VerifiedDownloader(f.http);
-            f.platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloads) with { Credentials = f, LegacyMicrosoftAccounts = f };
+            f.platform = TestPlatformServices.Create(new(TestFiles.Root()), downloads) with { Credentials = f, LegacyMicrosoftAccounts = f };
             f.lease = f.platform.DataLock.Acquire(f.platform.Paths);
             f.Service = new(f.platform, f.http, downloads, new(), authenticationClient: new(f.http,
                 new(new("http://127.0.0.1/device"), new("http://127.0.0.1/token"), new("http://127.0.0.1/xbl"), new("http://127.0.0.1/xsts"), new("http://127.0.0.1/mc"), new("http://127.0.0.1/entitlements"), new("http://127.0.0.1/profile"))));

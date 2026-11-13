@@ -45,7 +45,7 @@ public sealed class RemainingPageParityTests
             calls++; Assert.AreEqual("mod.mcimirror.top", request.RequestUri!.Host); Assert.IsNull(request.Headers.Authorization); Assert.IsFalse(request.Headers.Contains("x-api-key"));
             return Task.FromResult(request.RequestUri.AbsolutePath.EndsWith("/missing") ? new HttpResponseMessage(HttpStatusCode.NotFound) : ScriptedHttpHandler.Json("{\"translated\":\"中文介绍\"}"));
         }));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); await using var processes = (ProcessRunner)platform.Processes;
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions(), publicInformationHttp: http);
         var project = new ContentProject("cf-42", "fixture", "Title", "Original", "Author", 1, "mod", null, new("https://www.curseforge.com/minecraft/mc-mods/fixture"), Source: "curseforge");
         Assert.AreEqual("中文介绍", await service.GetChineseContentDescriptionAsync(project)); Assert.AreEqual("中文介绍", await service.GetChineseContentDescriptionAsync(project)); Assert.AreEqual(1, calls);
@@ -57,7 +57,7 @@ public sealed class RemainingPageParityTests
     {
         var root = TestFiles.Root(); Directory.CreateDirectory(root); var home = Path.Combine(root, "Custom.xaml"); await File.WriteAllTextAsync(home, "<TextBlock Text=\"Fixture\"/>"); var image = Path.Combine(root, "banner.png"); await File.WriteAllBytesAsync(image, [1, 2, 3]);
         using var http = new HttpClient(new ScriptedHttpHandler(request => { Assert.AreEqual("https://example.com/home/banner.png", request.RequestUri!.AbsoluteUri); return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent([4, 5]) }); }));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); await using var processes = (ProcessRunner)platform.Processes;
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions(), publicInformationHttp: http);
         Assert.AreEqual("<TextBlock Text=\"Fixture\"/>", await service.ReadHomeDocumentAsync(home, false)); CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, await service.ReadCustomHomeImageAsync("banner.png", home, false));
         CollectionAssert.AreEqual(new byte[] { 4, 5 }, await service.ReadCustomHomeImageAsync("banner.png", "https://example.com/home/Custom.xaml", true));

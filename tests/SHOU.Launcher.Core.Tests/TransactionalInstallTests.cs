@@ -32,7 +32,7 @@ public sealed class TransactionalInstallTests
             if (request.RequestUri.AbsolutePath.EndsWith(Convert.ToHexStringLower(SHA1.HashData(resource)), StringComparison.Ordinal)) return new(HttpStatusCode.OK) { Content = new ByteArrayContent(resource) };
             throw new AssertFailedException("Unexpected network request.");
         }));
-        var downloader = new VerifiedDownloader(http); var original = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var original = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var runner = (ProcessRunner)original.Processes;
         var platform = original with { JavaDiscovery = new Discovery(original.Info.Context.HardwareArchitecture), Processes = new NoGameProcesses() };
         using var lease = platform.DataLock.Acquire(platform.Paths);

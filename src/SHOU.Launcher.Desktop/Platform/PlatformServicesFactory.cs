@@ -8,15 +8,22 @@ namespace SHOU.Launcher.Desktop.Platform;
 public static class PlatformServicesFactory
 {
     public static PlatformServices Create(PlatformOptions options, IVerifiedDownloader downloader)
+        => CreateCore(options, downloader, null);
+
+    /// <summary>Compose services with an explicitly supplied credential adapter, including isolated test stores.</summary>
+    public static PlatformServices Create(PlatformOptions options, IVerifiedDownloader downloader, ICredentialStore credentials)
+    {
+        ArgumentNullException.ThrowIfNull(credentials);
+        return CreateCore(options, downloader, credentials);
+    }
+
+    private static PlatformServices CreateCore(PlatformOptions options, IVerifiedDownloader downloader, ICredentialStore? credentials)
     {
         ArgumentNullException.ThrowIfNull(downloader);
         var info = new NativePlatformInfo();
         var paths = new AppPaths(options, info.Context);
         var processes = new ProcessRunner();
-        ICredentialStore credentials;
-        if (OperatingSystem.IsMacOS()) credentials = new KeychainCredentialStore(paths.CredentialScope);
-        else if (OperatingSystem.IsWindows()) credentials = new WindowsDpapiCredentialStore(paths);
-        else throw new PlatformNotSupportedException("This Desktop host supports Windows and macOS; no credential adapter is registered for this OS.");
+        credentials ??= CreateNativeCredentials(paths);
         var discovery = new JavaDiscovery(processes, info.Context, options, managedRuntimeDirectory: paths.RuntimesDirectory);
         var installer = new MojangJavaRuntimeInstaller(downloader, discovery, paths.RuntimesDirectory,
             Path.Combine(paths.CacheDirectory, "java-metadata"));
@@ -30,6 +37,13 @@ public static class PlatformServicesFactory
             LegacyMicrosoftAccounts = OperatingSystem.IsWindows()
                 ? new WindowsLegacyMicrosoftAccountReader(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PCLCE")) : null
         };
+    }
+
+    private static ICredentialStore CreateNativeCredentials(IAppPaths paths)
+    {
+        if (OperatingSystem.IsMacOS()) return new KeychainCredentialStore(paths.CredentialScope);
+        if (OperatingSystem.IsWindows()) return new WindowsDpapiCredentialStore(paths);
+        throw new PlatformNotSupportedException("This Desktop host supports Windows and macOS; no credential adapter is registered for this OS.");
     }
 
     private sealed class Capabilities(PlatformContext context) : IPlatformCapabilities

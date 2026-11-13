@@ -114,7 +114,7 @@ public sealed class LegacyDesktopStartupTests
         public async Task StartAsync(CancellationToken ct = default)
         {
             if (Service is not null) await Service.DisposeAsync();
-            platform ??= PlatformServicesFactory.Create(new(Path.Combine(root, "new")), new VerifiedDownloader(http)) with { Credentials = this, LegacyDesktopData = this };
+            platform ??= TestPlatformServices.Create(new(Path.Combine(root, "new")), new VerifiedDownloader(http)) with { Credentials = this, LegacyDesktopData = this };
             Service = new(platform, http, new VerifiedDownloader(http), new()); await Service.InitializeAsync(ct);
         }
         public Task<LegacyDesktopData> ReadAsync(CancellationToken ct = default) { Reads++; return Task.FromResult(Data); }

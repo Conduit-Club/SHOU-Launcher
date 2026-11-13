@@ -330,7 +330,7 @@ public sealed partial class LocalPackTests
     public async Task ServicePublishesOnlyVerifiedNewInstancesAndRollsBackCancellationOrFailedPersistence(string scenario)
     {
         var mod = Mod(true); var resource = Resource(); using var handler = new FixtureApi(mod, resource); using var http = new HttpClient(handler); var resolver = new CurseForgePackResolver(http, FixtureKey);
-        var source = Archive(Manifest(mod, resource), ("overrides/config/client.json", "{}")); var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader) with { Credentials = new EmptyCredentials() };
+        var source = Archive(Manifest(mod, resource), ("overrides/config/client.json", "{}")); var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader) with { Credentials = new EmptyCredentials() };
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions(), localPackResolver: resolver); await service.InitializeAsync(); var inspection = await service.InspectLocalPackAsync(source); Assert.IsTrue(inspection.CanImport);
         if (scenario == "persist-failure") Directory.CreateDirectory(Path.Combine(platform.Paths.LocalDataDirectory, "shou.desktop.v1.json")); using var cancellation = new CancellationTokenSource();

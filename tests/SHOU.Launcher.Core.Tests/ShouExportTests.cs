@@ -21,7 +21,7 @@ public sealed class ShouExportTests
         Directory.CreateDirectory(Path.Combine(game, "saves/world")); await File.WriteAllTextAsync(Path.Combine(game, "saves/world/fixture.txt"), "world-data");
         var archive = await InstanceWorkspace.ExportAsync(new("fixture", "中文 实例", "1.21.1", game, Loader: "vanilla", GameVersionId: "1.21.1"), Path.Combine(root, "exports"), false, default);
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Local vanilla import must not contact network.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(Path.Combine(root, "data")), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(Path.Combine(root, "data")), downloader);
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions()); await service.InitializeAsync();
         var inspection = await service.InspectLocalPackAsync(archive); Assert.IsTrue(inspection.CanImport); Assert.AreEqual(LocalPackFormat.ShouExport, inspection.Format);
@@ -42,7 +42,7 @@ public sealed class ShouExportTests
     public async Task FailedOrCancelledComponentPreparationRetainsInstanceIdentityAndFiles(bool cancel)
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new IOException("Controlled unavailable metadata")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
         var instance = await service.CreateInstanceAsync("control", "1.21.1"); Directory.CreateDirectory(Path.Combine(instance.GameDirectory, "config"));

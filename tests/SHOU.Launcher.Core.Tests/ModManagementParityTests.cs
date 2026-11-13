@@ -153,7 +153,7 @@ public sealed class ModManagementParityTests
             else return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
             return Task.FromResult(ScriptedHttpHandler.Json(JsonSerializer.Serialize(body)));
         }));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); var game = Path.Combine(platform.Paths.InstancesDirectory, "fixture"); Directory.CreateDirectory(Path.Combine(game, "mods")); await File.WriteAllBytesAsync(Path.Combine(game, "mods/fixture.jar"), bytes);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); var game = Path.Combine(platform.Paths.InstancesDirectory, "fixture"); Directory.CreateDirectory(Path.Combine(game, "mods")); await File.WriteAllBytesAsync(Path.Combine(game, "mods/fixture.jar"), bytes);
         var instance = new GameInstance("fixture", "Fixture", "1.21.1", game, Loader: "fabric", GameVersionId: "1.21.1");
         await using (var store = new ConfigurationStore(platform.Paths)) await store.SaveAsync(new(new(), [instance], []));
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions()); await service.InitializeAsync();

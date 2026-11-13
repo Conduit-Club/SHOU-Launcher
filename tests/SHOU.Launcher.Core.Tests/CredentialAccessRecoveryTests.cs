@@ -21,7 +21,7 @@ public sealed class CredentialAccessRecoveryTests
     public async Task ForegroundRecoveryReusesProtectedSessionWithoutLoginOrChangingOriginalFiles(string mode)
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Recovering storage access must not log in or rotate tokens.")));
-        var downloader = new VerifiedDownloader(http); var original = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var original = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         var account = new AccountProfile("existing", AccountKind.Microsoft, "Fixture", "11111111222233334444555555555555", Persisted: true);
         var session = new AuthSession(mode == "mismatch" ? account with { PlayerUuid = "aaaaaaaa222233334444555555555555" } : account, "synthetic-access", "synthetic-refresh");
         using var cancellation = new CancellationTokenSource();

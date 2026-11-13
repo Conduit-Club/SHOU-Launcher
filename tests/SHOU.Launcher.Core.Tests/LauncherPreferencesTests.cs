@@ -23,7 +23,7 @@ public sealed class LauncherPreferencesTests
             Assert.IsNull(request.Headers.Authorization); Assert.IsFalse(request.Headers.Contains("x-api-key"));
             return Task.FromResult(ScriptedHttpHandler.Json("[{\"draft\":false,\"tag_name\":\"v9.0.0\",\"name\":\"Release\",\"body\":\"Release notes\",\"published_at\":\"2026-11-07T00:00:00Z\",\"html_url\":\"https://github.com/Conduit-Club/SHOU-Launcher/releases/tag/v9.0.0\",\"prerelease\":false,\"assets\":[{\"name\":\"installer.exe\"}]}]"));
         }));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions(), publicInformationHttp: http);
         var release = (await service.CheckLauncherReleasesAsync()).Single(); Assert.AreEqual("Release notes", release.Notes);

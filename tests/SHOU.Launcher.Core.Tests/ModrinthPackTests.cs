@@ -160,7 +160,7 @@ public sealed class ModrinthPackTests
         var root = TestFiles.Root(); var archive = Archive(root, Index(loader: scenario == "fabric" ? "fabric-loader" : null));
         using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(ScriptedHttpHandler.Json("""{"id":"fabric-loader-0.16.5-1.21.1","inheritsFrom":"1.21.1","mainClass":"net.fabricmc.loader.impl.launch.knot.KnotClient","libraries":[{"name":"net.fabricmc:fabric-loader:0.16.5"}]}"""))));
         using var cancellation = new CancellationTokenSource(); var downloader = new FixtureDownloader(() => { if (scenario == "cancel") cancellation.Cancel(); });
-        var platform = PlatformServicesFactory.Create(new(Path.Combine(root, "data")), downloader) with { Credentials = new EmptyCredentials() };
+        var platform = TestPlatformServices.Create(new(Path.Combine(root, "data")), downloader) with { Credentials = new EmptyCredentials() };
         using var lease = platform.DataLock.Acquire(platform.Paths);
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions()); await service.InitializeAsync();
         try
@@ -189,7 +189,7 @@ public sealed class ModrinthPackTests
         var entries = new JsonArray(Enumerable.Range(0, 310).Select(i => (JsonNode)FileEntry($"mods/fixture-{i}.jar")).ToArray());
         var archive = Archive(root, Index(entries)); var downloader = new FixtureDownloader(() => { });
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new InvalidOperationException("No online request expected.")));
-        var platform = PlatformServicesFactory.Create(new(Path.Combine(root, "data")), downloader) with { Credentials = new EmptyCredentials() };
+        var platform = TestPlatformServices.Create(new(Path.Combine(root, "data")), downloader) with { Credentials = new EmptyCredentials() };
         using var lease = platform.DataLock.Acquire(platform.Paths);
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions()); await service.InitializeAsync();
         var inspection = await service.InspectModrinthPackAsync(archive);

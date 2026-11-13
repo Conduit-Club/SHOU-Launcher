@@ -35,7 +35,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '21.0.13+9'
+          java-version: '21.0.13+9.0.LTS'
           overwrite-settings: false
           settings-path: ${{ runner.temp }}/shou-java-settings
       - name: Register isolated runner paths and tools

@@ -67,7 +67,7 @@ public sealed class AuthRegressionTests
     [TestMethod, TestCategory("DesktopPlatforms")] public async Task FailedSettingsWriteCannotPublishDraftOrChangeProxy()
     {
         var network = new NetworkOptions(); using var http = new HttpClient(new HttpClientHandler { UseProxy = false }); var downloader = new VerifiedDownloader(http);
-        var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         using var lease = platform.DataLock.Acquire(platform.Paths);
         await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, network);

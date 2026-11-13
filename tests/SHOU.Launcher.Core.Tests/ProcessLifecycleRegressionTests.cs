@@ -15,7 +15,7 @@ public sealed class ProcessLifecycleRegressionTests
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Cached fixture must not use network.")));
         var downloader = new PipelineDownloads();
-        var original = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var original = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var nativeProcesses = (ProcessRunner)original.Processes;
         var runner = new HoldingRunner { HoldWindowProbe = true };
         var platform = original with { Processes = runner, JavaDiscovery = new FixtureJava(original.Info.Context.HardwareArchitecture) };
@@ -77,7 +77,7 @@ public sealed class ProcessLifecycleRegressionTests
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Cached fixture must not perform network requests.")));
         var downloader = new PipelineDownloads();
-        var original = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var original = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var nativeProcesses = (ProcessRunner)original.Processes;
         var platform = original with { Processes = new ImmediateFailureRunner(), JavaDiscovery = new FixtureJava(original.Info.Context.HardwareArchitecture) };
         using var lease = platform.DataLock.Acquire(platform.Paths);

@@ -28,7 +28,7 @@ public sealed class ContentTrashTests
     public async Task PublicServiceRoundTripSurvivesRestartAndMergesLaterInstalledFiles(string kind, string name)
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound))));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         var i = new GameInstance("fixture", "Fixture", "1.21.1", Path.Combine(platform.Paths.InstancesDirectory, "fixture")); var a = await FileFor(i, kind, name); var b = await FileFor(i, kind, "two" + Path.GetExtension(name));
         await File.WriteAllBytesAsync(Path.Combine(i.GameDirectory, ContentInstallFiles.ManifestName), ContentInstallFiles.SerializeManifest(new(1, i.Id, [a, b])));
         var config = Path.Combine(i.GameDirectory, "options.txt"); await File.WriteAllTextAsync(config, "user selection remains\n"); var configBytes = await File.ReadAllBytesAsync(config);

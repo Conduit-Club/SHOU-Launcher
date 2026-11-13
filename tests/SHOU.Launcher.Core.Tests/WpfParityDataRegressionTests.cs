@@ -14,7 +14,7 @@ public sealed class WpfParityDataRegressionTests
     {
         var downloader = new FailedTransfers();
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("No network expected.")));
-        var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var processes = (ProcessRunner)platform.Processes;
         using var lease = platform.DataLock.Acquire(platform.Paths);
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
@@ -37,7 +37,7 @@ public sealed class WpfParityDataRegressionTests
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("No network expected.")));
         var downloader = new FailedTransfers();
-        var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var processes = (ProcessRunner)platform.Processes;
         using var lease = platform.DataLock.Acquire(platform.Paths);
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());

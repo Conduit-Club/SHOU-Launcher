@@ -2,7 +2,7 @@
 
 Authoritative definitions: `src/SHOU.Launcher.Core/Abstractions/`. Core is net10.0 and has no old WPF/Core reference. One Desktop supports osx-arm64, win-x64 and win-arm64; WPF stays the Windows default.
 
-Platform worker implements `SHOU.Launcher.Desktop.Platform.PlatformServicesFactory.Create(PlatformOptions, IVerifiedDownloader)` returning `PlatformServices`. Constructors calculate paths only. Bootstrap acquires `DataLock` before initializing any write service; disposal drains writes, stops only owned processes, then releases the lease. `--data-dir` must isolate all mutable roots, keys and lock.
+Platform worker implements `SHOU.Launcher.Desktop.Platform.PlatformServicesFactory.Create(PlatformOptions, IVerifiedDownloader)` returning `PlatformServices`. Its additive three-argument overload accepts an explicit `ICredentialStore` for portable service tests; the production two-argument entry retains native Windows/macOS storage and rejects unsupported hosts. Constructors calculate paths only. Bootstrap acquires `DataLock` before initializing any write service; disposal drains writes, stops only owned processes, then releases the lease. `--data-dir` must isolate all mutable roots, keys and lock.
 
 UI uses `Bootstrap.Launcher` (`ILauncherService`) and `Bootstrap.ExternalLauncher`. It owns `App`, creates `MainWindow`/VM from these, and must show a clear error if host wiring is absent. Snapshot/event callbacks may originate off UI thread. Unsubscribe/dispose view models; no credentials in account DTOs or logs. UI cancellation uses CancellationToken, game stop is separate. Host owns service disposal.
 

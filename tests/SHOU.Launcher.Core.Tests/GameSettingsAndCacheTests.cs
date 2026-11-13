@@ -125,7 +125,7 @@ public sealed class GameSettingsAndCacheTests
     public async Task ExplicitExternalInstancesKeepWorldAndServerActionsBoundedInBothDataModes(bool ordinary)
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("No networking expected.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         if (ordinary) platform = platform with { Paths = new OrdinaryPaths(platform.Paths) };
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
@@ -158,7 +158,7 @@ public sealed class GameSettingsAndCacheTests
     public async Task AttachedFolderSettingsContentAndSelectionPersistWithoutNetworkingOrGameProcess()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("No network/game installation expected.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         var folder = ExistingVersion(platform.Paths.DataDirectory); string instanceId;
         await using (var service = new LauncherService(platform, http, downloader, new NetworkOptions()))
@@ -210,7 +210,7 @@ public sealed class GameSettingsAndCacheTests
     public async Task ExplicitExternalFolderMappingSurvivesRestartWithoutRelaxingArbitraryGameRootWrites()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("No network expected."))); var downloader = new VerifiedDownloader(http);
-        var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
+        var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         var folder = ExistingVersion(TestFiles.Root()); var metadata = Path.Combine(folder, Path.GetFileName(folder) + ".json"); var original = await File.ReadAllBytesAsync(metadata); string id;
         await using (var service = new LauncherService(platform, http, downloader, new NetworkOptions()))
         {
@@ -227,7 +227,7 @@ public sealed class GameSettingsAndCacheTests
     public async Task NewSharedPolicyDoesNotMoveExistingDataAndRetainsExplicitSelectionPreference()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("No install expected."))); var downloader = new VerifiedDownloader(http);
-        var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
+        var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
         var isolated = await service.CreateInstanceAsync("isolated", "1.21.1"); Put(isolated.GameDirectory, "saves/keep/level.dat");
         await service.SaveSettingsAsync(service.Snapshot.Settings with { LaunchOptions = new(Isolation: InstanceIsolation.Shared), Downloads = new(SelectInstalledInstance: false) });

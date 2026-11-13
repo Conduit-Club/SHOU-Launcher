@@ -38,7 +38,7 @@ public sealed class LegacyPackCompatibilityTests
             _ => Archive((".minecraft/versions/1.21.1/1.21.1.json", "{\"id\":\"1.21.1\",\"mainClass\":\"net.minecraft.client.main.Main\",\"libraries\":[]}"), (".minecraft/versions/1.21.1/1.21.1.jar", "bundled-client"), (".minecraft/" + payload, "custom"))
         };
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Import without prepare must not download or launch anything.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         GameInstance instance;
         await using (var service = new LauncherService(platform, http, downloader, new NetworkOptions()))
         {
@@ -64,7 +64,7 @@ public sealed class LegacyPackCompatibilityTests
             ("patches/net.fabricmc.fabric-loader.json", "{\"uid\":\"net.fabricmc.fabric-loader\",\"mainClass\":\"net.fabricmc.loader.impl.launch.knot.KnotClient\",\"+libraries\":[{\"name\":\"fixture:custom:1\"}]}"),
             ("libraries/fixture/custom/1/custom-1.jar", "bundled library"), (".minecraft/config/custom.json", "{}"));
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Patched loader must use the supplied metadata.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var service = new LauncherService(platform, http, downloader, new()); var inspect = await service.InspectLocalPackAsync(source);
         Assert.IsTrue(inspect.LegacyProfile!.Components!.Single().Overridden);
         var imported = await service.ImportLocalPackAsync(new(source, inspect.ArchiveSha256, "Patched"));

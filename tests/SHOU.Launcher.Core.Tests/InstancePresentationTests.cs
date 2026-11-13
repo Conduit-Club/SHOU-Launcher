@@ -45,7 +45,7 @@ public sealed class InstancePresentationTests
     public async Task FailedSaveKeepsPublishedMetadataAndOriginalCounter()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("No network expected.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
         await service.InitializeAsync(); var other = await service.CreateInstanceAsync("Other", "1.21.1"); var instance = await service.CreateInstanceAsync("Fixture", "1.21.1");
@@ -80,7 +80,7 @@ public sealed class InstancePresentationTests
     public async Task QuiltChecksumAliasPreservesSentinelAndDoesNotRegisterInstance()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => Task.FromResult(ScriptedHttpHandler.Json("""{"id":"quilt-loader-0.30.2-1.21.1","inheritsFrom":"1.21.1","mainClass":"org.quiltmc.loader.impl.launch.knot.KnotClient","libraries":[]}"""))));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions()); await service.InitializeAsync();
         var folder = Path.Combine(platform.Paths.CacheDirectory, "versions/quilt-loader-0.30.2-1.21.1"); Directory.CreateDirectory(folder);

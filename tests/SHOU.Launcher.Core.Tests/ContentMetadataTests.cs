@@ -29,7 +29,7 @@ public sealed class ContentMetadataTests
             else return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound));
             return Task.FromResult(ScriptedHttpHandler.Json(JsonSerializer.Serialize(body)));
         }));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); var game = Path.Combine(platform.Paths.InstancesDirectory, "fixture"); var folder = Path.Combine(game, section == "shaders" ? "shaderpacks" : section); Directory.CreateDirectory(folder); var file = Path.Combine(folder, "display.zip"); await File.WriteAllBytesAsync(file, bytes);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); var game = Path.Combine(platform.Paths.InstancesDirectory, "fixture"); var folder = Path.Combine(game, section == "shaders" ? "shaderpacks" : section); Directory.CreateDirectory(folder); var file = Path.Combine(folder, "display.zip"); await File.WriteAllBytesAsync(file, bytes);
         var instance = new GameInstance("fixture", "Fixture", "1.21.1", game, GameVersionId: "1.21.1"); await using (var store = new ConfigurationStore(platform.Paths)) await store.SaveAsync(new(new(), [instance], []));
         await using var service = new LauncherService(platform, http, downloader, new NetworkOptions()); await service.InitializeAsync();
         var result = await service.ReadInstanceContentMetadataAsync(instance.Id, section); Assert.HasCount(expected, result.Info); CollectionAssert.AreEqual(bytes, await File.ReadAllBytesAsync(file));

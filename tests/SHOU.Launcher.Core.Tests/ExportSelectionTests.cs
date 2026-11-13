@@ -14,7 +14,7 @@ public sealed class ExportSelectionTests
     public async Task ExplicitDirectoriesAndSingleFilesRoundTripWithoutNetworkOrUnselectedContent(string format)
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Local export stays offline.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var service = new LauncherService(platform, http, downloader, new()); var instance = await service.CreateInstanceAsync("selection", "1.21.1");
         var files = new[] { "kubejs/server_scripts/a.js", "kubejs/config/account-token.txt", "scripts/one.zs", "scripts/not-selected.zs", "saves/World/fixture.txt", "custom.bin" };
         foreach (var relative in files) { var p = Path.Combine(instance.GameDirectory, relative); Directory.CreateDirectory(Path.GetDirectoryName(p)!); await File.WriteAllTextAsync(p, "original: " + relative); }
@@ -39,7 +39,7 @@ public sealed class ExportSelectionTests
     public async Task BrowseRejectsTraversalLinksAndCancellationWhileMarkingRootCredentialsUnselectable()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Browse stays offline.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); await using var service = new LauncherService(platform, http, downloader, new()); var instance = await service.CreateInstanceAsync("browse", "1.21.1");
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); await using var service = new LauncherService(platform, http, downloader, new()); var instance = await service.CreateInstanceAsync("browse", "1.21.1");
         await File.WriteAllTextAsync(Path.Combine(instance.GameDirectory, ".env"), "synthetic fixture");
         Directory.CreateSymbolicLink(Path.Combine(instance.GameDirectory, "alias"), TestFiles.Root());
         var rows = await service.GetInstanceExportEntriesAsync(instance.Id); Assert.IsFalse(rows.Single(r => r.RelativePath == ".env").CanSelect); Assert.IsFalse(rows.Single(r => r.RelativePath == "alias").CanSelect);

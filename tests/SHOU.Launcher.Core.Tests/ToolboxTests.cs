@@ -30,7 +30,7 @@ public sealed class ToolboxTests
     public async Task ExplicitUuidAndChineseNamePersistAcrossRestartAndFortuneIsStable()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("No game or network expected.")));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var processes = (ProcessRunner)platform.Processes;
         var id = "1234567890abcdef1234567890abcdef"; int fortune;
         await using (var service = new LauncherService(platform, http, downloader, new NetworkOptions()))

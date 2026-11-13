@@ -17,7 +17,7 @@ public sealed class InstanceModUpdateScanTests
     public async Task BudgetRetainsVerifiedResultsButExplicitUserCancellationStillCancels(bool userCancel)
     {
         var handler = new ScanHandler(); using var http = new HttpClient(handler); var downloader = new VerifiedDownloader(http);
-        var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         var game = Path.Combine(platform.Paths.InstancesDirectory, "fixture"); Directory.CreateDirectory(Path.Combine(game, "mods"));
         for (var i = 0; i < 8; i++) await File.WriteAllBytesAsync(Path.Combine(game, "mods", $"{i}.jar"), [(byte)i]);
         var instance = new GameInstance("fixture", "Fixture", "fabric-loader-0.16.14-1.21.1", game, Loader: "fabric", LoaderVersion: "0.16.14", Installed: true, GameVersionId: "1.21.1");

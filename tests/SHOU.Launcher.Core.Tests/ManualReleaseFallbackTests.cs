@@ -22,7 +22,7 @@ public sealed class ManualReleaseFallbackTests
             var xml = (mode == "dtd" ? "<!DOCTYPE feed [<!ENTITY entity SYSTEM 'file:///must-never-read'>]>" : "") + $"<feed xmlns='http://www.w3.org/2005/Atom'><entry><title>Release</title><link rel='alternate' href='{page}'/><updated>2026-11-07T00:00:00Z</updated><content type='html'>&lt;p&gt;Manual &amp;amp; safe&lt;/p&gt;</content></entry></feed>";
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(xml) });
         }));
-        var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         await using var processes = (ProcessRunner)platform.Processes; await using var service = new LauncherService(platform, http, downloader, new NetworkOptions(), publicInformationHttp: http);
         if (mode == "good")
         {

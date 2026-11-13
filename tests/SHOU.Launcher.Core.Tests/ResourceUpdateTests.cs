@@ -26,7 +26,7 @@ public sealed class ResourceUpdateTests
         {
             var f = new Fixture { Section = section, Folder = section == "shaders" ? "shaderpacks" : section, Kind = section == "shaders" ? "shader" : "resourcepack", Mode = mode };
             f.Http = new(new ScriptedHttpHandler(f.Respond)); var downloader = new VerifiedDownloader(f.Http);
-            var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); f.Root = Path.Combine(platform.Paths.InstancesDirectory, "fixture"); Directory.CreateDirectory(Path.Combine(f.Root, f.Folder)); await System.IO.File.WriteAllBytesAsync(f.File, f.Old);
+            var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); f.Root = Path.Combine(platform.Paths.InstancesDirectory, "fixture"); Directory.CreateDirectory(Path.Combine(f.Root, f.Folder)); await System.IO.File.WriteAllBytesAsync(f.File, f.Old);
             f.Instance = new("fixture", "Fixture", "1.21.1", f.Root, Loader: "fabric", GameVersionId: "1.21.1");
             if (tracked) await System.IO.File.WriteAllBytesAsync(f.Manifest, JsonSerializer.SerializeToUtf8Bytes(new ContentInstallManifest(1, f.Instance.Id,
                 [new("project", "old", f.Kind, f.Folder + "/My custom pack.zip", Hash(f.Old), Hash512(f.Old), f.Old.Length)])));

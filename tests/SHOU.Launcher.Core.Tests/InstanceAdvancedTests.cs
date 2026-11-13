@@ -138,7 +138,7 @@ public sealed class InstanceAdvancedTests
     private sealed class Fixture:IAsyncDisposable
     {
         public PlatformServices Platform=null!;public LauncherService Service=null!;public HttpClient Http=null!;public VerifiedDownloader Downloader=null!;public NoGame Guard=new();private ProcessRunner runner=null!;public string Config=>Path.Combine(Platform.Paths.LocalDataDirectory,"shou.desktop.v1.json");
-        public static async Task<Fixture>Create(){var f=new Fixture();f.Http=new(new ScriptedHttpHandler(_=>throw new AssertFailedException("No network expected")));f.Downloader=new(f.Http);var p=PlatformServicesFactory.Create(new(TestFiles.Root()),f.Downloader);f.runner=(ProcessRunner)p.Processes;f.Platform=p with{Processes=f.Guard};f.Service=new(f.Platform,f.Http,f.Downloader,new());await f.Service.InitializeAsync();return f;}
+        public static async Task<Fixture>Create(){var f=new Fixture();f.Http=new(new ScriptedHttpHandler(_=>throw new AssertFailedException("No network expected")));f.Downloader=new(f.Http);var p=TestPlatformServices.Create(new(TestFiles.Root()),f.Downloader);f.runner=(ProcessRunner)p.Processes;f.Platform=p with{Processes=f.Guard};f.Service=new(f.Platform,f.Http,f.Downloader,new());await f.Service.InitializeAsync();return f;}
         public async ValueTask DisposeAsync(){await Service.DisposeAsync();await runner.DisposeAsync();Http.Dispose();}
     }
 }

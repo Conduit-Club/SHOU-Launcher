@@ -54,7 +54,7 @@ public sealed partial class LocalPackTests
             }
             return ScriptedHttpHandler.Json(new JsonObject { ["data"] = data }.ToJsonString());
         };
-        using var http = new HttpClient(handler, false); var downloader = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader);
+        using var http = new HttpClient(handler, false); var downloader = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader);
         var game = Path.Combine(platform.Paths.InstancesDirectory, "fixture"); var relative = (kind == "mod" ? "mods/" : kind == "shader" ? "shaderpacks/" : "resourcepacks/") + previous.Name;
         Directory.CreateDirectory(Path.GetDirectoryName(Path.Combine(game, relative))!); await File.WriteAllBytesAsync(Path.Combine(game, relative), previous.Bytes);
         var instance = new GameInstance("fixture", "Fixture", "fabric-loader-0.16.14-1.21.1", game, Loader: "fabric", LoaderVersion: "0.16.14", Installed: true, GameVersionId: "1.21.1");

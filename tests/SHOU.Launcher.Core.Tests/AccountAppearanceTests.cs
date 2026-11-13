@@ -147,7 +147,7 @@ public sealed partial class AccountAppearanceTests
     public async Task ServiceChecksCapturedOfflineAccountAndActuallyPersistsOnlySelectedTarget()
     {
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Offline appearance must not access a network."))); var downloader = new VerifiedDownloader(http);
-        var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); using var lease = platform.DataLock.Acquire(platform.Paths);
+        var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); using var lease = platform.DataLock.Acquire(platform.Paths);
         await using var processes = (ProcessRunner)platform.Processes; await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());
         await service.InitializeAsync(); var first = await service.AddOfflineAccountAsync("FirstFixture"); var second = await service.AddOfflineAccountAsync("SecondFixture");
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => service.SaveOfflineAccountSkinAsync(first.Id, Png(), AccountSkinModel.Slim));

@@ -249,7 +249,7 @@ public sealed partial class WorldContentInstallTests
         {
             var f = new Fixture { Modern = modern, Version = modern ? "26.2" : "1.21.1", DataVersion = modern ? 4903 : 3955 };
             f.Catalog = new(f.Version, f.Handler); f.http = new(f.Handler); var downloader = new VerifiedDownloader(f.http);
-            f.Platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); f.lease = f.Platform.DataLock.Acquire(f.Platform.Paths);
+            f.Platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); f.lease = f.Platform.DataLock.Acquire(f.Platform.Paths);
             var jar = Zip(new() { ["version.json"] = JsonSerializer.Serialize(new { id = f.Version, world_version = f.DataVersion, pack_version = modern ? (object)new { data_major = 107, data_minor = 1 } : new { data = 48 } }) });
             f.Handler.Bytes["https://piston-data.mojang.com/client.jar"] = jar;
             var cache = Path.Combine(f.Platform.Paths.CacheDirectory, "versions", f.Version); Directory.CreateDirectory(cache);

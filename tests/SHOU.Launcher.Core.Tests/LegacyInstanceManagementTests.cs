@@ -173,7 +173,7 @@ public sealed class LegacyInstanceManagementTests
         public static async Task<Fixture> Create(string? executableDirectory = null)
         {
             var f = new Fixture(); f.http = new(new ScriptedHttpHandler(_ => throw new AssertFailedException("No download expected"))); var downloader = new VerifiedDownloader(f.http);
-            var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); f.runner = (ProcessRunner)platform.Processes; f.Platform = platform with { Processes = f.Guard, Paths = new AppPaths(new(platform.Paths.DataDirectory), platform.Info.Context, executableDirectory: executableDirectory) };
+            var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloader); f.runner = (ProcessRunner)platform.Processes; f.Platform = platform with { Processes = f.Guard, Paths = new AppPaths(new(platform.Paths.DataDirectory), platform.Info.Context, executableDirectory: executableDirectory) };
             f.Service = new(f.Platform, f.http, downloader, new NetworkOptions()); await f.Service.InitializeAsync(); await f.Service.SaveSettingsAsync(f.Service.Snapshot.Settings); return f;
         }
         public async ValueTask DisposeAsync() { await Service.DisposeAsync(); await runner.DisposeAsync(); http.Dispose(); }

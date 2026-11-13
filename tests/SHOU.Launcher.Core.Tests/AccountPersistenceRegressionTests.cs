@@ -107,7 +107,7 @@ public sealed class AccountPersistenceRegressionTests
                 return ScriptedHttpHandler.Json($$$"""{"accessToken":"fixture-token-{{{++replies}}}","clientToken":"fixture-client","selectedProfile":{"id":"11111111222233334444555555555555","name":"FixtureUser"}}""");
             }));
             var downloads = new VerifiedDownloader(http);
-            var original = PlatformServicesFactory.Create(new(TestFiles.Root()), downloads);
+            var original = TestPlatformServices.Create(new(TestFiles.Root()), downloads);
             var seed = new AccountProfile("existing", AccountKind.Yggdrasil, "FixtureUser", "11111111222233334444555555555555", "http://127.0.0.1/ygg", Persisted: true);
             var credentials = new FixtureCredentials(failRead, failWrite, seedAccount ? new(seed, "initial-fixture-token", ClientToken: "fixture-client") : null);
             var platform = original with { Credentials = credentials };

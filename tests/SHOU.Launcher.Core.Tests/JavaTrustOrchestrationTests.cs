@@ -209,7 +209,7 @@ public sealed class JavaTrustOrchestrationTests
         {
             var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Cached service fixture must not use the network.")));
             var downloads = new PipelineDownloads();
-            var native = PlatformServicesFactory.Create(new(TestFiles.Root()), downloads);
+            var native = TestPlatformServices.Create(new(TestFiles.Root()), downloads);
             var java = new JavaFixture(native.Info.Context.HardwareArchitecture);
             var installer = new InstallerFixture(java); var trust = new TrustFixture();
             var platform = native with { JavaDiscovery = java, JavaInstaller = installer };

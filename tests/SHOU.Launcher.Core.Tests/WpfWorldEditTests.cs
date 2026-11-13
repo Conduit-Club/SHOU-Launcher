@@ -148,7 +148,7 @@ public sealed class WpfWorldEditTests
     [TestMethod, DataRow(false), DataRow(true)]
     public async Task NewServiceEntryPointsRequireSelectedRegisteredTargetWithoutCredentials(bool isolated)
     {
-        var downloader = new NoDownloads(); var native = PlatformServicesFactory.Create(new(TestFiles.Root()), downloader); var credentials = new NoCredentials();
+        var downloader = new NoDownloads(); var native = TestPlatformServices.Create(new(TestFiles.Root()), downloader); var credentials = new NoCredentials();
         var platform = native with { Credentials = credentials, Paths = new FixturePaths(native.Paths, isolated) };
         using var lease = platform.DataLock.Acquire(platform.Paths); using var http = new HttpClient(new NoNetwork());
         await using var processes = (ProcessRunner)native.Processes; await using var service = new LauncherService(platform, http, downloader, new NetworkOptions());

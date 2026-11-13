@@ -13,6 +13,40 @@ namespace SHOU.Launcher.Core.Tests.Platform;
 public sealed class NativeAdapterTests
 {
     [TestMethod]
+    public async Task ExplicitCredentialsComposeOnPortableHostsWithoutCreatingNativeStorage()
+    {
+        var root = new PlatformFixture().Child("explicit test credentials");
+        var credentials = new InMemoryTestCredentials();
+        var services = PlatformServicesFactory.Create(new(root), new NeverDownloader(), credentials);
+        try
+        {
+            Assert.AreSame(credentials, services.Credentials);
+            Assert.IsFalse(Directory.Exists(root));
+            byte[] expected = [1, 2, 3];
+            await services.Credentials.WriteAsync("synthetic-account", expected);
+            expected[0] = 9;
+            var first = (await services.Credentials.ReadAsync("synthetic-account"))!;
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, first);
+            first[0] = 8;
+            CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, (await services.Credentials.ReadAsync("synthetic-account"))!);
+            Assert.IsNull(await new InMemoryTestCredentials().ReadAsync("synthetic-account"));
+            await services.Credentials.DeleteAsync("synthetic-account");
+            Assert.IsNull(await services.Credentials.ReadAsync("synthetic-account"));
+            Assert.IsFalse(Directory.Exists(root));
+        }
+        finally { await ((IAsyncDisposable)services.Processes).DisposeAsync(); }
+    }
+
+    [TestMethod]
+    public void LinuxProductionFactoryStillRejectsMissingNativeCredentials()
+    {
+        if (!OperatingSystem.IsLinux()) Assert.Inconclusive("Linux production-host boundary.");
+        var root = new PlatformFixture().Child("unsupported production credentials");
+        Assert.ThrowsExactly<PlatformNotSupportedException>(() => PlatformServicesFactory.Create(new(root), new NeverDownloader()));
+        Assert.IsFalse(Directory.Exists(root));
+    }
+
+    [TestMethod]
     [TestCategory("DesktopPlatforms")]
     public async Task FactoryConstructionDoesNotCreateDataOrAccessTheStore()
     {

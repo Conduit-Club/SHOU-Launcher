@@ -24,7 +24,7 @@ public sealed class VendorLoaderCatalogTests
         await File.WriteAllTextAsync(Path.Combine(recipeRoot, "installed.json"), System.Text.Json.JsonSerializer.Serialize(receipt, Configuration.ConfigurationStore.JsonOptions));
         if (scenario == "corrupt-library") await File.AppendAllTextAsync(library, "changed");
         using var http = new HttpClient(new ScriptedHttpHandler(_ => throw new AssertFailedException("Receipt reuse must stay offline")));
-        var downloads = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(root), downloads);
+        var downloads = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(root), downloads);
         await using var runner = (ProcessRunner)platform.Processes;
         var type = typeof(LauncherService).Assembly.GetType("SHOU.Launcher.Core.Loaders.PortableVendorInstaller")!;
         var installer = Activator.CreateInstance(type, [http, downloads, runner, cache, Path.Combine(root, "tmp"), (Func<IReadOnlyList<PCL.Core.Conduit.DownloadSource>>)(() => PCL.Core.Conduit.DownloadSources.Defaults()), (Func<ProxySettings>)(() => new(ProxyMode.Direct)), null]);
@@ -40,7 +40,7 @@ public sealed class VendorLoaderCatalogTests
             Assert.IsFalse(request.Headers.Contains("x-api-key"));
             return Task.FromResult(ScriptedHttpHandler.Json("""{"labyModVersion":"49","commitReference":"c228c3a3","minecraftVersions":[{"version":"1.21.1","runtime":{"name":"java-runtime-delta","version":21}}]}"""));
         }));
-        var downloads = new VerifiedDownloader(http); var platform = PlatformServicesFactory.Create(new(TestFiles.Root()), downloads);
+        var downloads = new VerifiedDownloader(http); var platform = TestPlatformServices.Create(new(TestFiles.Root()), downloads);
         using var lease = platform.DataLock.Acquire(platform.Paths); await using var runner = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloads, new NetworkOptions());
         var choices = await service.GetLoaderVersionsAsync("labymod", "1.21.1");
