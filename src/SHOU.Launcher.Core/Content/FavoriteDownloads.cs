@@ -36,7 +36,10 @@ public static class FavoriteDownloads
     }
     public static async Task<FavoriteDownloadResult> ExportAsync(IReadOnlyList<FavoriteDownloadEntry> plan, string directory, Func<ContentFile, CancellationToken, Task<string>> download, CancellationToken ct = default, int concurrency = 1)
     {
-        if (!Path.IsPathFullyQualified(directory) || !Directory.Exists(directory)) throw new ArgumentException("请选择已有的本机保存目录。"); SafePath.RejectLinks(directory);
+        if (!Path.IsPathFullyQualified(directory)) throw new ArgumentException("请选择已有的本机保存目录。");
+        // Native folder pickers may return a trailing separator; it is not a link alias.
+        directory = Path.TrimEndingDirectorySeparator(Path.GetFullPath(directory));
+        if (!Directory.Exists(directory)) throw new ArgumentException("请选择已有的本机保存目录。"); SafePath.RejectLinks(directory);
         var failures = new ConcurrentBag<FavoriteDownloadFailure>(); var added = 0; var reused = 0;
         // Serialize aliases of the same destination; independent destinations can transfer concurrently.
         using var gate = new SemaphoreSlim(Math.Clamp(concurrency, 1, 8));

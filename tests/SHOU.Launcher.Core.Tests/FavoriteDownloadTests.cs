@@ -28,7 +28,7 @@ public sealed class FavoriteDownloadTests
     {
         var root = TestFiles.Root(); Directory.CreateDirectory(root); var source = Path.Combine(root, "cache"); Directory.CreateDirectory(source); var destination = Path.Combine(root, "out"); Directory.CreateDirectory(destination);
         var a = FileOf("same.jar", [1, 2]); var b = FileOf("occupied.jar", [3, 4]); var c = FileOf("new.jar", [5, 6]); await File.WriteAllBytesAsync(Path.Combine(destination, a.FileName), [1, 2]); await File.WriteAllBytesAsync(Path.Combine(destination, b.FileName), [9, 9]); var cache = Path.Combine(source, c.FileName); await File.WriteAllBytesAsync(cache, [5, 6]); var calls = 0;
-        var result = await FavoriteDownloads.ExportAsync([new("a", "A", a, a.FileName), new("b", "B", b, b.FileName), new("c", "C", c, c.FileName)], destination, (file, ct) => { calls++; return Task.FromResult(cache); }, concurrency: 3);
+        var result = await FavoriteDownloads.ExportAsync([new("a", "A", a, a.FileName), new("b", "B", b, b.FileName), new("c", "C", c, c.FileName)], destination + Path.DirectorySeparatorChar, (file, ct) => { calls++; return Task.FromResult(cache); }, concurrency: 3);
         Assert.AreEqual(1, calls); Assert.AreEqual(1, result.Added); Assert.AreEqual(1, result.Reused); Assert.AreEqual("B", result.Failures.Single().Name); CollectionAssert.AreEqual(new byte[] { 9, 9 }, await File.ReadAllBytesAsync(Path.Combine(destination, b.FileName))); CollectionAssert.AreEqual(new byte[] { 5, 6 }, await File.ReadAllBytesAsync(Path.Combine(destination, c.FileName))); Assert.IsFalse(Directory.EnumerateFiles(destination, "*.partial").Any());
     }
     [TestMethod]

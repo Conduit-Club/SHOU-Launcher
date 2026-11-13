@@ -87,10 +87,16 @@ public sealed class HomeFavoritesParityUiTests
     public async Task BatchDownloadsRequireCommonVersionIgnoreStalePickerAndSaveOnlyFiles()
     {
         var service = new Service(); using var root = new MainWindowViewModel(service, new External()); var path = Path.Combine(FixturePaths.Create("r48-batch"), "favorites.json"); using var vm = new DownloadsPageViewModel(root, service, path);
+        vm.SelectCategory("favorites"); var view = new DownloadsView { DataContext = vm }; var window = new Window { Content = view, Width = 976, Height = 636 }; window.Show();
+        try
+        {
         vm.FavoriteShareCode = "[\"AANobbMI\",\"translations\"]"; await vm.ImportFavoriteShareCommand.ExecuteAsync(null); vm.SelectAllFavoritesCommand.Execute(null); await vm.PrepareFavoriteDownloadCommand.ExecuteAsync(null); Assert.True(vm.HasFavoriteBatch); Assert.Equal(new[] { "1.21.1" }, vm.FavoriteBatchVersions); Assert.True(vm.CanSaveFavoriteBatch);
+        window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); Assert.Equal("fabric", view.FindControl<ComboBox>("FavoriteBatchLoader")!.SelectedItem); Assert.Equal("1.21.1", view.FindControl<ComboBox>("FavoriteBatchVersion")!.SelectedItem);
         var destination = Path.Combine(service.Paths.DataDirectory, "saved"); Directory.CreateDirectory(destination); var stale = vm.FavoriteBatchIdentity; vm.FilteredFavoriteProjects[0].IsSelected = false; await vm.SaveFavoriteDownloadAsync(destination, stale); Assert.Empty(Directory.GetFiles(destination));
         vm.SelectAllFavoritesCommand.Execute(null); await vm.PrepareFavoriteDownloadCommand.ExecuteAsync(null); await vm.SaveFavoriteDownloadAsync(destination, vm.FavoriteBatchIdentity); Assert.Equal(2, Directory.GetFiles(destination).Length); Assert.Contains("已保存 2", vm.FavoriteBatchStatus); Assert.True(root.IsTaskNotificationVisible); Assert.Null(service.LastLaunchServerId); Assert.Empty(service.Snapshot.Downloads);
         service.FailVersions = true; await vm.PrepareFavoriteDownloadCommand.ExecuteAsync(null); Assert.Contains("未下载", vm.FavoriteStatus); Assert.False(vm.CanSaveFavoriteBatch);
+        }
+        finally { window.Close(); }
     }
     private static async Task Until(Func<bool> condition) { for (var i = 0; i < 500 && !condition(); i++) { Dispatcher.UIThread.RunJobs(); await Task.Delay(5); } Assert.True(condition()); }
     private sealed class External : IExternalLauncher

@@ -9,13 +9,14 @@ public sealed partial class DownloadsPageViewModel
     private ContentProject[] favoriteDownloadProjects = [];
     private Dictionary<string, IReadOnlyList<ContentRelease>> favoriteDownloadReleases = [];
     private string favoriteBatchLoader = "", favoriteBatchVersion = "", favoriteBatchStatus = "";
+    private IReadOnlyList<string> favoriteBatchLoaders = [], favoriteBatchVersions = [];
     private int favoriteBatchRevision;
     private CancellationTokenSource? favoriteBatchRead;
     public string FavoriteBatchIdentity => favoriteBatchRevision + "|" + FavoriteBatchLoader + "|" + FavoriteBatchVersion;
     public string FavoriteBatchSummary { get { try { return CanSaveFavoriteBatch ? string.Join("\n", FavoriteDownloads.Plan(favoriteDownloadProjects, favoriteDownloadReleases, FavoriteBatchLoader, FavoriteBatchVersion).Select(e => e.Title + " → " + e.DestinationName)) : ""; } catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException) { return UiPrivacy.Redact(ex.Message); } } }
-    public IReadOnlyList<string> FavoriteBatchLoaders => FavoriteDownloads.CommonLoaders(favoriteDownloadProjects, favoriteDownloadReleases);
-    public IReadOnlyList<string> FavoriteBatchVersions => FavoriteDownloads.CommonVersions(favoriteDownloadProjects, favoriteDownloadReleases, FavoriteBatchLoader);
-    public string FavoriteBatchLoader { get => favoriteBatchLoader; set { if (SetProperty(ref favoriteBatchLoader, value ?? "")) { OnPropertyChanged(nameof(FavoriteBatchVersions)); FavoriteBatchVersion = FavoriteBatchVersions.FirstOrDefault() ?? ""; } } }
+    public IReadOnlyList<string> FavoriteBatchLoaders => favoriteBatchLoaders;
+    public IReadOnlyList<string> FavoriteBatchVersions => favoriteBatchVersions;
+    public string FavoriteBatchLoader { get => favoriteBatchLoader; set { if (SetProperty(ref favoriteBatchLoader, value ?? "")) { FavoriteBatchVersion = ""; favoriteBatchVersions = FavoriteDownloads.CommonVersions(favoriteDownloadProjects, favoriteDownloadReleases, FavoriteBatchLoader); OnPropertyChanged(nameof(FavoriteBatchVersions)); FavoriteBatchVersion = FavoriteBatchVersions.FirstOrDefault() ?? ""; } } }
     public string FavoriteBatchVersion { get => favoriteBatchVersion; set { if (SetProperty(ref favoriteBatchVersion, value ?? "")) { OnPropertyChanged(nameof(CanSaveFavoriteBatch)); OnPropertyChanged(nameof(FavoriteBatchSummary)); } } }
     public string FavoriteBatchStatus { get => favoriteBatchStatus; private set => SetProperty(ref favoriteBatchStatus, value); }
     public bool HasFavoriteBatch => favoriteDownloadProjects.Length > 0;
@@ -29,7 +30,7 @@ public sealed partial class DownloadsPageViewModel
     }
     private void InvalidateFavoriteDownload()
     {
-        ++favoriteBatchRevision; favoriteBatchRead?.Cancel(); favoriteDownloadProjects = []; favoriteDownloadReleases.Clear();
+        ++favoriteBatchRevision; favoriteBatchRead?.Cancel(); favoriteDownloadProjects = []; favoriteDownloadReleases.Clear(); favoriteBatchLoaders = []; favoriteBatchVersions = []; FavoriteBatchLoader = ""; FavoriteBatchVersion = "";
         foreach (var name in new[] { nameof(HasFavoriteBatch), nameof(CanSaveFavoriteBatch), nameof(FavoriteBatchLoaders), nameof(FavoriteBatchVersions), nameof(FavoriteBatchSummary) }) OnPropertyChanged(name);
         PrepareFavoriteDownloadCommand?.NotifyCanExecuteChanged();
     }
@@ -54,9 +55,11 @@ public sealed partial class DownloadsPageViewModel
         favoriteBatchRead = null;
         if (!success || revision != favoriteBatchRevision) return;
         if (failed.Count > 0) { FavoriteBatchStatus = Localization.UiLocalization.Instance.Format("未能读取所选项目，未下载：{0}", string.Join(", ", failed)); FavoriteStatus = FavoriteBatchStatus; return; }
-        favoriteDownloadProjects = projects; favoriteDownloadReleases = releases; FavoriteBatchLoader = FavoriteBatchLoaders.FirstOrDefault() ?? ""; FavoriteBatchVersion = FavoriteBatchVersions.FirstOrDefault() ?? "";
+        favoriteDownloadProjects = projects; favoriteDownloadReleases = releases;
+        // Publish stable choices before selecting; replacing ItemsSource after selection clears Avalonia's selection.
+        favoriteBatchLoaders = FavoriteDownloads.CommonLoaders(projects, releases); OnPropertyChanged(nameof(FavoriteBatchLoaders)); FavoriteBatchLoader = FavoriteBatchLoaders.FirstOrDefault() ?? "";
         FavoriteBatchStatus = FavoriteBatchVersion.Length == 0 ? "所选收藏没有共同支持的加载器或游戏版本。" : "选择共同版本和保存目录后下载；仅保存文件，不安装到实例。所选版本可能包含测试版。";
-        foreach (var name in new[] { nameof(HasFavoriteBatch), nameof(CanSaveFavoriteBatch), nameof(FavoriteBatchLoaders), nameof(FavoriteBatchVersions), nameof(FavoriteBatchSummary) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(HasFavoriteBatch), nameof(CanSaveFavoriteBatch), nameof(FavoriteBatchSummary) }) OnPropertyChanged(name);
     }
     public async Task SaveFavoriteDownloadAsync(string directory, string? expectedIdentity = null)
     {
