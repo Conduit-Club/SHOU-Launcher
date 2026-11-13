@@ -53,6 +53,10 @@ try {
         Assert-ConduitProjectPaths -Dotnet $Dotnet -Projects $projects -Properties $props -ReportPath (Join-Path $report 'paths-after.json')
         $publish = Join-Path $build 'publish-desktop'
         $owner = if ($onefile) { Join-Path $publish 'SHOU.Launcher.Desktop.exe' } else { Join-Path $publish 'SHOU.Launcher.Core.dll' }
+        if ($onefile) {
+            $coreOwner=Join-Path $binary.Directory.FullName 'SHOU.Launcher.Core.dll'
+            & (Join-Path $PSScriptRoot 'Assert-DesktopBundle.ps1') -Executable $owner -Dotnet $Dotnet -CoreAssembly $coreOwner -RuntimeIdentifier $RuntimeIdentifier -ReportPath (Join-Path $report 'bundle.json')
+        }
         $check = & (Join-Path $PSScriptRoot 'Assert-ClientCredentials.ps1') -AssemblyPath $owner
         $dirty = -not [string]::IsNullOrWhiteSpace((& git -C $repo status --porcelain) -join "`n")
         $info = [ordered]@{ entry='Avalonia Desktop'; version=$identity.Version; codename=$identity.Codename; label=$identity.Label; source_sha=$env:PCL_GITHUB_SHA; source_dirty=$dirty;
@@ -66,6 +70,7 @@ try {
             & (Join-Path $PSScriptRoot 'Collect-DesktopLicenses.ps1') -PublishDirectory $publish
             $info | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $publish 'BUILD-INFO.json') -Encoding utf8
         } elseif (@(Get-ChildItem -LiteralPath $publish -Force).Count -ne 1 -or -not (Test-Path -LiteralPath $owner -PathType Leaf)) { throw 'Windows distribution must contain exactly one self-contained EXE.' }
+        if ($onefile) { $info.payload=@{name=[IO.Path]::GetFileName($owner);bytes=(Get-Item -LiteralPath $owner).Length;sha256=(Get-FileHash -LiteralPath $owner -Algorithm SHA256).Hash.ToLowerInvariant()} }
         $info | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'BUILD-INFO.json') -Encoding utf8
         if ($RuntimeIdentifier -eq 'osx-arm64') {
             & (Join-Path $repo 'scripts/macos/Package-App.ps1') -PublishDirectory $publish -OutputDirectory $output -Version $identity.Version -ArchiveStem $identity.ArchiveStem
