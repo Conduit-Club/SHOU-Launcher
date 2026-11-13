@@ -24,6 +24,11 @@
     </ScrollViewer>
     <ScrollViewer Grid.Column="1" Name="ToolboxPage" IsVisible="{Binding IsToolbox}" HorizontalScrollBarVisibility="Disabled">
       <StackPanel Margin="25" Spacing="15" DataContext="{Binding Toolbox}">
+        <Border Name="CrashAnalysisCard" Classes="card" DataContext="{Binding Root.Tools.Crash}"><StackPanel Spacing="10">
+          <TextBlock Text="崩溃分析" Classes="sectionTitle"/>
+          <WrapPanel><Button Name="AnalyzeCrashFilesButton" Content="选择日志或错误报告…" Click="AnalyzeCrashFiles_Click" IsEnabled="{Binding CanAnalyze}" Margin="0,0,8,0"/><Button Content="分析当前实例" Command="{Binding AnalyzeInstanceCommand}" Margin="0,0,8,0"/><Button Name="ExportCrashReportButton" Content="导出错误报告…" Click="ExportCrashReport_Click" IsVisible="{Binding HasReport}"/><Button Content="前往实例设置" Command="{Binding OpenInstanceSettingsCommand}" IsVisible="{Binding HasInstanceAction}"/></WrapPanel>
+          <SelectableTextBlock Name="CrashAnalysisText" Text="{Binding AnalysisText}" TextWrapping="Wrap"/>
+        </StackPanel></Border>
         <Border Name="ToolCommunityCard" Classes="card"><StackPanel Spacing="10"><TextBlock Text="{loc:Loc t7b224bc0c731704f}" Classes="sectionTitle" /><WrapPanel><Button Content="{loc:Loc tcc4b37166fcb77a3}" Command="{Binding Root.Home.OpenWikiCommand}" Margin="0,0,10,0" /><Button Content="{loc:Loc t527baa645f1698e1}" Command="{Binding Root.Home.OpenGuideCommand}" Margin="0,0,10,0" /><Button Name="ToolCommunityUpdatesButton" Content="{loc:Loc tfc45eb94060a2412}" Command="{Binding OpenCommunityUpdatesCommand}" Margin="0,0,10,0" /><Button Content="{loc:Loc t62c7a471a9e4bdc9}" Command="{Binding Root.ShowLogsCommand}" /></WrapPanel></StackPanel></Border>
         <Border Name="ToolboxActionsCard" Classes="card"><StackPanel Spacing="10">
           <DockPanel><views:LoadingGlyph DockPanel.Dock="Right" Width="24" Height="24" IsVisible="{Binding IsActionsBusy}" /><TextBlock Text="{loc:Loc t7b2a5133349a7018}" Classes="sectionTitle" LineHeight="18" /></DockPanel>

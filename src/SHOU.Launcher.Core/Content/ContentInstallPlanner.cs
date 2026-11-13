@@ -6,7 +6,7 @@ namespace SHOU.Launcher.Core.Content;
 public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, IContentDependencyCatalogService dependencies)
 {
     public const int MaximumProjects = 64, MaximumDepth = 16;
-    public const long MaximumTotalBytes = 2L * 1024 * 1024 * 1024;
+    public const long MaximumTotalBytes = long.MaxValue;
     public async Task<ContentInstallPlan> PlanAsync(GameInstance instance, string gameVersion, ContentInstallRequest request, CancellationToken ct = default, bool worldDatapacks = false, bool updatingDatapacks = false,
         IReadOnlySet<string>? replacingModPaths = null, ContentInstallManifest? installedMods = null, string? replacingResourcePath = null)
     {
@@ -45,8 +45,9 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
             if (!Compatible(release, project.Kind, gameVersion, instance.Loader) || !worldDatapacks && (project.ClientSide == "unsupported" ||
                 release.Environment is "server_only" or "server_only_client_optional" or "dedicated_server_only"))
                 throw new InvalidDataException("所选资源或required依赖不适用于此客户端实例的游戏版本/加载器。");
-            var selected = explicitFile is not null ? release.Files.SingleOrDefault(f => f.FileName == explicitFile)
-                : release.Files.Count(f => f.Primary) == 1 ? release.Files.Single(f => f.Primary) : release.Files.Count == 1 ? release.Files[0] : null;
+            var releaseFiles = FilesFor(release);
+            var selected = explicitFile is not null ? releaseFiles.SingleOrDefault(f => f.FileName == explicitFile)
+                : releaseFiles.Count(f => f.Primary) == 1 ? releaseFiles.Single(f => f.Primary) : releaseFiles.Count == 1 ? releaseFiles[0] : null;
             if (selected is null) throw new InvalidDataException("资源文件不明确，请选择具体文件；依赖须提供唯一主文件。");
             ContentInstallFiles.ValidateFile(selected);
             if (project.Kind == "mod" && !selected.FileName.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ||
@@ -76,7 +77,7 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
                     if (existing.Length == 1 && await ContentInstallFiles.MatchesAsync(ContentInstallFiles.Literal(instance.GameDirectory, existing[0].RelativePath), existing[0].Sha1, existing[0].Size, ct).ConfigureAwait(false))
                     {
                         child = await dependencies.GetContentReleaseAsync(existing[0].ReleaseId, ct).ConfigureAwait(false);
-                        if (!child.Files.Any(f => f.Sha1 == existing[0].Sha1 && f.Size == existing[0].Size && existing[0].RelativePath == "mods/" + f.FileName)) throw new InvalidDataException("已装依赖的在线文件身份不符，请先核对。");
+                        if (!FilesFor(child).Any(f => f.Sha1 == existing[0].Sha1 && f.Size == existing[0].Size && existing[0].RelativePath == "mods/" + f.FileName)) throw new InvalidDataException("已装依赖的在线文件身份不符，请先核对。");
                     }
                     else
                     {
@@ -113,6 +114,8 @@ public sealed class ContentInstallPlanner(ILauncherCatalogService catalog, ICont
         if (request.Kind == "shader") warnings.Add("文件装入shaderpacks；启用光影仍需实例具备相应渲染模组。");
         return new(instance.Id, gameVersion, instance.Loader, files, warnings.Distinct().ToArray());
     }
+    public static IReadOnlyList<ContentFile> FilesFor(ContentRelease release) => release.ManualFile is { } manual
+        ? [new(manual.FileName, manual.PageUri, manual.Sha1, manual.Size, true, manual)] : release.Files;
     private static bool Matches(string project, string version, ContentDependency dependency) =>
         dependency.VersionId is { } id ? id == version : dependency.ProjectId is { } p && p == project;
     public static string Folder(string kind) => kind switch { "mod" => "mods", "resourcepack" => "resourcepacks", "shader" => "shaderpacks", _ => throw new NotSupportedException("首批实例资源安装支持模组、资源包与光影包；数据包须选择具体存档。") };

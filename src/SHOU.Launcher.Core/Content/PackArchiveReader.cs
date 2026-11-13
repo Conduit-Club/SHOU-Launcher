@@ -10,8 +10,8 @@ namespace SHOU.Launcher.Core.Content;
 /// <summary>Bound a ZIP before ZipArchive allocates entries; retain physical path/handle identity while inspecting it.</summary>
 internal sealed class PackArchiveReader : IDisposable
 {
-    internal const long MaximumArchiveBytes = 256L * 1024 * 1024, MaximumExpandedBytes = 512L * 1024 * 1024, MaximumFileBytes = 128L * 1024 * 1024;
-    internal const int MaximumEntries = 10000;
+    internal const long MaximumArchiveBytes = long.MaxValue, MaximumExpandedBytes = long.MaxValue, MaximumFileBytes = long.MaxValue;
+    internal const int MaximumEntries = int.MaxValue;
     private readonly FileStream input;
     private readonly WorldPathSnapshot guard;
     private readonly WorldFileIdentity identity;
@@ -22,7 +22,7 @@ internal sealed class PackArchiveReader : IDisposable
     {
         if (!Path.IsPathFullyQualified(path)) throw new ArgumentException("请选择本机整合包的绝对路径。");
         path = Path.GetFullPath(path); var guard = WorldPathSnapshot.Capture(Path.GetDirectoryName(path)!, path);
-        if (guard.Final.Directory || guard.Final.Size is <= 0 or > MaximumArchiveBytes) throw new InvalidDataException("整合包 ZIP 须为不超过 256 MiB 的普通文件。");
+        if (guard.Final.Directory || guard.Final.Size <= 0) throw new InvalidDataException("请选择普通整合包文件。");
         var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, FileOptions.Asynchronous);
         try
         {
@@ -43,7 +43,7 @@ internal sealed class PackArchiveReader : IDisposable
     }
     internal async Task CopyToAsync(string destination, CancellationToken ct)
     {
-        Verify(); input.Position = 0; await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, FileOptions.Asynchronous);
+        Verify(); PackDiskSpace.Require(Path.GetDirectoryName(destination)!, identity.Size); input.Position = 0; await using var output = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, FileOptions.Asynchronous);
         var buffer = new byte[131072]; long read = 0;
         while (true) { var count = await input.ReadAsync(buffer.AsMemory(0, (int)Math.Min(buffer.Length, identity.Size + 1 - read)), ct).ConfigureAwait(false); if (count == 0) break; read += count; if (read > identity.Size) throw new IOException("整合包长度在复制期间已改变。"); await output.WriteAsync(buffer.AsMemory(0, count), ct).ConfigureAwait(false); }
         if (read != identity.Size) throw new IOException("整合包长度在复制期间已改变。"); await output.FlushAsync(ct).ConfigureAwait(false); Verify();
@@ -84,28 +84,27 @@ internal sealed class PackArchiveReader : IDisposable
             if (!paths.Add(ContentInstallFiles.PathKey(name))) throw new InvalidDataException("ZIP 含大小写、Unicode 或重复路径冲突。");
             var type = (entry.ExternalAttributes >> 16) & 0xf000;
             if (type is not (0 or 0x8000 or 0x4000) || type == 0x4000 && !directory || directory && entry.Length != 0) throw new InvalidDataException("ZIP 链接、特殊文件或目录条目无效。");
-            if (entry.Length > MaximumFileBytes || (total = checked(total + entry.Length)) > MaximumExpandedBytes || entry.Length > 0 && (entry.CompressedLength == 0 || entry.Length / (double)entry.CompressedLength > 1000)) throw new InvalidDataException("ZIP 单项、解压总量或压缩比超过预算。");
+            total = checked(total + entry.Length);
             if (!directory) files.Add(name);
         }
         CheckTargets(files);
     }
     internal static void ValidateDirectory(Stream input)
     {
-        if (input.Length < 22) throw new InvalidDataException("ZIP 文件不完整。");
-        var tail = new byte[(int)Math.Min(input.Length, 65557)]; input.Position = input.Length - tail.Length; input.ReadExactly(tail); var end = -1;
-        for (var i = tail.Length - 22; i >= 0; i--) if (BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(i)) == 0x06054b50 && i + 22 + BinaryPrimitives.ReadUInt16LittleEndian(tail.AsSpan(i + 20)) == tail.Length) { end = i; break; }
-        if (end < 0) throw new InvalidDataException("ZIP 中央目录缺失。");
-        var e = tail.AsSpan(end); var count = BinaryPrimitives.ReadUInt16LittleEndian(e[10..]); var size = BinaryPrimitives.ReadUInt32LittleEndian(e[12..]); var offset = BinaryPrimitives.ReadUInt32LittleEndian(e[16..]);
-        if (count is 0 or > MaximumEntries || size > 4 * 1024 * 1024 || offset + (long)size != input.Length - tail.Length + end || BinaryPrimitives.ReadUInt32LittleEndian(e[4..]) != 0 || BinaryPrimitives.ReadUInt16LittleEndian(e[8..]) != count) throw new InvalidDataException($"不支持 ZIP64、多卷或超过 {MaximumEntries} 项的 ZIP。");
-        input.Position = offset; var header = new byte[46];
-        for (var i = 0; i < count; i++)
-        {
-            input.ReadExactly(header); var flags = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(8)); var method = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(10));
-            if (BinaryPrimitives.ReadUInt32LittleEndian(header) != 0x02014b50 || (flags & 0x41) != 0 || method is not (0 or 8) || BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(20)) == uint.MaxValue || BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(24)) == uint.MaxValue || BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(34)) != 0) throw new InvalidDataException("ZIP 加密、压缩方法或条目目录无效。");
-            var length = BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(28)) + BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(30)) + BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(32));
-            if (length <= 0 || input.Position + length > offset + (long)size) throw new InvalidDataException("ZIP 目录长度无效。"); input.Position += length;
-        }
-        if (input.Position != offset + size) throw new InvalidDataException("ZIP 目录数量不一致。");
+        // ZipArchive validates standard ZIP and ZIP64 directories. No launcher-specific size/count gate.
+        input.Position = 0; using var zip = new ZipArchive(input, ZipArchiveMode.Read, true); _ = zip.Entries.Count;
+    }
+    internal static async Task<(long Size, string Sha1, string Sha512)> StreamEntryAsync(ZipArchiveEntry entry, string? destination, CancellationToken ct)
+    {
+        if (entry.Length < 0) throw new InvalidDataException("整合包条目大小无效。");
+        if (destination is not null) { PackDiskSpace.Require(Path.GetDirectoryName(destination)!, entry.Length); Directory.CreateDirectory(Path.GetDirectoryName(destination)!); }
+        await using var input = entry.Open();
+        await using var output = destination is null ? Stream.Null : new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, true);
+        using var sha1 = IncrementalHash.CreateHash(HashAlgorithmName.SHA1); using var sha512 = IncrementalHash.CreateHash(HashAlgorithmName.SHA512);
+        var buffer = new byte[131072]; long length = 0; uint crc = 0;
+        while (true) { var count = await input.ReadAsync(buffer, ct).ConfigureAwait(false); if (count == 0) break; length = checked(length + count); if (length > entry.Length) throw new InvalidDataException("条目展开长度与清单不符。"); crc = BoundedNbt.Crc32(buffer.AsSpan(0, count), crc); sha1.AppendData(buffer, 0, count); sha512.AppendData(buffer, 0, count); await output.WriteAsync(buffer.AsMemory(0, count), ct).ConfigureAwait(false); }
+        if (length != entry.Length || crc != entry.Crc32) throw new InvalidDataException("条目长度或 CRC 校验失败。");
+        return (length, Convert.ToHexStringLower(sha1.GetHashAndReset()), Convert.ToHexStringLower(sha512.GetHashAndReset()));
     }
     public void Dispose() { Zip.Dispose(); input.Dispose(); }
 }

@@ -23,31 +23,18 @@ public static class GameSettingsPolicy
     }
     public static IReadOnlyList<string> GameArguments(string text)
     {
-        if (text.Length > 4096 || text.Contains('\0')) throw new ArgumentException("游戏参数过长或无效。");
-        var arguments = LaunchPlanBuilder.TokenizeLegacy(text);
-        return ValidateGameArguments(arguments);
+        if (text.Contains('\0')) throw new ArgumentException("游戏参数含有无效字符。");
+        return ValidateGameArguments(LaunchPlanBuilder.TokenizeLegacy(text));
     }
     public static IReadOnlyList<string> ValidateGameArguments(IReadOnlyList<string> arguments)
     {
-        if (arguments.Any(a => a is null || a.Length > 4096 || a.Contains('\0'))) throw new ArgumentException("游戏参数无效。");
-        for (var i = 0; i < arguments.Count; i++)
-        {
-            var name = arguments[i]; if (name == "--fullscreen") continue;
-            if (name is not ("--server" or "--port" or "--quickPlayMultiplayer" or "--quickPlaySingleplayer") || ++i >= arguments.Count || arguments[i].StartsWith('-')) throw new ArgumentException("游戏参数支持服务器地址、端口及快速游戏；账户、目录与运行环境由启动器管理。");
-            if (name == "--port" && (!int.TryParse(arguments[i], out var port) || port is < 1 or > 65535)) throw new ArgumentException("服务器端口无效。");
-        }
+        if (arguments.Any(a => a is null || a.Contains('\0'))) throw new ArgumentException("游戏参数含有无效字符。");
         return arguments;
     }
     public static IReadOnlyList<string> JvmArguments(GameLaunchOptions options)
     {
-        if (options.JvmArguments.Length > 4096) throw new ArgumentException("JVM 参数过长。");
+        if (options.JvmArguments.Contains('\0')) throw new ArgumentException("JVM 参数含有无效字符。");
         var arguments = LaunchPlanBuilder.TokenizeLegacy(options.JvmArguments).ToList();
-        foreach (var argument in arguments)
-        {
-            // Each line is a single JVM argument. Agents, classpath, credentials, TLS and bootstrap properties stay owned by the protected pipeline.
-            if (!Regex.IsMatch(argument, @"^(-XX:[+-](UseG1GC|UseZGC|UseParallelGC|UseSerialGC|AlwaysPreTouch|UseStringDeduplication|UseAdaptiveSizePolicy|OmitStackTraceInFastThrow)|-XX:(MaxGCPauseMillis|G1HeapRegionSize|G1ReservePercent|InitiatingHeapOccupancyPercent|ParallelGCThreads|ConcGCThreads|SoftMaxHeapSize)=[0-9]+[kKmMgG]?|-D(file.encoding|user.language|user.country|sun.java2d.uiScale)=[A-Za-z0-9_.-]+|-Dlog4j2.formatMsgNoLookups=true)$", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1)))
-                throw new ArgumentException("JVM 参数不受支持。可设置 GC 调优、字符编码和语言；每行一个参数。账户、证书、classpath 与引导参数由启动器管理。");
-        }
         if (options.IpPreference == GameIpPreference.IPv4) { arguments.Add("-Djava.net.preferIPv4Stack=true"); arguments.Add("-Djava.net.preferIPv6Addresses=false"); }
         if (options.IpPreference == GameIpPreference.IPv6) { arguments.Add("-Djava.net.preferIPv4Stack=false"); arguments.Add("-Djava.net.preferIPv6Addresses=true"); }
         return arguments;

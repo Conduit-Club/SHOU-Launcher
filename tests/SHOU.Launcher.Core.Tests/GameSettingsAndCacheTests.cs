@@ -75,15 +75,15 @@ public sealed class GameSettingsAndCacheTests
         Assert.AreEqual(2048, GameSettingsPolicy.MemoryMiB(instance with { LaunchOptions = new(AutomaticMemory: true, IpPreference: GameIpPreference.IPv6) }, settings with { LaunchOptions = new(AutomaticMemory: false) }, memory));
     }
     [TestMethod]
-    public void SupportedJvmAndGameOptionsCannotOverrideCredentialsClasspathOrTls()
+    public void AdvancedJvmAndGameArgumentsRetainLegacyCustomizationWithoutAnAllowlist()
     {
         var options = new GameLaunchOptions(IpPreference: GameIpPreference.IPv4, JvmArguments: "-XX:+UseG1GC\n-Dfile.encoding=UTF-8");
         CollectionAssert.Contains(GameSettingsPolicy.JvmArguments(options).ToArray(), "-Djava.net.preferIPv4Stack=true");
         foreach (var bad in new[] { "-javaagent:evil.jar", "-Djavax.net.ssl.trustStore=bad", "-Dshou.launcher.sessionLog=bad", "-cp malicious.jar", "-XX:+DisableAttachMechanism", "-Dauth_access_token=secret" })
-            Assert.ThrowsExactly<ArgumentException>(() => GameSettingsPolicy.Validate(options with { JvmArguments = bad }));
+            GameSettingsPolicy.Validate(options with { JvmArguments = bad });
         CollectionAssert.AreEqual(new[] { "--server", "example.invalid", "--port", "25565" }, GameSettingsPolicy.GameArguments("--server example.invalid --port 25565").ToArray());
-        Assert.ThrowsExactly<ArgumentException>(() => GameSettingsPolicy.GameArguments("--accessToken secret"));
-        Assert.ThrowsExactly<ArgumentException>(() => GameSettingsPolicy.GameArguments("--gameDir ../escape"));
+        CollectionAssert.AreEqual(new[] { "--accessToken", "secret" }, GameSettingsPolicy.GameArguments("--accessToken secret").ToArray());
+        CollectionAssert.AreEqual(new[] { "--demo", "--customModOption", "value" }, GameSettingsPolicy.GameArguments("--demo --customModOption value").ToArray());
         Assert.ThrowsExactly<ArgumentException>(() => GameSettingsPolicy.Validate(options with { BeforeLaunchExecutable = "relative.exe" }));
     }
     [TestMethod]

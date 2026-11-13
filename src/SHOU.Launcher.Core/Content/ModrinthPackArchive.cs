@@ -10,9 +10,9 @@ namespace SHOU.Launcher.Core.Content;
 
 public sealed partial class ModrinthPackArchive
 {
-    public const long MaximumArchiveBytes = 256L * 1024 * 1024, MaximumOverrideBytes = 512L * 1024 * 1024;
-    public const int MaximumEntries = PackArchiveReader.MaximumEntries, MaximumFiles = 8192;
-    private const long MaximumOverrideFileBytes = 128L * 1024 * 1024, MaximumDownloadBytes = 4L * 1024 * 1024 * 1024;
+    public const long MaximumArchiveBytes = long.MaxValue, MaximumOverrideBytes = long.MaxValue;
+    public const int MaximumEntries = PackArchiveReader.MaximumEntries, MaximumFiles = int.MaxValue;
+    private const long MaximumOverrideFileBytes = long.MaxValue, MaximumDownloadBytes = long.MaxValue;
     private static readonly string[] DownloadSidecars = [".download.lock", ".part", ".part.resume.json"];
     private sealed record PackRead(ModrinthPackInspection Inspection, IReadOnlyDictionary<string, ZipArchiveEntry> Overrides);
     public async Task<ModrinthPackInspection> InspectAsync(string archivePath, CancellationToken ct = default)
@@ -28,37 +28,13 @@ public sealed partial class ModrinthPackArchive
         if (!Path.IsPathFullyQualified(path)) throw new ArgumentException("请选择本机整合包的绝对路径。");
         VerifiedDownloader.RejectLink(path);
         var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, true);
-        if (stream.Length is <= 0 or > MaximumArchiveBytes) { stream.Dispose(); throw new InvalidDataException("整合包须为不超过256 MiB的ZIP文件。"); }
+        if (stream.Length is <= 0 or > MaximumArchiveBytes) { stream.Dispose(); throw new InvalidDataException("请选择非空的 ZIP 整合包。"); }
         return stream;
     }
-    private static void ValidateDirectory(FileStream input)
-    {
-        var tail = new byte[(int)Math.Min(input.Length, 65557)]; input.Position = input.Length - tail.Length; input.ReadExactly(tail);
-        var end = -1;
-        for (var i = tail.Length - 22; i >= 0; i--)
-            if (BinaryPrimitives.ReadUInt32LittleEndian(tail.AsSpan(i)) == 0x06054b50 && i + 22 + BinaryPrimitives.ReadUInt16LittleEndian(tail.AsSpan(i + 20)) == tail.Length) { end = i; break; }
-        if (end < 0) throw new InvalidDataException("整合包ZIP目录缺失。");
-        var e = tail.AsSpan(end);
-        var count = BinaryPrimitives.ReadUInt16LittleEndian(e[10..]);
-        var size = BinaryPrimitives.ReadUInt32LittleEndian(e[12..]); var offset = BinaryPrimitives.ReadUInt32LittleEndian(e[16..]);
-        if (count is 0 or > MaximumEntries || size > 4 * 1024 * 1024 || offset + (long)size > input.Length - tail.Length + end ||
-            BinaryPrimitives.ReadUInt32LittleEndian(e[4..]) != 0 || BinaryPrimitives.ReadUInt16LittleEndian(e[8..]) != count)
-            throw new InvalidDataException($"整合包不支持ZIP64、多卷或超过{MaximumEntries}项的ZIP目录。");
-        input.Position = offset; var header = new byte[46];
-        for (var i = 0; i < count; i++)
-        {
-            input.ReadExactly(header);
-            if (BinaryPrimitives.ReadUInt32LittleEndian(header) != 0x02014b50 || (BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(8)) & 1) != 0 ||
-                BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(20)) == uint.MaxValue || BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(24)) == uint.MaxValue)
-                throw new InvalidDataException("ZIP目录、加密或ZIP64文件不受支持。");
-            input.Position += BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(28)) + BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(30)) + BinaryPrimitives.ReadUInt16LittleEndian(header.AsSpan(32));
-            if (input.Position > offset + (long)size) throw new InvalidDataException("ZIP目录大小无效。");
-        }
-        if (input.Position != offset + size) throw new InvalidDataException("ZIP目录项数量不一致。");
-    }
+    private static void ValidateDirectory(FileStream input) => PackArchiveReader.ValidateDirectory(input);
     public static string SafeRelative(string path)
     {
-        if (path.Length is 0 or > 512 || path[0] == '/' || path.Contains('\\') || path.Split('/').Any(p => p.Length == 0 || p is "." or ".." || p.EndsWith(' ') || p.EndsWith('.') || p.Any(c => char.IsControl(c) || ":<>|\"*?".Contains(c))))
+        if (path.Length == 0 || path[0] == '/' || path.Contains('\\') || path.Split('/').Any(p => p.Length == 0 || p is "." or ".." || p.EndsWith(' ') || p.EndsWith('.') || p.Any(c => char.IsControl(c) || ":<>|\"*?".Contains(c))))
             throw new InvalidDataException("整合包文件路径无效或越界。");
         return path;
     }
@@ -106,8 +82,8 @@ public sealed partial class ModrinthPackArchive
             SafeRelative(name);
             if (!entryKeys.Add(Key(name)) || ((entry.ExternalAttributes >> 16) & 0xF000) == 0xA000) throw new InvalidDataException("ZIP含重复路径、符号链接或大小写/Unicode路径冲突。");
             if (isDirectory) { if (entry.Length != 0) throw new InvalidDataException("ZIP目录条目长度无效。"); continue; }
-            if (entry == index) { if (entry.Length > 4 * 1024 * 1024) throw new InvalidDataException("整合包清单超过4 MiB。"); continue; }
-            if (entry.Length > MaximumOverrideFileBytes || checked(total += entry.Length) > MaximumOverrideBytes) throw new InvalidDataException("overrides超过单项128 MiB或总512 MiB限制。");
+            if (entry == index) continue;
+            if (entry.Length > MaximumOverrideFileBytes || checked(total += entry.Length) > MaximumOverrideBytes) throw new InvalidDataException("整合包解压长度超出系统可表示范围。");
             // Only format-defined override layers are game payload. Extra archive documentation is harmless.
             if (!name.StartsWith(prefix, StringComparison.Ordinal)) continue;
             var scoped = name[prefix.Length..]; var slash = scoped.IndexOf('/'); if (slash < 0) continue;
@@ -117,7 +93,7 @@ public sealed partial class ModrinthPackArchive
             if (target is null) continue;
             target.Add(Key(relative), entry);
         }
-        using var json = PackArchiveReader.Json(await PackArchiveReader.ReadEntryAsync(index, 4 * 1024 * 1024, ct).ConfigureAwait(false));
+        using var json = PackArchiveReader.Json(await PackArchiveReader.ReadEntryAsync(index, int.MaxValue, ct).ConfigureAwait(false));
         UniqueJson(json.RootElement); var root = json.RootElement;
         if (root.GetProperty("formatVersion").GetInt32() != 1 || Text(root, "game") != "minecraft") throw new NotSupportedException("只支持Minecraft的Modrinth格式版本1。");
         var nameText = Text(root, "name"); var version = Text(root, "versionId");
@@ -180,6 +156,7 @@ public sealed partial class ModrinthPackArchive
         var archiveCopy = ContentInstallFiles.Literal(Path.GetDirectoryName(Path.GetFullPath(directory))!, ".shou-pack-input-" + Guid.NewGuid().ToString("N") + ".mrpack");
         try
         {
+            PackDiskSpace.Require(directory, new FileInfo(archivePath).Length);
             await using (var source = OpenArchive(archivePath))
             await using (var copy = new FileStream(archiveCopy, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, true))
                 await source.CopyToAsync(copy, ct).ConfigureAwait(false);
@@ -194,6 +171,7 @@ public sealed partial class ModrinthPackArchive
             if (selected.Any(p => !inspection.Files.Any(f => f.Path == p && f.Client == "optional"))) throw new InvalidDataException("可选文件选择已失效或包含服务器文件。");
             var installed = new List<ContentInstalledFile>(); var done = 0;
             var selectedFiles = inspection.Files.Where(f => f.Client == "required" || f.Client == "optional" && selected.Contains(f.Path)).ToArray();
+            PackDiskSpace.Require(directory, checked(selectedFiles.Sum(f => f.Size) + read.Overrides.Values.Sum(e => e.Length)));
             var total = selectedFiles.Length + read.Overrides.Count; progress?.Report(new("安装整合包文件", 0, total));
             await Parallel.ForEachAsync(selectedFiles, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections, 1, 64), CancellationToken = ct }, async (file, token) =>
             {
@@ -217,12 +195,11 @@ public sealed partial class ModrinthPackArchive
                 var declared = inspection.Files.FirstOrDefault(f => Key(f.Path) == Key(relative));
                 if (declared is not null && (declared.Client == "unsupported" || declared.Client == "optional" && !selected.Contains(declared.Path))) continue;
                 ct.ThrowIfCancellationRequested(); var path = ContentInstallFiles.Literal(directory, relative); Directory.CreateDirectory(Path.GetDirectoryName(path)!);
-                var bytes = await PackArchiveReader.ReadEntryAsync(entry, MaximumOverrideFileBytes, ct).ConfigureAwait(false);
-                if (bytes.LongLength != entry.Length) throw new InvalidDataException("overrides条目长度不一致。");
-                await File.WriteAllBytesAsync(path, bytes, ct).ConfigureAwait(false);
+                if (File.Exists(path)) File.Delete(path);
+                var streamed = await PackArchiveReader.StreamEntryAsync(entry, path, ct).ConfigureAwait(false);
                 installed.RemoveAll(f => Key(f.RelativePath) == Key(relative));
                 progress?.Report(new("安装整合包文件", ++done, total, relative));
-                installed.Add(new("mrpack-local", inspection.VersionId, "pack", relative, Convert.ToHexStringLower(SHA1.HashData(bytes)), Convert.ToHexStringLower(SHA512.HashData(bytes)), bytes.Length));
+                installed.Add(new("mrpack-local", inspection.VersionId, "pack", relative, streamed.Sha1, streamed.Sha512, streamed.Size));
             }
             progress?.Report(new("安装整合包文件", total, total));
             ct.ThrowIfCancellationRequested();

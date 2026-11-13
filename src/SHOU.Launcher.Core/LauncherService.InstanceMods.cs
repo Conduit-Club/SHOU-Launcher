@@ -7,7 +7,7 @@ using SHOU.Launcher.Core.Instances;
 
 namespace SHOU.Launcher.Core;
 
-public sealed partial class LauncherService : IInstanceModUpdateService, IInstanceModUpdateProgressService, IInstanceModRefreshService, IInstanceResourceUpdateService
+public sealed partial class LauncherService : IInstanceModUpdateService, IInstanceModUpdateProgressService, IInstanceModRefreshService, IInstanceResourceUpdateService, IInstanceManualUpdateService
 {
     private sealed record ModUpdateState(GameInstance Instance, ContentInstalledFile Old, ContentRelease Release, ContentFile File, DateTimeOffset Expires);
     private readonly ConcurrentDictionary<string, ModUpdateState> modUpdates = new();
@@ -83,7 +83,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
                 try
                 {
                     var matches = await curseForge.MatchFingerprintsAsync(hashes.Select(f => f.Fingerprint).ToArray(), timeout.Token);
-                    foreach (var pair in hashes) if (matches.TryGetValue(pair.Fingerprint, out var release) && release.Files.Any(f => f.Sha1 == pair.File.Sha1 && f.Size == pair.File.Size)) cfMatches[pair.File.Sha1] = release;
+                    foreach (var pair in hashes) if (matches.TryGetValue(pair.Fingerprint, out var release) && ContentInstallPlanner.FilesFor(release).Any(f => f.Sha1 == pair.File.Sha1 && f.Size == pair.File.Size)) cfMatches[pair.File.Sha1] = release;
                 }
                 catch (OperationCanceledException) { throw; }
                 catch (Exception ex) when (ex is IOException or HttpRequestException or InvalidOperationException) { }
@@ -99,7 +99,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
                     var current = file.Cached?.Current ?? (fromCurseForge ? await curseForge.ReleaseAsync(origin!.ReleaseId, ct)
                         : modrinth.TryGetValue(file.Sha1, out var mr) ? mr : cfMatches.TryGetValue(file.Sha1, out var cf) ? cf : await Catalog.ReleaseFromSha1Async(file.Sha1, ct));
                     if (fromCurseForge && current.ProjectId != origin!.ProjectId) throw new InvalidDataException("在线项目与安装清单不符。");
-                    if (current.ProjectId is not { } project || !current.Files.Any(f => f.Sha1 == file.Sha1 && f.Size == file.Size)) throw new InvalidDataException("本地文件与在线身份不符。");
+                    if (current.ProjectId is not { } project || !ContentInstallPlanner.FilesFor(current).Any(f => f.Sha1 == file.Sha1 && f.Size == file.Size)) throw new InvalidDataException("本地文件与在线身份不符。");
                     fromCurseForge = IsNumericCfProject(project);
                     ContentRelease? next; ContentProject? projectInfo = file.Cached?.Project;
                     if (kind != "mod")
@@ -112,7 +112,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
                     {
                         var releases = await releaseQueries.GetOrAdd(project, _ => fromCurseForge ? curseForge.ReleasesAsync(project, InstanceIdentity.GameVersion(instance), kind == "mod" ? instance.Loader : null, ct) : Catalog.ReleasesAsync(project, InstanceIdentity.GameVersion(instance), kind == "mod" ? instance.Loader : null, ct));
                         next = releases.Where(r => r.ProjectId == project && r.ReleaseChannel == "release" && r.Published > current.Published && ContentInstallPlanner.Compatible(r, kind, InstanceIdentity.GameVersion(instance), instance.Loader))
-                            .OrderByDescending(r => r.Published).FirstOrDefault(r => r.Files.Count(f => f.Primary) == 1 || r.Files.Count == 1);
+                            .OrderByDescending(r => r.Published).FirstOrDefault(r => ContentInstallPlanner.FilesFor(r).Count(f => f.Primary) == 1 || ContentInstallPlanner.FilesFor(r).Count == 1);
                     }
                     verified = true;
                     var checkedAt = file.Cached?.Checked ?? DateTimeOffset.UtcNow;
@@ -121,12 +121,13 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
 
                     if (next is not null && next.ProjectId == project && next.ReleaseChannel == "release" && next.Published > current.Published && ContentInstallPlanner.Compatible(next, kind, InstanceIdentity.GameVersion(instance), instance.Loader))
                     {
-                        var target = next.Files.Count == 1 ? next.Files[0] : next.Files.Single(f => f.Primary);
+                        var nextFiles = ContentInstallPlanner.FilesFor(next);
+                        var target = nextFiles.Count == 1 ? nextFiles[0] : nextFiles.Single(f => f.Primary);
                         if (target.Sha1 != file.Sha1)
                         {
                             ContentInstallFiles.ValidateFile(target);
                             var token = Guid.NewGuid().ToString("N"); var old = new ContentInstalledFile(project, current.Id, kind, row.RelativePath, file.Sha1, file.Sha512, file.Size, Client: origin?.Client ?? "required", Server: origin?.Server ?? "unsupported");
-                            modUpdates[token] = new(instance, old, next, target, DateTimeOffset.UtcNow.AddMinutes(15));
+                            modUpdates[token] = new(instance, old, next, target, DateTimeOffset.MaxValue);
                             var page = fromCurseForge ? new Uri("https://www.curseforge.com/projects/" + project[3..] + "/files") : new Uri("https://modrinth.com/" + kind + "/" + project + "/changelog");
                             updates.Add(new(token, instance.Id, row.RelativePath, row.DisplayName, row.ModVersion ?? current.Version, next.Version, target.Size, page, project));
                         }
@@ -175,7 +176,7 @@ public sealed partial class LauncherService : IInstanceModUpdateService, IInstan
             var replacing = new HashSet<string>(StringComparer.Ordinal) { EnabledModPath(state.Old.RelativePath) };
             normalized = normalized with { Files = normalized.Files.Where(f => !paths.Contains(f.RelativePath)).ToArray() };
             var plan = await new ContentInstallPlanner(this, this).PlanAsync(instance, InstanceIdentity.GameVersion(instance), request, ct, replacingModPaths: resource ? null : replacing, installedMods: normalized, replacingResourcePath: resource ? state.Old.RelativePath : null).ConfigureAwait(false);
-            if (resource && !plan.Files.Any(f => !f.Dependency && f.ReleaseId == state.Release.Id && f.File == state.File))
+            if (!plan.Files.Any(f => !f.Dependency && f.ReleaseId == state.Release.Id && f.File == state.File))
                 throw new IOException("在线资源文件在检查后发生变化，请重新检查更新。");
             await RunContentTransferAsync((resource ? "resource-update:" : "mod-update:") + instance.Id, retry => ApplyInstanceFileUpdateAsync(token, resource, retry), async transfer =>
                 result = await ModUpdateFiles.ApplyAsync(instance, state.Old, plan, DownloadInstallFileAsync, () => EnsureInstanceNotRunning(instance), transfer).ConfigureAwait(false), ct).ConfigureAwait(false);

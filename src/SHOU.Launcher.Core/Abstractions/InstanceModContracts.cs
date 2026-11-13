@@ -28,3 +28,9 @@ public interface IInstanceModManagementService
     Task<IReadOnlyList<InstanceModTrash>> GetInstanceModTrashAsync(string instanceId, CancellationToken cancellationToken = default);
     Task RestoreInstanceModsAsync(string instanceId, string trashId, CancellationToken cancellationToken = default);
 }
+
+public interface IInstanceManualUpdateService
+{
+    Task<IReadOnlyList<CurseForgeManualFile>> GetInstanceUpdateManualFilesAsync(string token, CancellationToken cancellationToken = default);
+    Task ProvideInstanceUpdateManualFileAsync(string token, CurseForgeManualFile file, string path, CancellationToken cancellationToken = default);
+}

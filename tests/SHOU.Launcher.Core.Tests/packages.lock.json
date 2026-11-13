@@ -277,6 +277,11 @@
         "resolved": "2.1.0",
         "contentHash": "gmu+ekIud9GqhmEFJOkui14SZyNxIFL8pEbU5yNb1pNGI8dQNs/e9a9s5RqPZupPNGR+CX7W1Dzg0+J3fpDkDQ=="
       },
+      "SharpZipLib": {
+        "type": "Transitive",
+        "resolved": "1.4.2",
+        "contentHash": "yjj+3zgz8zgXpiiC3ZdF/iyTBbz2fFvMxZFEBPUcwZjIvXOf37Ylm+K58hqMfIBt5JgU/Z2uoUS67JmTLe973A=="
+      },
       "SkiaSharp": {
         "type": "Transitive",
         "resolved": "3.119.4",
@@ -324,6 +329,7 @@
       "shou.launcher.core": {
         "type": "Project",
         "dependencies": {
+          "SharpZipLib": "[1.4.2, )",
           "System.Security.Cryptography.Pkcs": "[10.0.14, )"
         }
       },

@@ -74,7 +74,7 @@ public sealed partial class LocalPackTests
         var reader = new LocalPackArchive(); var cf = await reader.ReadAsync(Archive(Manifest(Mod()))); Assert.AreEqual(LocalPackFormat.CurseForge, cf.Inspection.Format); Assert.IsFalse(cf.Inspection.CanImport);
         var root = TestFiles.Root(); var unknown = Path.Combine(root, "unknown.mrpack"); await File.WriteAllBytesAsync(unknown, Zip(("readme.txt", "not a pack"))); Assert.AreEqual(LocalPackFormat.Unknown, (await reader.ReadAsync(unknown)).Inspection.Format);
         var mmc = Path.Combine(root, "multimc.zip"); await File.WriteAllBytesAsync(mmc, Zip(("Instance/mmc-pack.json", "{\"formatVersion\":1,\"components\":[{\"uid\":\"net.minecraft\",\"version\":\"1.21.1\"}]}"), ("Instance/instance.cfg", "name=Fixture\nPreLaunchCommand=must-never-run")));
-        var recognized = await reader.ReadAsync(mmc); Assert.AreEqual(LocalPackFormat.MultiMC, recognized.Inspection.Format); Assert.IsFalse(recognized.Inspection.CanImport);
+        var recognized = await reader.ReadAsync(mmc); Assert.AreEqual(LocalPackFormat.MultiMC, recognized.Inspection.Format); Assert.IsTrue(recognized.Inspection.CanImport);
         var shou = Path.Combine(root, "shou.zip"); await File.WriteAllBytesAsync(shou, Zip(("shou-instance.json", "{\"schemaVersion\":1,\"Name\":\"Fixture export\"}")));
         Assert.AreEqual(LocalPackFormat.ShouExport, (await reader.ReadAsync(shou)).Inspection.Format);
     }
@@ -298,11 +298,11 @@ public sealed partial class LocalPackTests
     [TestMethod]
     [DataRow(false)]
     [DataRow(true)]
-    public async Task RaisedPackBudgetsStillRejectExcessClientFilesAndZipEntries(bool entries)
+    public async Task PackAcceptsMoreThanFormerFileAndZipEntryBudgets(bool entries)
     {
-        var count = entries ? ModrinthPackArchive.MaximumEntries : ModrinthPackArchive.MaximumFiles + 1;
+        var count = entries ? 65536 : 10001;
         var path = Archive(Manifest(), Enumerable.Range(0, count).Select(i => ($"overrides/config/{i}.json", "{}")).ToArray());
-        await Assert.ThrowsAsync<InvalidDataException>(() => new LocalPackArchive().ReadAsync(path));
+        Assert.AreEqual(count, (await new LocalPackArchive().ReadAsync(path)).OverrideEntries.Count);
     }
     [TestMethod, DataRow("manifest.json"), DataRow("overrides/config/example.json")]
     public async Task CorruptLocalZipEntryCrcIsRejectedAndNoInstanceIsPublished(string entryName)

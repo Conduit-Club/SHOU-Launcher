@@ -49,7 +49,7 @@
         </Grid>
       </Border>
       <Border Grid.Row="1" Name="GlobalError" IsVisible="{Binding HasError}" Background="{DynamicResource ClubErrorBackground}" Padding="12,8" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="0,0,0,1">
-        <DockPanel><Button DockPanel.Dock="Right" Classes="flat" Content="{loc:Loc td301bc1258334c7c}" Command="{Binding DismissErrorCommand}" Margin="10,0,0,0" /><TextBlock Name="GlobalErrorText" Text="{loc:Translate ErrorMessage}" Foreground="{DynamicResource ClubErrorForeground}" TextWrapping="Wrap" VerticalAlignment="Center" /></DockPanel>
+        <DockPanel><Button Name="OpenCrashAnalysisButton" DockPanel.Dock="Right" Content="查看崩溃分析" Command="{Binding ShowCrashAnalysisCommand}" IsVisible="{Binding HasCrashAnalysis}" Margin="8,0"/><Button DockPanel.Dock="Right" Classes="flat" Content="{loc:Loc td301bc1258334c7c}" Command="{Binding DismissErrorCommand}" Margin="10,0,0,0" /><TextBlock Name="GlobalErrorText" Text="{loc:Translate ErrorMessage}" Foreground="{DynamicResource ClubErrorForeground}" TextWrapping="Wrap" VerticalAlignment="Center" /></DockPanel>
       </Border>
       <ContentControl Grid.Row="2" Name="PageContent" Content="{Binding SelectedPage}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
       <Border Grid.Row="2" Name="OperationBar" IsVisible="{Binding ShowOperationStatus}" Margin="{Binding OperationInset}" Background="#22000000">

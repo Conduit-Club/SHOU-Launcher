@@ -14,7 +14,7 @@ public sealed partial class LauncherService : ILoaderInstanceService
     {
         if (instance.Loader == "vanilla") return;
         var game = Instances.InstanceIdentity.GameVersion(instance);
-        if (!resolved.InheritanceChain.Contains(game, StringComparer.Ordinal)) throw new InvalidDataException("加载器配置未继承所选Minecraft版本。");
+        if (!resolved.InheritanceChain.Contains(game, StringComparer.Ordinal) && !(instance.VersionId.StartsWith("shou-import-", StringComparison.Ordinal) && (string?)resolved.Metadata["shouImportedGameVersion"] == game)) throw new InvalidDataException("加载器配置未继承所选Minecraft版本。");
         var main = (string?)resolved.Metadata["mainClass"];
         if (Loaders.PortableVendorInstaller.Supports(instance.Loader)) { Loaders.PortableVendorInstaller.ValidateProfile(instance.Loader, resolved.Metadata); return; }
         var valid = instance.Loader switch

@@ -57,9 +57,9 @@ public sealed class CurseForgeResourceDownloadTests
         var error = await Assert.ThrowsAsync<IOException>(() => resolver.DownloadResourceAsync(file, target));
         StringAssert.Contains(error.Message, "HTTP 403"); Assert.IsTrue(calls > 0); Assert.IsFalse(error.Message.Contains("项目 0"));
         calls = 0;
-        await Assert.ThrowsAsync<InvalidDataException>(() => resolver.DownloadAsync(new(1,2,"mod.jar",file.Sha1,null,file.Size,file.Uri,false),target));
-        Assert.AreEqual(0,calls);
-        await Assert.ThrowsAsync<InvalidDataException>(() => resolver.DownloadResourceAsync(file with { Size = CurseForgePackResolver.MaximumCachedResourceBytes + 1 },target));
+        var large = await Assert.ThrowsAsync<IOException>(() => resolver.DownloadAsync(new(1,2,"mod.jar",file.Sha1,null,file.Size,file.Uri,false),target));
+        StringAssert.Contains(large.Message, "HTTP 403"); Assert.IsTrue(calls > 0); calls = 0;
+        await Assert.ThrowsAsync<InvalidDataException>(() => resolver.DownloadResourceAsync(file with { Size = -1 },target));
         Assert.AreEqual(0,calls); Assert.IsFalse(File.Exists(target));
     }
 }

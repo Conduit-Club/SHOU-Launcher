@@ -23,7 +23,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     private readonly HttpClient http;
     private readonly IVerifiedDownloader downloader;
     private readonly NetworkOptions network;
-    private readonly BuildConfiguration build;
+    private readonly IBuildConfiguration build;
     private readonly ConfigurationStore config;
     private readonly AuthenticationClient authentication;
     private readonly JavaBootstrapArtifact? javaBootstrap;
@@ -46,16 +46,17 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     private readonly string launcherLogPath;
 
     public LauncherService(PlatformServices platform, HttpClient http, IVerifiedDownloader downloader,
-        NetworkOptions network, BuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null,
+        NetworkOptions network, IBuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null,
         JavaBootstrapArtifact? javaBootstrap = null, IJavaTrustService? javaTrust = null, Content.CurseForgePackResolver? localPackResolver = null,
-        HttpClient? publicInformationHttp = null, IContentDependencyCatalogService? worldContentCatalog = null)
+        HttpClient? publicInformationHttp = null, IContentDependencyCatalogService? worldContentCatalog = null, Func<HttpClient>? contentTransportFactory = null)
     {
+        this.contentTransportFactory = contentTransportFactory;
         this.platform = platform; this.http = http; this.downloader = downloader; this.network = network;
         this.worldContentCatalog = worldContentCatalog;
         informationHttp = publicInformationHttp ?? new(new InformationRedirectHandler(new ConfigurableNetworkHandler(network, false))) { Timeout = TimeSpan.FromMinutes(5) };
         ownsInformationHttp = publicInformationHttp is null;
         gameCatalogCache = new(platform.Paths.CacheDirectory);
-        build = buildConfiguration ?? new(); config = new(platform.Paths);
+        build = buildConfiguration ?? new BuildConfiguration(); config = new(platform.Paths);
         authentication = authenticationClient ?? new(http);
         this.localPackResolver = localPackResolver;
         this.javaBootstrap = javaBootstrap;
@@ -63,7 +64,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         network.Credentials = platform.Credentials;
         launcherLogPath = Path.Combine(platform.Paths.LogsDirectory, "launcher.log");
         gameSessions = new(Path.Combine(platform.Paths.LocalDataDirectory, "game-sessions"));
-        snapshot = new(build.GetIdentity(), platform.Info.Context, new(), [], [], [],
+        snapshot = new((build is BuildConfiguration concrete ? concrete.GetIdentity() : new BuildConfiguration().GetIdentity() with { SourceSha = build.SourceSha, Configuration = build.Configuration, OwnerAssembly = build.OwnerAssembly, MicrosoftConfigured = !string.IsNullOrWhiteSpace(build.MicrosoftClientId), CurseForgeConfigured = !string.IsNullOrWhiteSpace(build.CurseForgeApiKey) }), platform.Info.Context, new(), [], [], [],
             [new("none", "只启动游戏", ""), new("smp", "SMP · 多人生存", "smp.shoumc.com"),
              new("create", "Create · 创造建筑", "create.shoumc.com"), new("shou", "SHOU · 校园展示", "shou.shoumc.com")], []);
     }
@@ -181,12 +182,13 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         if (instance.Loader is not ("vanilla" or "fabric" or "quilt" or "forge" or "neoforge" or "cleanroom" or "legacyfabric") && !Loaders.PortableVendorInstaller.Supports(instance.Loader)) throw new PlatformNotSupportedException("当前预览尚未实现此loader的processor链。");
         if (instance.Loader != "vanilla") _ = Instances.InstanceIdentity.GameVersion(instance);
         var resolver = new VersionMetadataResolver(http, downloader, Paths.CacheDirectory, Sources);
-        if (!concurrent && (instance.Origin is null || instance.RuntimeProfileOverride) && Loaders.PortableVendorInstaller.Supports(instance.Loader))
+        var importedLoader = instance.VersionId.StartsWith("shou-import-", StringComparison.Ordinal) && (string?)(await resolver.LoadAsync(instance.VersionId, ct))["shouImportedLoader"] == instance.Loader;
+        if (!concurrent && !importedLoader && (instance.Origin is null || instance.RuntimeProfileOverride) && Loaders.PortableVendorInstaller.Supports(instance.Loader))
         {
             var profile = await CacheVendorProfileAsync(instance.Loader, Instances.InstanceIdentity.GameVersion(instance), instance.LoaderVersion!, ct).ConfigureAwait(false);
-            if (profile != instance.VersionId) throw new InvalidDataException("安装适配器的实例身份不一致。");
+            if (profile != instance.VersionId && !(await resolver.ResolveAsync(instance.VersionId, ct).ConfigureAwait(false)).InheritanceChain.Contains(profile)) throw new InvalidDataException("安装适配器的实例身份不一致。");
         }
-        if (!concurrent && (instance.Origin is null || instance.RuntimeProfileOverride) && instance.Loader is "forge" or "neoforge" or "cleanroom")
+        if (!concurrent && !importedLoader && (instance.Origin is null || instance.RuntimeProfileOverride) && instance.Loader is "forge" or "neoforge" or "cleanroom")
         {
             var vanilla = await resolver.ResolveAsync(Instances.InstanceIdentity.GameVersion(instance), ct).ConfigureAwait(false);
             var processorVersion = vanilla;
@@ -206,7 +208,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         var context = Context(java);
         var gameFiles = await new MinecraftInstaller(http, concurrent ? new InstalledFileReader() : downloader, Paths.CacheDirectory, Sources, () => network.Capture().Downloads?.MaximumConnections ?? 8).InstallAsync(version, context,
             instance.GameDirectory, new InlineProgress<TransferProgress>(OnTransfer), ct, launchSession, concurrent, phases).ConfigureAwait(false);
-        if (!concurrent && (instance.Origin is null || instance.RuntimeProfileOverride) && Loaders.PortableVendorInstaller.Supports(instance.Loader))
+        if (!concurrent && !importedLoader && (instance.Origin is null || instance.RuntimeProfileOverride) && Loaders.PortableVendorInstaller.Supports(instance.Loader))
         {
             using var vendorClient = new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false));
             await VendorInstaller(vendorClient).CopyPayloadAsync(instance, ct).ConfigureAwait(false);
@@ -338,11 +340,13 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         Set(s => s with { LaunchActivity = new(instance.Id, instance.Name, "准备游戏", account?.Kind == AccountKind.Microsoft ? "微软正版验证" : account?.Kind == AccountKind.Yggdrasil ? "外置账户验证" : "离线角色") });
         var prepared = await PrepareInstanceAsync(instance, ct, launchSession: launchSession).ConfigureAwait(false);
         var original = await PlanAsync(instance, prepared.Game, prepared.Java, ct, serverAddress, launchSession).ConfigureAwait(false);
+        string? sessionLogPath = null;
+        var startedAt = DateTime.UtcNow;
         // The verified Java bootstrap owns output after handoff, including when the launcher exits.
         if (javaBootstrap is not null)
         {
             VerifiedDownloader.RejectLink(Paths.LogsDirectory);
-            var log = Path.Combine(Paths.LogsDirectory, "game-" + Guid.NewGuid().ToString("N") + ".log");
+            var log = Path.Combine(Paths.LogsDirectory, "game-" + Guid.NewGuid().ToString("N") + ".log"); sessionLogPath = log;
             var arguments = original.Arguments.ToList();
             arguments.Insert(original.MainClassIndex, "-Dshou.launcher.sessionLog=" + log);
             original = original with { Arguments = arguments, MainClassIndex = original.MainClassIndex + 1 };
@@ -368,7 +372,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         var independent = process is IDetachableProcess;
         games[process.ProcessId] = (instanceId, process, independent);
         RefreshGameSessions();
-        var observer = ObserveGameAsync(instanceId, process, collector);
+        var observer = ObserveGameAsync(instanceId, process, collector, sessionLogPath, startedAt);
         var monitoring = Task.WhenAll(observer, ObserveGameWindowAsync(instance, process, launchOptions));
         gameObservers[process.ProcessId] = monitoring;
         _ = monitoring.ContinueWith(_ => gameObservers.TryRemove(process.ProcessId, out var ignored), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
@@ -389,7 +393,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         catch (Exception ex) { if (!disposed) Log("Warning", $"实例 {instance.Id} / PID {process.ProcessId} 窗口观察未完成：{ex.GetType().Name}"); }
     }
-    private async Task ObserveGameAsync(string instanceId, IManagedProcess process, ProcessLogCollector collector)
+    private async Task ObserveGameAsync(string instanceId, IManagedProcess process, ProcessLogCollector collector, string? sessionLogPath, DateTime startedAt)
     {
         try
         {
@@ -397,8 +401,24 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
             if (result.Detached) return;
             collector.Flush(result.OutputTruncated);
             Log(result.ExitCode == 0 ? "Info" : "Error", $"实例 {instanceId} / PID {process.ProcessId} 本次游戏进程退出：code={result.ExitCode}, cancelled={result.Cancelled}, timeout={result.TimedOut}。");
+            if (result.ExitCode != 0 && !result.Cancelled && !disposed && Snapshot.Instances.SingleOrDefault(i => i.Id == instanceId) is { } failed)
+            {
+                try
+                {
+                    if (sessionLogPath is null || !File.Exists(sessionLogPath))
+                    {
+                        sessionLogPath = SafePath.Within(Paths.TempDirectory, "crash-" + Guid.NewGuid().ToString("N") + "/rawoutput.log");
+                        Directory.CreateDirectory(Path.GetDirectoryName(sessionLogPath)!);
+                        await File.WriteAllTextAsync(sessionLogPath, redactor.Scrub(collector.RecentOutput(), truncate: false), lifetime.Token);
+                    }
+                    var diagnosis = await AnalyzeInstanceCrashAsync(failed, Snapshot.Settings.Language, sessionLogPath, lifetime.Token, startedAt);
+                    if (!disposed) Set(s => s with { LastCrash = diagnosis, Error = "游戏异常退出，已生成崩溃分析；可在工具的百宝箱查看。" });
+                }
+                catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
+                catch (Exception error) { Log("Warning", "崩溃分析未完成：" + error.GetType().Name); }
+            }
             if (result.ExitCode != 0 && !result.Cancelled && !disposed && Snapshot.GameSessions.All(s => s.ProcessId == process.ProcessId) && Snapshot.State is "Ready" or "Launching")
-                Set(s => s with { State = s.State == "Ready" ? "Error" : s.State, Error = "游戏异常退出，请查看日志。" });
+                Set(s => s with { State = s.State == "Ready" ? "Error" : s.State, Error = s.LastCrash?.InstanceId == instanceId ? "游戏异常退出，已生成崩溃分析；可在工具的百宝箱查看。" : "游戏异常退出，请查看日志。" });
         }
         catch (Exception ex) { if (!disposed) { Log("Error", "游戏进程观察失败：" + ex.GetType().Name); Set(s => s with { Error = "无法完整读取游戏退出状态。" }); } }
         finally
@@ -712,17 +732,20 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     {
         private readonly StringBuilder stdout = new(), stderr = new();
         private readonly object gate = new();
+        private readonly Queue<string> recent = new();
+        public string RecentOutput() { lock (gate) return string.Join("\n", recent); }
+        private void Emit(bool error, string line) { recent.Enqueue(line); while (recent.Count > 2000) recent.Dequeue(); emit(error, line); }
         public void Report(ProcessOutput output)
         {
             lock (gate)
             {
                 var buffer = output.IsStandardError ? stderr : stdout; buffer.Append(output.Text);
                 while (buffer.ToString().IndexOf('\n') is var index && index >= 0)
-                { var line = buffer.ToString(0, index).TrimEnd('\r'); buffer.Remove(0, index + 1); emit(output.IsStandardError, line); }
+                { var line = buffer.ToString(0, index).TrimEnd('\r'); buffer.Remove(0, index + 1); Emit(output.IsStandardError, line); }
                 // Do not emit partial lines: a token may straddle process stream chunks.
-                if (buffer.Length > 131072) { buffer.Clear(); emit(output.IsStandardError, "[overlong game log line omitted]"); }
+                if (buffer.Length > 131072) { buffer.Clear(); Emit(output.IsStandardError, "[overlong game log line omitted]"); }
             }
         }
-        public void Flush(bool omitPartial) { lock (gate) { if (!omitPartial) { if (stdout.Length > 0) emit(false, stdout.ToString()); if (stderr.Length > 0) emit(true, stderr.ToString()); } stdout.Clear(); stderr.Clear(); } }
+        public void Flush(bool omitPartial) { lock (gate) { if (!omitPartial) { if (stdout.Length > 0) Emit(false, stdout.ToString()); if (stderr.Length > 0) Emit(true, stderr.ToString()); } stdout.Clear(); stderr.Clear(); } }
     }
 }

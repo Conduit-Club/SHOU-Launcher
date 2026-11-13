@@ -14,16 +14,16 @@ public sealed class ContentInstallTests
         var files = Enumerable.Range(0, 7000).Select(i => new ContentInstalledFile("fixture", "v1", "pack",
             $"config/{new string('a', 200)}/{new string('b', 200)}/fixture-{i}.json", new string('0', 40), new string('0', 128), 0)).ToArray();
         Assert.IsLessThan(ContentInstallFiles.MaximumManifestFiles, files.Length);
-        Assert.ThrowsExactly<InvalidDataException>(() => ContentInstallFiles.SerializeManifest(new(1, "fixture", files)));
+        Assert.IsGreaterThan(4 * 1024 * 1024, ContentInstallFiles.SerializeManifest(new(1, "fixture", files)).Length);
     }
     [TestMethod]
-    public async Task InstallationManifestRetainsAnExplicitCountBudget()
+    public async Task InstallationManifestReadsMoreThanTheFormerCountBudget()
     {
         var root = TestFiles.Root(); var instance = new GameInstance("large", "Large fixture", "1.21.1", root);
-        var files = Enumerable.Range(0, ContentInstallFiles.MaximumManifestFiles + 1)
+        var files = Enumerable.Range(0, 10001)
             .Select(i => new ContentInstalledFile("fixture", "v1", "pack", $"config/{i}.json", new string('0', 40), new string('0', 128), 0)).ToArray();
         await File.WriteAllBytesAsync(Path.Combine(root, ContentInstallFiles.ManifestName), System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(new ContentInstallManifest(1, instance.Id, files)));
-        await Assert.ThrowsAsync<InvalidDataException>(() => ContentInstallFiles.ReadManifestAsync(instance));
+        Assert.AreEqual(files.Length, (await ContentInstallFiles.ReadManifestAsync(instance)).Files.Count);
     }
     [TestMethod]
     public async Task RequiredDependenciesInstallActualFilesAndChecksummedManifestWithoutOptionalDownloads()

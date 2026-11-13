@@ -6,6 +6,7 @@ public sealed class ToolsPageViewModel : PageViewModel, IDisposable
 {
     public JavaTrustToolsViewModel JavaTrust { get; }
     public ToolboxViewModel Toolbox { get; }
+    public CrashAnalysisViewModel Crash { get; }
     private bool _isJavaTrust = true;
     public bool IsJavaTrust => _isJavaTrust;
     public bool IsToolbox => !_isJavaTrust;
@@ -17,14 +18,15 @@ public sealed class ToolsPageViewModel : PageViewModel, IDisposable
     {
         JavaTrust = new(owner);
         Toolbox = new(owner);
+        Crash = new(owner);
         ShowJavaTrustCommand = Command(() => SelectPage(true));
         ShowJavaSettingsCommand = Command(() => { Owner.Settings.SelectedSection = "java"; Owner.ShowSettingsCommand.Execute(null); });
         ShowToolboxCommand = Command(() => SelectPage(false));
     }
-    public override void Refresh(SHOU.Launcher.Core.Abstractions.LauncherSnapshot snapshot) { JavaTrust.Refresh(snapshot); Toolbox.Refresh(snapshot); base.Refresh(snapshot); }
+    public override void Refresh(SHOU.Launcher.Core.Abstractions.LauncherSnapshot snapshot) { JavaTrust.Refresh(snapshot); Toolbox.Refresh(snapshot); Crash.Refresh(snapshot); base.Refresh(snapshot); }
     public override void NotifyCommands() { JavaTrust?.NotifyCommands(); Toolbox?.NotifyCommands(); base.NotifyCommands(); }
     public void OnNavigatingAway() => Toolbox.Cancel();
-    public void Dispose() => Toolbox.Dispose();
+    public void Dispose() { Toolbox.Dispose(); Crash.Dispose(); }
 
     private void SelectPage(bool isJavaTrust)
     {

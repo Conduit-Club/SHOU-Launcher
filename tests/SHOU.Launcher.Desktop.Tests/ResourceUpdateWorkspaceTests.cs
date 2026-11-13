@@ -72,8 +72,33 @@ public sealed class ResourceUpdateWorkspaceTests
         }
         finally { w.Close(); }
     }
-    private sealed class Service : FakeLauncherService, IInstanceWorkspaceService, IInstanceResourceUpdateService
+    [AvaloniaTheory]
+    [InlineData("resourcepacks")]
+    [InlineData("shaders")]
+    public async Task AuthorBlockedUpdateShowsFilePickerAndContinuesAfterVerifiedSupplement(string section)
     {
+        var service = new Service { ManualMissing = true }; using var owner = Open(service, section); var vm = owner.Instances;
+        await Wait(() => vm.ModUpdates.Count == 2 && !vm.IsModScanBusy);
+        await vm.FilteredContentRows[0].UpdateCommand.ExecuteAsync(null);
+        Assert.True(vm.HasUpdateManualFiles); Assert.Empty(service.Applied);
+        await vm.UpdateManualFiles[0].ProvideFileAsync("/fixture/downloaded.zip");
+        Assert.Equal(1, service.Provided); Assert.Single(service.Applied); Assert.False(vm.HasUpdateManualFiles);
+    }
+    [AvaloniaFact]
+    public async Task NavigatingAwayInvalidatesManualFileCallbacks()
+    {
+        var service = new Service { ManualMissing = true }; using var owner = Open(service, "resourcepacks"); var vm = owner.Instances;
+        await Wait(() => vm.ModUpdates.Count == 2 && !vm.IsModScanBusy); await vm.FilteredContentRows[0].UpdateCommand.ExecuteAsync(null);
+        var row = vm.UpdateManualFiles[0]; owner.ShowHomeCommand.Execute(null); await row.ProvideFileAsync("/fixture/late.zip");
+        Assert.Equal(0, service.Provided); Assert.Empty(service.Applied);
+    }
+    private sealed class Service : FakeLauncherService, IInstanceWorkspaceService, IInstanceResourceUpdateService, IInstanceManualUpdateService
+    {
+        public bool ManualMissing;
+        public int Provided;
+        private static readonly CurseForgeManualFile Manual = new(101, 1002, "Alpha.zip", new string('a', 40), 10, new Uri("https://www.curseforge.com/projects/101/files/1002"));
+        public Task<IReadOnlyList<CurseForgeManualFile>> GetInstanceUpdateManualFilesAsync(string token, CancellationToken ct = default) => Task.FromResult<IReadOnlyList<CurseForgeManualFile>>(ManualMissing ? [Manual] : []);
+        public Task ProvideInstanceUpdateManualFileAsync(string token, CurseForgeManualFile file, string path, CancellationToken ct = default) { Provided++; ManualMissing = false; return Task.CompletedTask; }
         public TaskCompletionSource? Gate; public CancellationToken ReadToken; public List<(string Section, bool Refresh)> Scans = []; public List<string> Applied = []; public bool FailFirst; private HashSet<string> successful = [];
         public Task<IReadOnlyList<InstanceContentEntry>> ListInstanceContentAsync(string id, string kind, CancellationToken ct = default)
         {

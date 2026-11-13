@@ -173,7 +173,7 @@ public sealed partial class DownloadsPageViewModel
             if (preserveDraft && previousHash is not null && hash != previousHash)
                 _packImportDetails = ["整合包文件已改变，本次已按新文件重新预检，请核对内容后安装。"];
             PackStatus = local is not null
-                ? local.CanImport ? $"{local.Format switch { LocalPackFormat.CurseForge => "CurseForge ZIP", LocalPackFormat.ShouExport => "SHOU ZIP", _ => "Modrinth .mrpack" }} · Minecraft {local.GameVersion} · {(local.Loader + " " + local.LoaderVersion).Trim()}。"
+                ? local.CanImport ? $"{local.Format switch { LocalPackFormat.CurseForge => "CurseForge ZIP", LocalPackFormat.ShouExport => "SHOU ZIP", LocalPackFormat.MultiMC => "MultiMC ZIP", LocalPackFormat.Hmcl => "HMCL ZIP", LocalPackFormat.Mcbbs => "MCBBS ZIP", LocalPackFormat.CompressedInstance => "压缩实例 ZIP", _ => "Modrinth .mrpack" }} · Minecraft {local.GameVersion} · {(local.Loader + " " + local.LoaderVersion).Trim()}。"
                     : local.CapabilityReason ?? "此整合包暂不支持导入。"
                 : inspected!.CanImport ? $"{inspected.GameVersion} · {inspected.Loader} · {inspected.Files.Count} 项清单文件 · {inspected.Overrides.Count} 项客户端覆盖文件。" + string.Join(" ", inspected.Warnings) : inspected.CapabilityReason ?? "此整合包暂不支持导入。";
         }

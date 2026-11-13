@@ -67,10 +67,10 @@ public sealed class InstanceAdvancedTests
         var i = await f.Service.AttachExistingInstanceAsync(candidate); var before = await File.ReadAllBytesAsync(f.Config); var draft = await f.Service.ReadLegacyInstanceSettingsAsync(i.Id); Assert.AreEqual(expected,draft.DirectoryMode); Assert.AreEqual("{name} old",draft.Options.WindowTitle); Assert.IsTrue(draft.Warnings.Count >=2); Assert.IsFalse(string.Join(" ",draft.Warnings).Contains("DO_NOT_EXECUTE")); Assert.AreEqual("",draft.Options.BeforeLaunchExecutable); CollectionAssert.AreEqual(before,await File.ReadAllBytesAsync(f.Config)); Assert.AreEqual(text,await File.ReadAllTextAsync(ini)); Assert.AreEqual(0,f.Guard.Calls);
     }
     [TestMethod]
-    public void LegacyUnsupportedArgumentsAreNotCopiedOrExposedAndKnownArgumentsRemainUsable()
+    public void LegacyAdvancedArgumentsArePreservedWithoutAnAllowlistAndWarningsDoNotEchoValues()
     {
         var mapped = LegacyLaunchSettings.Map(new Dictionary<string,string>{{"VersionAdvanceJvm","-Djavax.net.ssl.trustStorePassword=NOT_A_REAL_SECRET"},{"VersionAdvanceGame","--accessToken NOT_A_REAL_SECRET"},{"VersionArgumentIndie","2"}},new());
-        Assert.AreEqual("",mapped.Options.JvmArguments); Assert.AreEqual("",mapped.Options.GameArguments); Assert.AreEqual(InstanceDirectoryMode.Shared,mapped.DirectoryMode); Assert.IsFalse(string.Join(" ",mapped.Warnings).Contains("NOT_A_REAL_SECRET"));
+        Assert.AreEqual("-Djavax.net.ssl.trustStorePassword=NOT_A_REAL_SECRET",mapped.Options.JvmArguments); Assert.AreEqual("--accessToken NOT_A_REAL_SECRET",mapped.Options.GameArguments); Assert.AreEqual(InstanceDirectoryMode.Shared,mapped.DirectoryMode); Assert.IsFalse(string.Join(" ",mapped.Warnings).Contains("NOT_A_REAL_SECRET"));
         Assert.HasCount(2,GameSettingsPolicy.JvmArguments(new(JvmArguments:"-XX:+UseG1GC -XX:-UseAdaptiveSizePolicy")));
     }
     [TestMethod]

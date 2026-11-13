@@ -40,7 +40,7 @@ public sealed class GameSettingsUiTests
         Assert.True(stored.LaunchOptions!.AutomaticMemory); Assert.Equal(LauncherVisibility.Hide, stored.LaunchOptions.Visibility); Assert.Equal(GameIpPreference.IPv4, stored.LaunchOptions.IpPreference);
         Assert.Equal(3, stored.Downloads!.MaximumConnections); Assert.Equal(1024, stored.Downloads.MaximumKiBPerSecond); Assert.True(stored.Downloads.HttpsOnly);
         settings.GameTitle = "draft"; settings.DiscardDraftCommand.Execute(null); Assert.Equal("{name} / {version}", settings.GameTitle);
-        settings.JvmArguments = "-javaagent:untrusted.jar"; await settings.SaveCommand.ExecuteAsync(null); Assert.Equal(1, service.SaveCalls); Assert.True(settings.IsDirty); Assert.Contains("JVM", vm.ErrorMessage);
+        settings.JvmArguments = "-javaagent:custom.jar"; await settings.SaveCommand.ExecuteAsync(null); Assert.Equal(2, service.SaveCalls); Assert.False(settings.IsDirty); Assert.Null(vm.ErrorMessage);
     }
     [AvaloniaFact]
     public void All39LegacyIconsHaveDistinctBundledImagesAndExactNumericAliases()

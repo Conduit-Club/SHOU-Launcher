@@ -81,7 +81,6 @@ internal static class ShouPackArchive
             files.Add(name); sizes.Add(name, size);
         }
         }
-        if (files.Count > 2048) throw new IOException("导出文件超过 2048 项。");
         PackArchiveReader.CheckTargets(files); Directory.CreateDirectory(outputDirectory);
         if (cf is null && files.Any(p => ContentInstallFiles.PathKey(p) == "SHOU-INSTANCE.JSON"))
             throw new InvalidDataException("所选内容已有 shou-instance.json，请使用 MRpack 或 CurseForge 格式保留该文件。");
@@ -148,13 +147,9 @@ internal static class ShouPackArchive
             PackPayloadPath.Validate(file.Path);
             if (file.Size is < 0 or > PackArchiveReader.MaximumFileBytes || !ContentInstallFiles.Hash(file.Sha1, 40) || !ContentInstallFiles.Hash(file.Sha512, 128)) throw new InvalidDataException("SHOU 文件路径或身份无效。");
             var entry = archive.Zip.GetEntry(file.Path)!; if (entry.Length != file.Size) throw new InvalidDataException("SHOU 文件大小不匹配。");
-            var bytes = await PackArchiveReader.ReadEntryAsync(entry, PackArchiveReader.MaximumFileBytes, ct).ConfigureAwait(false);
-            if (!Convert.ToHexStringLower(SHA1.HashData(bytes)).Equals(file.Sha1, StringComparison.OrdinalIgnoreCase) || !Convert.ToHexStringLower(SHA512.HashData(bytes)).Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("SHOU 文件哈希不匹配。");
-            if (stage is not null)
-            {
-                var target = ContentInstallFiles.Literal(stage, file.Path); Directory.CreateDirectory(Path.GetDirectoryName(target)!); await File.WriteAllBytesAsync(target, bytes, ct).ConfigureAwait(false);
-                installed.Add(new("shou-local", sha[..16], "pack", file.Path, file.Sha1, file.Sha512, file.Size));
-            }
+            var streamed = await PackArchiveReader.StreamEntryAsync(entry, stage is null ? null : ContentInstallFiles.Literal(stage, file.Path), ct).ConfigureAwait(false);
+            if (!streamed.Sha1.Equals(file.Sha1, StringComparison.OrdinalIgnoreCase) || !streamed.Sha512.Equals(file.Sha512, StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("SHOU 文件哈希不匹配。");
+            if (stage is not null) installed.Add(new("shou-local", sha[..16], "pack", file.Path, file.Sha1, file.Sha512, file.Size));
         }
         archive.Verify();
         if (stage is not null) await File.WriteAllBytesAsync(ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName), ContentInstallFiles.SerializeManifest(new ContentInstallManifest(1, "unregistered", installed)), ct).ConfigureAwait(false);
@@ -166,7 +161,7 @@ internal static class ShouPackArchive
         VerifiedDownloader.RejectLink(directory); Directory.CreateDirectory(directory); if (Directory.EnumerateFileSystemEntries(directory).Any()) throw new IOException("SHOU 暂存目录须为空。");
         using var archive = PackArchiveReader.Open(path); var actual = await archive.Sha256Async(ct).ConfigureAwait(false);
         if (!actual.Equals(expectedSha, StringComparison.OrdinalIgnoreCase)) throw new IOException("SHOU 包自预检后已改变。");
-        using var json = PackArchiveReader.Json(await PackArchiveReader.ReadEntryAsync(archive.Zip.GetEntry("shou-instance.json") ?? throw new InvalidDataException("SHOU 标识缺失。"), 4 * 1024 * 1024, ct).ConfigureAwait(false));
+        using var json = PackArchiveReader.Json(await PackArchiveReader.ReadEntryAsync(archive.Zip.GetEntry("shou-instance.json") ?? throw new InvalidDataException("SHOU 标识缺失。"), int.MaxValue, ct).ConfigureAwait(false));
         if (json.RootElement.GetProperty("schemaVersion").GetInt32() != 2) throw new InvalidDataException("SHOU 格式版本不支持。");
         return (await ReadAsync(archive, json.RootElement, actual, directory, ct).ConfigureAwait(false)).Inspection;
     }

@@ -66,6 +66,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public RelayCommand ShowDownloadsCommand { get; }
     public RelayCommand ShowSettingsCommand { get; }
     public RelayCommand ShowToolsCommand { get; }
+    public RelayCommand ShowCrashAnalysisCommand { get; }
+    public bool HasCrashAnalysis => Snapshot.LastCrash is not null;
     public RelayCommand ShowInstancesCommand { get; }
     public RelayCommand ShowAccountsCommand { get; }
     public RelayCommand ShowLogsCommand { get; }
@@ -93,6 +95,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         ShowDownloadsCommand = new(() => SelectedPage = Downloads);
         ShowSettingsCommand = new(() => SelectedPage = Settings);
         ShowToolsCommand = new(() => SelectedPage = Tools);
+        ShowCrashAnalysisCommand = new(() => { SelectedPage = Tools; Tools.ShowToolboxCommand.Execute(null); });
         ShowInstancesCommand = new(() => Instances.ShowSelectionCommand.Execute(null));
         ShowAccountsCommand = new(() => SelectedPage = Accounts);
         ShowLogsCommand = new(() => SelectedPage = Logs);
@@ -326,6 +329,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         if (Application.Current is { } app)
             app.RequestedThemeVariant = snapshot.Settings.Theme switch { "Dark" => ThemeVariant.Dark, "Light" => ThemeVariant.Light, _ => ThemeVariant.Default };
         OnPropertyChanged(nameof(Snapshot));
+        OnPropertyChanged(nameof(HasCrashAnalysis));
         OnPropertyChanged(nameof(WindowTitle));
         OnPropertyChanged(nameof(BrandTitle));
         OnPropertyChanged(nameof(BuildSummary));

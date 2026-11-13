@@ -57,7 +57,6 @@ public sealed class CurseForgePackResolver
             warnings.AddRange(item.Warnings); if (item.File is { } file) files.Add(file); else blocked.Add(Label(required[i]) + "：" + item.Reason);
         }
         if (references.Any(r => !r.Required)) warnings.Add("CurseForge 可选文件本轮默认不安装，仅安装清单内 required 文件。");
-        if (files.Sum(f => f.Size) > 4L * 1024 * 1024 * 1024) blocked.Add("清单下载总量超过 4 GiB，本次不会创建实例。");
         if (files.Select(f => ContentInstallFiles.PathKey(f.Path)).Distinct(StringComparer.Ordinal).Count() != files.Count) blocked.Add("不同 CurseForge 项目映射到相同文件路径，本次不会创建实例。");
         return new(files, warnings, blocked, results.Where(r => r?.Manual is not null).Select(r => r!.Manual!).ToArray());
     }
@@ -174,7 +173,7 @@ public sealed class CurseForgePackResolver
         catch (Exception ex) when (ex is JsonException or InvalidDataException or KeyNotFoundException or InvalidOperationException or FormatException or ArgumentException)
         { return new(null, [], ex is InvalidDataException ? ex.Message : "官方服务返回的文件元数据无效，未下载任何文件。"); }
     }
-    internal const long MaximumCachedResourceBytes = 2L * 1024 * 1024 * 1024;
+    internal const long MaximumCachedResourceBytes = long.MaxValue;
     public Task DownloadResourceAsync(ContentFile file, string path, IProgress<TransferProgress>? progress = null, CancellationToken ct = default)
         => DownloadVerifiedAsync(new(0, 0, file.FileName, file.Sha1, null, file.Size, file.Uri, false), path, MaximumCachedResourceBytes, progress, ct);
     public Task DownloadAsync(CurseForgePackFile file, string path, IProgress<TransferProgress>? progress = null, CancellationToken ct = default)

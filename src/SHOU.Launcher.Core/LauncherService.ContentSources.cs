@@ -6,7 +6,8 @@ namespace SHOU.Launcher.Core;
 
 public sealed partial class LauncherService : IContentSourceCatalogService
 {
-    private HttpClient ContentTransport() => new(new ConfigurableNetworkHandler(network, allowAutoRedirect: false));
+    private readonly Func<HttpClient>? contentTransportFactory;
+    private HttpClient ContentTransport() => contentTransportFactory?.Invoke() ?? new(new ConfigurableNetworkHandler(network, allowAutoRedirect: false));
     public async Task<ContentSearchPage> SearchContentPageAsync(ContentQuery query, CancellationToken cancellationToken = default)
     {
         await InitializeAsync(cancellationToken).ConfigureAwait(false);

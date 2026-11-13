@@ -50,6 +50,7 @@ public sealed record LauncherSnapshot(BuildIdentity Build, PlatformContext Platf
 {
     public IReadOnlyList<GameSessionSnapshot> GameSessions { get; init; } = [];
     public LaunchActivity? LaunchActivity { get; init; }
+    public CrashAnalysisReport? LastCrash { get; init; }
     public double DownloadBytesPerSecond { get; init; }
     public DateTimeOffset DownloadRateUpdatedAt { get; init; }
     public DownloadStatistics? DownloadTotals { get; init; }

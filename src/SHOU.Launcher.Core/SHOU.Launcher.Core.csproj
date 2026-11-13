@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="SharpZipLib" Version="1.4.2" />
     <PackageReference Include="System.Security.Cryptography.Pkcs" Version="10.0.14" />
     <ProjectReference Include="../SHOU.Launcher.Generators/SHOU.Launcher.Generators.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
     <AdditionalFiles Include="Configuration/settings.schema" />
@@ -12,5 +13,22 @@
     <Compile Include="../../PCL.Core/Conduit/CurseForgeAccess.cs" Link="Downloads/CurseForgeAccess.cs" />
     <Compile Include="../../PCL.Core/Conduit/Aria2RpcClient.cs" Link="Downloads/Aria2RpcClient.cs" />
     <Compile Include="../../PCL.Core/Conduit/ClubUpdateNotice.cs" Link="Community/ClubUpdateNotice.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/CrashCause.cs" Link="Diagnostics/Legacy/CrashCause.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/CrashAnalysisResult.cs" Link="Diagnostics/Legacy/CrashAnalysisResult.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/CrashEvidence.cs" Link="Diagnostics/Legacy/CrashEvidence.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/CrashFinding.cs" Link="Diagnostics/Legacy/CrashFinding.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/CrashText.cs" Link="Diagnostics/Legacy/CrashText.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/CrashRegex.cs" Link="Diagnostics/Legacy/CrashRegex.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/Logs/CrashConfidence.cs" Link="Diagnostics/Legacy/Logs/CrashConfidence.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/Logs/CrashLogKind.cs" Link="Diagnostics/Legacy/Logs/CrashLogKind.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/Logs/CrashLogSet.cs" Link="Diagnostics/Legacy/Logs/CrashLogSet.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/Logs/CrashLogText.cs" Link="Diagnostics/Legacy/Logs/CrashLogText.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/Detection/CrashRule.cs" Link="Diagnostics/Legacy/Detection/CrashRule.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/Detection/CrashRuleCatalog.cs" Link="Diagnostics/Legacy/Detection/CrashRuleCatalog.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/Detection/DetectionPhase.cs" Link="Diagnostics/Legacy/Detection/DetectionPhase.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/Detection/CrashEvidenceExtractor.cs" Link="Diagnostics/Legacy/Detection/CrashEvidenceExtractor.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/Detection/CrashStackAnalyzer.cs" Link="Diagnostics/Legacy/Detection/CrashStackAnalyzer.cs" />
+    <Compile Include="../../Plain Craft Launcher 2/Modules/Minecraft/CrashAnalysis/Presentation/CrashMessageSpec.cs" Link="Diagnostics/Legacy/Presentation/CrashMessageSpec.cs" />
+    <EmbeddedResource Include="Resources/crash-messages.json" LogicalName="SHOU.crash-messages.json" />
   </ItemGroup>
 </Project>

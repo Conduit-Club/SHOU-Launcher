@@ -23,10 +23,10 @@ public interface IContentCategoryCatalogService
 {
     Task<IReadOnlyList<ContentCategory>> GetContentCategoriesAsync(CancellationToken cancellationToken = default);
 }
-public sealed record ContentFile(string FileName, Uri Uri, string Sha1, long Size, bool Primary = false);
+public sealed record ContentFile(string FileName, Uri Uri, string Sha1, long Size, bool Primary = false, CurseForgeManualFile? ManualFile = null);
 public sealed record ContentRelease(string Id, string Name, string Version, DateTimeOffset Published,
     IReadOnlyList<string> GameVersions, IReadOnlyList<string> Loaders, IReadOnlyList<ContentFile> Files,
-    IReadOnlyList<ContentDependency>? Dependencies = null, string? ProjectId = null, string Environment = "unknown", string? Notice = null, string ReleaseChannel = "release");
+    IReadOnlyList<ContentDependency>? Dependencies = null, string? ProjectId = null, string Environment = "unknown", string? Notice = null, string ReleaseChannel = "release", CurseForgeManualFile? ManualFile = null);
 public sealed record ContentDependency(string Type, string? ProjectId = null, string? VersionId = null, string? FileName = null);
 public interface IContentDependencyCatalogService
 {

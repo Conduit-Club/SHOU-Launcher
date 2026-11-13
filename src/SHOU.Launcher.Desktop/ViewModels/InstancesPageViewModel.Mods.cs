@@ -118,6 +118,7 @@ public sealed partial class InstancesPageViewModel
     }
     private void NotifyModActions()
     {
+        foreach (var file in UpdateManualFiles) file.Refresh();
         OnPropertyChanged(nameof(HasModSelection)); OnPropertyChanged(nameof(HasSelectedMods)); OnPropertyChanged(nameof(ResourceListBottomMargin)); OnPropertyChanged(nameof(ModSelectionSummary)); OnPropertyChanged(nameof(CanManageMods)); OnPropertyChanged(nameof(CanUpdateContent)); OnPropertyChanged(nameof(CanTrashMods)); OnPropertyChanged(nameof(CanTrashContent)); OnPropertyChanged(nameof(CanReadContentTrash)); OnPropertyChanged(nameof(ContentTrashTitle)); OnPropertyChanged(nameof(CanOpenContentProject)); OnPropertyChanged(nameof(CheckContentUpdatesCaption)); if (_workspaceReady && !_workspaceDisposed) NotifyCommands();
     }
     internal void StopModScan() { ++modCheckGeneration; modScanCancellation?.Cancel(); IsModScanBusy = false; }
@@ -137,6 +138,7 @@ public sealed partial class InstancesPageViewModel
     {
         ClearModRelations();
         StopModScan(); ModUpdates.Clear(); SelectedModUpdate = null; ModUpdateStatus = ""; contentRows.Clear(); contentFilter = "全部";
+        ClearManualUpdates();
         ModDetail = ""; detailRow = null; ModTrash.Clear(); SelectedModTrash = null; OnPropertyChanged(nameof(HasModTrash)); ModActionSummary = ""; pendingModUpdates = []; pendingModPaths = []; OnPropertyChanged(nameof(HasModUpdates)); NotifyModActions();
     }
     internal void ModWorkspaceNavigationChanged()

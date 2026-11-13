@@ -10,27 +10,30 @@ namespace SHOU.Launcher.Core.Content;
 public static class ContentInstallFiles
 {
     public const string ManifestName = ".shou-content-manifest.json";
-    public const int MaximumManifestFiles = 10000;
-    private const int MaximumManifestBytes = 4 * 1024 * 1024;
+    public const int MaximumManifestFiles = int.MaxValue;
+    private const int MaximumManifestBytes = int.MaxValue;
     internal static byte[] SerializeManifest(ContentInstallManifest manifest)
     {
         if (manifest.Files.Count > MaximumManifestFiles) throw new InvalidDataException($"实例安装清单超过{MaximumManifestFiles}条限制。");
         var bytes = JsonSerializer.SerializeToUtf8Bytes(manifest);
-        if (bytes.Length > MaximumManifestBytes) throw new InvalidDataException("安装清单超过4 MiB，未发布实例或文件改动。");
+        if (bytes.Length > MaximumManifestBytes) throw new InvalidDataException("安装清单长度超出系统可表示范围。");
         return bytes;
     }
     public static string PathKey(string path) => path.Normalize(NormalizationForm.FormC).ToUpperInvariant();
     public static void ValidateFile(ContentFile file)
     {
-        if (file.FileName.Length is 0 or > 200 || file.FileName.Any(c => char.IsControl(c) || c is '/' or '\\' or ':') || file.FileName is "." or ".." ||
-            !Hash(file.Sha1, 40) || file.Size is < 0 or > ContentInstallPlanner.MaximumTotalBytes || !AllowedResourceUri(file.Uri)) throw new InvalidDataException("资源文件身份、来源或大小无效。");
+        if (file.FileName.Length == 0 || file.FileName.Any(c => char.IsControl(c) || c is '/' or '\\' or ':') || file.FileName is "." or ".." ||
+            !Hash(file.Sha1, 40) || file.Size is < 0 or > ContentInstallPlanner.MaximumTotalBytes || !(file.ManualFile is { } manual ? ValidManual(file, manual) : AllowedResourceUri(file.Uri))) throw new InvalidDataException("资源文件身份、来源或大小无效。");
     }
+    private static bool ValidManual(ContentFile file, CurseForgeManualFile manual) => manual.ProjectId > 0 && manual.FileId > 0
+        && manual.FileName == file.FileName && manual.Sha1 == file.Sha1 && manual.Size == file.Size && manual.PageUri == file.Uri
+        && file.Uri == new Uri($"https://www.curseforge.com/projects/{manual.ProjectId}/files/{manual.FileId}");
     public static bool Hash(string? value, int length) => value is not null && value.Length == length && value.All(Uri.IsHexDigit);
     public static bool AllowedUri(Uri uri) => uri.IsAbsoluteUri && uri.Scheme == "https" && uri.Host.Equals("cdn.modrinth.com", StringComparison.OrdinalIgnoreCase) && uri.UserInfo.Length == 0 && uri.Fragment.Length == 0 && uri.IsDefaultPort;
     private static bool AllowedResourceUri(Uri uri) => AllowedUri(uri) || CurseForgePackResolver.AllowedCurseForgeUri(uri);
     public static string Literal(string root, string relative)
     {
-        if (relative.Length is 0 or > 512 || relative.Contains('\\') || relative.Split('/').Any(p => p.Length == 0 || p is "." or ".." || p.Any(c => char.IsControl(c) || c == ':'))) throw new InvalidDataException("文件路径无效。");
+        if (relative.Length == 0 || relative.Contains('\\') || relative.Split('/').Any(p => p.Length == 0 || p is "." or ".." || p.Any(c => char.IsControl(c) || c == ':'))) throw new InvalidDataException("文件路径无效。");
         var full = Path.GetFullPath(Path.Combine(root, relative));
         if (!SafePath.IsWithin(Path.GetFullPath(root), full)) throw new IOException("文件路径越界。");
         VerifiedDownloader.RejectLink(full); return full;

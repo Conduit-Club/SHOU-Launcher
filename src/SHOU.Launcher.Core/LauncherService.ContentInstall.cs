@@ -48,6 +48,18 @@ public sealed partial class LauncherService : IContentInstallationService, ICont
     private async Task DownloadInstallFileAsync(ContentFile file, string target, CancellationToken ct)
     {
         ContentInstallFiles.ValidateFile(file);
+        if (file.ManualFile is { } manual)
+        {
+            if (await CurseForgeManualCache.DigestAsync(Paths.CacheDirectory, manual, ct).ConfigureAwait(false) is null)
+                throw new InvalidOperationException("此版本需要在官网下载并选择安装文件后继续更新：" + manual.FileName);
+            var source = CurseForgeManualCache.PathFor(Paths.CacheDirectory, manual);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!); IO.SafePath.RejectLinks(target);
+            await using (var input = File.OpenRead(source))
+            await using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, true))
+                await input.CopyToAsync(output, ct).ConfigureAwait(false);
+            if (!await ContentInstallFiles.MatchesAsync(target, file.Sha1, file.Size, ct)) throw new InvalidDataException("补充文件校验失败。");
+            return;
+        }
         if (CurseForgePackResolver.AllowedCurseForgeUri(file.Uri))
         {
             using var transport = ContentTransport();

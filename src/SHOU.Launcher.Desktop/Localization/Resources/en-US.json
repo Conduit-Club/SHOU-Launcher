@@ -3231,5 +3231,7 @@
   "t7a0a6ccb8c6ad857": "Incomplete: {0}",
   "td09ae8da9937c141": "Imported {0} favorites.",
   "t70f9b6f26de2f4f2": "Could not resolve (retained for retry): {0}",
-  "tded2e7766fd4567e": "Download cancelled or failed; completed files are retained."
+  "tded2e7766fd4567e": "Download cancelled or failed; completed files are retained.",
+  "tfd2d4eb005e182d0": "Custom JVM arguments are passed to Java unchanged. Quote values containing spaces.",
+  "tfebb5a932e21b5eb": "Custom JVM arguments are passed to Java unchanged. Quote values containing spaces."
 }

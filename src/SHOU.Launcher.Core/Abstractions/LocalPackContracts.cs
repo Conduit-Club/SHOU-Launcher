@@ -1,6 +1,6 @@
 namespace SHOU.Launcher.Core.Abstractions;
 
-public enum LocalPackFormat { Unknown, Modrinth, MultiMC, CurseForge, ShouExport }
+public enum LocalPackFormat { Unknown, Modrinth, MultiMC, CurseForge, ShouExport, Hmcl, Mcbbs, CompressedInstance }
 
 /// <summary>Detected archive contents, never inferred from the file extension. Unsupported formats carry a reason.</summary>
 public sealed record LocalPackInspection(LocalPackFormat Format, string Name, string GameVersion, string Loader,
@@ -8,7 +8,9 @@ public sealed record LocalPackInspection(LocalPackFormat Format, string Name, st
     string? CapabilityReason = null, ModrinthPackInspection? Modrinth = null,
     IReadOnlyList<string>? LocalFiles = null, int SkippedFiles = 0, string? PackVersion = null, int? RecommendedMemoryMiB = null,
     IReadOnlyList<CurseForgeManualFile>? ManualFiles = null, IReadOnlyList<LocalPackOptionalFile>? OptionalFiles = null,
-    IReadOnlyList<string>? SelectedOptionalFiles = null);
+    IReadOnlyList<string>? SelectedOptionalFiles = null, LegacyPackProfile? LegacyProfile = null);
+public sealed record LegacyPackComponent(string Loader, string Version, bool Overridden = false);
+public sealed record LegacyPackProfile(string? VersionJson = null, IReadOnlyList<LegacyPackComponent>? Components = null, string? JvmArguments = null, string? GameArguments = null, string? ClientJarRelativePath = null, bool CompleteVersionProfile = false);
 public sealed record LocalPackOptionalFile(string Key, string Name, Uri PageUri, string? Notice = null);
 public interface ILocalPackSelectionService
 {

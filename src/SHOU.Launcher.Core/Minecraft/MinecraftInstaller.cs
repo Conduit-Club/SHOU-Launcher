@@ -21,11 +21,17 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
     {
         Directory.CreateDirectory(gameDirectory);
         var metadata = version.Metadata;
-        var client = metadata["downloads"]?["client"] as JsonObject ?? throw new InvalidDataException("Version has no downloadable client.");
+        var client = metadata["downloads"]?["client"] as JsonObject;
         var clientId = (string?)metadata["jar"] ?? version.InheritanceChain.FirstOrDefault() ?? version.Id;
         var clientPath = SafePath.Within(cacheDirectory, $"versions/{SafePath.Identifier(clientId)}/{clientId}.jar");
         phases?.Report(new("检查游戏客户端", 0, 1));
-        await FetchDescriptorAsync(client, clientPath, progress, ct).ConfigureAwait(false);
+        if (metadata["shouLocalClient"] is JsonObject localClient)
+        {
+            if (!clientId.StartsWith("shou-import-", StringComparison.Ordinal) ||
+                !await Content.ContentInstallFiles.MatchesAsync(clientPath, (string?)localClient["sha1"] ?? "", (long?)localClient["size"] ?? -1, ct))
+                throw new InvalidDataException("导入整合包的本地客户端缺失或已改变，请重新导入。");
+        }
+        else await FetchDescriptorAsync(client ?? throw new InvalidDataException("Version has no downloadable client."), clientPath, progress, ct).ConfigureAwait(false);
         var librariesDirectory = Path.Combine(cacheDirectory, "libraries");
         var libraries = LibraryResolver.Resolve(metadata, context);
         var completedLibraries = 0; phases?.Report(new("检查依赖库", 0, libraries.Files.Count));

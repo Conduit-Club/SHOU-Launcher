@@ -10,6 +10,24 @@ namespace SHOU.Launcher.Desktop.Views;
 public partial class ToolsView : UserControl
 {
     public ToolsView() => AvaloniaXamlLoader.Load(this);
+    private async void AnalyzeCrashFiles_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((DataContext as ToolsPageViewModel)?.Crash is not { CanAnalyze: true } vm) return;
+        try
+        {
+            var files = await Storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "选择游戏日志或错误报告", AllowMultiple = true,
+                FileTypeFilter = [new("日志与错误报告") { Patterns = ["*.log", "*.txt", "*.zip", "*.gz", "*.bz2"] }, FilePickerFileTypes.All] });
+            var paths = files.Select(f => f.TryGetLocalPath() ?? throw new IOException("请选择本机文件。")).ToArray();
+            if (paths.Length > 0 && vm.CanAnalyze) await vm.AnalyzeFilesAsync(paths);
+        }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+    private async void ExportCrashReport_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((DataContext as ToolsPageViewModel)?.Crash is not { HasReport: true, CanAnalyze: true } vm) return;
+        try { if (await SavePathAsync("导出错误报告", "SHOU-crash-report.zip", "zip") is { } path && vm.CanAnalyze) await vm.ExportAsync(path); }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
     private ToolboxViewModel? Toolbox => (DataContext as ToolsPageViewModel)?.Toolbox;
     private IStorageProvider Storage => TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境无法打开文件选择器。");
     private async Task<string?> SavePathAsync(string title, string name, string extension)

@@ -9,32 +9,32 @@ namespace SHOU.Launcher.Core.Content;
 public sealed record LocalPackDescriptor(LocalPackInspection Inspection,
     IReadOnlyList<CurseForgePackReference> CurseForgeFiles, IReadOnlyDictionary<string, string> OverrideEntries, bool CanResolveCurseForge);
 
-/// <summary>Detects actual archive markers. Only CF client payload is staged here; genuine MRpack is delegated unchanged.</summary>
-public sealed class LocalPackArchive
+/// <summary>Detects format metadata and stages CF and legacy payloads; MRpack keeps its format-specific installer.</summary>
+public sealed partial class LocalPackArchive
 {
     public async Task<LocalPackDescriptor> ReadAsync(string path, CancellationToken ct = default)
     {
         using var archive = PackArchiveReader.Open(path); var sha256 = await archive.Sha256Async(ct).ConfigureAwait(false);
         var entries = archive.Zip.Entries.Where(e => !e.FullName.EndsWith('/')).ToDictionary(e => e.FullName, StringComparer.Ordinal);
+        if (await ReadLegacyAsync(archive, entries, sha256, ct).ConfigureAwait(false) is { } legacy) return legacy;
         var markers = new[] { "modrinth.index.json", "manifest.json", "mmc-pack.json", "shou-instance.json" }.Where(entries.ContainsKey).ToArray();
         if (markers.Length > 1 && markers.Contains("shou-instance.json", StringComparer.Ordinal))
         {
             // A root-override CF manifest may itself be game payload in a later exact SHOU export.
-            using var metadata = PackArchiveReader.Json(await PackArchiveReader.ReadEntryAsync(entries["shou-instance.json"], 4 * 1024 * 1024, ct).ConfigureAwait(false));
+            using var metadata = PackArchiveReader.Json(await PackArchiveReader.ReadEntryAsync(entries["shou-instance.json"], int.MaxValue, ct).ConfigureAwait(false));
             var value = metadata.RootElement;
             if (value.TryGetProperty("schemaVersion", out var schema) && schema.TryGetInt32(out var number) && number == 2 &&
                 value.TryGetProperty("Files", out var list) && list.ValueKind == JsonValueKind.Array &&
                 markers.Where(m => m != "shou-instance.json").All(m => list.EnumerateArray().Any(f => f.TryGetProperty("Path", out var pathValue) && pathValue.GetString() == m)))
                 markers = ["shou-instance.json"];
         }
-        if (markers.Length > 1) throw new InvalidDataException("ZIP 含多个不同格式的整合包标识，不能猜测导入方式。");
-        var marker = markers.SingleOrDefault(); var prefix = "";
+        // WPF gives root descriptors precedence. A bundled secondary descriptor is not a reason to reject a pack.
+        var marker = markers.FirstOrDefault(); var prefix = "";
         if (marker is null)
         {
-            var wrapped = entries.Keys.Where(k => k.Count(c => c == '/') == 1 &&
-                new[] { "modrinth.index.json", "manifest.json", "mmc-pack.json", "shou-instance.json" }.Contains(k[(k.IndexOf('/') + 1)..], StringComparer.Ordinal)).ToArray();
-            if (wrapped.Length > 1) throw new InvalidDataException("ZIP 含多个不同的整合包标识，不能猜测导入方式。");
-            if (wrapped.Length == 1) { marker = wrapped[0]; prefix = marker[..(marker.IndexOf('/') + 1)]; }
+            var wrapped = entries.Keys.FirstOrDefault(k => k.Count(c => c == '/') == 1 &&
+                new[] { "modrinth.index.json", "manifest.json", "mmc-pack.json", "shou-instance.json" }.Contains(k[(k.IndexOf('/') + 1)..], StringComparer.Ordinal));
+            if (wrapped is not null) { marker = wrapped; prefix = marker[..(marker.IndexOf('/') + 1)]; }
         }
         var markerName = marker?[prefix.Length..];
         if (markerName == "modrinth.index.json")
@@ -43,7 +43,7 @@ public sealed class LocalPackArchive
             return new(new(LocalPackFormat.Modrinth, mrpack.Name, mrpack.GameVersion, mrpack.Loader, mrpack.LoaderVersion, sha256, mrpack.Warnings, mrpack.CanImport, mrpack.CapabilityReason, mrpack, mrpack.Overrides), [], new Dictionary<string, string>(), false);
         }
         if (marker is null) return Blocked(LocalPackFormat.Unknown, "未知 ZIP", sha256, "ZIP 未包含受支持的整合包格式标识；不会作为 SHOU 包或 MRpack 猜测导入。");
-        using var json = PackArchiveReader.Json(await PackArchiveReader.ReadEntryAsync(entries[marker], 4 * 1024 * 1024, ct).ConfigureAwait(false)); var root = json.RootElement;
+        using var json = PackArchiveReader.Json(await PackArchiveReader.ReadEntryAsync(entries[marker], int.MaxValue, ct).ConfigureAwait(false)); var root = json.RootElement;
         if (marker.EndsWith("mmc-pack.json", StringComparison.Ordinal))
         {
             if (!entries.ContainsKey(prefix + "instance.cfg") || root.GetProperty("formatVersion").GetInt32() != 1) throw new InvalidDataException("MultiMC ZIP 缺少有效实例元数据。");
@@ -110,8 +110,9 @@ public sealed class LocalPackArchive
             if (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge) throw new NotSupportedException("此 ZIP 不是支持的 CurseForge 客户端包。");
             var required = CurseForgePackSelection.Apply(read.CurseForgeFiles, optionalFiles).Where(f => f.Required).ToArray();
             if (files.Count != required.Length || required.Any(r => files.Count(f => f.ProjectId == r.ProjectId && f.FileId == r.FileId) != 1)) throw new InvalidDataException("已解析文件未完整匹配 required 清单，未创建实例。");
-            if (files.Select(f => ContentInstallFiles.PathKey(f.Path)).Distinct(StringComparer.Ordinal).Count() != files.Count || files.Sum(f => f.Size) > 4L * 1024 * 1024 * 1024) throw new InvalidDataException("解析结果存在路径冲突或超过总大小预算。");
+            if (files.Select(f => ContentInstallFiles.PathKey(f.Path)).Distinct(StringComparer.Ordinal).Count() != files.Count) throw new InvalidDataException("解析结果存在路径冲突或超过总大小预算。");
             PackArchiveReader.CheckTargets(files.Select(f => f.Path).Concat(read.OverrideEntries.Keys));
+            PackDiskSpace.Require(directory, checked(files.Sum(f => f.Size) + read.OverrideEntries.Values.Sum(p => archive.Zip.GetEntry(p)!.Length)));
             var installed = new List<ContentInstalledFile>(); var done = 0; var total = files.Count + read.OverrideEntries.Count;
             progress?.Report(new("安装整合包文件", 0, total));
             await Parallel.ForEachAsync(files, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections, 1, 64), CancellationToken = ct }, async (file, token) =>
@@ -138,10 +139,10 @@ public sealed class LocalPackArchive
             foreach (var (relative, entryName) in read.OverrideEntries)
             {
                 var entry = archive.Zip.GetEntry(entryName) ?? throw new IOException("覆盖文件在暂存副本中缺失。");
-                var bytes = await PackArchiveReader.ReadEntryAsync(entry, PackArchiveReader.MaximumFileBytes, ct).ConfigureAwait(false); var target = ContentInstallFiles.Literal(directory, relative); Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                await File.WriteAllBytesAsync(target, bytes, ct).ConfigureAwait(false); installed.RemoveAll(f => ContentInstallFiles.PathKey(f.RelativePath) == ContentInstallFiles.PathKey(relative));
+                var target = ContentInstallFiles.Literal(directory, relative); if (File.Exists(target)) File.Delete(target);
+                var streamed = await PackArchiveReader.StreamEntryAsync(entry, target, ct).ConfigureAwait(false); installed.RemoveAll(f => ContentInstallFiles.PathKey(f.RelativePath) == ContentInstallFiles.PathKey(relative));
                 progress?.Report(new("安装整合包文件", ++done, total, relative));
-                installed.Add(new("cf-local", actual[..16], "pack", relative, Convert.ToHexStringLower(SHA1.HashData(bytes)), Convert.ToHexStringLower(SHA512.HashData(bytes)), bytes.Length));
+                installed.Add(new("cf-local", actual[..16], "pack", relative, streamed.Sha1, streamed.Sha512, streamed.Size));
             }
             progress?.Report(new("安装整合包文件", total, total));
             archive.Verify(); ct.ThrowIfCancellationRequested(); await File.WriteAllBytesAsync(ContentInstallFiles.Literal(directory, ContentInstallFiles.ManifestName), ContentInstallFiles.SerializeManifest(new ContentInstallManifest(1, "unregistered", installed)), ct).ConfigureAwait(false);

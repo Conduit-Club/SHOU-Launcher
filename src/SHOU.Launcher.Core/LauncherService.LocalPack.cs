@@ -64,12 +64,13 @@ public sealed partial class LauncherService : ILocalPackProgressService, ILocalP
             return new(result.Instance, result.InstalledFiles, read.Inspection.Warnings, result);
         }
         var isShou = read.Inspection.Format == LocalPackFormat.ShouExport && read.Inspection.CanImport;
-        if (!isShou && (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge)) throw new NotSupportedException(read.Inspection.CapabilityReason ?? "此格式尚未支持导入。");
-        if (isShou && request.OptionalClientFiles is { Count: > 0 }) throw new InvalidDataException("SHOU 整包未声明可选文件。");
-        if (!isShou) _ = CurseForgePackSelection.Apply(read.CurseForgeFiles, request.OptionalClientFiles);
+        var isLegacy = read.Inspection.LegacyProfile is not null && read.Inspection.CanImport;
+        if (!isShou && !isLegacy && (read.Inspection.Format != LocalPackFormat.CurseForge || !read.CanResolveCurseForge)) throw new NotSupportedException(read.Inspection.CapabilityReason ?? "此格式尚未支持导入。");
+        if ((isShou || isLegacy) && request.OptionalClientFiles is { Count: > 0 }) throw new InvalidDataException("SHOU 整包未声明可选文件。");
+        if (!isShou && !isLegacy) _ = CurseForgePackSelection.Apply(read.CurseForgeFiles, request.OptionalClientFiles);
         var planKey = CurseForgePackSelection.PlanKey(request.ExpectedSha256, request.OptionalClientFiles);
-        LocalPackPlan? plan = isShou ? new([], read.Inspection.Warnings) : null;
-        if (!isShou && !localPackPlans.TryGetValue(planKey, out plan))
+        LocalPackPlan? plan = isShou || isLegacy ? new([], read.Inspection.Warnings) : null;
+        if (!isShou && !isLegacy && !localPackPlans.TryGetValue(planKey, out plan))
         {
             var inspection = await InspectLocalPackCoreAsync(request.ArchivePath, progress, cancellationToken, request.OptionalClientFiles).ConfigureAwait(false);
             if (!inspection.CanImport || !localPackPlans.TryGetValue(planKey, out plan)) throw new InvalidOperationException(inspection.CapabilityReason ?? "整合包文件尚未全部核实。");
@@ -85,11 +86,12 @@ public sealed partial class LauncherService : ILocalPackProgressService, ILocalP
             {
                 await RunContentTransferAsync("local-pack:" + Guid.NewGuid().ToString("N"), token => ImportLocalPackAsync(request, token), async token =>
                 {
-                    var inspection = isShou ? await ShouPackArchive.StageAsync(request.ArchivePath, request.ExpectedSha256, stage, token).ConfigureAwait(false)
+                    var inspection = isLegacy ? await new LocalPackArchive().StageLegacyAsync(request.ArchivePath, request.ExpectedSha256, stage, token, progress).ConfigureAwait(false)
+                        : isShou ? await ShouPackArchive.StageAsync(request.ArchivePath, request.ExpectedSha256, stage, token).ConfigureAwait(false)
                         : await new LocalPackArchive().StageCurseForgeAsync(request.ArchivePath, request.ExpectedSha256, stage, capturedPlan.Files,
                         (file, path, transferToken) => resolver.DownloadAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), transferToken), token, progress, network.Capture().Downloads?.MaximumConnections ?? 8, request.OptionalClientFiles).ConfigureAwait(false);
-                    var profile = await CacheLoaderProfileAsync(inspection.Loader, inspection.GameVersion, inspection.LoaderVersion, token).ConfigureAwait(false);
-                    var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination, MemoryMiB: inspection.RecommendedMemoryMiB, Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion);
+                    var profile = await CacheImportedProfileAsync(inspection, stage, token).ConfigureAwait(false);
+                    var instance = new GameInstance(Guid.NewGuid().ToString("N"), request.InstanceName.Trim(), profile, destination, MemoryMiB: inspection.RecommendedMemoryMiB, Loader: inspection.Loader, LoaderVersion: inspection.LoaderVersion, GameVersionId: inspection.GameVersion, LaunchOptions: inspection.LegacyProfile is { } legacy ? new GameLaunchOptions(InheritGlobal: false, JvmArguments: legacy.JvmArguments ?? "", GameArguments: legacy.GameArguments ?? "") : null);
                     var manifestPath = ContentInstallFiles.Literal(stage, ContentInstallFiles.ManifestName); var manifest = JsonSerializer.Deserialize<ContentInstallManifest>(await File.ReadAllBytesAsync(manifestPath, token).ConfigureAwait(false)) ?? throw new InvalidDataException("整合包安装清单缺失。");
                     await File.WriteAllBytesAsync(manifestPath, ContentInstallFiles.SerializeManifest(manifest with { InstanceId = instance.Id }), token).ConfigureAwait(false);
                     if (request.PrepareAfterImport)

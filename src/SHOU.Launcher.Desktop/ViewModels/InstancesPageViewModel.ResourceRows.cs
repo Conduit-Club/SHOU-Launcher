@@ -20,6 +20,7 @@ public sealed partial class InstancesPageViewModel
         if (!CanUpdateContent) return;
         var current = Rows();
         var valid = updates.Where(u => u.InstanceId == SelectedInstance?.Id && ModUpdates.Any(known => known.Token == u.Token) && current.Any(r => r.Update?.Token == u.Token)).ToArray();
+        if (!await PrepareManualUpdatesAsync(valid)) return;
         if (IsModsSection) { RequestModUpdate(valid); return; }
         if (valid.Length == 0 || SelectedInstance is not { } instance || Service is not IInstanceResourceUpdateService service) return;
         var section = SelectedSection.Key; var completed = 0; var failures = new List<string>(); var notices = new HashSet<string>();
