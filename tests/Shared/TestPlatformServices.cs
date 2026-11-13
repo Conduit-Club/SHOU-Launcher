@@ -4,11 +4,17 @@ using SHOU.Launcher.Desktop.Platform;
 
 namespace SHOU.Launcher.Tests;
 
-/// <summary>Portable service fixtures never read or write the current user's native credentials.</summary>
+/// <summary>Portable service fixtures use explicit credentials and memory, independent of native host adapters.</summary>
 internal static class TestPlatformServices
 {
     public static PlatformServices Create(PlatformOptions options, IVerifiedDownloader downloader)
-        => PlatformServicesFactory.Create(options, downloader, new InMemoryTestCredentials());
+        => PlatformServicesFactory.Create(options, downloader, new InMemoryTestCredentials())
+            with { MemoryInfo = new FixedTestMemory() };
+
+    private sealed class FixedTestMemory : IMemoryInfo
+    {
+        public MemoryStatus Read() => new(16L * 1024 * 1024 * 1024, 8L * 1024 * 1024 * 1024);
+    }
 }
 
 internal sealed class InMemoryTestCredentials : ICredentialStore
