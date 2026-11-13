@@ -7,6 +7,15 @@ public static class BundledLicenseDocuments
     // Keep the existing bounded, top-level document list. Runtime package catalogs stay in the bundle.
     public static IReadOnlyList<LicenseDocument> Read(string executableDirectory)
     {
+        using var embedded = typeof(BundledLicenseDocuments).Assembly.GetManifestResourceStream("SHOU.Desktop.Documents.zip");
+        if (embedded is not null)
+        {
+            using var archive = new System.IO.Compression.ZipArchive(embedded);
+            return archive.Entries.Where(e => e.Name.Length > 0 && e.Length <= 1024 * 1024
+                && (e.FullName is "LICENSE" or "LICENCE" || e.FullName.StartsWith("licenses/", StringComparison.Ordinal)
+                && e.FullName.Count(c => c == '/') == 1 && Path.GetExtension(e.Name) is ".txt" or ".md"))
+                .Take(100).Select(e => { using var reader = new StreamReader(e.Open()); return new LicenseDocument(e.Name, reader.ReadToEnd()); }).ToArray();
+        }
         var executable = new DirectoryInfo(Path.TrimEndingDirectorySeparator(Path.GetFullPath(executableDirectory)));
         var roots = new List<string> { executable.FullName };
         if (executable.Name == "MacOS" && executable.Parent is { Name: "Contents" } contents && contents.Parent?.Extension == ".app")

@@ -85,6 +85,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
             foreach (var path in new[] { Paths.DataDirectory, Paths.SharedDataDirectory, Paths.LocalDataDirectory, Paths.CacheDirectory,
                          Paths.LogsDirectory, Paths.RuntimesDirectory, Paths.InstancesDirectory, Paths.TempDirectory }) Directory.CreateDirectory(path);
             var state = await config.LoadAsync(cancellationToken).ConfigureAwait(false);
+            state = await ImportFirstRunLegacyDataAsync(state, cancellationToken).ConfigureAwait(false);
             ConfigurationStore.ValidateSettings(state.Settings);
             if (state.Settings.GameRoot is { Length: > 0 } gameRoot) EnsureIsolatedGamePath(gameRoot);
             foreach (var instance in state.Instances)

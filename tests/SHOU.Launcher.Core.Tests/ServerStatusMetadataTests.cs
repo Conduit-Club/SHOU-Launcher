@@ -22,7 +22,11 @@ public sealed class ServerStatusMetadataTests
             var port = ((IPEndPoint)listener.LocalEndpoint).Port;
             var server = Task.Run(async () =>
             {
-                using var client = await listener.AcceptTcpClientAsync(); await using var stream = client.GetStream(); var input = new byte[1]; await stream.ReadExactlyAsync(input);
+                using var client = await listener.AcceptTcpClientAsync(); await using var stream = client.GetStream();
+                // Drain the handshake and status request before closing. Windows resets a TCP
+                // connection closed with unread request bytes, potentially discarding the reply.
+                var input = new byte[1]; await stream.ReadExactlyAsync(input);
+                var request = new byte[input[0] + 2]; await stream.ReadExactlyAsync(request);
                 var text = Encoding.UTF8.GetBytes(json); using var payload = new MemoryStream(); payload.WriteByte(0); VarInt(payload, text.Length); payload.Write(text); using var packet = new MemoryStream(); VarInt(packet, (int)payload.Length); payload.Position = 0; await payload.CopyToAsync(packet); await stream.WriteAsync(packet.ToArray());
             });
             var result = await ClubStatusProbe.ProbeAsync(new("fixture", "Fixture", "127.0.0.1:" + port)); await server;

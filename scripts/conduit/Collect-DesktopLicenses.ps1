@@ -1,7 +1,8 @@
 [CmdletBinding()]
-param([Parameter(Mandatory)][string]$PublishDirectory)
+param([Parameter(Mandatory)][string]$PublishDirectory, [string]$DependencyFile = '')
 $ErrorActionPreference='Stop'
-$deps=Get-Content -Raw -LiteralPath (Join-Path $PublishDirectory 'SHOU.Launcher.Desktop.deps.json') | ConvertFrom-Json -AsHashtable
+if (-not $DependencyFile) { $DependencyFile=Join-Path $PublishDirectory 'SHOU.Launcher.Desktop.deps.json' }
+$deps=Get-Content -Raw -LiteralPath $DependencyFile | ConvertFrom-Json -AsHashtable
 $destination=Join-Path $PublishDirectory 'licenses'
 $null=New-Item -ItemType Directory -Path $destination -Force
 $lucide=Join-Path $PSScriptRoot '../../src/SHOU.Launcher.Desktop/Assets/Icons/Lucide'
