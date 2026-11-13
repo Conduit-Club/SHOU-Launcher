@@ -46,7 +46,7 @@ public static partial class Bootstrap
                     launcher.Paths.CacheDirectory, launcher.Paths.LogsDirectory, launcher.Paths.RuntimesDirectory,
                     launcher.Paths.InstancesDirectory, launcher.Paths.TempDirectory, launcher.Paths.ResourcesDirectory,
                     launcher.Paths.LockFile, launcher.Paths.IsIsolated },
-                configurationAssembly = typeof(BuildConfiguration).Assembly.Location, dataLockAcquired = dataLease is not null,
+                configurationAssembly = typeof(BuildConfiguration).Assembly.GetName().Name, dataLockAcquired = dataLease is not null,
                 java, generatedSettings = GeneratedSettingsSchema.Entries, lifecycle = GeneratedLifecycle.Entries,
                 javaBootstrap = new { available = productJavaBootstrap is not null, sha256 = productJavaBootstrap?.Sha256 },
                 capabilities = new { launcher.Capabilities.SupportsCredentialPersistence, launcher.Capabilities.SupportsSystemProxy, launcher.Capabilities.Limitations } });

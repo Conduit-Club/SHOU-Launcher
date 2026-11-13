@@ -4,7 +4,7 @@
     <AssemblyName>SHOU.Launcher.Desktop</AssemblyName>
     <RuntimeIdentifiers>osx-arm64;win-x64;win-arm64;linux-x64</RuntimeIdentifiers>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
-    <PublishSingleFile>false</PublishSingleFile><PublishTrimmed>false</PublishTrimmed><PublishAot>false</PublishAot>
+    <PublishSingleFile Condition="'$(PublishSingleFile)' == ''">false</PublishSingleFile><PublishTrimmed>false</PublishTrimmed><PublishAot>false</PublishAot>
     <ApplicationIcon>../../Plain Craft Launcher 2/Images/Conduit/club.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
@@ -18,11 +18,21 @@
     <PackageReference Include="BitMiracle.LibTiff.NET" Version="2.4.660" />
     <AvaloniaResource Include="Assets/**" />
     <EmbeddedResource Include="Localization/Resources/zh-CN.json;Localization/Resources/zh-TW.json;Localization/Resources/en-US.json" />
-    <Content Include="Assets/AchievementIcons/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/mcgen.txt" />
-    <Content Include="Assets/AchievementIcons/README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/achievement-icons.md" />
+    <Content Include="Assets/AchievementIcons/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/mcgen.txt" Condition="'$(PublishSingleFile)' != 'true'" />
+    <Content Include="Assets/AchievementIcons/README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/achievement-icons.md" Condition="'$(PublishSingleFile)' != 'true'" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(DesktopDocumentsArchive)' != '' and Exists('$(DesktopDocumentsArchive)')">
+    <EmbeddedResource Include="$(DesktopDocumentsArchive)" LogicalName="SHOU.Desktop.Documents.zip" />
   </ItemGroup>
   <ItemGroup Condition="'$(JavaBootstrapJarPath)' != '' and Exists('$(JavaBootstrapJarPath)')">
     <EmbeddedResource Include="$(JavaBootstrapJarPath)" LogicalName="SHOU.Launcher.Desktop.JavaBootstrap.jar" />
     <AssemblyMetadata Include="SHOU.JavaBootstrap.Sha256" Value="$(JavaBootstrapSha256)" />
   </ItemGroup>
+  <Target Name="ExcludeWindowsSingleFileDebugSidecars" BeforeTargets="_ComputeFilesToBundle"
+          Condition="'$(PublishSingleFile)' == 'true' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">
+    <ItemGroup>
+      <!-- Native NuGet PDBs cannot be consumed from the bundle. Managed symbols are embedded. -->
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
 </Project>

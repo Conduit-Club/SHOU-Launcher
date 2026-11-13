@@ -163,7 +163,7 @@ try {
             $env:PCL_UNLISTED_FAKE_TOKEN=$unlisted
             $out=Join-Path $fixtures $case
             & (Join-Path $repo 'scripts/conduit/Publish-Desktop.ps1') -RuntimeIdentifier $SequenceRid -Configuration Release -Dotnet $Dotnet -EnvFile $envFile -BuildRoot $intermediate -OutputRoot $out -BuildSuffix ('B07-'+$case)
-            $owner=if($SequenceRid -eq 'osx-arm64'){Join-Path $out 'SHOU Launcher.app/Contents/MacOS/SHOU.Launcher.Core.dll'}else{Join-Path $out 'SHOU Launcher/SHOU.Launcher.Core.dll'}
+            $owner=if($SequenceRid -eq 'osx-arm64'){Join-Path $out 'SHOU Launcher.app/Contents/MacOS/SHOU.Launcher.Core.dll'}else{Join-Path $out 'SHOU Launcher/SHOU.Launcher.Desktop.exe'}
             $presentA=Owner-Contains $owner $a;$presentB=Owner-Contains $owner $b
             Require ($presentA -eq ($case -eq 'A') -and $presentB -eq ($case -eq 'B')) 'B07 stale Microsoft input survived normal clean/publish.'
             Require ((Owner-Contains $owner $cfA) -eq ($case -eq 'A')) 'B07 stale first escaped key survived.'

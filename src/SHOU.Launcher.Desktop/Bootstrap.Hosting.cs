@@ -47,7 +47,8 @@ public static partial class Bootstrap
     {
         var data = ArgumentValue("--data-dir");
         if (data is null && OperatingSystem.IsWindows())
-            data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SHOU-Launcher-Preview");
+            data = Platform.Windows.WindowsStartupPaths.ResolveDataDirectory(AppContext.BaseDirectory,
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
         networkOptions = new();
         httpClient = new(new ConfigurableNetworkHandler(networkOptions)) { Timeout = TimeSpan.FromSeconds(40), MaxResponseContentBufferSize = 4 * 1024 * 1024 };
         httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("SHOU-Launcher/1.5.0");

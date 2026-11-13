@@ -92,6 +92,7 @@ public sealed record PlatformServices(IPlatformInfo Info, IAppPaths Paths, IPlat
     IJavaDiscovery JavaDiscovery, IJavaRuntimeInstaller JavaInstaller, IDataDirectoryLock DataLock)
 {
     public ILegacyMicrosoftAccountReader? LegacyMicrosoftAccounts { get; init; }
+    public ILegacyDesktopDataReader? LegacyDesktopData { get; init; }
     public IMemoryInfo? MemoryInfo { get; init; }
 }
 

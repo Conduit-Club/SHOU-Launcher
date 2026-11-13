@@ -36,7 +36,8 @@ public static partial class Bootstrap
         Directory.CreateDirectory(Path.GetDirectoryName(result)!);
         var report = new { runId = ArgumentValue("--run-id"), build = new BuildConfiguration().GetIdentity(),
             os = RuntimeInformation.OSDescription, processArchitecture = RuntimeInformation.ProcessArchitecture.ToString(),
-            configurationAssembly = typeof(BuildConfiguration).Assembly.Location, dataDirectory = Launcher?.Paths.DataDirectory,
+            configurationAssembly = typeof(BuildConfiguration).Assembly.GetName().Name, executableDirectory = AppContext.BaseDirectory,
+            dataDirectory = Launcher?.Paths.DataDirectory,
             isolated = Launcher?.Paths.IsIsolated, state = Launcher?.Snapshot.State, nativeWindowHandleObserved = nativeWindowObserved,
             macTitlebar = MacTitlebarObservation, reason, reportedAt = DateTimeOffset.UtcNow, evidenceBoundary = "application observation only; external GUI evidence required" };
         var temporary = result + ".tmp-" + Guid.NewGuid().ToString("N");

@@ -17,6 +17,7 @@ public sealed class Aria2CdnNativeTests
     public async Task ExternalRpcTransfersAllowlistedCdnAndBlockedRedirectCannotOverwriteExistingFile()
     {
         await using var daemon = await ExternalDaemon.StartAsync();
+        var originalVersion = await daemon.Rpc.GetVersionAsync(); Assert.IsFalse(string.IsNullOrWhiteSpace(originalVersion));
         var bytes = new byte[128 * 1024]; RandomNumberGenerator.Fill(bytes);
         var blocked = false; var leaked = false; var calls = 0;
         using var http = new HttpClient(new ScriptedHttpHandler(request =>
@@ -37,13 +38,14 @@ public sealed class Aria2CdnNativeTests
         blocked = true; await File.WriteAllTextAsync(path, "original user bytes");
         await Assert.ThrowsAsync<IOException>(() => resolver.DownloadResourceAsync(file, path));
         Assert.AreEqual("original user bytes", await File.ReadAllTextAsync(path)); Assert.IsTrue(calls > 1);
-        Assert.AreEqual("1.37.0", await daemon.Rpc.GetVersionAsync());
+        Assert.AreEqual(originalVersion, await daemon.Rpc.GetVersionAsync());
     }
 
     [TestMethod]
     public async Task CdnCancellationAndNewRelayResumeKeepExternalDaemonAlive()
     {
         await using var daemon = await ExternalDaemon.StartAsync();
+        var originalVersion = await daemon.Rpc.GetVersionAsync(); Assert.IsFalse(string.IsNullOrWhiteSpace(originalVersion));
         var bytes = new byte[2 * 1024 * 1024]; RandomNumberGenerator.Fill(bytes);
         using var http = new HttpClient(new ScriptedHttpHandler(request =>
         {
@@ -64,7 +66,7 @@ public sealed class Aria2CdnNativeTests
         CollectionAssert.AreEqual(bytes, await File.ReadAllBytesAsync(path));
         Assert.IsTrue(progress.Any(p => p.Stage == "Completed" && p.Backend == "aria2"));
         options.Update(new(Aria2: new(false, daemon.Endpoint.AbsoluteUri)));
-        Assert.AreEqual("1.37.0", await daemon.Rpc.GetVersionAsync());
+        Assert.AreEqual(originalVersion, await daemon.Rpc.GetVersionAsync());
     }
 
     private sealed class Callback(Action<TransferProgress> report) : IProgress<TransferProgress>
