@@ -18,9 +18,10 @@ public sealed class WpfSettingsParityTests
     private static T Find<T>(Window window, string name) where T : Control => window.GetVisualDescendants().OfType<T>().Single(c => c.Name == name);
 
     [AvaloniaFact]
-    public void ContextNavigationHasReferenceWidthAndRetainsDraftAcrossEveryCategory()
+    public async Task ContextNavigationHasReferenceWidthAndRetainsValuesAcrossAutomaticSaveAndEveryCategory()
     {
-        using var root = new MainWindowViewModel(new FakeLauncherService(), new FakeExternalLauncher());
+        var service = new FakeLauncherService();
+        using var root = new MainWindowViewModel(service, new FakeExternalLauncher());
         var window = new Window { Width = 976, Height = 588, Content = new SettingsView { DataContext = root.Settings } };
         window.Show(); Pump(window);
         try
@@ -36,9 +37,12 @@ public sealed class WpfSettingsParityTests
             foreach (var section in SettingsPageViewModel.SectionIds)
             {
                 root.Settings.SelectSectionCommand.Execute(section); Pump(window);
-                Assert.Equal(section, root.Settings.SelectedSection); Assert.True(root.Settings.IsDirty);
+                Assert.Equal(section, root.Settings.SelectedSection);
                 Assert.Equal("explicit parity draft", root.Settings.CustomInfo);
             }
+            Assert.True(await root.Settings.FlushAutoSaveAsync());
+            Assert.False(root.Settings.IsDirty);
+            Assert.Equal("explicit parity draft", service.Snapshot.Settings.CustomInfo);
             Assert.Equal(10, window.GetVisualDescendants().OfType<Button>().Count(b => b.Classes.Contains("contextNavigation")));
             Assert.Null(((SettingsView)window.Content!).FindControl<Button>("SettingsNetworkNavigation"));
             Assert.True(((SettingsView)window.Content!).FindControl<TextBox>("JvmArgumentsSetting")!.IsEnabled);
