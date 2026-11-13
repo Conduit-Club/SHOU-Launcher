@@ -19,7 +19,7 @@ public sealed class WpfScreenshotGalleryTests
     {
         var root = FixturePaths.Create("gallery");
         using var http = new HttpClient(); var downloads = new VerifiedDownloader(http);
-        var platform = PlatformServicesFactory.Create(new(root), downloads);
+        var platform = TestPlatformServices.Create(new(root), downloads);
         using var lease = platform.DataLock.Acquire(platform.Paths);
         await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloads, new NetworkOptions());

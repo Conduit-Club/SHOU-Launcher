@@ -18,7 +18,7 @@ public sealed class WpfInstancePresentationTests
     {
         var root = FixturePaths.Create("presentation");
         using var http = new HttpClient(); var downloads = new VerifiedDownloader(http);
-        var platform = PlatformServicesFactory.Create(new(root), downloads); using var lease = platform.DataLock.Acquire(platform.Paths);
+        var platform = TestPlatformServices.Create(new(root), downloads); using var lease = platform.DataLock.Acquire(platform.Paths);
         await using var processes = (ProcessRunner)platform.Processes;
         await using var service = new LauncherService(platform, http, downloads, new NetworkOptions());
         await service.InitializeAsync(); var instance = await service.CreateInstanceAsync("Presentation fixture", "1.21.1");

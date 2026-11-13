@@ -91,7 +91,9 @@ public sealed class ProcessRunnerTests
         var fixture = new PlatformFixture();
         await using var runner = new ProcessRunner();
         string[] values = ["中文 空格 (game)", "a\"b", "$HOME;$(not-a-command)", @"C:\folder with spaces\", "", "line\nbreak"];
-        var result = await runner.RunAsync(fixture.JavaProcess("argv", values));
+        // Verify the OS argv transport independently of Java's Windows ANSI conversion.
+        // Java process startup/draining/cancellation remain covered by the other native fixture tests.
+        var result = await runner.RunAsync(fixture.ManagedArgvProcess(values));
         Assert.AreEqual(0, result.ExitCode, result.StandardError);
         Assert.AreEqual(string.Concat(values.Select(value => value.Length + ":" + value)), result.StandardOutput);
         Assert.IsFalse(result.Cancelled || result.TimedOut);

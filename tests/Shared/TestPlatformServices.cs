@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Desktop.Platform;
 
-namespace SHOU.Launcher.Core.Tests;
+namespace SHOU.Launcher.Tests;
 
 /// <summary>Portable service fixtures never read or write the current user's native credentials.</summary>
 internal static class TestPlatformServices

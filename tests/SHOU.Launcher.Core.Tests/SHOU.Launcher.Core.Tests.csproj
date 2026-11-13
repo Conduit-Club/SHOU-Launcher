@@ -1,5 +1,5 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable></PropertyGroup>
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><IsTestProject>true</IsTestProject><IsPackable>false</IsPackable><GenerateProgramFile>false</GenerateProgramFile></PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/SHOU.Launcher.Core/SHOU.Launcher.Core.csproj" />
     <ProjectReference Include="../../src/SHOU.Launcher.Desktop/SHOU.Launcher.Desktop.csproj" />
@@ -8,6 +8,8 @@
     <PackageReference Include="MSTest.TestFramework" Version="4.3.0" />
   </ItemGroup>
   <ItemGroup>
+    <Using Include="SHOU.Launcher.Tests" />
+    <Compile Include="../Shared/TestPlatformServices.cs" Link="Fixtures/TestPlatformServices.cs" />
     <Content Include="Fixtures/**/*" CopyToOutputDirectory="PreserveNewest" />
     <Compile Include="../../PCL.Core.Test/Conduit/DownloadSourcesTest.cs" Link="ExistingRegressions/DownloadSourcesTest.cs" />
     <Compile Include="../../PCL.Core.Test/Conduit/ModDownloadSourcesTest.cs" Link="ExistingRegressions/ModDownloadSourcesTest.cs" />

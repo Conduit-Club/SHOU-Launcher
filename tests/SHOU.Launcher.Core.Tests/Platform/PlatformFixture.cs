@@ -46,7 +46,19 @@ internal sealed class PlatformFixture
     }
 
     public ProcessSpec JavaProcess(string mode, params string[] arguments) => new(JavaExecutable,
-        new[] { JavaSource, mode }.Concat(arguments).ToArray(), Root, Timeout: TimeSpan.FromSeconds(20));
+        // Java's Windows launcher converts public argv through the system ANSI code page.
+        // Resolve the source relative to the Unicode working directory and encode captured output explicitly.
+        new[] { "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8", Path.GetFileName(JavaSource), mode }.Concat(arguments).ToArray(), Root, Timeout: TimeSpan.FromSeconds(20));
+
+    public ProcessSpec ManagedArgvProcess(params string[] arguments)
+    {
+        var home = Environment.GetEnvironmentVariable("DOTNET_ROOT")
+            ?? throw new InvalidOperationException("The process fixture requires the registered DOTNET_ROOT.");
+        var executable = Path.Combine(home, OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet");
+        if (!File.Exists(executable)) throw new FileNotFoundException("The registered process fixture host is missing.", executable);
+        return new(executable, new[] { typeof(PlatformFixture).Assembly.Location, "--argv-fixture" }.Concat(arguments).ToArray(),
+            Root, Timeout: TimeSpan.FromSeconds(20));
+    }
     public string Child(string name) => Path.Combine(Root, name);
     public static PlatformContext Context(LauncherOS os) => new(os, RuntimeArchitecture.Arm64, RuntimeArchitecture.Arm64, "fixture");
 }

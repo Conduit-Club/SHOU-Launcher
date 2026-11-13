@@ -95,7 +95,7 @@ public sealed class WpfSettingsParityTests
             var network = new RejectPresentationNetwork();
             using var http = new HttpClient(network);
             var downloads = new VerifiedDownloader(http);
-            var platform = PlatformServicesFactory.Create(new(directory), downloads);
+            var platform = TestPlatformServices.Create(new(directory), downloads);
             using var lease = platform.DataLock.Acquire(platform.Paths);
             await using var processes = (ProcessRunner)platform.Processes;
             await using var service = new LauncherService(platform, http, downloads, new NetworkOptions());
