@@ -28,4 +28,11 @@
     <EmbeddedResource Include="$(JavaBootstrapJarPath)" LogicalName="SHOU.Launcher.Desktop.JavaBootstrap.jar" />
     <AssemblyMetadata Include="SHOU.JavaBootstrap.Sha256" Value="$(JavaBootstrapSha256)" />
   </ItemGroup>
+  <Target Name="ExcludeWindowsSingleFileDebugSidecars" BeforeTargets="_ComputeFilesToBundle"
+          Condition="'$(PublishSingleFile)' == 'true' and $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">
+    <ItemGroup>
+      <!-- Native NuGet PDBs cannot be consumed from the bundle. Managed symbols are embedded. -->
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)" Condition="'%(ResolvedFileToPublish.Extension)' == '.pdb'" />
+    </ItemGroup>
+  </Target>
 </Project>

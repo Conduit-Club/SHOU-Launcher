@@ -24,10 +24,16 @@ try {
         if($offset -lt 0 -or $size -le 0 -or $compressed -ne 0 -or $offset+$size -gt $header -or $name.StartsWith('/') -or $name.Split('/') -contains '..') { throw 'Invalid or compressed bundle entry.' }
         $entries+= [pscustomobject]@{name=$name;offset=$offset;size=$size;type=$type}
     }
-    foreach($name in @('SHOU.Launcher.Desktop.dll','SHOU.Launcher.Core.dll','System.Private.CoreLib.dll','coreclr.dll','clrjit.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','SHOU.Launcher.Desktop.runtimeconfig.json','SHOU.Launcher.Desktop.deps.json')) {
+    foreach($name in @('SHOU.Launcher.Desktop.dll','SHOU.Launcher.Core.dll','System.Private.CoreLib.dll','libSkiaSharp.dll','libHarfBuzzSharp.dll','SHOU.Launcher.Desktop.runtimeconfig.json','SHOU.Launcher.Desktop.deps.json')) {
         if(@($entries | Where-Object name -EQ $name).Count -ne 1){throw "Required bundle entry is missing/duplicated: $name"}
     }
     if($entries | Where-Object name -Match '(?i)(^|/)(\.env|UserKey\.bin|shou\.desktop\.v1\.json|config\.v1\.(json|yml)|credentials-v1)(/|$)'){throw 'Private data entered the bundle.'}
+    # The SDK's singlefilehost statically contains the Windows runtime; coreclr/clrjit
+    # need not appear as separate manifest entries. Require its self-contained config.
+    $runtimeEntry=$entries | Where-Object name -EQ 'SHOU.Launcher.Desktop.runtimeconfig.json'
+    $stream.Position=$runtimeEntry.offset
+    $runtime=[Text.Encoding]::UTF8.GetString($reader.ReadBytes([int]$runtimeEntry.size)) | ConvertFrom-Json
+    if($runtime.runtimeOptions.framework -or $runtime.runtimeOptions.frameworks -or -not ($runtime.runtimeOptions.includedFrameworks | Where-Object name -EQ 'Microsoft.NETCore.App')){throw 'Bundle is not configured as self-contained.'}
     $core=$entries | Where-Object name -EQ 'SHOU.Launcher.Core.dll'
     $stream.Position=$core.offset; $coreBytes=$reader.ReadBytes([int]$core.size)
     $coreHash=[Convert]::ToHexStringLower([Security.Cryptography.SHA256]::HashData($coreBytes))
@@ -41,7 +47,7 @@ try {
         if($reader.ReadUInt32() -ne 0x4550 -or $reader.ReadUInt16() -ne $machine){throw 'Native component architecture mismatch.'}
         $native+=$entry.name
     }
-    [pscustomobject]@{format="$major.$minor";entryCount=$count;coreSha256=$coreHash;nativeArchitecture=$RuntimeIdentifier;nativeComponents=$native;entries=$entries} |
+    [pscustomobject]@{format="$major.$minor";entryCount=$count;coreSha256=$coreHash;selfContained=$true;includedFrameworks=$runtime.runtimeOptions.includedFrameworks;nativeArchitecture=$RuntimeIdentifier;nativeComponents=$native;entries=$entries} |
         ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $ReportPath -Encoding utf8
     Write-Host "Verified single-file bundle: $count entries; native components match $RuntimeIdentifier; Core matches fresh build."
 } finally {$reader.Dispose()}
