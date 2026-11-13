@@ -1,5 +1,15 @@
 # 双端完善清单
 
+## R50 Mac 安装与两端整合（2026-11-13）
+
+- [x] R50-MAC-INSTALL：完整应用 ZIP 与配置备份后更新 `/Applications/SHOU Launcher.app` 至 8cb5cb48；原 3 账户/1 XPlus 实例保留，正常退出/重开、签名及安装程序集核验通过，候选保持打开供用户比较。
+- [x] R50-MAC-CREDENTIAL：只在用户点击恢复时请求原 Keychain 项授权，后台不弹窗；取消/拒绝/损坏不覆盖原记录。用户补齐系统授权后两项微软凭据重开自动读取，原账户菜单真实刷新、有效期与皮肤预览恢复通过，无需重新登录。
+- [x] R50-INTEGRATE：Windows 增量 bundle 与 Mac 补丁在当前功能分支无冲突整合（7002883f）；整合后 Mac Core 917 通过/6 条件跳过、Desktop 364 通过，Windows x64 交叉编译 0 警告/错误。Windows 原生单 EXE 和 170 项脱敏证据/25 图已核验，未带 `.env`、UserKey 或用户凭据；未启动游戏。
+- [ ] R50-WIN-CAPTION：Windows 最终详情页截图（如 final-mods）右上角未见三按钮，首页三钮可见且最小化/最大化/还原已验；需实窗复现隐藏/越界或捕获差异并修复，不能用 UIA Invoke 通过代替可见性。
+- [ ] R50-SIGNING：Mac 当前为本地临时签名，更换签名可能再次要求原钥匙串项授权；Windows 未签名。正式签名、新机器/ARM64、更多旧缓存及第三方账户在线验证继续补齐，不宣称所有历史账户均可无感登录。
+
+详见 [Mac 安装与整合报告](docs/conduit/MACOS-R50.md)、[Windows 原生报告](docs/conduit/WINDOWS-R50.md)。
+
 ## R50 Windows：单文件候选与旧数据首次衔接（2026-11-13）
 
 - [x] R50-WIN-ONEFILE：win-x64 自包含单 EXE；212 项包内清单、Core 哈希、静态运行时与原生架构校验，图片/三语/Java bootstrap/许可内嵌，分发和 ZIP 均只有 EXE。最终源码 e1286dc4，未签名、未发布。
@@ -7,9 +17,9 @@
 - [x] R50-WIN-UPGRADE：已有生产/预览 sidecar 优先，旁边存在旧 PCL 目录也不抛弃当前新版配置/凭据；移除的账户不自动重导入。最后针对回归 7/7。
 - [x] R50-WIN-AUTO：Core 899 通过/18 条件跳过，Desktop 363 全过；e1286dc4 Windows 最终发布与 Mac ARM64 交叉构建通过，C# 0 警告/错误；失败记录保留。
 - [x] R50-WIN-NATIVE：仅 EXE 新目录冷启动；200% DPI 首页/版本自动目录/模组/资源包/设置/工具/OOM 分析、窗口最大化还原和正常关闭重开有截图与 exit0；原生回退获本轮授权。DPAPI 四独立命令通过，未启动游戏。
-- [ ] R50-WIN-MATRIX：更多旧缓存/provider/目录布局和失效/断网、ARM64/签名/新机器及完整 DPI/输入/选择器仍待验；真实旧目录未直接覆盖安装。Mac 本轮只有交叉编译，继续由 Mac 原生接回。
+- [ ] R50-WIN-MATRIX：更多旧缓存/provider/目录布局和失效/断网、ARM64/签名/新机器及完整 DPI/输入/选择器仍待验；真实旧目录未直接覆盖安装。Windows 会话只做 Mac 交叉编译；Mac 本机安装与原账户验证已在上方接回。
 
-详见 [Windows R50 报告](docs/conduit/WINDOWS-R50.md)。Mac 侧并行的凭据恢复改动单独整合；本轮 Windows 提交只通过 Git bundle 交回，不自行推送或合并。
+详见 [Windows R50 报告](docs/conduit/WINDOWS-R50.md)。Windows 会话通过 Git bundle 交回且未自行推送；Mac 主任务已整合两端本地提交。
 
 ## R49：大包、旧格式、CF 手动更新与旧版崩溃分析（2026-11-13）
 
