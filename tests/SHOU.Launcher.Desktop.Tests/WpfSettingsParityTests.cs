@@ -4,6 +4,7 @@ using Avalonia.Threading;
 using Avalonia.VisualTree;
 using PCL.Core.Conduit;
 using SHOU.Launcher.Core;
+using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Core.Downloads;
 using SHOU.Launcher.Desktop.Platform;
 using SHOU.Launcher.Desktop.ViewModels;
@@ -125,9 +126,11 @@ public sealed class WpfSettingsParityTests
                 {
                     Assert.True(Find<Border>(window, "ClubIntroductionCard").IsEffectivelyVisible);
                     Assert.True(Find<Border>(window, "ClubServersCard").IsEffectivelyVisible);
+                    // This presentation persistence fixture does not exercise native system-proxy support.
+                    owner.Settings.ProxyMode = ProxyMode.Direct;
                     owner.Settings.ShowClubIntroduction = false; owner.Settings.ShowClubServers = false;
                     await owner.Settings.SaveCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(5)); Pump(window);
-                    Assert.False(owner.HasError); Assert.False(owner.Settings.IsDirty);
+                    Assert.False(owner.HasError, owner.ErrorMessage); Assert.False(owner.Settings.IsDirty, owner.Settings.AutoSaveFeedback);
                     Assert.False(Find<Border>(window, "ClubIntroductionCard").IsEffectivelyVisible);
                     Assert.False(Find<Border>(window, "ClubServersCard").IsEffectivelyVisible);
                 }
