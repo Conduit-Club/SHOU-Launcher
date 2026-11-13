@@ -21,5 +21,5 @@ public sealed partial class ContentProjectRowViewModel
         SaveFavoriteNoteCommand = new(async () => { if (await owner.SaveFavoriteNoteAsync(this, FavoriteNoteDraft)) IsEditingFavoriteNote = false; });
         RemoveFavoriteCommand = new(() => owner.RemoveFavoriteRowAsync(this));
     }
-    internal void SetFavoriteNote(string value) { SetProperty(ref favoriteNote, value, nameof(FavoriteNote)); OnPropertyChanged(nameof(HasFavoriteNote)); }
+    internal void SetFavoriteNote(string value) { SetProperty(ref favoriteNote, value, nameof(FavoriteNote)); OnPropertyChanged(nameof(HasFavoriteNote)); FavoriteNoteDraft = value; IsEditingFavoriteNote = false; }
 }
