@@ -20,7 +20,7 @@ $identity = & (Join-Path $PSScriptRoot 'Get-BuildIdentity.ps1') -RuntimeIdentifi
 $entry = Join-Path $repo 'src/SHOU.Launcher.Desktop/SHOU.Launcher.Desktop.csproj'
 $onefile = $RuntimeIdentifier.StartsWith('win-', [StringComparison]::Ordinal)
 $props = @('-p:UseArtifactsOutput=true', "-p:ArtifactsPath=$build", "-p:Configuration=$Configuration", "-p:RuntimeIdentifier=$RuntimeIdentifier", '-p:SelfContained=true', '-p:UseSharedCompilation=false', "-p:PublishSingleFile=$($onefile.ToString().ToLowerInvariant())", "-p:IncludeNativeLibrariesForSelfExtract=$($onefile.ToString().ToLowerInvariant())", '-p:PublishTrimmed=false','-p:PublishAot=false','-p:UseAppHost=true')
-if ($onefile) { $props += @('-p:DebugType=embedded', '-p:EnableCompressionInSingleFile=false') }
+if ($onefile) { $props += @('-p:DebugType=embedded', '-p:EnableCompressionInSingleFile=false', '-p:EnableSingleFileAnalyzer=false') }
 $projects = @($entry, (Join-Path $repo 'src/SHOU.Launcher.Core/SHOU.Launcher.Core.csproj'), (Join-Path $repo 'src/SHOU.Launcher.Generators/SHOU.Launcher.Generators.csproj'))
 $bootstrap=New-ConduitJavaBootstrap $repo $build
 $props+=@("-p:JavaBootstrapJarPath=$($bootstrap.path)","-p:JavaBootstrapSha256=$($bootstrap.sha256)")
@@ -28,6 +28,7 @@ Push-Location $repo
 try {
     Invoke-ConduitBuildEnvironment -Repo $repo -EnvFile $EnvFile -Action {
         param($inputConfig)
+        $publishProps = @($props)
         Assert-ConduitProjectPaths -Dotnet $Dotnet -Projects $projects -Properties $props -ReportPath (Join-Path $report 'paths-before.json')
         Invoke-ConduitDotnet $Dotnet (@('restore',$entry) + $props) (Join-Path $report 'restore.log')
         Invoke-ConduitDotnet $Dotnet (@('clean',$entry,'-v','quiet') + $props) (Join-Path $report 'clean.log')
@@ -47,10 +48,11 @@ try {
             Copy-Item -LiteralPath (Join-Path $repo 'src/SHOU.Launcher.Desktop/Assets/AchievementIcons/README.md') -Destination (Join-Path $documents 'licenses/achievement-icons.md')
             $documentArchive=$documents + '.zip'
             Compress-Archive -Path (Join-Path $documents '*') -DestinationPath $documentArchive
-            $props += "-p:DesktopDocumentsArchive=$documentArchive"
+            $publishProps = $publishProps + @("-p:DesktopDocumentsArchive=$documentArchive")
         }
-        Invoke-ConduitDotnet $Dotnet (@('publish',$entry,'--no-restore','-o',(Join-Path $build 'publish-desktop')) + $props) (Join-Path $report 'publish.log')
-        Assert-ConduitProjectPaths -Dotnet $Dotnet -Projects $projects -Properties $props -ReportPath (Join-Path $report 'paths-after.json')
+        Assert-ConduitProjectPaths -Dotnet $Dotnet -Projects $projects -Properties $publishProps -ReportPath (Join-Path $report 'paths-before-publish.json')
+        Invoke-ConduitDotnet $Dotnet (@('publish',$entry,'--no-restore','-o',(Join-Path $build 'publish-desktop')) + $publishProps) (Join-Path $report 'publish.log')
+        Assert-ConduitProjectPaths -Dotnet $Dotnet -Projects $projects -Properties $publishProps -ReportPath (Join-Path $report 'paths-after.json')
         $publish = Join-Path $build 'publish-desktop'
         $owner = if ($onefile) { Join-Path $publish 'SHOU.Launcher.Desktop.exe' } else { Join-Path $publish 'SHOU.Launcher.Core.dll' }
         if ($onefile) {
