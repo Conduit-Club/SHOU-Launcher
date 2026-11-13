@@ -27,7 +27,7 @@ public sealed class RemainingPageParityUiTests
             vm.FavoriteShareCode = "[\"AANobbMI\",\"missing\"]"; await vm.ImportFavoriteShareCommand.ExecuteAsync(null); Assert.Equal(2, vm.FilteredFavoriteProjects.Count); Assert.Contains("missing", vm.FavoriteStatus);
             vm.FavoriteQuery = "Sodium"; Assert.Single(vm.FilteredFavoriteProjects); vm.SelectAllFavoritesCommand.Execute(null); Assert.Equal(new[] { "AANobbMI" }, JsonSerializer.Deserialize<string[]>(vm.GetFavoriteShareCode()));
             await vm.RemoveSelectedFavoritesCommand.ExecuteAsync(null); Assert.Single(vm.FavoriteProjects); Assert.Empty(vm.FilteredFavoriteProjects);
-            vm.FavoriteQuery = ""; await vm.DeleteFavoriteFolderCommand.ExecuteAsync(null); Assert.Single(vm.FavoriteFolders); Assert.Single(vm.FilteredFavoriteProjects);
+            vm.FavoriteQuery = ""; await vm.DeleteFavoriteFolderCommand.ExecuteAsync(null); Assert.True(vm.HasFavoriteFolderDeletion); await vm.ConfirmDeleteFavoriteFolderCommand.ExecuteAsync(null); Assert.Single(vm.FavoriteFolders); Assert.Single(vm.FilteredFavoriteProjects);
         }
         using var reloaded = new DownloadsPageViewModel(root, service, path); Assert.Single(reloaded.FavoriteFolders); Assert.Equal("cf-42", reloaded.FavoriteProjects.Single().Project.Id);
         var original = await File.ReadAllTextAsync(path); reloaded.FavoriteShareCode = "[\"../invalid\"]"; await reloaded.ImportFavoriteShareCommand.ExecuteAsync(null); Assert.Equal(original, await File.ReadAllTextAsync(path)); Assert.Single(reloaded.FavoriteProjects);

@@ -52,7 +52,7 @@ public sealed partial class HomePageViewModel
     {
         var previousHome = presentation.HomeSource + presentation.HomeLocation;
         var previousImages = string.Join('\n', presentation.BackgroundImages ?? []);
-        presentation = settings;
+        presentation = settings; UpdateHomeFileWatcher();
         if (background is null || previousImages != string.Join('\n', settings.BackgroundImages ?? [])) RefreshBackgrounds();
         backgroundTimer.Interval = TimeSpan.FromSeconds((double)settings.SlideshowSeconds);
         backgroundTimer.IsEnabled = settings.RotateHomeBackground && backgroundFiles.Length > 1;
@@ -110,5 +110,5 @@ public sealed partial class HomePageViewModel
         { if (generation == homeGeneration) HomeDocument = "主页读取失败：" + UiPrivacy.Redact(ex.Message); }
         finally { if (ReferenceEquals(customHomeRead, cts)) customHomeRead = null; }
     }
-    private void DisposeAppearance() { customHomeRead?.Cancel(); backgroundTimer.Stop(); background?.Dispose(); previousBackground?.Dispose(); }
+    private void DisposeAppearance() { SetHomeFileWatching(false); customHomeRead?.Cancel(); backgroundTimer.Stop(); background?.Dispose(); previousBackground?.Dispose(); }
 }

@@ -22,6 +22,14 @@ public sealed class RemainingPageParityTests
         Assert.Throws<InvalidDataException>(() => CustomHomeDocument.Parse("<local:MyButton EventType=\"打开网页\" EventData=\"file:///tmp/f\"/>"));
     }
     [TestMethod]
+    public void PortableHomeParsesGridDefinitionsAndMultipleOldEventsWithoutLoadingHandlers()
+    {
+        var node = CustomHomeDocument.Parse("\uFEFF<?xml version=\"1.0\"?><Grid><Grid.ColumnDefinitions><ColumnDefinition Width=\"2*\"/><ColumnDefinition Width=\"Auto\"/></Grid.ColumnDefinitions><local:MyButton Grid.Column=\"1\"><local:MyButton.Events><local:CustomEvent Type=\"复制文本\" Data=\"hello\"/><local:CustomEvent Type=\"弹出提示\" Data=\"done|Finish\"/></local:MyButton.Events></local:MyButton></Grid>").Single();
+        Assert.AreEqual("Grid", node.Kind); Assert.AreEqual("2*,Auto", node.Properties!["ColumnDefinitions"]); var button = node.Children.Single(); Assert.AreEqual("1", button.Properties!["Grid.Column"]); CollectionAssert.AreEqual(new[] { "CopyText", "ShowHint" }, button.Actions!.Select(a => a.Type).ToArray());
+        Assert.Throws<InvalidDataException>(() => CustomHomeDocument.Parse("<Button EventType=\"ShowDialog\" EventData=\"missing separator\"/>"));
+        Assert.Throws<InvalidDataException>(() => CustomHomeDocument.Parse("<Button EventType=\"OpenUrl\" EventData=\"https://user:secret@example.com/\"/>"));
+    }
+    [TestMethod]
     public void WikiReferencesUseProviderSpecificSlugsAndOnlySupportedResourceTypes()
     {
         var project = new ContentProject("AANobbMI", "sodium", "Sodium", "Description", "Author", 1, "mod", null, new("https://modrinth.com/mod/sodium"));

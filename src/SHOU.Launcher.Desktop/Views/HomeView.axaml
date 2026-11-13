@@ -44,7 +44,7 @@
     </Border>
     <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
       <StackPanel Spacing="15" Margin="25">
-        <StackPanel IsVisible="{Binding ShowCustomHomeDocument}" Spacing="10"><Button Content="{loc:Loc t5e0bf841841d8682}" Command="{Binding RefreshCustomHomeCommand}" HorizontalAlignment="Right"/><views:CustomHomeView /></StackPanel>
+        <StackPanel IsVisible="{Binding ShowCustomHomeDocument}" Spacing="10"><Button Content="{loc:Loc t5e0bf841841d8682}" Command="{Binding RefreshCustomHomeCommand}" HorizontalAlignment="Right"/><TextBlock Text="{Binding HomeActionFeedback}" IsVisible="{Binding HasHomeActionFeedback}" Classes="muted" TextWrapping="Wrap"/><views:CustomHomeView /></StackPanel>
         <Border Name="ClubIntroductionCard" Classes="card" Padding="20" IsVisible="{Binding ShowClubIntroduction}">
           <StackPanel Spacing="14">
             <DockPanel Name="ClubBrandRow" Height="46">

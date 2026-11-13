@@ -50,6 +50,7 @@ public sealed partial class DownloadsPageViewModel
     }
     public void OnNavigatingAway()
     {
+        InvalidateFavoriteDownload();
         SaveSearchDraft(); ++_requestRevision; CancelBrowseReads();
         _catalogRequestActive = false;
         foreach (var loader in AdditionalLoaders) loader.IsLoading = false;

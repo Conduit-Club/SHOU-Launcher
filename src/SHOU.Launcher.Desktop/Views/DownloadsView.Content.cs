@@ -92,6 +92,19 @@ public partial class DownloadsView
         }, DispatcherPriority.Loaded);
     }
 
+    private async void ImportWpfFavorites_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DownloadsPageViewModel vm) return;
+        try { var storage = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境不支持本机文件选择。"); var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = Localization.UiLocalization.Instance.Text("选择旧 WPF 收藏配置"), AllowMultiple = false, FileTypeFilter = [new("JSON") { Patterns = ["*.json"] }] }); if (files.FirstOrDefault()?.TryGetLocalPath() is not { } path || !vm.CanEdit) return; SHOU.Launcher.Core.IO.SafePath.RejectLinks(path); if (new FileInfo(path).Length > 1048576) throw new IOException("收藏文件超过大小限制。"); await vm.ImportLegacyFavoritesAsync(await File.ReadAllTextAsync(path)); }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+    private async void SaveFavoriteBatch_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DownloadsPageViewModel vm || !vm.CanSaveFavoriteBatch) return;
+        var identity = vm.FavoriteBatchIdentity;
+        try { var storage = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境不支持本机文件选择。"); var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = Localization.UiLocalization.Instance.Text("选择收藏资源保存目录"), AllowMultiple = false }); if (folders.FirstOrDefault()?.TryGetLocalPath() is { } directory) await vm.SaveFavoriteDownloadAsync(directory, identity); }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
     private async void ShareFavorites_Click(object? sender, RoutedEventArgs e)
     {
         if (DataContext is not DownloadsPageViewModel vm) return;

@@ -37,32 +37,26 @@ public sealed partial class LauncherService : ILauncherCatalogService, IMinecraf
         => Uri.TryCreate(iconUrl, UriKind.Absolute, out var uri) && AllowedContentIcon(uri) ? CurseForgeIconAsync(uri, cancellationToken) : Catalog.IconAsync(iconUrl, cancellationToken);
     public async Task<string> DownloadContentAsync(ContentFile file, CancellationToken cancellationToken = default)
     {
-        if (file.FileName.Length is 0 or > 200 || file.FileName.Contains('/') || file.FileName.Contains('\\') || file.FileName is "." or ".."
-            || file.Sha1.Length != 40 || !file.Sha1.All(Uri.IsHexDigit) || file.Size is < 0 or > Content.CurseForgePackResolver.MaximumCachedResourceBytes
-            || !(Content.ContentInstallFiles.AllowedUri(file.Uri) || Content.CurseForgePackResolver.AllowedCurseForgeUri(file.Uri)))
-            throw new InvalidDataException("资源文件身份无效。");
-        var path = SafePath.Within(Paths.CacheDirectory, "content/" + file.Sha1.ToLowerInvariant() + "/" + file.FileName);
+        string? result = null;
         await ExecuteAsync("Installing", async ct =>
         {
-            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            installCancellation = cancellation;
-            var ownership = downloadOwners.Begin("content:" + file.Sha1);
-            contentTransfers[ownership.Generation] = file;
-            try
-            {
-                if (Content.CurseForgePackResolver.AllowedCurseForgeUri(file.Uri))
-                {
-                    using var transport = ContentTransport();
-                    await new Content.CurseForgePackResolver(transport, null, network: network).DownloadResourceAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), cancellation.Token).ConfigureAwait(false);
-                }
-                else
-                {
-                    var urls = ModDownloadSources.Resolve(file.Uri.AbsoluteUri, Sources()).Select(s => new Uri(s)).ToArray();
-                    await downloader.DownloadAsync(new(urls, path, file.Sha1, Size: file.Size), new InlineProgress<TransferProgress>(OnTransfer), cancellation.Token).ConfigureAwait(false);
-                }
-            }
+            using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct); installCancellation = cancellation;
+            var ownership = downloadOwners.Begin("content:" + file.Sha1); contentTransfers[ownership.Generation] = file;
+            try { result = await DownloadCachedContentFileAsync(file, cancellation.Token).ConfigureAwait(false); }
             finally { downloadOwners.End(ownership); installCancellation = null; }
         }, cancellationToken).ConfigureAwait(false);
+        return result!;
+    }
+    private async Task<string> DownloadCachedContentFileAsync(ContentFile file, CancellationToken ct)
+    {
+        if (file.FileName.Length is 0 or > 200 || file.FileName.Contains('/') || file.FileName.Contains('\\') || file.FileName is "." or ".."
+            || file.Sha1.Length != 40 || !file.Sha1.All(Uri.IsHexDigit) || file.Size is < 0 or > Content.CurseForgePackResolver.MaximumCachedResourceBytes
+            || !(Content.ContentInstallFiles.AllowedUri(file.Uri) || Content.CurseForgePackResolver.AllowedCurseForgeUri(file.Uri))) throw new InvalidDataException("资源文件身份无效。");
+        var path = SafePath.Within(Paths.CacheDirectory, "content/" + file.Sha1.ToLowerInvariant() + "/" + file.FileName);
+        if (Content.CurseForgePackResolver.AllowedCurseForgeUri(file.Uri))
+        { using var transport = ContentTransport(); await new Content.CurseForgePackResolver(transport, null, network: network).DownloadResourceAsync(file, path, new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false); }
+        else
+        { var urls = ModDownloadSources.Resolve(file.Uri.AbsoluteUri, Sources()).Select(s => new Uri(s)).ToArray(); await downloader.DownloadAsync(new(urls, path, file.Sha1, Size: file.Size), new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false); }
         return path;
     }
 }

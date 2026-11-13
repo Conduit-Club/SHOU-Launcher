@@ -73,7 +73,7 @@ public sealed record GameCatalogGroupViewModel(string Name, IReadOnlyList<GameCa
 public sealed record ContentSortChoice(string Id, string Name);
 public sealed record ContentSourceChoice(string Id, string Name);
 
-public sealed class ContentProjectRowViewModel : ObservableObject, IDisposable
+public sealed partial class ContentProjectRowViewModel : ObservableObject, IDisposable
 {
     private bool _disposed;
     private bool selected;
@@ -98,7 +98,7 @@ public sealed class ContentProjectRowViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand OpenCommand { get; }
     public ContentProjectRowViewModel(DownloadsPageViewModel owner, ContentProject project)
     {
-        Project = project;
+        Project = project; InitializeFavoriteRow(owner);
         OpenCommand = new(() => owner.OpenProjectAsync(project), () => owner.CanQuery);
     }
     internal async Task LoadIconAsync(ILauncherCatalogService catalog, SemaphoreSlim gate, CancellationToken ct)
@@ -630,8 +630,8 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         ImportLocalPackCommand?.NotifyCanExecuteChanged(); ReadCachedPackCommand?.NotifyCanExecuteChanged();
         ConfirmWorldContentInstallCommand?.NotifyCanExecuteChanged(); CancelWorldContentPreviewCommand?.NotifyCanExecuteChanged(); RefreshWorldContentTargetsCommand?.NotifyCanExecuteChanged();
         foreach (var loader in AdditionalLoaders) loader.NotifyState();
-        foreach (var command in new[] { CreateFavoriteFolderCommand, RenameFavoriteFolderCommand, DeleteFavoriteFolderCommand, RemoveSelectedFavoritesCommand, ImportFavoriteShareCommand }) command?.NotifyCanExecuteChanged();
-        base.NotifyCommands(); OnPropertyChanged(nameof(CanQuery));
+        foreach (var command in new[] { CreateFavoriteFolderCommand, RenameFavoriteFolderCommand, DeleteFavoriteFolderCommand, RemoveSelectedFavoritesCommand, ImportFavoriteShareCommand, ConfirmDeleteFavoriteFolderCommand, CopySelectedFavoritesCommand, MoveSelectedFavoritesCommand, RetryUnresolvedFavoritesCommand, PrepareFavoriteDownloadCommand }) command?.NotifyCanExecuteChanged();
+        base.NotifyCommands(); OnPropertyChanged(nameof(CanQuery)); OnPropertyChanged(nameof(CanSaveFavoriteBatch));
         TryStartCatalogRequest(); TryStartSearchRequest();
     }
 }
