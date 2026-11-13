@@ -128,6 +128,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
             await Owner.RunAsync("移除本机账户", ct => Service.RemoveAccountAsync(id, ct));
             ConfirmRemoval = false;
         }, () => CanEdit && SelectedAccount is not null && ConfirmRemoval);
+        InitializeCredentialRecovery();
         InitializeAccountPanel();
         InitializeAccountAppearance();
     }
@@ -281,7 +282,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
             SelectedAccount = Accounts.FirstOrDefault(a => a.Id == snapshot.SelectedAccountId);
             RefreshAccountPanel();
             RefreshAccountAppearanceRows();
-            OnPropertyChanged(nameof(AccountDetail)); OnPropertyChanged(nameof(PersistenceSummary));
+            OnPropertyChanged(nameof(AccountDetail)); OnPropertyChanged(nameof(PersistenceSummary)); OnPropertyChanged(nameof(NeedsCredentialAuthorization));
         }
         finally { _refreshing = false; }
         base.Refresh(snapshot);

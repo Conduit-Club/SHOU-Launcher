@@ -3233,5 +3233,7 @@
   "t70f9b6f26de2f4f2": "Could not resolve (retained for retry): {0}",
   "tded2e7766fd4567e": "Download cancelled or failed; completed files are retained.",
   "tfd2d4eb005e182d0": "Custom JVM arguments are passed to Java unchanged. Quote values containing spaces.",
-  "tfebb5a932e21b5eb": "Custom JVM arguments are passed to Java unchanged. Quote values containing spaces."
+  "tfebb5a932e21b5eb": "Custom JVM arguments are passed to Java unchanged. Quote values containing spaces.",
+  "t53a59354361e5939": "Authorize Keychain access",
+  "t50a626534809dffa": "Allow this updated launcher to read macOS Keychain. Your existing sign-in credentials are preserved."
 }

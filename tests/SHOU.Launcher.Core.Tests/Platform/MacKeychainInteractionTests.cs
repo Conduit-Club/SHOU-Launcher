@@ -19,17 +19,19 @@ public sealed class MacKeychainInteractionTests
     private const string Security = "/System/Library/Frameworks/Security.framework/Security";
 
     [TestMethod]
-    public void NativeInteractionStateIsDisabledInsideScopeAndRestoredAfterFailure()
+    [DataRow(false)]
+    [DataRow(true)]
+    public void NativeInteractionStateHonorsExplicitModeAndRestoresAfterFailure(bool allowInteraction)
     {
         RequireMac();
         var previous = State();
-        RunGuarded(() => Assert.AreEqual((byte)0, State()));
+        RunGuarded(() => Assert.AreEqual(allowInteraction ? (byte)1 : (byte)0, State()), allowInteraction);
         Assert.AreEqual(previous, State());
         Assert.Throws<InvalidOperationException>(() => RunGuarded(() =>
         {
-            Assert.AreEqual((byte)0, State());
+            Assert.AreEqual(allowInteraction ? (byte)1 : (byte)0, State());
             throw new InvalidOperationException("synthetic failure");
-        }));
+        }, allowInteraction));
         Assert.AreEqual(previous, State());
     }
 
@@ -113,11 +115,11 @@ public sealed class MacKeychainInteractionTests
         return value;
     }
 
-    private static void RunGuarded(Action action)
+    private static void RunGuarded(Action action, bool allowInteraction = false)
     {
-        var method = typeof(KeychainCredentialStore).GetMethod("WithoutInteraction", BindingFlags.Static | BindingFlags.NonPublic)!
+        var method = typeof(KeychainCredentialStore).GetMethod("WithInteraction", BindingFlags.Static | BindingFlags.NonPublic)!
             .MakeGenericMethod(typeof(int));
-        try { method.Invoke(null, new object[] { new Func<int>(() => { action(); return 0; }) }); }
+        try { method.Invoke(null, new object[] { new Func<int>(() => { action(); return 0; }), allowInteraction }); }
         catch (TargetInvocationException ex) when (ex.InnerException is not null)
         { ExceptionDispatchInfo.Capture(ex.InnerException).Throw(); throw; }
     }

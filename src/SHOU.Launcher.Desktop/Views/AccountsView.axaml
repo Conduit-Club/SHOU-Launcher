@@ -12,6 +12,10 @@
   <Grid RowDefinitions="*,Auto">
   <ScrollViewer Name="AccountsPanelScroller" HorizontalScrollBarVisibility="Disabled">
     <StackPanel Name="CompactAccountsPanel" Margin="20,12,20,8" Spacing="8">
+      <StackPanel Name="CredentialAuthorizationPanel" IsVisible="{Binding NeedsCredentialAuthorization}" Spacing="6">
+        <TextBlock Text="{loc:Loc t50a626534809dffa}" TextWrapping="Wrap" Classes="muted"/>
+        <Button Name="RecoverCredentialAccessButton" Content="{loc:Loc t53a59354361e5939}" Command="{Binding RecoverCredentialAccessCommand}" HorizontalAlignment="Stretch"/>
+      </StackPanel>
       <Grid Name="AccountChannelGrid" ColumnDefinitions="*,*" RowDefinitions="34,40">
         <Button Name="MicrosoftChannelButton" Classes="accountChannel" Classes.selected="{Binding IsMicrosoftChannel}" Content="{loc:Translate MicrosoftChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="microsoft" Margin="0,0,3,0" />
         <Button Name="LittleSkinChannelButton" Grid.Column="1" Classes="accountChannel" Classes.selected="{Binding IsLittleSkinChannel}" Content="{loc:Translate LittleSkinChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="littleskin" Margin="3,0,0,0" />

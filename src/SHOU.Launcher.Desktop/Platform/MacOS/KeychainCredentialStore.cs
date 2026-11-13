@@ -6,7 +6,7 @@ using SHOU.Launcher.Core.Abstractions;
 namespace SHOU.Launcher.Desktop.Platform.MacOS;
 
 /// <summary>Generic-password items via Security.framework. Secret bytes never enter a subprocess or argv.</summary>
-public sealed class KeychainCredentialStore : ICredentialStore
+public sealed class KeychainCredentialStore : ICredentialStore, IUserAuthorizedCredentialStore
 {
     private static readonly object InteractionGate = new();
     private readonly string _service;
@@ -20,15 +20,17 @@ public sealed class KeychainCredentialStore : ICredentialStore
         // No framework initialization or keychain access until the data lease has been acquired by the host.
     }
 
-    public async Task<byte[]?> ReadAsync(string key, CancellationToken cancellationToken = default)
+    public Task<byte[]?> ReadAsync(string key, CancellationToken cancellationToken = default) => ReadCoreAsync(key, false, cancellationToken);
+    public Task<byte[]?> ReadWithUserAuthorizationAsync(string key, CancellationToken cancellationToken = default) => ReadCoreAsync(key, true, cancellationToken);
+    private async Task<byte[]?> ReadCoreAsync(string key, bool allowInteraction, CancellationToken cancellationToken)
     {
         ValidateName(key);
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            return await Task.Run(() => WithoutInteraction<byte[]?>(() =>
+            return await Task.Run(() => WithInteraction<byte[]?>(() =>
             {
-                using var query = Query(key);
+                using var query = Query(key, allowInteraction);
                 Native.Set(query, "kSecReturnData", Native.True);
                 Native.Set(query, "kSecMatchLimit", Native.Constant("kSecMatchLimitOne"));
                 var status = Native.SecItemCopyMatching(query.DangerousGetHandle(), out var result);
@@ -42,7 +44,7 @@ public sealed class KeychainCredentialStore : ICredentialStore
                 var bytes = new byte[(int)count];
                 if (bytes.Length > 0) Marshal.Copy(Native.CFDataGetBytePtr(result), bytes, 0, bytes.Length);
                 return bytes;
-            }), cancellationToken);
+            }, allowInteraction), cancellationToken);
         }
         catch (Exception ex) when (ex is DllNotFoundException or EntryPointNotFoundException or TypeInitializationException)
         { throw new CredentialStoreException(CredentialFailure.Unavailable, "本机 Security framework 不可用。", ex); }
@@ -57,7 +59,7 @@ public sealed class KeychainCredentialStore : ICredentialStore
         var bytes = value.ToArray();
         try
         {
-            await Task.Run(() => WithoutInteraction(() =>
+            await Task.Run(() => WithInteraction(() =>
             {
                 using var query = Query(key);
                 using var data = new CFHandle(Native.CFDataCreate(IntPtr.Zero, bytes, bytes.Length));
@@ -89,7 +91,7 @@ public sealed class KeychainCredentialStore : ICredentialStore
         await _gate.WaitAsync(cancellationToken);
         try
         {
-            await Task.Run(() => WithoutInteraction(() =>
+            await Task.Run(() => WithInteraction(() =>
             {
                 using var query = Query(key);
                 var status = Native.SecItemDelete(query.DangerousGetHandle());
@@ -102,7 +104,7 @@ public sealed class KeychainCredentialStore : ICredentialStore
         finally { _gate.Release(); }
     }
 
-    private CFHandle Query(string key)
+    private CFHandle Query(string key, bool allowInteraction = false)
     {
         var query = Native.Dictionary();
         Native.Set(query, "kSecClass", Native.Constant("kSecClassGenericPassword"));
@@ -110,8 +112,8 @@ public sealed class KeychainCredentialStore : ICredentialStore
         using var account = Native.String(key);
         Native.Set(query, "kSecAttrService", service.DangerousGetHandle());
         Native.Set(query, "kSecAttrAccount", account.DangerousGetHandle());
-        // Do not let a locked or inaccessible keychain turn an unattended operation into an authorization prompt.
-        Native.Set(query, "kSecUseAuthenticationUI", Native.Constant("kSecUseAuthenticationUIFail"));
+        // Background calls never prompt. Foreground recovery explicitly allows the system to authorize the existing item.
+        Native.Set(query, "kSecUseAuthenticationUI", Native.Constant(allowInteraction ? "kSecUseAuthenticationUIAllow" : "kSecUseAuthenticationUIFail"));
         return query;
     }
 
@@ -124,16 +126,16 @@ public sealed class KeychainCredentialStore : ICredentialStore
     // SecItem's authentication-UI query flag does not cover every legacy-keychain UI path.
     // Apple's SecKeychain.cpp/Globals.h implement this legacy switch as a process-local bool,
     // not a keychain preference or an ACL change. Serialize every store instance, and keep
-    // save/disable/call/restore on one native worker thread without any await under this gate.
+    // save/set/call/restore on one native worker thread without any await under this gate.
     // https://github.com/apple-oss-distributions/Security/blob/main/OSX/libsecurity_keychain/lib/Globals.h
-    private static T WithoutInteraction<T>(Func<T> action)
+    private static T WithInteraction<T>(Func<T> action, bool allowInteraction = false)
     {
         lock (InteractionGate)
         {
             Check(Native.SecKeychainGetUserInteractionAllowed(out var previous), "读取交互状态");
             try
             {
-                Check(Native.SecKeychainSetUserInteractionAllowed(0), "关闭交互");
+                Check(Native.SecKeychainSetUserInteractionAllowed(allowInteraction ? (byte)1 : (byte)0), "设置本次交互");
                 return action();
             }
             finally
