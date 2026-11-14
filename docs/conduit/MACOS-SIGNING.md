@@ -43,7 +43,25 @@ python3 scripts/macos/manage_signing.py init
 
 不要在聊天、命令日志或提交中粘贴这些值。通过 GitHub Secrets 网页或 `gh secret set` 的标准输入添加。
 2026-11-14 经维护者明确授权，已将本机同一身份的加密 P12 和导出密码存入本仓库上述 Actions Secrets；私钥不进入源码、构建日志或 artifact。
-本地已验证导入成功/密码错误的清理与搜索列表恢复；云端可信构建与签名指纹核验结果将在验证完成后补充。
+本地已验证导入成功/密码错误的清理与搜索列表恢复。
+
+### 云端验证（2026-11-14）
+
+代码提交 `a001ff141eda590ac8f367dba267d7211e1e3d6a` 的
+[可信推送构建](https://github.com/Conduit-Club/SHOU-Launcher/actions/runs/43546419732)
+和 [PR 桌面检查](https://github.com/Conduit-Club/SHOU-Launcher/actions/runs/43546424831) 均通过；
+同一提交的 Build (CI) 与 Conduit Build 也通过。
+
+- macOS：Core 941 通过 / 7 条件跳过，Desktop 365 通过；固定证书导入、隔离原生签名测试、候选打包、临时私钥清理均成功。
+- Windows：Core 931 通过 / 11 条件跳过，Desktop 365 通过；x64 和 ARM64 单 EXE 候选打包成功，Mac 签名步骤按平台跳过。
+- PR 构建明确跳过签名私钥导入和签名诊断，仍可生成临时签名测试包；可信 push 使用固定签名。
+- 已下载可信 Mac artifact 并独立复核 ZIP CRC / SHA-256、完整应用的 `codesign --verify --deep --strict`、构建来源与配置注入布尔记录。
+  云端包的证书指纹与本机均为 `BBFC2DA005E308768F21B86F4BA73D5B691305C9`，DR 绑定证书与应用标识。
+  artifact 与内层候选均无 P12、密码或私有钥匙串；未启动该云端应用、未替换个人安装。
+
+可信候选 `SHOU-Launcher-osx-arm64-v1.5.0-dev.8.ga001ff14.zip`：54,563,625 字节，
+SHA-256 `4ea28e796e41543c04d74a2ad026b021fb02b255ea6aa19c944b7b31a1afdd0b`。
+这是未公证的开发候选，不是正式发布，也不表示下方真实登录钥匙串的无感更新问题已解决。
 
 可信的手动/分支构建把原 P12 导入 runner 临时钥匙串；结束时 `always()` 清理钥匙串、P12 和临时证书。
 PR 构建不读取签名 Secrets，继续生成明确标注的临时签名测试包，避免将私钥交给 PR 代码。
