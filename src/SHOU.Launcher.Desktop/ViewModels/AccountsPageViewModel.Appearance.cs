@@ -27,6 +27,8 @@ public sealed partial class AccountsPageViewModel
     private readonly Dictionary<string, AccountAppearance> appearanceCache = new(StringComparer.Ordinal);
     private IAccountAppearanceService? appearanceService;
     private string? appearanceIdentity;
+    private string? appearanceSessionStamp;
+    private bool appearanceSessionChangedWhileReading;
     private long appearanceGeneration;
     private CancellationTokenSource? appearanceReadCancellation;
     private bool appearanceReady, appearanceReadScheduled, appearanceRead, appearanceBusy, appearanceDialogOpen, appearancePickerActive;
@@ -92,8 +94,8 @@ public sealed partial class AccountsPageViewModel
         InitializeOnlineAppearance();
         appearanceReady = true;
     }
-    private static string AppearanceIdentity(AccountProfile account) => account.Id + "\n" + account.Kind + "\n" + account.PlayerUuid + "\n" + account.AuthenticationServer
-        + "\n" + account.ExpiresAt?.UtcTicks.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    // Renewing a token does not change the character. Keep its in-flight avatar read alive.
+    private static string AppearanceIdentity(AccountProfile account) => account.Id + "\n" + account.Kind + "\n" + account.PlayerUuid + "\n" + account.AuthenticationServer;
     private void RefreshAccountAppearanceRows()
     {
         if (!appearanceReady) return;
@@ -108,9 +110,18 @@ public sealed partial class AccountsPageViewModel
         if (!appearanceReady) return;
         OnPropertyChanged(nameof(SelectedAppearanceAccountRow));
         var identity = SelectedChannelAccount is { } account ? AppearanceIdentity(account) : null;
-        if (appearanceIdentity == identity) { OnPropertyChanged(nameof(AccountAppearancePlayer)); NotifyAccountAppearanceCommands(); return; }
+        var stamp = SelectedChannelAccount is { } current ? current.ExpiresAt?.UtcTicks + "\n" + current.Persisted + "\n" + current.Status : null;
+        var sessionChanged = appearanceSessionStamp != stamp; appearanceSessionStamp = stamp;
+        if (appearanceIdentity == identity)
+        {
+            // Authentication can complete during this very read. Do not cancel it, but
+            // do retry a previously failed portrait after a later successful sign-in.
+            if (sessionChanged) { if (appearanceBusy) appearanceSessionChangedWhileReading = true; else appearanceRead = false; }
+            OnPropertyChanged(nameof(AccountAppearancePlayer)); NotifyAccountAppearanceCommands(); ScheduleUnreadAccountAppearance(); return;
+        }
         ++appearanceGeneration; appearanceReadCancellation?.Cancel(); appearanceReadCancellation = null;
         appearanceIdentity = identity; appearanceRead = false; appearanceBusy = false; appearancePickerActive = false;
+        appearanceSessionChangedWhileReading = false;
         onlineSkinDraft = null; onlineWriteNeedsRefresh = false;
         CloseAccountAppearance(); appearanceMessage = ""; accountAppearance = identity is null ? null : appearanceCache.GetValueOrDefault(identity);
         UpdateAccountAppearance(accountAppearance); ScheduleUnreadAccountAppearance();
@@ -125,6 +136,7 @@ public sealed partial class AccountsPageViewModel
     {
         if (appearanceService is null || SelectedChannelAccount is not { } account || appearanceBusy) return;
         var identity = AppearanceIdentity(account); var generation = appearanceGeneration;
+        appearanceSessionChangedWhileReading = false; var retryAfterRenewal = false;
         using var cancellation = new CancellationTokenSource(); appearanceReadCancellation = cancellation; appearanceBusy = true; appearanceMessage = "正在读取外观…"; NotifyAppearancePresentation();
         try
         {
@@ -140,11 +152,23 @@ public sealed partial class AccountsPageViewModel
             UpdateAccountAppearance(result);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested) { if (IsCurrentAppearance(identity, generation)) { appearanceRead = true; appearanceMessage = "读取已取消，已有外观保留。"; } }
-        catch (Exception ex) { if (IsCurrentAppearance(identity, generation)) { appearanceRead = true; appearanceMessage = UiPrivacy.Redact(ex.Message); } }
+        catch (Exception ex)
+        {
+            if (IsCurrentAppearance(identity, generation))
+            {
+                retryAfterRenewal = appearanceSessionChangedWhileReading && ex is not AuthenticationException;
+                appearanceRead = !retryAfterRenewal;
+                if (!retryAfterRenewal) appearanceMessage = UiPrivacy.Redact(ex.Message);
+            }
+        }
         finally
         {
             if (ReferenceEquals(appearanceReadCancellation, cancellation)) appearanceReadCancellation = null;
-            if (IsCurrentAppearance(identity, generation)) { appearanceBusy = false; NotifyAppearancePresentation(); }
+            if (IsCurrentAppearance(identity, generation))
+            {
+                appearanceBusy = false; appearanceSessionChangedWhileReading = false; NotifyAppearancePresentation();
+                if (retryAfterRenewal) ScheduleUnreadAccountAppearance();
+            }
         }
     }
     private bool IsCurrentAppearance(string identity, long generation) => appearanceIdentity == identity && appearanceGeneration == generation && SelectedChannelAccount is { } selected && AppearanceIdentity(selected) == identity;

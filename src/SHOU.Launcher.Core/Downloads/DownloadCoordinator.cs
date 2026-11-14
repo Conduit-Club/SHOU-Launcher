@@ -42,6 +42,7 @@ public sealed class DownloadCoordinator(HttpClient http, IVerifiedDownloader int
             await using var lease = new FileStream(leasePath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
             if (await VerifiedDownloader.IsValidAsync(request.DestinationPath, request, cancellationToken).ConfigureAwait(false))
             { progress?.Report(new(destination, "Completed", new FileInfo(destination).Length, request.Size, "cache", "缓存")); return; }
+            if (await LocalDownloadReuse.TryImportAsync(request, progress, cancellationToken).ConfigureAwait(false)) return;
             try
             {
                 progress?.Report(new(destination, "Queued", 0, request.Size, "aria2", "aria2", "等待全局下载名额"));

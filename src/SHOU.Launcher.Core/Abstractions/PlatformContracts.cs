@@ -116,8 +116,10 @@ public interface IJavaRuntimeInstaller
     Task<JavaInstallation> InstallAsync(JavaRuntimeRequest request, IProgress<TransferProgress>? progress = null, CancellationToken cancellationToken = default);
 }
 
+public sealed record LocalDownloadSource(string Root, string RelativePath);
 public sealed record DownloadRequest(IReadOnlyList<Uri> Sources, string DestinationPath,
-    string? Sha1 = null, string? Sha256 = null, long? Size = null, bool AllowResume = true);
+    string? Sha1 = null, string? Sha256 = null, long? Size = null, bool AllowResume = true,
+    IReadOnlyList<LocalDownloadSource>? LocalSources = null);
 public interface IVerifiedDownloader
 {
     Task DownloadAsync(DownloadRequest request, IProgress<TransferProgress>? progress = null, CancellationToken cancellationToken = default);

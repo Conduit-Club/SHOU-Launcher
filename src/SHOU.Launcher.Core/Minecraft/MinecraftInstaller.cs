@@ -17,7 +17,8 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
     Func<IReadOnlyList<DownloadSource>> sources, Func<int>? maximumConnections = null)
 {
     public async Task<InstalledGame> InstallAsync(ResolvedVersion version, RuleContext context, string gameDirectory,
-        IProgress<TransferProgress>? progress = null, CancellationToken ct = default, string? nativeSession = null, bool preserveGameData = false, IProgress<PackInstallProgress>? phases = null)
+        IProgress<TransferProgress>? progress = null, CancellationToken ct = default, string? nativeSession = null, bool preserveGameData = false, IProgress<PackInstallProgress>? phases = null,
+        ExternalInstanceOrigin? existingOrigin = null)
     {
         Directory.CreateDirectory(gameDirectory);
         var metadata = version.Metadata;
@@ -31,7 +32,8 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
                 !await Content.ContentInstallFiles.MatchesAsync(clientPath, (string?)localClient["sha1"] ?? "", (long?)localClient["size"] ?? -1, ct))
                 throw new InvalidDataException("导入整合包的本地客户端缺失或已改变，请重新导入。");
         }
-        else await FetchDescriptorAsync(client ?? throw new InvalidDataException("Version has no downloadable client."), clientPath, progress, ct).ConfigureAwait(false);
+        else await FetchDescriptorAsync(client ?? throw new InvalidDataException("Version has no downloadable client."), clientPath, progress, ct,
+            existingOrigin is null ? null : ClientSources(existingOrigin, version)).ConfigureAwait(false);
         var librariesDirectory = Path.Combine(cacheDirectory, "libraries");
         var libraries = LibraryResolver.Resolve(metadata, context);
         var completedLibraries = 0; phases?.Report(new("检查依赖库", 0, libraries.Files.Count));
@@ -52,20 +54,22 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
             {
                 sha1 = await ReadChecksumAsync(file.Url, token).ConfigureAwait(false);
             }
-            await downloader.DownloadAsync(new(Map(file.Url), path, sha1, Size: file.Size), progress, token).ConfigureAwait(false);
+            await downloader.DownloadAsync(new(Map(file.Url), path, sha1, Size: file.Size,
+                LocalSources: ExistingSources(existingOrigin, "libraries/" + file.RelativePath)), progress, token).ConfigureAwait(false);
             phases?.Report(new("检查依赖库", Interlocked.Increment(ref completedLibraries), libraries.Files.Count, file.RelativePath));
         }).ConfigureAwait(false);
         var assetsDirectory = Path.Combine(cacheDirectory, "assets");
         var indexDescriptor = metadata["assetIndex"] as JsonObject ?? throw new InvalidDataException("Version has no asset index descriptor.");
         var indexId = (string?)indexDescriptor["id"] ?? throw new InvalidDataException("Asset index ID missing.");
         var indexPath = SafePath.Within(assetsDirectory, $"indexes/{SafePath.Identifier(indexId)}.json");
-        await FetchDescriptorAsync(indexDescriptor, indexPath, progress, ct).ConfigureAwait(false);
+        await FetchDescriptorAsync(indexDescriptor, indexPath, progress, ct, ExistingSources(existingOrigin, $"assets/indexes/{SafePath.Identifier(indexId)}.json")).ConfigureAwait(false);
         var assets = AssetResolver.Parse(indexId, await File.ReadAllTextAsync(indexPath, ct).ConfigureAwait(false));
         var objects = assets.Objects.DistinctBy(a => a.Hash).ToArray(); var completedAssets = 0;
         phases?.Report(new("检查游戏资源", 0, objects.Length));
         await Parallel.ForEachAsync(objects, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections?.Invoke() ?? 8, 1, 64), CancellationToken = ct }, async (asset, token) =>
         {
-            await downloader.DownloadAsync(new(Map(asset.OfficialUri), SafePath.Within(assetsDirectory, asset.RelativePath), asset.Hash, Size: asset.Size), progress, token).ConfigureAwait(false);
+            await downloader.DownloadAsync(new(Map(asset.OfficialUri), SafePath.Within(assetsDirectory, asset.RelativePath), asset.Hash, Size: asset.Size,
+                LocalSources: ExistingSources(existingOrigin, "assets/" + asset.RelativePath)), progress, token).ConfigureAwait(false);
             phases?.Report(new("检查游戏资源", Interlocked.Increment(ref completedAssets), objects.Length, asset.Hash));
         }).ConfigureAwait(false);
         if (!preserveGameData) AssetResolver.MaterializeLegacyLayout(assets, assetsDirectory, gameDirectory);
@@ -112,10 +116,21 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
         }
         throw new AggregateException("No configured source supplied a usable library checksum.", errors);
     }
-    private Task FetchDescriptorAsync(JsonObject file, string destination, IProgress<TransferProgress>? progress, CancellationToken ct)
+    private static IReadOnlyList<LocalDownloadSource>? ExistingSources(ExternalInstanceOrigin? origin, string relative)
+        => origin is null ? null : [new(origin.MinecraftRoot, relative)];
+    private static IReadOnlyList<LocalDownloadSource> ClientSources(ExternalInstanceOrigin origin, ResolvedVersion version)
+    {
+        var sources = new List<LocalDownloadSource> { new(origin.VersionDirectory, origin.OriginalVersionId + ".jar") };
+        foreach (var id in version.InheritanceChain.Distinct(StringComparer.Ordinal))
+            if (id.Length is > 0 and <= 180 && id is not ("." or "..") && id.IndexOfAny(['/', '\\', ':']) < 0)
+                sources.Add(new(origin.MinecraftRoot, $"versions/{id}/{id}.jar"));
+        return sources;
+    }
+    private Task FetchDescriptorAsync(JsonObject file, string destination, IProgress<TransferProgress>? progress, CancellationToken ct,
+        IReadOnlyList<LocalDownloadSource>? localSources = null)
     {
         var url = (string?)file["url"] ?? throw new InvalidDataException("Download descriptor URL missing.");
         var sha1 = (string?)file["sha1"] ?? throw new InvalidDataException("Download descriptor checksum missing.");
-        return downloader.DownloadAsync(new(Map(new Uri(url)), destination, sha1, Size: (long?)file["size"]), progress, ct);
+        return downloader.DownloadAsync(new(Map(new Uri(url)), destination, sha1, Size: (long?)file["size"], LocalSources: localSources), progress, ct);
     }
 }

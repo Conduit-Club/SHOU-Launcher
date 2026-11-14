@@ -32,6 +32,7 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
                 progress?.Report(new(destination, "Completed", new FileInfo(destination).Length, request.Size, "cache"));
                 return;
             }
+            if (await LocalDownloadReuse.TryImportAsync(request, progress, cancellationToken).ConfigureAwait(false)) return;
             var failures = new List<Exception>();
             var sources = request.Sources.Where(uri => !policy.HttpsOnly || uri.Scheme == "https" || uri.IsLoopback).ToArray();
             if (sources.Length == 0) throw new InvalidDataException("当前下载策略仅允许 HTTPS，请修改来源或协议设置。");

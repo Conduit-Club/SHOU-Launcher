@@ -125,6 +125,9 @@ public sealed partial class AccountAppearanceClient(HttpClient http)
         if (maximum <= 0) throw Invalid("外观下载超过总预算。");
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         if (response.StatusCode is >= HttpStatusCode.MultipleChoices and < HttpStatusCode.BadRequest || response.RequestMessage?.RequestUri is { } final && final != request.RequestUri) throw Invalid("外观服务重定向已拒绝。");
+        if (response.StatusCode == HttpStatusCode.Unauthorized && request.RequestUri is { Scheme: "https", Host: "api.minecraftservices.com", AbsolutePath: "/minecraft/profile" }
+            && request.Headers.Authorization?.Scheme == "Bearer")
+            throw new AuthenticationException("appearance_unauthorized", "Microsoft 登录凭据需要刷新；原账户记录保留。");
         if (!response.IsSuccessStatusCode) throw Invalid($"读取外观失败（HTTP {(int)response.StatusCode}）。请刷新登录或稍后重试。");
         if (response.Content.Headers.ContentLength is { } length && length > maximum) throw Invalid("外观响应超过大小上限。");
         await using var stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false); using var output = new MemoryStream(); var buffer = new byte[16384];

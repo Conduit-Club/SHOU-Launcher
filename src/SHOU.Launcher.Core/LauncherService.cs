@@ -48,9 +48,11 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     public LauncherService(PlatformServices platform, HttpClient http, IVerifiedDownloader downloader,
         NetworkOptions network, IBuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null,
         JavaBootstrapArtifact? javaBootstrap = null, IJavaTrustService? javaTrust = null, Content.CurseForgePackResolver? localPackResolver = null,
-        HttpClient? publicInformationHttp = null, IContentDependencyCatalogService? worldContentCatalog = null, Func<HttpClient>? contentTransportFactory = null)
+        HttpClient? publicInformationHttp = null, IContentDependencyCatalogService? worldContentCatalog = null, Func<HttpClient>? contentTransportFactory = null,
+        Func<HttpClient>? accountAppearanceTransportFactory = null)
     {
         this.contentTransportFactory = contentTransportFactory;
+        this.accountAppearanceTransportFactory = accountAppearanceTransportFactory;
         this.platform = platform; this.http = http; this.downloader = downloader; this.network = network;
         this.worldContentCatalog = worldContentCatalog;
         informationHttp = publicInformationHttp ?? new(new InformationRedirectHandler(new ConfigurableNetworkHandler(network, false))) { Timeout = TimeSpan.FromMinutes(5) };
@@ -208,7 +210,8 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         var java = await SelectInstanceJavaAsync(instance, version, ct).ConfigureAwait(false);
         var context = Context(java);
         var gameFiles = await new MinecraftInstaller(http, concurrent ? new InstalledFileReader() : downloader, Paths.CacheDirectory, Sources, () => network.Capture().Downloads?.MaximumConnections ?? 8).InstallAsync(version, context,
-            instance.GameDirectory, new InlineProgress<TransferProgress>(OnTransfer), ct, launchSession, concurrent, phases).ConfigureAwait(false);
+            instance.GameDirectory, new InlineProgress<TransferProgress>(OnTransfer), ct, launchSession, concurrent, phases,
+            instance.RuntimeProfileOverride ? null : instance.Origin).ConfigureAwait(false);
         if (!concurrent && !importedLoader && (instance.Origin is null || instance.RuntimeProfileOverride) && Loaders.PortableVendorInstaller.Supports(instance.Loader))
         {
             using var vendorClient = new HttpClient(new ConfigurableNetworkHandler(network, allowAutoRedirect: false));
@@ -519,7 +522,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         { foreach (var session in await authentication.LoginYggdrasilAsync(server, username, password, ct, selectProfile).ConfigureAwait(false)) result.Add(await SaveSessionAsync(session, ct).ConfigureAwait(false)); }, cancellationToken).ConfigureAwait(false);
         return result;
     }
-    private async Task<AccountProfile> SaveSessionAsync(AuthSession session, CancellationToken ct)
+    private async Task<AccountProfile> SaveSessionAsync(AuthSession session, CancellationToken ct, bool selectAccount = true)
     {
         RegisterSession(session); var account = session.Profile;
         if (Snapshot.CanPersistAccounts)
@@ -538,6 +541,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         // Publish a saved account only after both the protected credential write and sidecar commit.
         // A failed sidecar must not leave the UI claiming that a newly authorized account was saved.
         var next = AccountCandidate(Snapshot, account);
+        if (!selectAccount) next = next with { SelectedAccountId = Snapshot.SelectedAccountId };
         try { await PersistCandidateAsync(next, ct).ConfigureAwait(false); }
         catch
         {
@@ -550,11 +554,12 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
             throw;
         }
         sessions[account.Id] = session with { Profile = account };
-        Set(s => s with { Accounts = next.Accounts, SelectedAccountId = account.Id }); return account;
+        appearanceAuthenticatedTokens[account.Id] = AppearanceTokenHash(session.AccessToken);
+        Set(s => s with { Accounts = next.Accounts, SelectedAccountId = next.SelectedAccountId }); return account;
     }
     public Task RefreshAccountAsync(string accountId, CancellationToken cancellationToken = default) => ExecuteAsync("Authenticating", async ct =>
     { _ = await RefreshInternalAsync(FindAccount(accountId), ct).ConfigureAwait(false); }, cancellationToken);
-    private async Task<AuthSession> RefreshInternalAsync(AccountProfile account, CancellationToken ct)
+    private async Task<AuthSession> RefreshInternalAsync(AccountProfile account, CancellationToken ct, bool selectAccount = true)
     {
         if (account.Kind == AccountKind.Offline) throw new InvalidOperationException("离线档案无需刷新。");
         if (!sessions.TryGetValue(account.Id, out var current)) throw new AuthenticationException("missing_credentials", "请重新登录此账户。");
@@ -562,7 +567,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         {
             var refreshed = account.Kind == AccountKind.Microsoft ? await authentication.RefreshMicrosoftAsync(ResolveClientId(), current, ct).ConfigureAwait(false)
                 : await authentication.RefreshYggdrasilAsync(current, ct).ConfigureAwait(false);
-            _ = await SaveSessionAsync(refreshed, ct).ConfigureAwait(false); return sessions[account.Id];
+            _ = await SaveSessionAsync(refreshed, ct, selectAccount).ConfigureAwait(false); return sessions[account.Id];
         }
         catch (AuthenticationException) { ReplaceAccount(account with { Status = "凭据已失效 · 请重新登录" }); throw; }
     }
@@ -578,6 +583,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         if (!Snapshot.CanPersistAccounts && account.Kind != AccountKind.Offline) throw new InvalidOperationException("凭据读取曾失败，删除写入已禁用以保护原数据。");
         if (account.Kind != AccountKind.Offline) await platform.Credentials.DeleteAsync(AccountKey(accountId), ct).ConfigureAwait(false);
         sessions.TryRemove(accountId, out _); Set(s => s with { Accounts = s.Accounts.Where(a => a.Id != accountId).ToArray(), SelectedAccountId = s.SelectedAccountId == accountId ? null : s.SelectedAccountId });
+        appearanceAuthenticatedTokens.TryRemove(accountId, out _);
         await PersistAsync(ct).ConfigureAwait(false);
     }, cancellationToken);
     public async Task RefreshServersAsync(CancellationToken cancellationToken = default)

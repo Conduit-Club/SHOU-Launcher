@@ -22,6 +22,37 @@ namespace SHOU.Launcher.Desktop.Tests;
 public sealed partial class AccountAppearanceUiTests
 {
     [AvaloniaFact]
+    public async Task RejectedOldCredentialsShowLoginRequiredWithoutAutomaticRefreshLoop()
+    {
+        var service = new AppearanceUiService(); var old = new AccountProfile("microsoft:fixture", AccountKind.Microsoft, "Fixture", new string('a', 32)); var reads = 0;
+        service.Base.Publish(service.Snapshot with { Accounts = [old], SelectedAccountId = old.Id });
+        service.Read = (_, remote, _) =>
+        {
+            if (!remote) return Task.FromResult(AccountAppearanceClient.Unread(old));
+            reads++; service.Base.Publish(service.Snapshot with { Accounts = [old with { Status = "凭据已失效 · 请重新登录" }] });
+            return Task.FromException<AccountAppearance>(new AuthenticationException("invalid_grant", "凭据已失效，请重新登录。"));
+        };
+        using var fixture = await Fixture.OpenAsync(service: service); Pump(fixture.Window);
+        Assert.Equal(1, reads); Assert.Contains("重新登录", fixture.Vm.AccountAppearanceStatus); Assert.False(fixture.Vm.IsAccountAppearanceBusy);
+    }
+
+    [AvaloniaFact]
+    public async Task AutomaticCredentialRenewalDuringPortraitReadDoesNotCancelOrRepeatSuccessfulRead()
+    {
+        var service = new AppearanceUiService(); var old = new AccountProfile("microsoft:fixture", AccountKind.Microsoft, "Fixture", new string('a', 32));
+        service.Base.Publish(service.Snapshot with { Accounts = [old], SelectedAccountId = old.Id });
+        var online = new AccountAppearance(old.Id, AccountSkinModel.Classic, AccountAppearancePng.Decode(Png()), [], false, null, "fixture", true); var reads = 0;
+        service.Read = (_, remote, ct) =>
+        {
+            if (!remote) return Task.FromResult(AccountAppearanceClient.Unread(old));
+            reads++; service.Base.Publish(service.Snapshot with { Accounts = [old with { ExpiresAt = DateTimeOffset.UtcNow.AddHours(1), Status = "已授权" }] });
+            ct.ThrowIfCancellationRequested(); return Task.FromResult(online);
+        };
+        using var fixture = await Fixture.OpenAsync(service: service); Pump(fixture.Window);
+        Assert.True(fixture.Vm.HasAccountSkin); Assert.Same(online.Skin, fixture.Vm.AccountSkin); Assert.Equal(1, reads); Assert.False(fixture.Vm.IsAccountAppearanceBusy);
+    }
+
+    [AvaloniaFact]
     public async Task RefreshedCredentialsRetryFailedPortraitAndUnrelatedProgressDoesNotRefetch()
     {
         var service = new AppearanceUiService(); var old = new AccountProfile("microsoft:fixture", AccountKind.Microsoft, "Fixture", new string('a', 32), ExpiresAt: DateTimeOffset.UtcNow.AddHours(-1));
