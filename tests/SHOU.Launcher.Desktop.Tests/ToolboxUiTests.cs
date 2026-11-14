@@ -42,11 +42,16 @@ public sealed class ToolboxUiTests
         var cleanup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); CancellationToken received = default;
         var service = new ToolService { DownloadBehavior = async ct => { received = ct; try { await Task.Delay(Timeout.Infinite, ct); } finally { await cleanup.Task; } } };
         using var vm = new MainWindowViewModel(service, new FakeExternalLauncher()); var window = new MainWindow { DataContext = vm }; window.Show();
+        var closed = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        window.Closed += (_, _) => closed.TrySetResult();
         try
         {
             vm.Tools.Toolbox.DownloadUrl = "https://example.invalid/fixture.bin"; var work = vm.Tools.Toolbox.DownloadCommand.ExecuteAsync(null);
-            window.Close(); Assert.True(received.IsCancellationRequested); Assert.True(window.IsVisible);
-            cleanup.SetResult(); await work; Dispatcher.UIThread.RunJobs(); await Task.Yield(); Dispatcher.UIThread.RunJobs();
+            window.Close(); Assert.True(received.IsCancellationRequested); Assert.True(window.IsVisible); Assert.False(closed.Task.IsCompleted);
+            cleanup.SetResult(); await work;
+            // Tool completion precedes settings flush and the final Close continuation.
+            // Observe the actual lifecycle event rather than assume two dispatcher turns suffice.
+            await closed.Task.WaitAsync(TimeSpan.FromSeconds(5));
             Assert.False(window.IsVisible);
         }
         finally { cleanup.TrySetResult(); window.Close(); }

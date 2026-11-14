@@ -5,6 +5,7 @@
 - [x] R54-VERSION：按用户指定统一 v1.6.0 / xb，覆盖共享元数据、新旧程序集版本、WPF 当前版本/代号、新端 HTTP/aria2 User-Agent 与 Minecraft launcher_version；保留 v1.5.0 历史报告、固定导入来源和第三方依赖版本。
 - [x] R54-NOTES：新增 [v1.6.0 xb 发行说明草稿](docs/conduit/RELEASE-v1.6.0.md)，明确保留范围及验证边界；版本更新不创建标签、不合并或正式发布。
 - [x] R54-LOCAL：版本元数据/启动计划/手动发行查询 30 项、设置/软件信息相关 Headless 13 项通过，C# 0 警告/错误；三种发行 RID 的构建标识均为 1.6.0 / xb。全量与打包以本次提交的云端 CI 为准，未启动游戏或替换个人安装。
+- [x] R54-CI-WAIT：版本提交 cad89b9 的 PR 两端通过，可信 push 的 Mac Headless 364/365；关闭工具清理用例只等两次 Dispatcher 调度，未等待后续设置刷盘和最终 Close。改为等待真实 Closed 事件并设 5 秒失败期限；保留取消已发出、清理放行前窗口仍在、最终确已关闭的断言，不改产品关闭逻辑、不跳过测试。修正后本机工具组 7/7、完整 Headless 365/365，通过结果分列、不相加。
 - [ ] R54-CD：Conduit Release Draft 仍调用旧 WPF Publish.ps1；接入新 Desktop 双端正式产物、统一校验/哈希，并补 dev/main 的受信桌面构建和签名。当前版本号更新不能代替正式发布流程演练。
 - [ ] R54-GATES：R46-BOOT、R50-WIN-CAPTION、R53-FIRST-AUTH 及 G08 仍未验收完成。PR #15 当前自动化通过不等于完整 WPF 替代门禁通过；合入 dev 集成与替换 main 稳定发行应分别判断。
 
