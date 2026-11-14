@@ -23,7 +23,8 @@ $output=Assert-ConduitTaskPath $OutputDirectory
 $app=Join-Path $output 'SHOU Launcher.app'
 $mac=Join-Path $app 'Contents/MacOS'
 $res=Join-Path $app 'Contents/Resources'
-$null=New-Item -ItemType Directory -Path (Split-Path $mac),$res -Force
+$helpers=Join-Path $app 'Contents/Helpers'
+$null=New-Item -ItemType Directory -Path (Split-Path $mac),$res,$helpers -Force
 Copy-Item -LiteralPath $publish -Destination $mac -Recurse
 # Resource directories do not belong in the code directory: codesign treats dotted
 # package/version directories there as nested bundles instead of ordinary resources.
@@ -32,6 +33,25 @@ foreach ($name in @('licenses','LICENSE','LICENCE','THIRD-PARTY-METADATA.json'))
     if (Test-Path -LiteralPath $source) { Move-Item -LiteralPath $source -Destination (Join-Path $res $name) }
 }
 $repo=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$brokerRoot=Join-Path $repo 'src/SHOU.Launcher.Desktop/Native/MacOS'
+$brokerManifest=Get-Content -Raw -LiteralPath (Join-Path $brokerRoot 'frozen-arm64-v1/manifest.json') | ConvertFrom-Json
+$brokerSource=Join-Path $brokerRoot 'credential_broker.c'
+$brokerPayload=Join-Path $brokerRoot 'frozen-arm64-v1/SHOU.CredentialBroker'
+if ((Get-FileHash $brokerSource -Algorithm SHA256).Hash.ToLowerInvariant() -ne $brokerManifest.source_sha256 -or
+    (Get-FileHash $brokerPayload -Algorithm SHA256).Hash.ToLowerInvariant() -ne $brokerManifest.payload_sha256) {
+    throw 'Frozen credential component differs from its reviewed source/asset manifest. Rebuild it explicitly; ordinary UI updates must preserve it.'
+}
+$broker=Join-Path $helpers 'SHOU.CredentialBroker'
+Copy-Item -LiteralPath $brokerPayload -Destination $broker
+& /bin/chmod +x $broker
+if ($LASTEXITCODE -ne 0) { throw 'Cannot set credential component executable permission.' }
+if ($signing.identity -ne '-' -and $brokerManifest.signing_identity -ne $signing.identity) {
+    throw 'Fixed credential component signer differs from the launcher signer. Rebuild/sign the component explicitly for an intentional signing-identity migration.'
+}
+# Preserve the entire reviewed signed executable. Re-signing or recompiling it
+# with a different host SDK can change the cdhash and prompt again after updates.
+& /usr/bin/codesign --verify --strict $broker
+if ($LASTEXITCODE -ne 0) { throw 'Credential component signature verification failed.' }
 Copy-Item -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/Images/Conduit/club-logo.png') -Destination $res
 Copy-Item -LiteralPath (Join-Path $repo 'LICENSE'),(Join-Path $repo 'Plain Craft Launcher 2/LICENCE') -Destination $res
 $iconset=Join-Path $env:TMPDIR ('shou-'+[guid]::NewGuid().ToString('N')+'.iconset')
@@ -69,6 +89,9 @@ if (Test-Path -LiteralPath $buildInfoPath) {
     $buildInfo.signing=$signing.mode
     $buildInfo.signing_identity=$signing.identity
     $buildInfo.packaging_script_sha256=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $buildInfo.credential_broker=@{protocol=1;identifier=$brokerManifest.identifier;frozen_source_sha256=$brokerManifest.source_sha256;frozen_payload_sha256=$brokerManifest.payload_sha256}
+    $buildInfo.credential_broker.signing_identity=$brokerManifest.signing_identity
+    $buildInfo.credential_broker.cdhash=$brokerManifest.cdhash
     $buildInfo | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $buildInfoPath -Encoding utf8
     $buildInfo | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $output 'BUILD-INFO.json') -Encoding utf8
 }
@@ -108,6 +131,10 @@ if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect bundle designated requirement.'
 if ($signing.identity -ne '-' -and ($requirementText -match 'designated => cdhash' -or $requirementText -notmatch $signing.identity)) { throw 'Bundle does not retain the fixed certificate requirement.' }
 @{mode=$signing.mode;identity=$signing.identity;notarized=$false;designated_requirement=$requirementText} |
     ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $output 'SIGNING-INFO.json')
+$brokerSignature=(& /usr/bin/codesign -d -r- --verbose=4 $broker 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect credential component identity.' }
+@{protocol=1;identity=$brokerManifest.signing_identity;launcher_identity=$signing.identity;frozen_source_sha256=$brokerManifest.source_sha256;frozen_payload_sha256=$brokerManifest.payload_sha256;signature=$brokerSignature} |
+    ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $output 'CREDENTIAL-BROKER-INFO.json')
 $nativeReport | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'native-dependencies.json')
 & /usr/bin/ditto -c -k --sequesterRsrc --keepParent $app (Join-Path $output ($ArchiveStem+'.zip'))
 if ($LASTEXITCODE -ne 0) { throw 'Bundle archive failed.' }

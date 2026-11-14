@@ -1,0 +1,12 @@
+{
+  "protocol": 1,
+  "identifier": "club.conduit.shou.launcher.credentials.v1",
+  "signing_identity": "BBFC2DA005E308768F21B86F4BA73D5B691305C9",
+  "cdhash": "b52770a28e3a962111114fccf06023cdbc08793f",
+  "source_sha256": "1c1209b4fade7e84d83e34625cc1477659955b928ac27c22c24987688e4a6e17",
+  "payload_sha256": "753543641f62113e3ad3f5d237c2978965ac2a87a4fcc559de43f9c617cb25ce",
+  "compiler": "Apple clang version 21.0.0 (clang-2100.4.1.1)",
+  "sdk": "27.2",
+  "minimum_macos": "14.0",
+  "architecture": "arm64"
+}

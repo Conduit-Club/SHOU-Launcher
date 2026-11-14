@@ -73,7 +73,7 @@ PR 构建不读取签名 Secrets，继续生成明确标注的临时签名测试
 本机和 CI 必须复用同一个 P12。单纯给两张证书起相同名字，不能保持应用身份。
 公证需要以后切换到 Apple Developer ID；不需要为每款软件另买会员。
 
-## 钥匙串验证的实际边界
+## R52 直接访问钥匙串的复现（修复前）
 
 固定证书可以保持代码签名身份，但**不能保证当前 macOS 的旧文件钥匙串更新后不再授权**。
 2026-11-14 的原生验证发现：当前用户登录钥匙串里严格绑定测试程序的模拟项除应用 DR 外，还被系统附加了 `cdhash:` 分区。
@@ -86,6 +86,10 @@ PR 构建不读取签名 Secrets，继续生成明确标注的临时签名测试
 这项专用钥匙串测试在本机和同一 P12 的模拟 CI 导入后均通过，但它不能替代上述当前登录钥匙串的真实候选结果。
 如果签名稳定但系统仍阻止读取，报告 `PASS_WITH_KEYCHAIN_LIMITATION` 并在 CI 发出 warning，不能记作凭据无感更新通过。
 对当前个人安装与真实账户的首次签名切换/后续更新授权仍需单独验收，不能承诺换成本地证书就只再授权最后一次。
+
+R53 已改为使用冻结的原生凭据组件，普通主程序更新不再改变钥匙串调用者。
+两个不同代码哈希的完整候选已经通过无交互读写和故障拒绝验证；原记录保留，首次切换仍可能需要系统“始终允许”。
+详见 [R53 验证与边界](MACOS-R53.md) 和 [组件维护约定](../../src/SHOU.Launcher.Desktop/Native/MacOS/README.md)。
 
 参考：[Apple TN2206](https://developer.apple.com/library/archive/technotes/tn2206/)、
 [GitHub macOS runner 证书导入](https://docs.github.com/en/actions/how-tos/deploy/deploy-to-third-party-platforms/sign-xcode-applications)。

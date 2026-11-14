@@ -64,6 +64,9 @@ jobs:
       - name: Verify Mac signing continuity and Keychain access
         if: matrix.rid == 'osx-arm64' && github.event_name != 'pull_request'
         run: python3 scripts/macos/test_signing.py --directory "$SHOU_DEV_ROOT/reports/signing-continuity"
+      - name: Verify stable Mac credential broker and caller isolation
+        if: matrix.rid == 'osx-arm64' && github.event_name != 'pull_request'
+        run: python3 scripts/macos/test_credential_broker.py --directory "$SHOU_DEV_ROOT/reports/credential-broker"
       - name: Publish same Desktop candidate
         if: matrix.publish
         shell: pwsh
@@ -73,6 +76,9 @@ jobs:
           PCL_CURSEFORGE_API_KEY: ${{ github.event_name != 'pull_request' && secrets.CURSEFORGE_API_KEY || '' }}
           SHOU_MACOS_ALLOW_ADHOC: ${{ github.event_name == 'pull_request' && '1' || '0' }}
         run: ./scripts/dev/Invoke-Dev.ps1 -RunId candidate -Action Publish -RuntimeIdentifier $env:TARGET_RID -Configuration Release
+      - name: Verify real Mac candidate upgrade and credential fault handling
+        if: matrix.rid == 'osx-arm64' && github.event_name != 'pull_request'
+        run: python3 scripts/macos/test_packaged_credentials.py --app "$SHOU_DEV_ROOT/dist/candidate/Desktop/Release/osx-arm64/default/SHOU Launcher.app" --directory "$SHOU_DEV_ROOT/reports/packaged-credential-upgrade"
       - name: Preserve Windows ARM64 build
         if: matrix.rid == 'win-x64'
         shell: pwsh
@@ -93,6 +99,7 @@ jobs:
             ${{ runner.temp }}/shou-desktop-dev/dist/**/*.sha256
             ${{ runner.temp }}/shou-desktop-dev/dist/**/BUILD-INFO.json
             ${{ runner.temp }}/shou-desktop-dev/dist/**/SIGNING-INFO.json
+            ${{ runner.temp }}/shou-desktop-dev/dist/**/CREDENTIAL-BROKER-INFO.json
             ${{ runner.temp }}/shou-desktop-dev/build/**/reports/**
             ${{ runner.temp }}/shou-desktop-dev/reports/**
           if-no-files-found: warn

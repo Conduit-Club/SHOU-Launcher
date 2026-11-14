@@ -9,6 +9,7 @@ namespace SHOU.Launcher.Desktop.Platform.MacOS;
 public sealed class KeychainCredentialStore : ICredentialStore, IUserAuthorizedCredentialStore
 {
     private static readonly object InteractionGate = new();
+    private static readonly Lazy<MacCredentialBrokerClient?> Broker = new(MacCredentialBrokerClient.ForCurrentApp);
     private readonly string _service;
     private readonly SemaphoreSlim _gate = new(1, 1);
 
@@ -20,8 +21,10 @@ public sealed class KeychainCredentialStore : ICredentialStore, IUserAuthorizedC
         // No framework initialization or keychain access until the data lease has been acquired by the host.
     }
 
-    public Task<byte[]?> ReadAsync(string key, CancellationToken cancellationToken = default) => ReadCoreAsync(key, false, cancellationToken);
-    public Task<byte[]?> ReadWithUserAuthorizationAsync(string key, CancellationToken cancellationToken = default) => ReadCoreAsync(key, true, cancellationToken);
+    public Task<byte[]?> ReadAsync(string key, CancellationToken cancellationToken = default)
+        => Broker.Value is { } broker ? broker.RequestAsync(_service, key, 1, default, cancellationToken) : ReadCoreAsync(key, false, cancellationToken);
+    public Task<byte[]?> ReadWithUserAuthorizationAsync(string key, CancellationToken cancellationToken = default)
+        => Broker.Value is { } broker ? broker.RequestAsync(_service, key, 4, default, cancellationToken) : ReadCoreAsync(key, true, cancellationToken);
     private async Task<byte[]?> ReadCoreAsync(string key, bool allowInteraction, CancellationToken cancellationToken)
     {
         ValidateName(key);
@@ -53,6 +56,7 @@ public sealed class KeychainCredentialStore : ICredentialStore, IUserAuthorizedC
 
     public async Task WriteAsync(string key, ReadOnlyMemory<byte> value, CancellationToken cancellationToken = default)
     {
+        if (Broker.Value is { } broker) { _ = await broker.RequestAsync(_service, key, 2, value, cancellationToken).ConfigureAwait(false); return; }
         ValidateName(key);
         if (value.Length > 1048576) throw new ArgumentOutOfRangeException(nameof(value));
         await _gate.WaitAsync(cancellationToken);
@@ -87,6 +91,7 @@ public sealed class KeychainCredentialStore : ICredentialStore, IUserAuthorizedC
 
     public async Task DeleteAsync(string key, CancellationToken cancellationToken = default)
     {
+        if (Broker.Value is { } broker) { _ = await broker.RequestAsync(_service, key, 3, default, cancellationToken).ConfigureAwait(false); return; }
         ValidateName(key);
         await _gate.WaitAsync(cancellationToken);
         try
@@ -146,7 +151,7 @@ public sealed class KeychainCredentialStore : ICredentialStore, IUserAuthorizedC
         }
     }
 
-    private static void Check(int status, string operation = "操作")
+    internal static void Check(int status, string operation = "操作")
     {
         if (status == 0) return;
         var failure = status switch
