@@ -27,11 +27,11 @@
 
 持续失败报告只添加阶段、次数与整数原生状态；不复制原始异常消息、参数或令牌。R46 历史报告未保存原生错误码，故**根因仍未确认**，此版属于恢复缓解和诊断补齐。
 
-## 待完成与边界
+## 云端结果与剩余边界
 
 代码提交 `d61458e7e33519181d3c20fccb0305f60a613552` 的 [受信 push](https://github.com/Conduit-Club/SHOU-Launcher/actions/runs/43584210751)、[双端 PR](https://github.com/Conduit-Club/SHOU-Launcher/actions/runs/43584216880)、通用与 WPF 回归全部通过。Mac Core 941 通过/7 跳过、Headless 374/3；Windows Core 931/11、Headless 376/1（两项新标题栏用例实际通过）；各套分列，不累加重复检查。固定凭据组件 10 项、真实包更新/故障 17 项通过。
 
-已创建并推送精确 `v1.6` 注释标签（tag object `08589f7a64f95d2c82fb314717dea8094bb348c6`），指向上述源码；[标签发行运行](https://github.com/Conduit-Club/SHOU-Launcher/actions/runs/43584891437) 四个 job 全部通过，生成 Prerelease 草稿。13 个资产齐套，三包的 GitHub SHA-256 摘要与统一清单、单包旁置校验均一致；Mac ZIP 本机 CRC、内外元数据和固定组件整文件再次一致。标签版 Mac 包已安装到 `/Applications/SHOU Launcher.app`，旧程序和本机 JSON 配置备份位于 `~/Library/Application Support/SHOU-Launcher/backups/app-update-r55-20261114-182917/`；安装前后配置字节一致，实例目录未移动。
+已创建并推送精确 `v1.6` 注释标签（tag object `08589f7a64f95d2c82fb314717dea8094bb348c6`），指向上述源码；[标签发行运行](https://github.com/Conduit-Club/SHOU-Launcher/actions/runs/43584891437) 四个 job 全部通过，先生成 Prerelease 草稿，经资产与最终个人回读核对后已[公开预发布](https://github.com/Conduit-Club/SHOU-Launcher/releases/tag/v1.6)，未设为 Latest，稳定 Latest 仍为 v1.5.0。13 个资产齐套，三包的 GitHub SHA-256 摘要与统一清单、单包旁置校验均一致；Mac ZIP 本机 CRC、内外元数据和固定组件整文件再次一致。标签版 Mac 包已安装到 `/Applications/SHOU Launcher.app`，旧程序和本机 JSON 配置备份位于 `~/Library/Application Support/SHOU-Launcher/backups/app-update-r55-20261114-182917/`；安装前后配置字节一致，实例目录未移动。
 
 | 包 | SHA-256 |
 | --- | --- |
@@ -39,6 +39,8 @@
 | win-x64 | `1c38cedd3702f1de9a718256e5a80c21eb9d2d2ff1c015c65d03e0723327a2e2` |
 | win-arm64 | `3ee8ee8e1697cde24055513a5688b8c6638002ca99e831d073c9542978a18a9a` |
 
-最终标签包更新后的个人账户回读等待用户再次手动解锁；未把锁屏当作通过或操作系统解锁。普通绘图 6 次、按实际 `local/shou.desktop.v1.json` 启用的软件绘图 6 次，共 12 次冷启均建立原生窗口并按时正常退出，CoreVideo 均一次成功。首轮脚本写错配置路径的所谓“软件”结果已标记无效，不计入这 12 次。最终安装包回读继续进行。Windows ARM64 真机、完整 DPI/跨屏/VoiceOver、旧格式/provider 游戏矩阵继续按 todo 留存。本轮原生与凭据检查不启动游戏，也不替代在线令牌刷新验证。
+最终标签包安装后，桌面恢复可用，CUA 已核对两个旧微软项持久化已保存和原 XPlus 实例；Cmd-Q 正常退出重开后再次核对两项均自动回读，无恢复面板或新的钥匙串密码请求，软件信息为 1.6.0 / xb。未更改所选账户，窗口保留在首页。HTTP401 外观提示仍属过期在线令牌，本轮没有刷新登录。普通绘图 6 次、按实际 `local/shou.desktop.v1.json` 启用的软件绘图 6 次，共 12 次冷启均建立原生窗口并按时正常退出，CoreVideo 均一次成功。首轮脚本写错配置路径的所谓“软件”结果已标记无效，不计入这 12 次。Windows ARM64 真机、完整 DPI/跨屏/VoiceOver、旧格式/provider 游戏矩阵继续按 todo 留存。本轮原生与凭据检查不启动游戏，也不替代在线令牌刷新验证。
 
 详细本机证据保存在 `.shou-dev/reports/macos-r55-release/`；最终标签产物源码、SDK、RID、Release 配置及 SHA-256 以随包 BUILD-INFO / RELEASE-MANIFEST 为准。
+
+本轮源代码与流程提交为 `d61458e`；`ef3b4ed` 及后续交付文档提交只更新运行证据与待办，不移动已验证的 v1.6 标签。PR #15 保持打开、未合并，main/dev 引用未变；用户原计划文件和 .env 保留。
