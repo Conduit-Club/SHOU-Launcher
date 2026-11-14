@@ -1,5 +1,7 @@
 # Conduit-Club 构建
 
+Mac 双端候选的固定本地证书、CI Secrets 和钥匙串限制见 [Mac 签名说明](MACOS-SIGNING.md)。下方 Windows WPF 构建与历史发行说明继续保留。
+
 本项目是 Conduit-Club 基于 PCL-CE 独立维护的第三方社团 Minecraft 启动器。当前已加入第一阶段社团定制，详见 CUSTOMIZATION.md；微软登录配置见 MICROSOFT-LOGIN.md。
 
 ## 上游

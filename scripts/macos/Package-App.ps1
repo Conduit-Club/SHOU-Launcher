@@ -1,10 +1,23 @@
 [CmdletBinding()]
 param([Parameter(Mandatory)][string]$PublishDirectory,[Parameter(Mandatory)][string]$OutputDirectory,
-    [Parameter(Mandatory)][string]$Version,[Parameter(Mandatory)][string]$ArchiveStem)
+    [Parameter(Mandatory)][string]$Version,[Parameter(Mandatory)][string]$ArchiveStem,
+    [string]$SigningIdentity=$env:SHOU_MACOS_SIGNING_IDENTITY,
+    [string]$SigningKeychain=$env:SHOU_MACOS_SIGNING_KEYCHAIN,
+    [switch]$AllowAdHocSigning)
 $ErrorActionPreference='Stop'
 if (-not $IsMacOS) { throw 'Local Mac packaging/signature inspection requires macOS.' }
 . (Join-Path $PSScriptRoot '../conduit/Build-Shared.ps1')
 Assert-ConduitHeavyGate
+. (Join-Path $PSScriptRoot 'Signing.ps1')
+$signing=Resolve-ShouMacSigning -Identity $SigningIdentity -Keychain $SigningKeychain -AllowAdHoc:$AllowAdHocSigning
+$signArgs=$signing.arguments
+$previousKeychains=@(Get-ShouMacKeychainSearchList)
+try {
+if ($signing.identity -ne '-') {
+    # codesign also resolves the private key through the search list, even with
+    # --keychain. Restore that list on both success and failure.
+    Set-ShouMacKeychainSearchList (@($signing.keychain)+@($previousKeychains | Where-Object { $_ -ne $signing.keychain }))
+}
 $publish=Assert-ConduitTaskPath $PublishDirectory
 $output=Assert-ConduitTaskPath $OutputDirectory
 $app=Join-Path $output 'SHOU Launcher.app'
@@ -50,6 +63,15 @@ if ($LASTEXITCODE -ne 0) { throw 'Cannot encode bundle icon.' }
 "@ | Set-Content -LiteralPath (Join-Path $app 'Contents/Info.plist') -Encoding utf8
 & /bin/chmod +x (Join-Path $mac 'SHOU.Launcher.Desktop')
 if ($LASTEXITCODE -ne 0) { throw 'Cannot set apphost executable permission.' }
+$buildInfoPath=Join-Path $mac 'BUILD-INFO.json'
+if (Test-Path -LiteralPath $buildInfoPath) {
+    $buildInfo=Get-Content -Raw -LiteralPath $buildInfoPath | ConvertFrom-Json -AsHashtable
+    $buildInfo.signing=$signing.mode
+    $buildInfo.signing_identity=$signing.identity
+    $buildInfo.packaging_script_sha256=(Get-FileHash -LiteralPath $PSCommandPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    $buildInfo | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $buildInfoPath -Encoding utf8
+    $buildInfo | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath (Join-Path $output 'BUILD-INFO.json') -Encoding utf8
+}
 $nativeReport=@()
 foreach ($file in Get-ChildItem -LiteralPath $mac -File -Recurse) {
     $kind = & /usr/bin/file -b $file.FullName
@@ -59,21 +81,37 @@ foreach ($file in Get-ChildItem -LiteralPath $mac -File -Recurse) {
         $links = & /usr/bin/otool -L $file.FullName
         $dependencyRows = @($links | Where-Object { $_ -match '^\s+' })
         if ($LASTEXITCODE -ne 0 -or ($dependencyRows -join "`n") -match '/opt/homebrew|/Users/[^/]+/') { throw "Unexpected developer-machine native dependency: $($file.Name)" }
-        $nativeReport += @{file=$file.Name;architectures=$arch;dependencies=$dependencyRows;signature='ad-hoc'}
+        $nativeReport += @{file=$file.Name;architectures=$arch;dependencies=$dependencyRows;signature=$signing.mode}
     }
     # All files in Contents/MacOS are code subcomponents, including PE DLLs and JSON data.
     # Follow Avalonia's explicit per-file signing order, then sign the apphost/bundle last.
     # codesign stores generic-file signatures in xattrs; ditto preserves them in the archive.
     if ($file.Name -eq 'SHOU.Launcher.Desktop') { continue }
-    & /usr/bin/codesign --force --sign - $file.FullName 2>&1 | Out-Host
+    & /usr/bin/codesign --force --sign $signing.identity @signArgs $file.FullName 2>&1 | Out-Host
     if ($LASTEXITCODE -ne 0) { throw "Local native signing failed: $($file.Name)" }
     & /usr/bin/codesign --verify --strict $file.FullName
     if ($LASTEXITCODE -ne 0) { throw "Individual signature verification failed: $($file.Name)" }
 }
-& /usr/bin/codesign --force --sign - --identifier club.conduit.shou.launcher --entitlements (Join-Path $PSScriptRoot 'Entitlements.plist') $app 2>&1 | Out-Host
+$requirementArgs=@()
+if ($signing.identity -ne '-') {
+    # Pin the certificate and app identifier, never a per-build executable hash.
+    # Reusing the exported identity on CI produces the same designated requirement.
+    $requirement='designated => identifier "club.conduit.shou.launcher" and certificate leaf = H"'+$signing.identity+'"'
+    $requirementArgs=@('--requirements',('='+$requirement))
+}
+& /usr/bin/codesign --force --sign $signing.identity @signArgs @requirementArgs --identifier club.conduit.shou.launcher --entitlements (Join-Path $PSScriptRoot 'Entitlements.plist') $app 2>&1 | Out-Host
 if ($LASTEXITCODE -ne 0) { throw 'Local bundle signing failed.' }
 & /usr/bin/codesign --verify --strict $app
 if ($LASTEXITCODE -ne 0) { throw 'Local bundle signature verification failed.' }
+$requirementText=(& /usr/bin/codesign -d -r- $app 2>&1) -join "`n"
+if ($LASTEXITCODE -ne 0) { throw 'Cannot inspect bundle designated requirement.' }
+if ($signing.identity -ne '-' -and ($requirementText -match 'designated => cdhash' -or $requirementText -notmatch $signing.identity)) { throw 'Bundle does not retain the fixed certificate requirement.' }
+@{mode=$signing.mode;identity=$signing.identity;notarized=$false;designated_requirement=$requirementText} |
+    ConvertTo-Json -Depth 3 | Set-Content -LiteralPath (Join-Path $output 'SIGNING-INFO.json')
 $nativeReport | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $output 'native-dependencies.json')
 & /usr/bin/ditto -c -k --sequesterRsrc --keepParent $app (Join-Path $output ($ArchiveStem+'.zip'))
 if ($LASTEXITCODE -ne 0) { throw 'Bundle archive failed.' }
+} finally {
+    Set-ShouMacKeychainSearchList $previousKeychains
+    if ($iconset -and (Test-Path -LiteralPath $iconset)) { Remove-Item -LiteralPath $iconset -Recurse -Force }
+}

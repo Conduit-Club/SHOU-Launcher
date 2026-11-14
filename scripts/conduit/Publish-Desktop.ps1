@@ -13,6 +13,11 @@ Assert-ConduitHeavyGate
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $build = Assert-ConduitTaskPath $BuildRoot
 $output = Assert-ConduitTaskPath $OutputRoot
+$macSigning=$null
+if ($RuntimeIdentifier -eq 'osx-arm64') {
+    . (Join-Path $repo 'scripts/macos/Signing.ps1')
+    $macSigning=Resolve-ShouMacSigning
+}
 if (Test-Path -LiteralPath $output) { throw 'Candidate output already exists; use a new output root (the build root may be reused for B07).' }
 $report = Assert-ConduitTaskPath (Join-Path $build 'reports')
 $null = New-Item -ItemType Directory -Path $build,$output,$report -Force
@@ -65,7 +70,8 @@ try {
             sdk=(& $Dotnet --version); avalonia='12.1.5'; runtime=$RuntimeIdentifier; configuration=$Configuration; self_contained=$true;
             configuration_owner='SHOU.Launcher.Core.dll'; distribution=$(if($onefile){'single self-contained EXE; native runtime extraction'}else{'application bundle'}); configuration_sources=$inputConfig.Sources; credential_verification=$check;
             java_bootstrap=@{sha256=$bootstrap.sha256;source_sha256=$bootstrap.source_sha256;compiler=$bootstrap.compiler;target_class_version=52;transport='private stdin'};
-            signing=$(if($RuntimeIdentifier -eq 'osx-arm64'){'ad-hoc local candidate; not notarized'}else{'unsigned local candidate'}); windows_default='legacy WPF'; built_at=[DateTimeOffset]::UtcNow.ToString('o') }
+            signing=$(if($macSigning){$macSigning.mode}else{'unsigned local candidate'}); windows_default='legacy WPF'; built_at=[DateTimeOffset]::UtcNow.ToString('o') }
+        if ($macSigning) { $info.signing_identity=$macSigning.identity }
         if (-not $onefile) {
             Copy-Item -LiteralPath (Join-Path $repo 'LICENSE'),(Join-Path $repo 'Plain Craft Launcher 2/LICENCE') -Destination $publish
             Copy-Item -LiteralPath (Join-Path $repo 'Plain Craft Launcher 2/metadata.json') -Destination (Join-Path $publish 'THIRD-PARTY-METADATA.json')
@@ -75,7 +81,7 @@ try {
         if ($onefile) { $info.payload=@{name=[IO.Path]::GetFileName($owner);bytes=(Get-Item -LiteralPath $owner).Length;sha256=(Get-FileHash -LiteralPath $owner -Algorithm SHA256).Hash.ToLowerInvariant()} }
         $info | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $output 'BUILD-INFO.json') -Encoding utf8
         if ($RuntimeIdentifier -eq 'osx-arm64') {
-            & (Join-Path $repo 'scripts/macos/Package-App.ps1') -PublishDirectory $publish -OutputDirectory $output -Version $identity.Version -ArchiveStem $identity.ArchiveStem
+            & (Join-Path $repo 'scripts/macos/Package-App.ps1') -PublishDirectory $publish -OutputDirectory $output -Version $identity.Version -ArchiveStem $identity.ArchiveStem -SigningIdentity $macSigning.identity -SigningKeychain $macSigning.keychain -AllowAdHocSigning:($macSigning.identity -eq '-')
         } else {
             $destination = Join-Path $output 'SHOU Launcher'
             Copy-Item -LiteralPath $publish -Destination $destination -Recurse

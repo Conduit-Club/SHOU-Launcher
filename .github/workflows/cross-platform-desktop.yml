@@ -5,7 +5,7 @@ on:
   pull_request:
     branches: [dev, main]
   push:
-    branches: [features/macos-arm64]
+    branches: [features/macos-arm64, features/windows-parity]
 
 permissions:
   contents: read
@@ -55,6 +55,15 @@ jobs:
         env:
           TARGET_RID: ${{ matrix.rid }}
         run: ./scripts/dev/Invoke-Dev.ps1 -RunId headless -Action Test -EntryProject tests/SHOU.Launcher.Desktop.Tests/SHOU.Launcher.Desktop.Tests.csproj -RuntimeIdentifier $env:TARGET_RID -Configuration Release
+      - name: Import fixed Mac candidate signing identity
+        if: matrix.rid == 'osx-arm64' && github.event_name != 'pull_request'
+        env:
+          MACOS_SIGNING_CERTIFICATE_BASE64: ${{ secrets.MACOS_SIGNING_CERTIFICATE_BASE64 }}
+          MACOS_SIGNING_PASSWORD: ${{ secrets.MACOS_SIGNING_PASSWORD }}
+        run: python3 scripts/macos/manage_signing.py install-ci --directory "$RUNNER_TEMP/shou-macos-signing"
+      - name: Verify Mac signing continuity and Keychain access
+        if: matrix.rid == 'osx-arm64' && github.event_name != 'pull_request'
+        run: python3 scripts/macos/test_signing.py --directory "$SHOU_DEV_ROOT/reports/signing-continuity"
       - name: Publish same Desktop candidate
         if: matrix.publish
         shell: pwsh
@@ -62,6 +71,7 @@ jobs:
           TARGET_RID: ${{ matrix.rid }}
           PCL_MS_CLIENT_ID: ${{ github.event_name != 'pull_request' && secrets.CLIENT_ID || '' }}
           PCL_CURSEFORGE_API_KEY: ${{ github.event_name != 'pull_request' && secrets.CURSEFORGE_API_KEY || '' }}
+          SHOU_MACOS_ALLOW_ADHOC: ${{ github.event_name == 'pull_request' && '1' || '0' }}
         run: ./scripts/dev/Invoke-Dev.ps1 -RunId candidate -Action Publish -RuntimeIdentifier $env:TARGET_RID -Configuration Release
       - name: Preserve Windows ARM64 build
         if: matrix.rid == 'win-x64'
@@ -70,6 +80,9 @@ jobs:
           PCL_MS_CLIENT_ID: ${{ github.event_name != 'pull_request' && secrets.CLIENT_ID || '' }}
           PCL_CURSEFORGE_API_KEY: ${{ github.event_name != 'pull_request' && secrets.CURSEFORGE_API_KEY || '' }}
         run: ./scripts/dev/Invoke-Dev.ps1 -RunId candidate-arm64 -Action Publish -RuntimeIdentifier win-arm64 -Configuration Release
+      - name: Remove ephemeral Mac signing identity
+        if: always() && matrix.rid == 'osx-arm64' && github.event_name != 'pull_request'
+        run: python3 scripts/macos/manage_signing.py cleanup-ci --directory "$RUNNER_TEMP/shou-macos-signing"
       - name: Upload candidate and evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -79,6 +92,7 @@ jobs:
             ${{ runner.temp }}/shou-desktop-dev/dist/**/*.zip
             ${{ runner.temp }}/shou-desktop-dev/dist/**/*.sha256
             ${{ runner.temp }}/shou-desktop-dev/dist/**/BUILD-INFO.json
+            ${{ runner.temp }}/shou-desktop-dev/dist/**/SIGNING-INFO.json
             ${{ runner.temp }}/shou-desktop-dev/build/**/reports/**
             ${{ runner.temp }}/shou-desktop-dev/reports/**
           if-no-files-found: warn
