@@ -51,7 +51,7 @@ public sealed class DownloadCoordinator(HttpClient http, IVerifiedDownloader int
                 var rpc = await options.Aria2Connection.ConnectAsync(options, configuration, cancellationToken).ConfigureAwait(false);
                 if (rpc is null) throw new IOException("本机 Aria2 RPC 未连接。");
                 var transportOptions = await ProxyOptionsAsync(request.Sources, configuration, cancellationToken).ConfigureAwait(false);
-                await rpc.DownloadAsync(request.Sources.Select(s => s.AbsoluteUri).ToArray(), rpcStaging, "SHOU-Launcher/1.5.0",
+                await rpc.DownloadAsync(request.Sources.Select(s => s.AbsoluteUri).ToArray(), rpcStaging, "SHOU-Launcher/1.6.0",
                     value => progress?.Report(new(request.DestinationPath, "Downloading", value.Completed, value.Total, "aria2", "aria2", $"{value.Connections} 个连接 · {value.Speed / 1024d:0.0} KiB/s", value.Connections)), cancellationToken, connections, transportOptions).ConfigureAwait(false);
                 progress?.Report(new(destination, "Verifying", new FileInfo(rpcStaging).Length, request.Size, "aria2", "aria2", "本机校验大小与哈希"));
                 if (!await VerifiedDownloader.IsValidAsync(rpcStaging, request, cancellationToken).ConfigureAwait(false)) throw new InvalidDataException("aria2 output failed local size/hash verification.");

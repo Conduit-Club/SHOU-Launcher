@@ -44,7 +44,7 @@ public static class LaunchPlanBuilder
             ["game_assets"] = Path.Combine(input.AssetsDirectory, "virtual", input.AssetIndexId), ["assets_index_name"] = input.AssetIndexId,
             ["natives_directory"] = Path.GetFullPath(input.NativesDirectory), ["library_directory"] = Path.GetFullPath(input.LibrariesDirectory),
             ["classpath"] = string.Join(input.Context.ClasspathSeparator, classpath), ["classpath_separator"] = input.Context.ClasspathSeparator,
-            ["launcher_name"] = "SHOU-Launcher", ["launcher_version"] = "1.5.0", ["clientid"] = input.Identity.ClientId ?? "",
+            ["launcher_name"] = "SHOU-Launcher", ["launcher_version"] = "1.6.0", ["clientid"] = input.Identity.ClientId ?? "",
             ["auth_xuid"] = input.Identity.Xuid ?? "", ["quickPlayPath"] = Path.Combine(input.TemporaryDirectory ?? input.GameDirectory, "quick-play.json"),
             ["quickPlayMultiplayer"] = input.ServerAddress ?? "", ["quickPlaySingleplayer"] = "", ["quickPlayRealms"] = "",
             ["resolution_width"] = (input.WindowWidth ?? 960).ToString(System.Globalization.CultureInfo.InvariantCulture),

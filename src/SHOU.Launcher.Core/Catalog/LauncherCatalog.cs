@@ -25,7 +25,7 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
                 timeout.CancelAfter(TimeSpan.FromSeconds(20));
                 using var request = new HttpRequestMessage(body is null ? HttpMethod.Get : HttpMethod.Post, candidate.Url);
                 if (body is not null) request.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
-                request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.5.0 (+https://github.com/Conduit-Club/SHOU-Launcher)");
+                request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.6.0 (+https://github.com/Conduit-Club/SHOU-Launcher)");
                 request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
                 using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
@@ -211,7 +211,7 @@ public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<Download
             {
                 using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(10));
                 using var request = new HttpRequestMessage(HttpMethod.Get, candidate);
-                request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.5.0");
+                request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.6.0");
                 using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
                 response.EnsureSuccessStatusCode();
                 if (response.Content.Headers.ContentLength is > 524288) throw new InvalidDataException("资源图标过大。");

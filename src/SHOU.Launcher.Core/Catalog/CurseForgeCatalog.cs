@@ -30,7 +30,7 @@ public sealed class CurseForgeCatalog(HttpClient http, string? apiKey)
         using var request = new HttpRequestMessage(body is null ? HttpMethod.Get : HttpMethod.Post, uri);
         if (body is not null) request.Content = new StringContent(System.Text.Json.JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
         request.Headers.Add("x-api-key", apiKey); request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
-        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.5.0 (+https://github.com/Conduit-Club/SHOU-Launcher)");
+        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.6.0 (+https://github.com/Conduit-Club/SHOU-Launcher)");
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
         if (response.RequestMessage?.RequestUri is { } actual && actual != uri || (int)response.StatusCode is >= 300 and < 400) throw new IOException("CurseForge API 重定向已拒绝。");
         if (!response.IsSuccessStatusCode) throw new IOException($"CurseForge 返回 HTTP {(int)response.StatusCode}，请稍后重试。");

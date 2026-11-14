@@ -55,7 +55,7 @@ public sealed class ClubUpdatesClient(HttpClient http, string cacheDirectory)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(15));
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.5.0");
+        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.6.0");
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
         // The dedicated client disables automatic redirects: no remote page can send a request off the trusted origin.
         response.EnsureSuccessStatusCode();

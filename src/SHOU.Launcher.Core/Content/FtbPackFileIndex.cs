@@ -68,7 +68,7 @@ internal static class FtbPackFileIndex
             throw new InvalidOperationException("FTB 公共清单请求不能携带全局凭据。");
         var uri = new Uri("https://api.feed-the-beast.com/v1/modpacks/public/modpack/" + route);
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.5.0"); request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.6.0"); request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, ct).ConfigureAwait(false);
         if (!response.IsSuccessStatusCode || response.RequestMessage?.RequestUri is { } final && final != uri || response.Content.Headers.ContentLength > budget)
             throw new IOException("FTB 公共清单未返回可核验的响应。");

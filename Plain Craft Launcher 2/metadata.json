@@ -1,8 +1,8 @@
 {
   "name": "潮涌核心社启动器",
-  "codename": "wyc",
+  "codename": "xb",
   "version": {
-    "base": "1.5.0",
+    "base": "1.6.0",
     "upstream": "2.12.1",
     "suffix": "",
     "code": 529

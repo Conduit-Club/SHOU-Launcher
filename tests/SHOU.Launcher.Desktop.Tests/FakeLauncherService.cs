@@ -59,7 +59,7 @@ internal class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMi
 
     public FakeLauncherService()
     {
-        Snapshot = new(new("潮涌核心社启动器", "1.5.0", "wyc", "b97b565678cbcdc8f602b57973d0837d3ac556a2", "Release", "SHOU.Launcher.Core", false, false),
+        Snapshot = new(new("潮涌核心社启动器", "1.6.0", "xb", "b97b565678cbcdc8f602b57973d0837d3ac556a2", "Release", "SHOU.Launcher.Core", false, false),
             new(LauncherOS.MacOS, RuntimeArchitecture.Arm64, RuntimeArchitecture.Arm64, "test-fixture"), new(),
             [new("instance-1", "测试原版", "1.21.1", Path.Combine(Paths.InstancesDirectory, "fixture"), Installed: true)],
             [new("offline-1", AccountKind.Offline, "同名角色", "00000000000000000000000000000001")],

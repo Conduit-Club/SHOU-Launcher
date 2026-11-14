@@ -51,7 +51,7 @@ public static partial class Bootstrap
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
         networkOptions = new();
         httpClient = new(new ConfigurableNetworkHandler(networkOptions)) { Timeout = TimeSpan.FromSeconds(40), MaxResponseContentBufferSize = 4 * 1024 * 1024 };
-        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("SHOU-Launcher/1.5.0");
+        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("SHOU-Launcher/1.6.0");
         verifiedDownloader = new DownloadCoordinator(httpClient, new VerifiedDownloader(httpClient, networkOptions), networkOptions,
             warning => Console.Error.WriteLine(warning));
         platformServices = PlatformServicesFactory.Create(new(data, ArgumentValue("--java-path")), verifiedDownloader);
