@@ -1,55 +1,48 @@
 # Conduit-Club 构建
 
-Mac 双端候选的固定本地证书、CI Secrets 和钥匙串限制见 [Mac 签名说明](MACOS-SIGNING.md)。下方 Windows WPF 构建与历史发行说明继续保留。
+当前发行入口是共享 Avalonia Desktop：Windows x64、Windows ARM64 和 Apple Silicon macOS。旧 WPF 工程与构建脚本保留作回归和历史参考，不再供新版 Release 取包。开发基线为 `dev`，稳定分支为 `main`；当前目标为 **1.6.0 / xb**。
 
-本项目是 Conduit-Club 基于 PCL-CE 独立维护的第三方社团 Minecraft 启动器。当前已加入第一阶段社团定制，详见 CUSTOMIZATION.md；微软登录配置见 MICROSOFT-LOGIN.md。
+## Desktop 本地构建
 
-## 上游
-
-- 自 2026-10-20 起独立维护，不再自动同步原上游；默认分支为 `main`，开发与候选发行分支为 `dev`，通过 `dev → main` PR 审查。
-- 最后纳入的 PCL-CE 基线：`f00b458e7bcf1368ea4e00148cf5db09bd1f5133`（2026-10-15），此次同步新增 9 个提交；旧发布工作流的两处删除冲突已按社团独立发行策略处理。历史迁移见 [HISTORY.md](HISTORY.md)。
-- 直接 PCL-CE 基线版本：`2.15.1`；当前版本目标为 `v1.5.0`（wyc），已发布包以社团 Releases 页面显示的版本为准。`v1.0.0`（zst）首发说明保留作历史记录。正式发行标签使用 `v` 前缀，同时兼容读取旧 `conduit-v` 标签，不冒充 CE 官方发行版。
-
-## 环境
-
-本机 .NET SDK 10.0.401 / Windows Desktop Runtime 10.0.12 位于 `D:\Programs_Dev\dotnet`。
-SDK 通过微软官方 `https://dot.net/v1/dotnet-install.ps1` 安装，使用 `-Channel 10.0 -Quality GA -Architecture x64 -InstallDir D:\Programs_Dev\dotnet`。
-用户 PATH 和 DOTNET_ROOT 指向该目录；更改后请新开终端。NuGet 缓存位于 `D:\DevCache\nuget`。
+使用仓库锁定的 .NET SDK 10.0.403、PowerShell 7 和 Python 3；Java 21 用于不启动游戏的加载器/协议回归。任务工具和依赖缓存放入 `.shou-dev`，使用 [任务入口](../../scripts/dev/Invoke-Dev.ps1) 和现有工具注册。
 
 ```powershell
-./scripts/conduit/Publish.ps1 -Dotnet D:\Programs_Dev\dotnet\dotnet.exe
-./scripts/conduit/Publish.ps1 -Configuration Release -Dotnet D:\Programs_Dev\dotnet\dotnet.exe -OutputRoot artifacts/conduit-release
+./scripts/dev/Invoke-Dev.ps1 -TaskRoot <已注册任务目录> -RunId desktop-tests -Action Test -EntryProject tests/SHOU.Launcher.Desktop.Tests/SHOU.Launcher.Desktop.Tests.csproj -RuntimeIdentifier win-x64 -Configuration Release
+./scripts/dev/Invoke-Dev.ps1 -TaskRoot <已注册任务目录> -RunId candidate -Action Publish -RuntimeIdentifier win-x64 -Configuration Release
+```
+
+macOS 将 RID 改为 `osx-arm64`；Windows ARM64 使用 `win-arm64`。`Invoke-Dev.ps1` 通过任务门禁执行 `Validate-Desktop.ps1` / `Publish-Desktop.ps1`，保存构建记录、TRX 和包旁元数据；`Initialize-CI.ps1` 仅用于临时 GitHub runner，不能在本机运行或替换现有控制器。已有本机工具注册和空间策略应继续复用，不能因打包绕过空间门禁。
+
+Windows ZIP 只含一个自包含 `SHOU.Launcher.Desktop.exe`，无需用户复制散落 DLL 或安装 .NET。macOS ZIP 含签名的 `SHOU Launcher.app` 和固定凭据组件。普通候选名带源码短 SHA；每包旁置 SHA-256 与 `BUILD-INFO.json`，记录完整源码、版本、代号、SDK、RID、配置、凭据注入布尔结果和 Windows 内嵌负载信息。ARM64 交叉编译不代替 ARM64 真机验收。
+
+## 凭据与 Mac 签名
+
+复制 `.env.example` 为根目录 `.env`，填写公开的 Microsoft Client ID 与项目获准的 CurseForge API Key；也可用进程环境，后者优先。`Publish-Desktop.ps1 -EnvFile <路径>` 明确指定本机文件。解析器只读取受支持键，不执行命令、插值或表达式，保留 Key 中的 `$`；不注入 Client Secret、GitHub Token 或服务私钥。`.env` 不提交、不上传为产物，也不自动同步云端。
+
+Actions 的仓库 Secrets 使用 `CLIENT_ID`、`CURSEFORGE_API_KEY`、`MACOS_SIGNING_CERTIFICATE_BASE64` 和 `MACOS_SIGNING_PASSWORD`。PR（包括同仓 PR）不注入秘密或固定签名，仍运行双端编译/测试，Mac 使用显式临时签名。受信 push / 手动 / 标签构建注入客户端配置；Mac 临时导入固定证书，检查稳定凭据组件和真实包跨更新回读，最后清理 CI 钥匙串。证书和 P12 不进入 artifact。
+
+项目 Key 会随客户端分发，GitHub Secrets 保护构建输入，不能使客户端内的 Key 保密。详细边界见 [凭据构建说明](CLIENT-CREDENTIALS-20261031.md)。Mac 固定证书、冻结组件与首次旧项授权见 [Mac 签名说明](MACOS-SIGNING.md)。当前没有 Apple Developer ID 公证或 Windows Authenticode；完整性哈希不等于平台认证。
+
+## CI 与发行
+
+- `Shared Desktop migration`：面向 dev/main 的 PR、dev/main 及保留的移植分支 push 都构建双端；受信构建启用固定 Mac 签名。执行 Core、Headless、发行策略/收集回归，产出三个 RID；Windows 同时检查单 EXE 与内嵌负载。
+- `Legacy WPF regression`：保留旧工程验证包，不参与新版 Release 资产选择。
+- `Conduit Desktop Release Draft`：版本标签 push，或手动选择已有标签；复用同一 Desktop 构建工作流，只有两个宿主的编译、测试、签名与打包全部通过才收集资产。
+
+稳定包必须 `Release`、精确 `v<三段版本>` 标签指向所构建源码，且源码属于 `origin/main`。预发布显式使用 `-Prerelease`，允许同版本的 `v1.6`（仅源码补丁号为 0）或带后缀标签，不要求提前合并 main。`v1.6` 对应程序版本 **1.6.0 / xb**；GitHub 必须标为 Prerelease，不能设为 Latest。用户本轮要求暂不合并 PR，因此此标签从移植功能分支创建。
+
+`Collect-ReleaseAssets.ps1` 只从 Actions 产物的 `dist` 收集包，拒绝测试夹具、缺平台、混合源码/配置、散落 DLL、错误 PE 架构、损坏哈希、变化的固定凭据组件或不一致的 Mac 构建信息。全部验证后生成三包、旁置构建/签名信息、`SHA256SUMS.txt` 与 `RELEASE-MANIFEST.json`。先创建**草稿**，不覆盖已有发行、不自动公开；维护者核对资产后再将预发布公开，正式发行仍遵循 dev → main 审查流程。
+
+工作流进入分支的代码不代表分支已推送或被验证。首次运行结果和未完成原生验收见 [R55](MACOS-R55.md)、[v1.6.0 说明](RELEASE-v1.6.0.md) 与 [todo](../../todo.md)。不启动 Minecraft 的编译、Headless、凭据专项不代替完整游戏/真机矩阵。
+
+## 旧 WPF 构建（历史参考）
+
+```powershell
+./scripts/conduit/Publish.ps1 -Configuration Release -Dotnet <dotnet.exe> -OutputRoot artifacts/legacy-verification
 dotnet test PCL.Core.Test/PCL.Core.Test.csproj -c Beta -p:Platform=x64
 ```
 
-脚本默认构建 Windows x64、Beta、自包含单文件程序；正式首发可传入 `-Configuration Release`，输出到 `artifacts/conduit`（或显式指定的新目录），ZIP 内含 EXE、许可文件及构建信息。无需额外安装 .NET 运行时，不是 MSI/Setup 安装向导。可通过 `-OutputRoot artifacts/conduit-club1` 指定新输出目录；保留旧目录可避免混入旧文件。可使用 `-Architecture ARM64` 交叉编译，但不能替代 ARM64 真机验证。
-
-## 发布
-
-### 本地配置与 GitHub Secrets
-
-复制 `.env.example` 为仓库根目录 `.env`，填写 `PCL_MS_CLIENT_ID=应用程序GUID`。`.env` 及其变体被 Git 忽略，不能放入提交或上传为 artifact。`Publish.ps1` 自动读取它，进程环境优先；不执行文件内的命令、变量插值或表达式。值支持不加引号或使用一对单/双引号，CurseForge Key 中的 `$` 按原样保留。
-
-当前构建入口和源码生成器只允许注入公开的 Microsoft Client ID、项目获准的 CurseForge API Key 和源码 SHA。脚本会临时隔离其他 `PCL_*` 环境变量并在退出时还原；不要填写 Client Secret、GitHub Token 或服务器私钥。每次构建会 clean 并关闭共享编译，防止环境配置变化后沿用旧生成代码。编译后通过 `Assert-ClientCredentials.ps1` 核对已配置的三项值确实进入 `PCL.Core.dll`，日志和构建信息只显示布尔结果。
-
-GitHub Actions 使用仓库 Secret `CLIENT_ID` 映射为 `PCL_MS_CLIENT_ID`；可选的 `CURSEFORGE_API_KEY` 映射为 `PCL_CURSEFORGE_API_KEY`，也可在本地 `.env` 中填写同名变量。社团工作流在面向 `main` / `dev` 的 PR、这两个分支的 push 和手动运行时构建，分开运行社团回归与全量测试；全量测试失败仍保留失败状态和 TRX 报告。Fork PR 无法读取仓库 Secrets，仍可执行无 Client ID 编译。
-
-本地还兼容 `CURSEFORGE_API_KEY`、`CURSEFORGE_API` 两个别名；同一来源中，`PCL_CURSEFORGE_API_KEY` 优先，其次依上述顺序取值。2026-10-30 已使用本机 `.env` 的真实 Key 验证官方 API；2026-10-31 按维护者最新决定，将其手动配置为仓库级 `CURSEFORGE_API_KEY` Secret，用于客户端构建注入。本地 `.env` 不会自行同步到 GitHub。构建配置解析回归使用 `./scripts/conduit/Test-BuildEnvironment.ps1`，不输出 Key。
-
-此方案会将项目 Key 带入分发的客户端，可从程序中提取。GitHub Secrets 保护源码仓库及构建输入，不提供客户端运行时保密；这一选择及各工作流的核对方式见 [凭据构建说明](CLIENT-CREDENTIALS-20261031.md)。
-
-2026-10-03 已配置并审核通过 `CLIENT_ID`。CurseForge 项目 Key 已于 2026-10-31 配置；Natayark、联机、遥测等服务未配置凭据，也未复制上游凭据。原 CE GPG / MirrorChyan 发行工作流在社团仓库保持禁用。微软应用注入已验证，真实账户授权与 Minecraft 服务联调仍需单独确认。
-
-`Conduit Build` 工作流可在 GitHub Actions 手动运行，会上传 x64 构建产物，不使用上游密钥或镜像服务。当前版本目标为 v1.5.0（wyc），正式包、历史 v1.0.0 包和对应说明均以社团 Releases 页面为准；发行包使用 ZIP 旁的 SHA-256 文件校验，不把 PR 或开发构建链接当作已发布包。
-
-原 CE Release 与 MirrorChyan 工作流仅允许在 `PCL-Community/PCL-CE` 仓库运行，避免重写社团发行说明或调用上游服务；独立维护后继续保留此隔离。
-
-## 当前限制
-
-- 微软公共 Client ID 和获准的 CurseForge 项目 Key 可由上述构建入口注入；缺少 Key 的构建仍需依赖可用的镜像回退。联机不再依赖 Natayark 凭据；仍需真实两端验证。
-- 社团 UI、服务器入口和更新源已完成首轮接入；更新页手动追踪社团 GitHub Releases。
-- 未使用上游 GPG 私钥，也未做 Authenticode 签名；SHA-256 仅用于核对文件完整性。
-- 编译和单元测试不能替代登录、下载、安装游戏、启动 Minecraft 的端到端验证。
+旧脚本继续保留原元数据、凭据注入校验和 main 正式标签策略。原 PCL-CE 来源和迁移历史仅见 [HISTORY.md](HISTORY.md)，不再跟踪或同步其上游。
 
 ## 首次本机验证（v1.0.0，2026-10-02 历史记录）
 

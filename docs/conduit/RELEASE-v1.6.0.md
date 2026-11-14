@@ -1,6 +1,6 @@
-# 潮涌核心社启动器 v1.6.0 · xb（发行说明草稿）
+# 潮涌核心社启动器 v1.6.0 · xb（v1.6 预发布）
 
-此文件用于发行准备。版本号与代号已统一；尚未创建 v1.6.0 标签、合并到 main 或正式发布。
+本次使用 `v1.6` 预发布标签，程序内部版本为 **1.6.0 / xb**。来源为 `features/windows-parity`，PR #15 暂不合并；main 与稳定 Latest 仍为 v1.5.0。此包用于双端迁移验收，不表示完整 WPF 替代门禁已通过。
 
 ## 本次变化
 
@@ -11,18 +11,24 @@
 - Mac 使用固定签名的稳定凭据组件，普通主程序更新保留钥匙串访问身份。旧登录项首次切换可能仍需用户在系统提示选择一次“始终允许”，不要求因此删除账户或重新录入密码。
 - 保留简体中文、繁體中文、English；设置修改自动保存。发行版本由用户在设置中手动检查并前往浏览器下载。新版不提供大厅/P2P 联机、视频背景或自动替换程序。
 
-## 发行前待完成
+## 构建与下载
 
-- 正式 Release 工作流目前仍调用旧 WPF `Publish.ps1`。须接入新 Desktop 的 Windows/macOS 构建、签名、包校验和统一 SHA-256，完成新发行流程演练后再发布。
-- 共享桌面的可信 push 当前只覆盖功能分支；dev/main 的受信构建、签名和完整凭据测试仍需接通。
-- 核实 Mac 间歇 `AvaloniaNativeRenderTimer.EnsureRegistered` 初始化失败、Windows 详情页标题栏三按钮，以及 Mac 旧登录项首次授权后的重开自动回读。
-- Windows ARM64 已有编译/单文件打包证据，真机使用、新机器、完整 DPI/跨屏/无障碍及其余旧格式/provider 验证仍按 todo 保留。Mac 当前产物为 osx-arm64，不宣称提供 Intel 包。
-- 当前 Mac 使用固定本地证书，未做 Apple Developer ID 公证；Windows 包未做发行签名。完整 WPF 替代门禁尚未通过，旧工程与入口继续保留。
+- 新发行流程复用共享 Desktop 构建，分别在 Mac ARM64 和 Windows x64 宿主测试，产出 `osx-arm64`、`win-x64`、`win-arm64`。Windows ZIP 只含一个自包含 EXE；Mac ZIP 含 `.app`。
+- 工作流已加入 dev/main 受信桌面构建触发（各分支合入此工作流后生效），签名与凭据专项跟随同一入口；PR 不读取构建 Secrets。标签先生成草稿，维护者核对三包、源码与哈希后公开为 Prerelease，不替换 Latest。
+- 源码、SDK、架构与配置见各 `BUILD-INFO-<RID>.json`；统一 SHA-256 见 `SHA256SUMS.txt` 和 `RELEASE-MANIFEST.json`。两种 Windows 包应按设备架构选择；Mac 当前仅提供 Apple Silicon 包。
+
+## 已知限制
+
+- Mac 间歇显示时钟初始化失败尚未确认历史根因。此版在 Avalonia 初始化前增加 CoreVideo 注册预检、最多约 1.75 秒的有限等待和原生错误码记录；持续失败应在桌面唤醒后重试，不能将此缓解表述为根因已修复。锁屏期间独立探测实际返回 Create/-6661；解锁后的新包原生验收另见 R55。
+- 已复核 Windows R50 原始详情页截图，最小化、最大化、关闭均可见；此前待办误判已纠正。新增长标题和最小宽度的 Windows 专用布局回归，不据误判修改正常 Windows 代码。
+- R53 个人安装的两个旧微软项已在退出重开后自动读取；这证明存储访问，不代表过期登录令牌已在线刷新。新包更新回读、锁定/撤权和证书迁移仍按专项记录逐项确认。
+- Windows ARM64 真机、新机器、完整 DPI/跨屏/无障碍、更多历史整合包与第三方账户/provider 继续按 todo 验证。未提供 Intel Mac 包。
+- Mac 使用固定本地证书，未做 Apple Developer ID 公证；Windows 包未做 Authenticode 发行签名。旧 WPF 工程保留作回归，不再作为本次 Release 的产物入口。
 
 ## 来源与验证
 
 版本更新本身不代表本次已启动 Minecraft、完成全部游戏矩阵或正式分发。
 双端账户接续证据见 [Windows R50](WINDOWS-R50.md)，钥匙串更新专项见 [Mac R53](MACOS-R53.md)。
-最终源码、构建和测试结果以 PR #15 的当前提交及 Actions 为准；发行时须补齐 main 上的最终源码提交、SDK、架构、配置和各产物 SHA-256。
+最终源码以 `v1.6^{commit}` 和随包清单一致为准；标签构建与测试由 Actions 留档。流程和本轮验收见 [R55](MACOS-R55.md)。本轮不启动游戏，亦未合并到 dev/main。
 
 剩余差距与历史证据保留在 [todo](../../todo.md)，不因更新版本号而勾选为完成。

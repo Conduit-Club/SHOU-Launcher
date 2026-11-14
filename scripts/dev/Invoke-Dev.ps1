@@ -6,7 +6,8 @@ param([ValidateSet('main','ui','platform')][string]$Worker='main',
     [ValidateSet('Debug','CI','Beta','Release')][string]$Configuration='Release',
     [string]$EntryProject='src/SHOU.Launcher.Desktop/SHOU.Launcher.Desktop.csproj',
     [string]$EnvFile='.env',[string]$Case='default',
-    [string]$TaskRoot=$env:SHOU_DEV_ROOT,[string]$Python='',[double]$PeakGiB=3,[string]$TestFilter='')
+    [string]$TaskRoot=$env:SHOU_DEV_ROOT,[string]$Python='',[double]$PeakGiB=3,[string]$TestFilter='',
+    [string]$ReleaseTag='', [switch]$Prerelease)
 $ErrorActionPreference='Stop'
 foreach ($id in @($RunId,$Case)) { if ($id -notmatch '^[A-Za-z0-9_.-]+$' -or $id -in @('.','..')) { throw 'Invalid job/case identifier.' } }
 if (-not $TaskRoot) { throw 'Explicit TaskRoot or SHOU_DEV_ROOT required.' }
@@ -21,6 +22,8 @@ $command=@($pwsh,'-NoProfile','-File')
 if ($Action -eq 'Publish') {
     if($RuntimeIdentifier -eq 'linux-x64'){throw 'Linux is a portable-test target; no Linux product host is registered.'}
     $command+=@((Join-Path $repo 'scripts/conduit/Publish-Desktop.ps1'),'-RuntimeIdentifier',$RuntimeIdentifier,'-Configuration',$Configuration,'-Dotnet',$dotnet,'-EnvFile',$EnvFile,'-BuildRoot',$build,'-OutputRoot',$output)
+    if($ReleaseTag){$command+=@('-ReleaseTag',$ReleaseTag)}
+    if($Prerelease){$command+='-Prerelease'}
 } else {
     $command+=@((Join-Path $repo 'scripts/dev/Validate-Desktop.ps1'),'-Action',$Action,'-EntryProject',$EntryProject,'-RuntimeIdentifier',$RuntimeIdentifier,'-Configuration',$Configuration,'-Dotnet',$dotnet,'-BuildRoot',$build)
     if($TestFilter){$command+=@('-TestFilter',$TestFilter)}

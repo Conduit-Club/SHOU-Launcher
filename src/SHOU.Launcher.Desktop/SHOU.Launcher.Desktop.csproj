@@ -8,6 +8,7 @@
     <ApplicationIcon>../../Plain Craft Launcher 2/Images/Conduit/club.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="SHOU.Launcher.Desktop.Tests" />
     <ProjectReference Include="../SHOU.Launcher.Core/SHOU.Launcher.Core.csproj" />
     <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />

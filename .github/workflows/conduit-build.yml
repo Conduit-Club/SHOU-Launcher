@@ -1,4 +1,4 @@
-name: Conduit Build
+name: Legacy WPF regression
 
 on:
   workflow_dispatch:
@@ -44,7 +44,7 @@ jobs:
       - name: Verify build environment parsing
         shell: pwsh
         run: ./scripts/conduit/Test-BuildEnvironment.ps1
-      - name: Publish club launcher
+      - name: Publish legacy verification package (not a release)
         id: publish
         shell: pwsh
         env:

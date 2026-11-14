@@ -28,7 +28,12 @@ public static partial class Bootstrap
             InitializeHostAsync().GetAwaiter().GetResult();
             var command = RunCommandAsync().GetAwaiter().GetResult();
             // Keep AppKit startup on the original STA/main thread, after async services have completed.
-            exitCode = command ?? Program.BuildAvaloniaApp().StartWithClassicDesktopLifetime(Arguments);
+            if (command is { } result) exitCode = result;
+            else
+            {
+                MacDisplayLinkObservation = Platform.MacOS.MacDisplayLinkStartup.Prepare(OperatingSystem.IsMacOS());
+                exitCode = Program.BuildAvaloniaApp().StartWithClassicDesktopLifetime(Arguments);
+            }
         }
         catch (Exception ex)
         {
@@ -109,6 +114,8 @@ public static partial class Bootstrap
             stackMethods = new System.Diagnostics.StackTrace(error, false).GetFrames()
                 .Select(frame => frame.GetMethod()).Where(method => method is not null)
                 .Select(method => method!.DeclaringType?.FullName + "." + method.Name).Take(32).ToArray(),
+            nativeDisplayLink = error is Platform.MacOS.DisplayLinkStartupException display ? display.Report : MacDisplayLinkObservation,
+            nativeRenderTimerStatus = Platform.MacOS.MacDisplayLinkStartup.NativeFailureStatus(error),
             innerTypes = InnerExceptionTypes(error), reportedAt = DateTimeOffset.UtcNow }); }
         catch (Exception reportError) { Console.Error.WriteLine("Failure report could not be written: " + reportError.GetType().Name); }
     }

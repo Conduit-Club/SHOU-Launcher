@@ -5,7 +5,7 @@ param(
     [string]$Dotnet = 'dotnet', [string]$EnvFile = '.env',
     [Parameter(Mandatory)][string]$BuildRoot,
     [Parameter(Mandatory)][string]$OutputRoot,
-    [string]$BuildSuffix = '', [string]$ReleaseTag = ''
+    [string]$BuildSuffix = '', [string]$ReleaseTag = '', [switch]$Prerelease
 )
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'Build-Shared.ps1')
@@ -21,7 +21,7 @@ if ($RuntimeIdentifier -eq 'osx-arm64') {
 if (Test-Path -LiteralPath $output) { throw 'Candidate output already exists; use a new output root (the build root may be reused for B07).' }
 $report = Assert-ConduitTaskPath (Join-Path $build 'reports')
 $null = New-Item -ItemType Directory -Path $build,$output,$report -Force
-$identity = & (Join-Path $PSScriptRoot 'Get-BuildIdentity.ps1') -RuntimeIdentifier $RuntimeIdentifier -Configuration $Configuration -BuildSuffix $BuildSuffix -ReleaseTag $ReleaseTag
+$identity = & (Join-Path $PSScriptRoot 'Get-BuildIdentity.ps1') -RuntimeIdentifier $RuntimeIdentifier -Configuration $Configuration -BuildSuffix $BuildSuffix -ReleaseTag $ReleaseTag -Prerelease:$Prerelease
 $entry = Join-Path $repo 'src/SHOU.Launcher.Desktop/SHOU.Launcher.Desktop.csproj'
 $onefile = $RuntimeIdentifier.StartsWith('win-', [StringComparison]::Ordinal)
 $props = @('-p:UseArtifactsOutput=true', "-p:ArtifactsPath=$build", "-p:Configuration=$Configuration", "-p:RuntimeIdentifier=$RuntimeIdentifier", '-p:SelfContained=true', '-p:UseSharedCompilation=false', "-p:PublishSingleFile=$($onefile.ToString().ToLowerInvariant())", "-p:IncludeNativeLibrariesForSelfExtract=$($onefile.ToString().ToLowerInvariant())", '-p:PublishTrimmed=false','-p:PublishAot=false','-p:UseAppHost=true')
@@ -66,11 +66,11 @@ try {
         }
         $check = & (Join-Path $PSScriptRoot 'Assert-ClientCredentials.ps1') -AssemblyPath $owner
         $dirty = -not [string]::IsNullOrWhiteSpace((& git -C $repo status --porcelain) -join "`n")
-        $info = [ordered]@{ entry='Avalonia Desktop'; version=$identity.Version; codename=$identity.Codename; label=$identity.Label; source_sha=$env:PCL_GITHUB_SHA; source_dirty=$dirty;
+        $info = [ordered]@{ entry='Avalonia Desktop'; version=$identity.Version; codename=$identity.Codename; label=$identity.Label; prerelease=$identity.Prerelease; release_tag=$identity.ReleaseTag; source_sha=$env:PCL_GITHUB_SHA; source_dirty=$dirty;
             sdk=(& $Dotnet --version); avalonia='12.1.5'; runtime=$RuntimeIdentifier; configuration=$Configuration; self_contained=$true;
             configuration_owner='SHOU.Launcher.Core.dll'; distribution=$(if($onefile){'single self-contained EXE; native runtime extraction'}else{'application bundle'}); configuration_sources=$inputConfig.Sources; credential_verification=$check;
             java_bootstrap=@{sha256=$bootstrap.sha256;source_sha256=$bootstrap.source_sha256;compiler=$bootstrap.compiler;target_class_version=52;transport='private stdin'};
-            signing=$(if($macSigning){$macSigning.mode}else{'unsigned local candidate'}); windows_default='legacy WPF'; built_at=[DateTimeOffset]::UtcNow.ToString('o') }
+            signing=$(if($macSigning){$macSigning.mode}else{'unsigned local candidate'}); windows_default='Avalonia Desktop in this package; legacy WPF source retained'; built_at=[DateTimeOffset]::UtcNow.ToString('o') }
         if ($macSigning) { $info.signing_identity=$macSigning.identity }
         if (-not $onefile) {
             Copy-Item -LiteralPath (Join-Path $repo 'LICENSE'),(Join-Path $repo 'Plain Craft Launcher 2/LICENCE') -Destination $publish

@@ -2,10 +2,43 @@ name: Shared Desktop migration
 
 on:
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Optional same-repository source ref'
+        type: string
+        default: ''
+      release_tag:
+        description: 'Existing source tag; empty for a development candidate'
+        type: string
+        default: ''
+      prerelease:
+        description: 'Allow a matching prerelease tag outside main'
+        type: boolean
+        default: false
+  workflow_call:
+    inputs:
+      source_ref:
+        type: string
+        default: ''
+      release_tag:
+        type: string
+        default: ''
+      prerelease:
+        type: boolean
+        default: false
+    secrets:
+      CLIENT_ID:
+        required: false
+      CURSEFORGE_API_KEY:
+        required: false
+      MACOS_SIGNING_CERTIFICATE_BASE64:
+        required: false
+      MACOS_SIGNING_PASSWORD:
+        required: false
   pull_request:
     branches: [dev, main]
   push:
-    branches: [features/macos-arm64, features/windows-parity]
+    branches: [dev, main, features/macos-arm64, features/windows-parity]
 
 permissions:
   contents: read
@@ -26,6 +59,9 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_ref || github.sha }}
+          fetch-depth: 0
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: '10.0.403'
@@ -41,6 +77,12 @@ jobs:
       - name: Verify parser contract
         shell: pwsh
         run: ./scripts/conduit/Test-BuildEnvironment.ps1
+      - name: Verify release tag policy and asset selection
+        shell: pwsh
+        run: |
+          $tools=Get-Content -Raw (Join-Path $env:SHOU_DEV_ROOT 'control/tools.json') | ConvertFrom-Json
+          & $tools.python.executable scripts/conduit/test_release_pipeline.py --directory "$env:SHOU_DEV_ROOT/reports/release-pipeline"
+          if($LASTEXITCODE -ne 0){throw 'Release pipeline regression failed.'}
       - name: Portable Core and protocol tests
         shell: pwsh
         env:
@@ -75,7 +117,13 @@ jobs:
           PCL_MS_CLIENT_ID: ${{ github.event_name != 'pull_request' && secrets.CLIENT_ID || '' }}
           PCL_CURSEFORGE_API_KEY: ${{ github.event_name != 'pull_request' && secrets.CURSEFORGE_API_KEY || '' }}
           SHOU_MACOS_ALLOW_ADHOC: ${{ github.event_name == 'pull_request' && '1' || '0' }}
-        run: ./scripts/dev/Invoke-Dev.ps1 -RunId candidate -Action Publish -RuntimeIdentifier $env:TARGET_RID -Configuration Release
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease && 'true' || 'false' }}
+        run: |
+          $release=@{}
+          if($env:RELEASE_TAG){$release.ReleaseTag=$env:RELEASE_TAG}
+          if($env:RELEASE_PRERELEASE -eq 'true'){$release.Prerelease=$true}
+          ./scripts/dev/Invoke-Dev.ps1 -RunId candidate -Action Publish -RuntimeIdentifier $env:TARGET_RID -Configuration Release @release
       - name: Verify real Mac candidate upgrade and credential fault handling
         if: matrix.rid == 'osx-arm64' && github.event_name != 'pull_request'
         run: python3 scripts/macos/test_packaged_credentials.py --app "$SHOU_DEV_ROOT/dist/candidate/Desktop/Release/osx-arm64/default/SHOU Launcher.app" --directory "$SHOU_DEV_ROOT/reports/packaged-credential-upgrade"
@@ -85,7 +133,13 @@ jobs:
         env:
           PCL_MS_CLIENT_ID: ${{ github.event_name != 'pull_request' && secrets.CLIENT_ID || '' }}
           PCL_CURSEFORGE_API_KEY: ${{ github.event_name != 'pull_request' && secrets.CURSEFORGE_API_KEY || '' }}
-        run: ./scripts/dev/Invoke-Dev.ps1 -RunId candidate-arm64 -Action Publish -RuntimeIdentifier win-arm64 -Configuration Release
+          RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_PRERELEASE: ${{ inputs.prerelease && 'true' || 'false' }}
+        run: |
+          $release=@{}
+          if($env:RELEASE_TAG){$release.ReleaseTag=$env:RELEASE_TAG}
+          if($env:RELEASE_PRERELEASE -eq 'true'){$release.Prerelease=$true}
+          ./scripts/dev/Invoke-Dev.ps1 -RunId candidate-arm64 -Action Publish -RuntimeIdentifier win-arm64 -Configuration Release @release
       - name: Remove ephemeral Mac signing identity
         if: always() && matrix.rid == 'osx-arm64' && github.event_name != 'pull_request'
         run: python3 scripts/macos/manage_signing.py cleanup-ci --directory "$RUNNER_TEMP/shou-macos-signing"
