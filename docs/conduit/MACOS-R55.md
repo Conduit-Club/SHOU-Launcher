@@ -29,6 +29,16 @@
 
 ## 待完成与边界
 
-云端当前提交的全量、两个 Windows 新布局用例、Mac 固定签名/真实包凭据专项、标签演练和草稿资产核对待本轮执行记录补齐。普通绘图 6 次、按实际 `local/shou.desktop.v1.json` 启用的软件绘图 6 次，共 12 次冷启均建立原生窗口并按时正常退出，CoreVideo 均一次成功。首轮脚本写错配置路径的所谓“软件”结果已标记无效，不计入这 12 次。最终安装包回读继续进行。Windows ARM64 真机、完整 DPI/跨屏/VoiceOver、旧格式/provider 游戏矩阵继续按 todo 留存。本轮原生与凭据检查不启动游戏，也不替代在线令牌刷新验证。
+代码提交 `d61458e7e33519181d3c20fccb0305f60a613552` 的 [受信 push](https://github.com/Conduit-Club/SHOU-Launcher/actions/runs/43584210751)、[双端 PR](https://github.com/Conduit-Club/SHOU-Launcher/actions/runs/43584216880)、通用与 WPF 回归全部通过。Mac Core 941 通过/7 跳过、Headless 374/3；Windows Core 931/11、Headless 376/1（两项新标题栏用例实际通过）；各套分列，不累加重复检查。固定凭据组件 10 项、真实包更新/故障 17 项通过。
+
+已创建并推送精确 `v1.6` 注释标签（tag object `08589f7a64f95d2c82fb314717dea8094bb348c6`），指向上述源码；[标签发行运行](https://github.com/Conduit-Club/SHOU-Launcher/actions/runs/43584891437) 四个 job 全部通过，生成 Prerelease 草稿。13 个资产齐套，三包的 GitHub SHA-256 摘要与统一清单、单包旁置校验均一致；Mac ZIP 本机 CRC、内外元数据和固定组件整文件再次一致。标签版 Mac 包已安装到 `/Applications/SHOU Launcher.app`，旧程序和本机 JSON 配置备份位于 `~/Library/Application Support/SHOU-Launcher/backups/app-update-r55-20261114-182917/`；安装前后配置字节一致，实例目录未移动。
+
+| 包 | SHA-256 |
+| --- | --- |
+| osx-arm64 | `e73f3f88aeb03db4ae534cd49951e2fb013a0d83339a251c3908c14c8f351fb4` |
+| win-x64 | `1c38cedd3702f1de9a718256e5a80c21eb9d2d2ff1c015c65d03e0723327a2e2` |
+| win-arm64 | `3ee8ee8e1697cde24055513a5688b8c6638002ca99e831d073c9542978a18a9a` |
+
+最终标签包更新后的个人账户回读等待用户再次手动解锁；未把锁屏当作通过或操作系统解锁。普通绘图 6 次、按实际 `local/shou.desktop.v1.json` 启用的软件绘图 6 次，共 12 次冷启均建立原生窗口并按时正常退出，CoreVideo 均一次成功。首轮脚本写错配置路径的所谓“软件”结果已标记无效，不计入这 12 次。最终安装包回读继续进行。Windows ARM64 真机、完整 DPI/跨屏/VoiceOver、旧格式/provider 游戏矩阵继续按 todo 留存。本轮原生与凭据检查不启动游戏，也不替代在线令牌刷新验证。
 
 详细本机证据保存在 `.shou-dev/reports/macos-r55-release/`；最终标签产物源码、SDK、RID、Release 配置及 SHA-256 以随包 BUILD-INFO / RELEASE-MANIFEST 为准。
