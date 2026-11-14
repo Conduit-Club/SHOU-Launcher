@@ -84,22 +84,27 @@ if($packages.Count -ne $rids.Count){throw 'All three Desktop packages are requir
 $stage=$outputPath+'.stage-'+[guid]::NewGuid().ToString('N')
 $null=New-Item -ItemType Directory -Path $stage
 try{
+    # Only compiled packages belong at the public upload root. Verification
+    # records stay in Actions evidence and must not become release attachments.
+    $evidence=Join-Path $stage 'evidence'
+    $null=New-Item -ItemType Directory -Path $evidence
     $checksums=@();$records=@()
     foreach($rid in $rids){
         $item=$packages[$rid];$name=[IO.Path]::GetFileName($item.archive)
-        Copy-Item -LiteralPath $item.archive,($item.archive+'.sha256') -Destination $stage
-        Copy-Item -LiteralPath $item.metadata -Destination (Join-Path $stage "BUILD-INFO-$rid.json")
+        Copy-Item -LiteralPath $item.archive -Destination $stage
+        Copy-Item -LiteralPath ($item.archive+'.sha256') -Destination $evidence
+        Copy-Item -LiteralPath $item.metadata -Destination (Join-Path $evidence "BUILD-INFO-$rid.json")
         if($rid -eq 'osx-arm64'){
             foreach($document in @('SIGNING-INFO','CREDENTIAL-BROKER-INFO')){
-                Copy-Item -LiteralPath (Join-Path (Split-Path $item.metadata) ($document+'.json')) -Destination (Join-Path $stage "$document-$rid.json")
+                Copy-Item -LiteralPath (Join-Path (Split-Path $item.metadata) ($document+'.json')) -Destination (Join-Path $evidence "$document-$rid.json")
             }
         }
         $checksums+="$($item.sha256)  $name"
         $records+=@{runtime=$rid;file=$name;sha256=$item.sha256;bytes=$item.bytes}
     }
-    $checksums | Set-Content -LiteralPath (Join-Path $stage 'SHA256SUMS.txt') -Encoding ascii
+    $checksums | Set-Content -LiteralPath (Join-Path $evidence 'SHA256SUMS.txt') -Encoding ascii
     $summary=@{version=$Version;codename=$Codename;tag=$Tag;source_sha=$SourceSha;prerelease=[bool]$Prerelease;entry='Avalonia Desktop';packages=$records}
-    $summary | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $stage 'RELEASE-MANIFEST.json') -Encoding utf8
+    $summary | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath (Join-Path $evidence 'RELEASE-MANIFEST.json') -Encoding utf8
     [IO.Directory]::Move($stage,$outputPath)
     $summary | ConvertTo-Json -Depth 5
 }finally{if(Test-Path -LiteralPath $stage){Remove-Item -LiteralPath $stage -Recurse -Force}}

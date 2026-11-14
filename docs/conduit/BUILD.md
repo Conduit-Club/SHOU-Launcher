@@ -31,7 +31,7 @@ Actions 的仓库 Secrets 使用 `CLIENT_ID`、`CURSEFORGE_API_KEY`、`MACOS_SIG
 
 稳定包必须 `Release`、精确 `v<三段版本>` 标签指向所构建源码，且源码属于 `origin/main`。预发布显式使用 `-Prerelease`，允许同版本的 `v1.6`（仅源码补丁号为 0）或带后缀标签，不要求提前合并 main。`v1.6` 对应程序版本 **1.6.0 / xb**；GitHub 必须标为 Prerelease，不能设为 Latest。用户本轮要求暂不合并 PR，因此此标签从移植功能分支创建。
 
-`Collect-ReleaseAssets.ps1` 只从 Actions 产物的 `dist` 收集包，拒绝测试夹具、缺平台、混合源码/配置、散落 DLL、错误 PE 架构、损坏哈希、变化的固定凭据组件或不一致的 Mac 构建信息。全部验证后生成三包、旁置构建/签名信息、`SHA256SUMS.txt` 与 `RELEASE-MANIFEST.json`。先创建**草稿**，不覆盖已有发行、不自动公开；维护者核对资产后再将预发布公开，正式发行仍遵循 dev → main 审查流程。
+`Collect-ReleaseAssets.ps1` 只从 Actions 产物的 `dist` 收集包，拒绝测试夹具、缺平台、混合源码/配置、散落 DLL、错误 PE 架构、损坏哈希、变化的固定凭据组件或不一致的 Mac 构建信息。全部验证后，公开上传目录仅保留三个平台 ZIP；构建/签名信息、`.sha256`、`SHA256SUMS.txt` 与 `RELEASE-MANIFEST.json` 移入 `evidence/`，单独存为 Actions 的 `Desktop-Release-Evidence-<tag>-<run>` 验证产物，不附加到 GitHub Release。公开文件通过 GitHub 自带的 SHA-256 摘要核对；内部来源与完整性检查继续执行。发行说明只描述功能、下载和用户需要知道的兼容事项，分支/PR、源码/SDK、测试编号和过程留在维护报告。先创建**草稿**，不覆盖已有发行、不自动公开；维护者核对资产后再将预发布公开，正式发行仍遵循 dev → main 审查流程。
 
 工作流进入分支的代码不代表分支已推送或被验证。首次运行结果和未完成原生验收见 [R55](MACOS-R55.md)、[v1.6.0 说明](RELEASE-v1.6.0.md) 与 [todo](../../todo.md)。不启动 Minecraft 的编译、Headless、凭据专项不代替完整游戏/真机矩阵。
 

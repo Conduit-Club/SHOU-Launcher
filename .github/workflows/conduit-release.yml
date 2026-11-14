@@ -77,6 +77,12 @@ jobs:
           RELEASE_PRERELEASE: ${{ needs.validate.outputs.prerelease }}
         run: |
           ./scripts/conduit/Collect-ReleaseAssets.ps1 -InputRoot candidates -OutputRoot release-assets -Tag $env:RELEASE_TAG -SourceSha $env:RELEASE_SOURCE -Version $env:RELEASE_VERSION -Codename $env:RELEASE_CODENAME -Prerelease:($env:RELEASE_PRERELEASE -eq 'true')
+      - name: Preserve internal release verification evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: Desktop-Release-Evidence-${{ needs.validate.outputs.tag }}-${{ github.run_id }}
+          path: release-assets/evidence/
+          if-no-files-found: error
       - name: Create reviewable Desktop release draft
         shell: pwsh
         env:
@@ -93,6 +99,7 @@ jobs:
           if(-not (Test-Path -LiteralPath $notes -PathType Leaf)){throw 'Version-specific release notes are required.'}
           gh release create $env:RELEASE_TAG @flags --title "SHOU-Launcher v$($env:RELEASE_VERSION) · $($env:RELEASE_CODENAME)" --notes-file $notes
           if($LASTEXITCODE -ne 0){throw 'Cannot create draft; existing tags/releases are never overwritten.'}
-          $files=Get-ChildItem release-assets -File | ForEach-Object FullName
+          $files=@('osx-arm64','win-x64','win-arm64') | ForEach-Object { Join-Path release-assets "SHOU-Launcher-$_-$($env:RELEASE_TAG).zip" }
+          foreach($file in $files){if(-not (Test-Path -LiteralPath $file -PathType Leaf)){throw 'A compiled release package is missing.'}}
           gh release upload $env:RELEASE_TAG @files
           if($LASTEXITCODE -ne 0){throw 'Release asset upload failed; draft stays unpublished.'}

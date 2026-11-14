@@ -135,9 +135,43 @@ def main():
         if error:
             assert not destination.exists(), 'Rejected packages left a partial release directory.'
         else:
-            result = json.loads((destination / 'RELEASE-MANIFEST.json').read_text(encoding='utf-8-sig'))
+            evidence = destination / 'evidence'
+            result = json.loads((evidence / 'RELEASE-MANIFEST.json').read_text(encoding='utf-8-sig'))
             assert len(result['packages']) == 3 and result['source_sha'] == source and result['prerelease'] is True
-            assert len(list(destination.glob('*.zip'))) == 3
+            public = {p.name for p in destination.iterdir() if p.is_file()}
+            assert public == {f'SHOU-Launcher-{rid}-v1.6.zip' for rid in ['osx-arm64', 'win-x64', 'win-arm64']}, public
+            assert len(list(evidence.iterdir())) == 10, 'Internal verification records must remain available.'
+            for package in result['packages']:
+                name = package['file']
+                digest = hashlib.sha256((destination / name).read_bytes()).hexdigest()
+                assert digest == package['sha256']
+                assert (evidence / (name + '.sha256')).read_text().strip() == digest + '  ' + name
+    # Exercise the actual YAML publisher script with a local gh stub. Even extra
+    # files in the upload root must never become public release attachments.
+    publisher = out / 'publisher'; publisher.mkdir()
+    shutil.copytree(out / 'complete-packages-assets', publisher / 'release-assets')
+    (publisher / 'release-assets/debug.zip').write_bytes(b'not a compiled package')
+    (publisher / 'release-assets/internal.json').write_text('{}')
+    notes = publisher / 'docs/conduit/RELEASE-v1.6.0.md'; notes.parent.mkdir(parents=True)
+    shutil.copy2(repo / 'docs/conduit/RELEASE-v1.6.0.md', notes)
+    workflow = (repo / '.github/workflows/conduit-release.yml').read_text()
+    step = workflow.split('      - name: Create reviewable Desktop release draft\n', 1)[1]
+    body = step.split('        run: |\n', 1)[1]
+    script = '\n'.join(line[10:] for line in body.splitlines() if line.startswith('          '))
+    assert script and 'gh release upload' in script
+    harness = publisher / 'publish.ps1'
+    harness.write_text("$ErrorActionPreference='Stop'\n$global:calls=[Collections.Generic.List[object]]::new()\n"
+                       "function gh { param([Parameter(ValueFromRemainingArguments)][string[]]$Arguments) "
+                       "$global:calls.Add(@{arguments=@($Arguments)});$global:LASTEXITCODE=0 }\n"
+                       "$env:RELEASE_TAG='v1.6';$env:RELEASE_VERSION='1.6.0';$env:RELEASE_CODENAME='xb';$env:RELEASE_PRERELEASE='true'\n"
+                       + script + "\n$global:calls | ConvertTo-Json -Depth 5\n")
+    published = json.loads(check([pwsh, '-NoProfile', '-File', harness], 'publisher-compiled-packages-only', cwd=publisher).stdout.lstrip('\ufeff'))
+    assert len(published) == 2
+    create, upload = (call['arguments'] for call in published)
+    assert create[:3] == ['release', 'create', 'v1.6'] and '--prerelease' in create and '--draft' in create and '--latest=false' in create
+    assert upload[:3] == ['release', 'upload', 'v1.6'] and len(upload) == 6
+    assert {Path(name).name for name in upload[3:]} == {f'SHOU-Launcher-{rid}-v1.6.zip' for rid in ['osx-arm64', 'win-x64', 'win-arm64']}
+
     result = dict(status='PASS', cases=cases, fixture_only=True, user_refs_modified=False, releases_created=False)
     (out / 'result.json').write_text(json.dumps(result, indent=2) + '\n'); print(json.dumps(result, indent=2))
 
