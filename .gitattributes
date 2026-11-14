@@ -60,4 +60,9 @@
 #*.pdf   diff=astextplain
 #*.PDF   diff=astextplain
 #*.rtf   diff=astextplain
+
+# Frozen macOS credential component: preserve executable and source provenance.
+/src/SHOU.Launcher.Desktop/Native/MacOS/credential_broker.c text eol=lf
+/src/SHOU.Launcher.Desktop/Native/MacOS/frozen-arm64-v1/manifest.json text eol=lf
+/src/SHOU.Launcher.Desktop/Native/MacOS/frozen-arm64-v1/SHOU.CredentialBroker binary
 #*.RTF   diff=astextplain

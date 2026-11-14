@@ -1,0 +1,51 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="using:SHOU.Launcher.Desktop.Localization"
+             xmlns:local="using:SHOU.Launcher.Desktop.Views" x:Class="SHOU.Launcher.Desktop.Views.AccountAppearanceOverlay"
+             Name="AccountAppearanceModal" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Focusable="True" KeyDown="Appearance_KeyDown">
+  <UserControl.Styles>
+    <Style Selector="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /></Style>
+    <Style Selector="TextBlock.appearanceHint"><Setter Property="FontSize" Value="12" /><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /></Style>
+    <Style Selector="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+  </UserControl.Styles>
+  <Grid Background="#66000000" KeyboardNavigation.TabNavigation="Cycle">
+    <Border Name="AccountAppearanceCard" Background="{DynamicResource ClubSurface}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="9" BoxShadow="0 8 26 0 #55000000" Padding="22,18" Margin="28,22" MaxWidth="620" MaxHeight="650" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+      <Grid RowDefinitions="Auto,Auto,*,Auto,Auto" RowSpacing="9">
+        <Grid ColumnDefinitions="*,Auto"><TextBlock Name="AccountAppearanceTitle" Text="{Binding AccountAppearanceDialogTitle}" LineHeight="32" FontSize="23" FontWeight="Bold" Foreground="{DynamicResource ClubAccent}" /><Button Name="CloseAccountAppearanceButton" Grid.Column="1" Content="{loc:Loc t3fd47edce45b3603}" Command="{Binding CloseAppearanceCommand}" Padding="10,2" MinHeight="27" /></Grid>
+        <StackPanel Grid.Row="1" Spacing="2"><TextBlock Text="{Binding AccountAppearancePlayer}" LineHeight="20" FontSize="14" /><TextBlock Text="{Binding AccountAppearanceSummary}" Classes="appearanceHint" /><TextBlock Text="{Binding AccountAppearanceStatus}" Classes="appearanceHint" IsVisible="{Binding HasAccountAppearanceMessage}" /></StackPanel>
+        <Grid Grid.Row="2">
+          <Grid IsVisible="{Binding IsOnlineSkinPage}" ColumnDefinitions="*,220" ColumnSpacing="14">
+            <Border Background="{DynamicResource ClubSelection}" CornerRadius="6" ClipToBounds="True"><local:AccountSkinPreviewControl Name="OnlineSkin3DPreview" Skin="{Binding OnlineSkinPreview}" Model="{Binding SelectedLocalSkinModel.Value}" ShowOuterLayer="True" MinHeight="160" /></Border>
+            <StackPanel Grid.Column="1" Spacing="14" VerticalAlignment="Center">
+              <ComboBox Name="OnlineSkinModelSelector" ItemsSource="{Binding SkinModelChoices}" SelectedItem="{Binding SelectedLocalSkinModel}" IsEnabled="{Binding CanChooseOnlineSkin}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox>
+              <Button Name="PickOnlineSkinButton" Content="选择皮肤 PNG…" IsEnabled="{Binding CanChooseOnlineSkin}" Click="PickOnlineSkin_Click" />
+              <Button Name="UploadOnlineSkinButton" Content="上传到此角色" Classes="primary" Command="{Binding UploadOnlineSkinCommand}" />
+            </StackPanel>
+          </Grid>
+          <Grid IsVisible="{Binding IsAccountPreviewPage}">
+            <Border Name="AccountPreviewViewport" Background="{DynamicResource ClubSelection}" CornerRadius="6" ClipToBounds="True"><local:AccountSkinPreviewControl Name="AccountSkinPreview" Skin="{Binding AccountSkin}" Cape="{Binding PreviewCapeTexture}" Model="{Binding AccountSkinModel}" ShowOuterLayer="{Binding ShowSkinOuterLayer}" ShowCape="{Binding ShowPreviewCape}" MinHeight="160" /></Border>
+          </Grid>
+          <Grid IsVisible="{Binding IsAccountCapePage}" ColumnDefinitions="*,210" ColumnSpacing="12">
+            <Grid RowDefinitions="Auto,*,Auto,Auto" RowSpacing="8"><TextBlock Text="{Binding AccountCapeSummary}" Classes="appearanceHint" /><ListBox Grid.Row="1" Name="AccountCapeList" ItemsSource="{Binding AccountCapes}" SelectedItem="{Binding SelectedPreviewCape}" MinHeight="64"><ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" Margin="7,6"><TextBlock Text="{Binding Name}" /><TextBlock Grid.Column="1" Text="{loc:Loc tad93d84391821288}" IsVisible="{Binding IsActive}" Classes="appearanceHint" /></Grid></DataTemplate></ListBox.ItemTemplate></ListBox><TextBlock Grid.Row="2" Text="{loc:Loc t95be0103f3d08834}" IsVisible="{Binding !HasAccountCapes}" Classes="appearanceHint" /><StackPanel Grid.Row="3" Spacing="8"><Button Name="WearOnlineCapeButton" Content="穿戴所选披风" Command="{Binding WearOnlineCapeCommand}" IsVisible="{Binding SupportsOnlineAppearance}" /><Button Name="HideOnlineCapeButton" Content="卸下当前披风" Command="{Binding HideOnlineCapeCommand}" IsVisible="{Binding SupportsOnlineAppearance}" /><Button Name="ManageAccountCapeWebsiteButton" Content="{loc:Loc t7b23834751bb120f}" Command="{Binding OpenAppearanceWebsiteCommand}" IsVisible="{Binding CanOpenAppearanceWebsite}" HorizontalAlignment="Left" /></StackPanel></Grid>
+            <Border Grid.Column="1" Background="{DynamicResource ClubSelection}" CornerRadius="6"><local:AccountSkinPreviewControl Name="AccountCapePreview" Skin="{Binding AccountSkin}" Cape="{Binding PreviewCapeTexture}" Model="{Binding AccountSkinModel}" ShowOuterLayer="{Binding ShowSkinOuterLayer}" ShowCape="True" /></Border>
+          </Grid>
+          <Grid IsVisible="{Binding IsLocalSkinPage}" ColumnDefinitions="*,220" ColumnSpacing="14">
+            <Border Background="{DynamicResource ClubSelection}" CornerRadius="6" ClipToBounds="True">
+              <Grid><local:AccountSkinPreviewControl Name="LocalSkin3DPreview" Skin="{Binding AccountSkin}" Model="{Binding SelectedLocalSkinModel.Value}" ShowOuterLayer="True" MinHeight="160" />
+                <TextBlock Text="{loc:Loc t2969b18bc1a61c75}" IsVisible="{Binding !HasAccountSkin}" TextWrapping="Wrap" Margin="16" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Grid>
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="14" VerticalAlignment="Center">
+            <TextBlock Text="{Binding AccountAppearanceCapability}" Classes="appearanceHint" />
+            <Grid ColumnDefinitions="70,*"><TextBlock Text="{loc:Loc tf5d00e4846a47470}" VerticalAlignment="Center" /><ComboBox Name="LocalSkinModelSelector" Grid.Column="1" ItemsSource="{Binding SkinModelChoices}" SelectedItem="{Binding SelectedLocalSkinModel}" IsEnabled="{Binding CanChooseLocalSkin}" HorizontalAlignment="Stretch"><ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Name}" /></DataTemplate></ComboBox.ItemTemplate></ComboBox></Grid>
+            <StackPanel Spacing="8"><Button Name="PickOfflineSkinButton" Classes="primary" Content="{loc:Loc t180ee1322559a48f}" ToolTip.Tip="{loc:Loc tde5bc03839b12c3e}" IsEnabled="{Binding CanChooseLocalSkin}" Click="PickOfflineSkin_Click" /><Button Name="SaveLocalSkinPngButton" Content="{loc:Loc t13a552f02fde1959}" IsEnabled="{Binding CanSaveSkinPng}" Click="SaveSkinPng_Click" /></StackPanel>
+            </StackPanel>
+          </Grid>
+        </Grid>
+        <Grid Grid.Row="3" ColumnDefinitions="*,Auto" IsVisible="{Binding IsAccountPreviewPage}">
+          <StackPanel Orientation="Horizontal" Spacing="14"><CheckBox Name="PreviewOuterLayerCheckBox" Content="{loc:Loc tfe3f9d295c66ea50}" IsChecked="{Binding ShowSkinOuterLayer}" /><CheckBox Name="PreviewCapeCheckBox" Content="{loc:Loc tc8cede4357602235}" IsChecked="{Binding ShowPreviewCape}" /></StackPanel>
+          <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8"><Button Name="ResetAccountPreviewButton" Content="{loc:Loc t95ac0ce3b08bf57c}" Click="ResetPreview_Click" /><Button Name="RefreshAccountPreviewButton" Content="{loc:Loc taee88743413144a2}" Command="{Binding RefreshAppearanceCommand}" /></StackPanel>
+        </Grid>
+        <Grid Grid.Row="4" ColumnDefinitions="*,Auto"><TextBlock Text="{loc:Loc ta1f84ed0b8c2d28a}" ToolTip.Tip="{loc:Loc t3d65a34ee0ef1b95}" IsVisible="{Binding IsAccountPreviewPage}" Classes="appearanceHint" VerticalAlignment="Center" /><TextBlock Text="{Binding AccountAppearanceCapability}" IsVisible="{Binding IsAccountCapePage}" Classes="appearanceHint" /><StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7"><Button Content="{loc:Loc t6cd7c2dac6c36ef4}" Command="{Binding RefreshAppearanceCommand}" IsVisible="{Binding !IsAccountPreviewPage}" /><Button Content="{loc:Loc tcaf06adff4f18c9e}" Command="{Binding CancelAppearanceReadCommand}" IsVisible="{Binding IsAccountAppearanceBusy}" /></StackPanel></Grid>
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

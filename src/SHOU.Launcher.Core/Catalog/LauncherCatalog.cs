@@ -1,0 +1,233 @@
+using System.Net.Http.Headers;
+using System.Text.Json;
+using System.Text.Json.Nodes;
+using PCL.Core.Conduit;
+using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Core.IO;
+
+namespace SHOU.Launcher.Core.Catalog;
+
+/// <summary>Data-only catalogs share the production proxy/source policy. They never execute remote content.</summary>
+public sealed class LauncherCatalog(HttpClient http, Func<IReadOnlyList<DownloadSource>> sources, bool preferCompleteCatalog = true)
+{
+    private const int MaximumBytes = 8 * 1024 * 1024;
+    private async Task<(JsonNode Data, string Source, bool Partial)> ReadAsync(string url, bool modSource, CancellationToken ct, Func<JsonNode, bool> validate, object? body = null)
+    {
+        var candidates = modSource ? ModDownloadSources.Resolve(url, sources()).Select(u => new SourceAddress(u, "Modrinth", 0)).ToArray()
+            : DownloadSources.Resolve([url], sources());
+        var failures = new List<Exception>();
+        foreach (var candidate in preferCompleteCatalog && url == DownloadSources.ManifestUrl ? candidates.OrderBy(c => new Uri(c.Url).Host == new Uri(DownloadSources.ManifestUrl).Host ? 0 : c.IsPartialCatalog ? 2 : 1) : candidates.AsEnumerable())
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromSeconds(20));
+                using var request = new HttpRequestMessage(body is null ? HttpMethod.Get : HttpMethod.Post, candidate.Url);
+                if (body is not null) request.Content = new StringContent(JsonSerializer.Serialize(body), System.Text.Encoding.UTF8, "application/json");
+                request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.6.1 (+https://github.com/Conduit-Club/SHOU-Launcher)");
+                request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                if (response.Content.Headers.ContentLength is > MaximumBytes) throw new InvalidDataException("目录响应超过大小限制。");
+                await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
+                using var bytes = new MemoryStream();
+                var buffer = new byte[16384];
+                while (true)
+                {
+                    var count = await stream.ReadAsync(buffer, timeout.Token).ConfigureAwait(false);
+                    if (count == 0) break;
+                    if (bytes.Length + count > MaximumBytes) throw new InvalidDataException("目录响应超过大小限制。");
+                    bytes.Write(buffer, 0, count);
+                }
+                var node = JsonNode.Parse(bytes.ToArray()) ?? throw new InvalidDataException("目录内容为空。");
+                if (!validate(node)) throw new InvalidDataException("目录结构无效。");
+                return (node, new Uri(candidate.Url).Host, candidate.IsPartialCatalog);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or JsonException or OperationCanceledException)
+            { failures.Add(new IOException("目录来源失败：" + ex.GetType().Name)); }
+        }
+        throw new AggregateException("所有目录来源均不可用，请检查网络后重试。", failures);
+    }
+    public async Task<GameCatalog> GamesAsync(CancellationToken ct = default)
+    {
+        var document = await ReadAsync(DownloadSources.ManifestUrl, false, ct, n => n["versions"] is JsonArray).ConfigureAwait(false);
+        var data = document.Data;
+        var entries = data["versions"] as JsonArray ?? throw new InvalidDataException("版本列表缺失。");
+        if (entries.Count is 0 or > 20000) throw new InvalidDataException("版本列表数量无效。");
+        var latest = new[] { (string?)data["latest"]?["release"], (string?)data["latest"]?["snapshot"] };
+        var result = entries.Select(n =>
+        {
+            var id = (string?)n?["id"] ?? "";
+            if (id.Length is 0 or > 160 || id.Any(char.IsControl)) throw new InvalidDataException("版本名称无效。");
+            var installable = true;
+            try { _ = SafePath.Identifier(id); } catch (ArgumentException) { installable = false; }
+            return new GameCatalogVersion(id, (string?)n?["type"] ?? "unknown",
+                DateTimeOffset.TryParse((string?)n?["releaseTime"], out var date) ? date : DateTimeOffset.MinValue,
+                latest.Contains(id), installable);
+        }).ToArray();
+        return new(result, document.Source, document.Partial);
+    }
+    public async Task<IReadOnlyList<LoaderCatalogVersion>> FabricAsync(string gameVersion, CancellationToken ct = default)
+    {
+        SafePath.Identifier(gameVersion);
+        var document = await ReadAsync("https://meta.fabricmc.net/v2/versions/loader/" + Uri.EscapeDataString(gameVersion), false, ct, n => n is JsonArray).ConfigureAwait(false);
+        var data = document.Data;
+        if (data is not JsonArray entries || entries.Count > 5000) throw new InvalidDataException("Fabric目录无效。");
+        // Historical +build loader coordinates are not supported by the installation identity policy.
+        // Keep them from invalidating the modern versions returned in the same official response.
+        return entries.Where(n => !System.Text.RegularExpressions.Regex.IsMatch((string?)n?["loader"]?["version"] ?? "",
+            @"\A[0-9]+\.[0-9]+\.[0-9]+\+build\.[0-9]+\z", System.Text.RegularExpressions.RegexOptions.CultureInvariant))
+            .Select(n => new LoaderCatalogVersion(SafePath.Identifier((string?)n?["loader"]?["version"] ?? ""),
+            (bool?)n?["loader"]?["stable"] ?? false)).Distinct().ToArray();
+    }
+    public async Task<IReadOnlyList<ContentProject>> SearchAsync(ContentQuery query, CancellationToken ct = default)
+    {
+        var type = query.Kind switch { "mod" => "mod", "modpack" => "modpack", "resourcepack" => "resourcepack",
+            "shader" => "shader", "datapack" => "datapack", _ => throw new NotSupportedException("此来源尚不支持这类内容。") };
+        if (query.Search.Length > 256 || query.Offset < 0 || query.Limit is < 1 or > 50 || query.Offset + query.Limit > 10000) throw new ArgumentException("搜索条件超出范围。");
+        if (query.Sort is not ("relevance" or "downloads" or "follows" or "newest" or "updated")) throw new ArgumentException("未知排序。");
+        var facets = new List<string[]> { new[] { "project_type:" + type } };
+        if (!string.IsNullOrWhiteSpace(query.GameVersion)) facets.Add(["versions:" + query.GameVersion]);
+        if (!string.IsNullOrWhiteSpace(query.Loader)) facets.Add(["categories:" + query.Loader]);
+        if (!string.IsNullOrWhiteSpace(query.Category))
+        {
+            if (query.Category.Length > 80 || query.Category.Any(c => !char.IsAsciiLetterOrDigit(c) && c != '-')) throw new ArgumentException("标签无效。");
+            facets.Add(["categories:" + query.Category]);
+        }
+        var url = "https://api.modrinth.com/v2/search?limit=" + query.Limit + "&offset=" + query.Offset + "&query=" + Uri.EscapeDataString(query.Search)
+            + "&index=" + (query.Sort == "relevance" && string.IsNullOrWhiteSpace(query.Search) ? "downloads" : query.Sort) + "&facets=" + Uri.EscapeDataString(JsonSerializer.Serialize(facets));
+        var document = await ReadAsync(url, true, ct, n => n["hits"] is JsonArray).ConfigureAwait(false);
+        var data = document.Data;
+        if (data["hits"] is not JsonArray hits || hits.Count > 100) throw new InvalidDataException("资源搜索响应无效。");
+        return hits.Select(n =>
+        {
+            var id = SafePath.Identifier((string?)n?["project_id"] ?? "");
+            var slug = SafePath.Identifier((string?)n?["slug"] ?? id);
+            var pageType = (string?)n?["project_type"];
+            if (pageType is not ("mod" or "modpack" or "resourcepack" or "shader" or "datapack")) pageType = type;
+            return new ContentProject(id, slug, (string?)n?["title"] ?? id, (string?)n?["description"] ?? "",
+                (string?)n?["author"] ?? "", (long?)n?["downloads"] ?? 0, query.Kind, (string?)n?["icon_url"],
+                new Uri("https://modrinth.com/" + pageType + "/" + slug), Categories: ReadStrings(n?["categories"]), GameVersions: ReadStrings(n?["versions"]),
+                Updated: DateTimeOffset.TryParse((string?)n?["date_modified"], out var updated) ? updated : null);
+        }).ToArray();
+    }
+    private static string[] ReadStrings(JsonNode? node) => node is JsonArray array ? array.Take(5000).Select(x => (string?)x ?? "").Where(x => x.Length is > 0 and <= 160).ToArray() : [];
+    public async Task<IReadOnlyList<ContentCategory>> CategoriesAsync(CancellationToken ct = default)
+    {
+        var document = await ReadAsync("https://api.modrinth.com/v2/tag/category", true, ct, n => n is JsonArray).ConfigureAwait(false);
+        return ((JsonArray)document.Data).Take(2000).Select(n => new ContentCategory((string?)n?["name"] ?? "", (string?)n?["project_type"] ?? ""))
+            .Where(c => c.Id.Length is > 0 and <= 80 && c.Id.All(x => char.IsAsciiLetterOrDigit(x) || x == '-') && c.Kind is "mod" or "modpack" or "resourcepack" or "shader" or "datapack").Distinct().ToArray();
+    }
+    public async Task<IReadOnlyList<ContentRelease>> ReleasesAsync(string projectId, string? gameVersion, string? loader, CancellationToken ct = default)
+    {
+        SafePath.Identifier(projectId);
+        var args = new List<string>();
+        if (!string.IsNullOrWhiteSpace(gameVersion)) args.Add("game_versions=" + Uri.EscapeDataString(JsonSerializer.Serialize(new[] { gameVersion })));
+        if (!string.IsNullOrWhiteSpace(loader)) args.Add("loaders=" + Uri.EscapeDataString(JsonSerializer.Serialize(new[] { loader })));
+        var document = await ReadAsync("https://api.modrinth.com/v2/project/" + projectId + "/version" + (args.Count == 0 ? "" : "?" + string.Join('&', args)), true, ct, n => n is JsonArray).ConfigureAwait(false);
+        var data = document.Data;
+        if (data is not JsonArray versions || versions.Count > 10000) throw new InvalidDataException("资源版本响应无效。");
+        return versions.Take(250).Select(ParseRelease).ToArray();
+    }
+    public async Task<ContentRelease> ReleaseAsync(string releaseId, CancellationToken ct = default)
+    {
+        SafePath.Identifier(releaseId);
+        var result = await ReadAsync("https://api.modrinth.com/v2/version/" + releaseId, true, ct, n => n is JsonObject).ConfigureAwait(false);
+        return ParseRelease(result.Data);
+    }
+    public async Task<ContentRelease> ReleaseFromSha1Async(string sha1, CancellationToken ct = default)
+    {
+        if (!Content.ContentInstallFiles.Hash(sha1, 40)) throw new ArgumentException("模组哈希无效。");
+        var result = await ReadAsync("https://api.modrinth.com/v2/version_file/" + sha1 + "?algorithm=sha1", true, ct, n => n is JsonObject).ConfigureAwait(false);
+        var release = ParseRelease(result.Data);
+        if (!release.Files.Any(f => f.Sha1 == sha1)) throw new InvalidDataException("在线模组身份与本地哈希不符。");
+        return release;
+    }
+    public async Task<IReadOnlyDictionary<string, ContentRelease>> ReleasesFromHashesAsync(IReadOnlyList<string> hashes, CancellationToken ct)
+    {
+        if (hashes.Any(h => !Content.ContentInstallFiles.Hash(h, 40))) throw new ArgumentException("模组哈希无效。");
+        var result = new Dictionary<string, ContentRelease>(StringComparer.Ordinal);
+        foreach (var group in hashes.Distinct(StringComparer.Ordinal).Chunk(100))
+        {
+            var response = await ReadAsync("https://api.modrinth.com/v2/version_files", true, ct, n => n is JsonObject, new { hashes = group, algorithm = "sha1" });
+            foreach (var hash in group)
+                if (response.Data[hash] is { } node)
+                {
+                    var release = ParseRelease(node);
+                    if (!release.Files.Any(f => f.Sha1 == hash)) throw new InvalidDataException("批量模组身份与本地哈希不符。");
+                    result.Add(hash, release);
+                }
+        }
+        return result;
+    }
+    public async Task<ContentProject> ProjectAsync(string projectId, CancellationToken ct = default)
+    {
+        SafePath.Identifier(projectId);
+        var result = await ReadAsync("https://api.modrinth.com/v2/project/" + projectId, true, ct, n => n is JsonObject).ConfigureAwait(false);
+        var n = result.Data;
+        var id = SafePath.Identifier((string?)n["id"] ?? "");
+        var slug = SafePath.Identifier((string?)n["slug"] ?? id);
+        var kind = (string?)n["project_type"] ?? "";
+        if (kind is not ("mod" or "modpack" or "resourcepack" or "shader" or "datapack")) throw new InvalidDataException("未知资源类型。");
+        return new(id, slug, (string?)n["title"] ?? id, (string?)n["description"] ?? "", "", (long?)n["downloads"] ?? 0,
+            kind, (string?)n["icon_url"], new Uri("https://modrinth.com/" + kind + "/" + slug), (string?)n["client_side"] ?? "unknown",
+            Categories: ReadStrings(n["categories"]), GameVersions: ReadStrings(n["game_versions"]));
+    }
+    private static ContentRelease ParseRelease(JsonNode? n)
+    {
+        var files = (n?["files"] as JsonArray ?? []).Select(f =>
+            {
+                var name = (string?)f?["filename"] ?? "";
+                if (name.Length is 0 or > 200 || name.Contains('/') || name.Contains('\\') || name is "." or "..") throw new InvalidDataException("资源文件名无效。");
+                var uri = new Uri((string?)f?["url"] ?? "");
+                if (uri.Scheme != "https" || !string.IsNullOrEmpty(uri.UserInfo) || !uri.Host.Equals("cdn.modrinth.com", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidDataException("资源文件来源无效。");
+                var hash = (string?)f?["hashes"]?["sha1"] ?? "";
+                if (hash.Length != 40 || !hash.All(Uri.IsHexDigit)) throw new InvalidDataException("资源文件缺少SHA-1。");
+                var size = (long?)f?["size"] ?? -1;
+                if (size is < 0 or > 2147483648) throw new InvalidDataException("资源文件大小无效。");
+                return new ContentFile(name, uri, hash.ToLowerInvariant(), size, (bool?)f?["primary"] ?? false);
+            }).ToArray();
+        var dependencies = (n?["dependencies"] as JsonArray ?? []);
+        if (files.Length > 64 || dependencies.Count > 128) throw new InvalidDataException("资源文件或依赖数量超限。");
+        return new ContentRelease(SafePath.Identifier((string?)n?["id"] ?? ""), (string?)n?["name"] ?? "",
+            (string?)n?["version_number"] ?? "", DateTimeOffset.TryParse((string?)n?["date_published"], out var date) ? date : DateTimeOffset.MinValue,
+            Strings(n?["game_versions"]), Strings(n?["loaders"]), files,
+            dependencies.Select(d => new ContentDependency((string?)d?["dependency_type"] ?? "", (string?)d?["project_id"], (string?)d?["version_id"], (string?)d?["file_name"])).ToArray(),
+            (string?)n?["project_id"], (string?)n?["environment"] ?? "unknown", ReleaseChannel: (string?)n?["version_type"] ?? "release");
+    }
+    private static string[] Strings(JsonNode? node) => node is JsonArray values ? values.Select(v => (string?)v ?? "").ToArray() : [];
+    public async Task<byte[]> IconAsync(string url, CancellationToken ct = default)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme != "https" ||
+            uri.Host != "cdn.modrinth.com" || uri.UserInfo.Length > 0 || uri.Fragment.Length > 0)
+            throw new InvalidDataException("资源图标地址不受支持。");
+        foreach (var candidate in ModDownloadSources.Resolve(url, sources()))
+        {
+            ct.ThrowIfCancellationRequested();
+            try
+            {
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(10));
+                using var request = new HttpRequestMessage(HttpMethod.Get, candidate);
+                request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.6.1");
+                using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+                response.EnsureSuccessStatusCode();
+                if (response.Content.Headers.ContentLength is > 524288) throw new InvalidDataException("资源图标过大。");
+                await using var input = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
+                using var result = new MemoryStream(); var buffer = new byte[8192];
+                while (true)
+                {
+                    var count = await input.ReadAsync(buffer, timeout.Token).ConfigureAwait(false); if (count == 0) break;
+                    if (result.Length + count > 524288) throw new InvalidDataException("资源图标过大。");
+                    result.Write(buffer, 0, count);
+                }
+                return result.ToArray();
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
+            catch (Exception ex) when (ex is HttpRequestException or IOException or InvalidDataException or OperationCanceledException) { }
+        }
+        throw new IOException("资源图标暂不可用。");
+    }
+}

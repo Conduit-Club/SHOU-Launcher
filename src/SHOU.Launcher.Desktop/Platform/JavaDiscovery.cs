@@ -1,0 +1,205 @@
+using System.Security;
+using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Core.Java;
+using SHOU.Launcher.Desktop.Platform.Windows;
+
+namespace SHOU.Launcher.Desktop.Platform;
+
+public sealed partial class JavaDiscovery : IJavaDiscovery
+{
+    private readonly IProcessRunner _processes;
+    private readonly JavaRuntimeProbe _probe;
+    private readonly PlatformContext _platform;
+    private readonly string? _configuredExecutable;
+    private readonly string _home;
+    private readonly bool _includeSystemSources;
+    private readonly string? _managedRuntimeDirectory;
+    private readonly IReadOnlyList<string> _additionalSearchRoots;
+
+    public JavaDiscovery(IProcessRunner processes, PlatformContext platform, PlatformOptions? options = null,
+        string? homeDirectory = null, bool includeSystemSources = true, TimeSpan? probeTimeout = null,
+        string? managedRuntimeDirectory = null, IReadOnlyList<string>? additionalSearchRoots = null)
+    {
+        _processes = processes;
+        _probe = new JavaRuntimeProbe(processes, probeTimeout);
+        _platform = platform;
+        _configuredExecutable = options?.ConfiguredJavaExecutable;
+        _home = homeDirectory ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        _includeSystemSources = includeSystemSources;
+        _managedRuntimeDirectory = managedRuntimeDirectory;
+        _additionalSearchRoots = additionalSearchRoots ?? [];
+    }
+
+    public async Task<JavaInstallation> ProbeAsync(string executable, CancellationToken cancellationToken = default)
+    {
+        if (Path.IsPathFullyQualified(executable))
+        {
+            var root = DerivedJavaTrustService.FindDerivedRootForCandidate(executable,
+                _managedRuntimeDirectory ?? Path.GetDirectoryName(executable)!);
+            if (root is not null && !await DerivedJavaTrustService.ValidateCandidateReadOnlyAsync(root, executable, cancellationToken))
+                return InvalidDerived(executable, "probe");
+        }
+        return await _probe.ProbeAsync(executable, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<JavaInstallation>> DiscoverAsync(JavaDiscoveryRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var candidates = new Dictionary<string, string>(_platform.OS == LauncherOS.Windows
+            ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var configured = request.ConfiguredExecutable ?? _configuredExecutable;
+        if (!string.IsNullOrWhiteSpace(configured)) Add(configured, "configured", requireExists: false);
+        // On macOS prefer conventional installed JDKs; managed runtimes remain a fallback.
+        if (_platform.OS != LauncherOS.MacOS || !_includeSystemSources) ScanRuntimeRoot(request.ManagedRuntimeDirectory, "managed");
+
+        if (_includeSystemSources)
+        {
+            var javaHome = Environment.GetEnvironmentVariable("JAVA_HOME");
+            if (!string.IsNullOrWhiteSpace(javaHome)) AddHome(javaHome, "JAVA_HOME");
+            if (_platform.OS == LauncherOS.MacOS && OperatingSystem.IsMacOS())
+            {
+                // Finder does not inherit an interactive shell's PATH.
+                foreach (var root in new[] { "/Library/Java/JavaVirtualMachines", Path.Combine(_home, "Library", "Java", "JavaVirtualMachines") })
+                    foreach (var directory in EnumerateDirectories(root))
+                        AddHome(Path.Combine(directory, "Contents", "Home"), "JavaVirtualMachines");
+
+                if (File.Exists("/usr/libexec/java_home"))
+                {
+                    var result = await _processes.RunAsync(new ProcessSpec("/usr/libexec/java_home", ["-V"], "/",
+                        Timeout: TimeSpan.FromSeconds(5), OutputLimitCharacters: 32768), cancellationToken: cancellationToken);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (result.ExitCode == 0 && !result.TimedOut && !result.OutputTruncated)
+                        foreach (var line in (result.StandardOutput + "\n" + result.StandardError).Split('\n'))
+                        {
+                            var slash = line.IndexOf('/');
+                            if (slash >= 0) AddHome(line[slash..].Trim(), "java_home");
+                        }
+                }
+            }
+            else if (_platform.OS == LauncherOS.Windows && OperatingSystem.IsWindows())
+            {
+                foreach (var home in WindowsJavaCandidates.RegistryHomes()) AddHome(home, "registry");
+                var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+                ScanRuntimeRoot(Path.Combine(local, "Packages", "Microsoft.4297127D64EC6_8wekyb3d8bbwe", "LocalCache", "Local", "runtime"), "MicrosoftStore");
+                var roaming = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                ScanRuntimeRoot(Path.Combine(roaming, ".minecraft", "runtime"), "MinecraftRuntime");
+                foreach (var baseDirectory in new[] { Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles),
+                    Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86) }.Where(path => !string.IsNullOrWhiteSpace(path)).Distinct())
+                    foreach (var vendor in new[] { "Java", "Eclipse Adoptium", "Microsoft", "Zulu", "BellSoft", "Amazon Corretto" })
+                        ScanRuntimeRoot(Path.Combine(baseDirectory, vendor), "installed");
+            }
+            foreach (var entry in (Environment.GetEnvironmentVariable("PATH") ?? "").Split(
+                _platform.OS == LauncherOS.Windows ? ';' : ':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                var directory = _platform.OS == LauncherOS.Windows ? entry.Trim('"') : entry;
+                if (Path.IsPathFullyQualified(directory)) Add(Path.Combine(directory, JavaFilename), "PATH");
+            }
+        }
+
+        if (_platform.OS == LauncherOS.MacOS && _includeSystemSources) ScanRuntimeRoot(request.ManagedRuntimeDirectory, "managed");
+        foreach (var root in PortableSearchRoots().Distinct(_platform.OS == LauncherOS.Windows ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal)) ScanPortableRoot(root);
+        var installations = new List<JavaInstallation>();
+        foreach (var (path, source) in candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var derivedRoot = DerivedJavaTrustService.FindDerivedRootForCandidate(path, request.ManagedRuntimeDirectory);
+            if (derivedRoot is not null
+                && !await DerivedJavaTrustService.ValidateCandidateReadOnlyAsync(derivedRoot, path, cancellationToken))
+            {
+                if (source == "configured") installations.Add(InvalidDerived(path, source));
+                continue;
+            }
+            installations.Add((await _probe.ProbeAsync(path, cancellationToken)) with { Source = source });
+        }
+        return installations.OrderByDescending(java => java.IsUsable
+            && (!request.RequiredMajorVersion.HasValue || java.MajorVersion == request.RequiredMajorVersion)
+            && (!request.RequiredArchitecture.HasValue || java.RuntimeArchitecture == request.RequiredArchitecture))
+            .ThenByDescending(java => java.MajorVersion)
+            .ThenBy(java => _platform.OS == LauncherOS.MacOS && java.Source is "configured" or "JAVA_HOME" or "JavaVirtualMachines" or "java_home" ? 0 : 1)
+            .ThenBy(java => java.ExecutablePath, StringComparer.Ordinal).ToArray();
+
+        void Add(string path, string source, bool requireExists = true)
+        {
+            if (candidates.Count >= 64) return;
+            if (!Path.IsPathFullyQualified(path))
+            {
+                // Keep an explicitly configured bad path visible to the caller; never resolve it against cwd.
+                if (!requireExists) candidates.TryAdd(path, source);
+                return;
+            }
+            path = Path.GetFullPath(path);
+            // This Apple stub can invoke a system installation prompt rather than an installed JVM.
+            if (_platform.OS == LauncherOS.MacOS && path == "/usr/bin/java") return;
+            if (!requireExists || File.Exists(path)) candidates.TryAdd(path, source);
+        }
+
+        void AddHome(string path, string source)
+        {
+            if (!Path.IsPathFullyQualified(path)) return;
+            Add(Path.Combine(path, "bin", JavaFilename), source);
+            if (_platform.OS == LauncherOS.MacOS) Add(Path.Combine(path, "Contents", "Home", "bin", JavaFilename), source);
+        }
+
+        void ScanRuntimeRoot(string root, string source)
+        {
+            if (!Path.IsPathFullyQualified(root) || !Directory.Exists(root)) return;
+            var queue = new Queue<(string Directory, int Depth)>();
+            queue.Enqueue((root, 0));
+            var visited = 0;
+            while (queue.Count > 0 && visited++ < 2048)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var (directory, depth) = queue.Dequeue();
+                if (Path.GetFileName(directory) == ".staging" || MojangJavaRuntimeInstaller.IsIncompleteRuntime(directory)) continue;
+                AddHome(directory, source);
+                if (Path.GetFileName(directory) == "bin") Add(Path.Combine(directory, JavaFilename), source);
+                if (depth >= 7) continue;
+                foreach (var child in EnumerateDirectories(directory))
+                {
+                    if (IsLink(child)) continue; // No loops or traversal into unrelated runtime trees.
+                    if (DerivedJavaTrustService.IsDerivedRootDirectory(directory)
+                        && !DerivedJavaTrustService.IsCompletedVariantDirectory(child)) continue;
+                    queue.Enqueue((child, depth + 1));
+                }
+            }
+        }
+
+        void ScanPortableRoot(string root)
+        {
+            if (!Path.IsPathFullyQualified(root) || !Directory.Exists(root) || IsLink(root)) return;
+            var pending = new Queue<(string Path, int Depth)>(); pending.Enqueue((root, 0));
+            var visited = 0;
+            while (pending.TryDequeue(out var entry) && visited++ < 1024 && candidates.Count < 64)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (MojangJavaRuntimeInstaller.IsIncompleteRuntime(entry.Path) || Path.GetFileName(entry.Path) == ".staging") continue;
+                AddHome(entry.Path, "portable");
+                if (Path.GetFileName(entry.Path).Equals("bin", StringComparison.OrdinalIgnoreCase)) Add(Path.Combine(entry.Path, JavaFilename), "portable");
+                if (entry.Depth >= 5 || File.Exists(Path.Combine(entry.Path, "bin", JavaFilename))) continue;
+                foreach (var child in EnumerateDirectories(entry.Path))
+                {
+                    if (IsLink(child) || !IsJavaSearchDirectory(Path.GetFileName(child))) continue;
+                    if (DerivedJavaTrustService.IsDerivedRootDirectory(entry.Path) && !DerivedJavaTrustService.IsCompletedVariantDirectory(child)) continue;
+                    pending.Enqueue((child, entry.Depth + 1));
+                }
+            }
+        }
+    }
+
+    private string JavaFilename => _platform.OS == LauncherOS.Windows ? "java.exe" : "java";
+    private static JavaInstallation InvalidDerived(string executable, string source) => new(executable, "", "", 0, "",
+        RuntimeArchitecture.Unknown, source, "[InvalidDerivedRuntime] 派生 Java 未通过执行前只读验证。");
+
+    private static bool IsLink(string path)
+    {
+        try { return (File.GetAttributes(path) & FileAttributes.ReparsePoint) != 0; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException) { return true; }
+    }
+
+    private static IEnumerable<string> EnumerateDirectories(string root)
+    {
+        try { return Directory.Exists(root) ? Directory.GetDirectories(root).Order(StringComparer.Ordinal).ToArray() : []; }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SecurityException) { return []; }
+    }
+}

@@ -1,0 +1,26 @@
+<Project>
+  <PropertyGroup Condition="$([System.String]::Copy('$(MSBuildProjectName)').StartsWith('SHOU.Launcher.'))">
+    <LangVersion>14.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Configurations>Debug;CI;Beta;Release</Configurations>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- Keep lock targets stable across native hosts and portable Linux test jobs.
+         Product publishing remains restricted to the three supported Desktop RIDs. -->
+    <RuntimeIdentifiers>osx-arm64;win-x64;win-arm64;linux-x64</RuntimeIdentifiers>
+    <Deterministic>true</Deterministic>
+    <UseSharedCompilation>false</UseSharedCompilation>
+    <Version>1.6.1</Version>
+    <Authors>Conduit Club; PCL Community contributors</Authors>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'CI'">
+    <DefineConstants>CI;TRACE</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Beta'">
+    <DefineConstants>BETA;PUBLISH</DefineConstants>
+    <Optimize>true</Optimize>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    <DefineConstants>RELEASE;PUBLISH</DefineConstants>
+  </PropertyGroup>
+</Project>

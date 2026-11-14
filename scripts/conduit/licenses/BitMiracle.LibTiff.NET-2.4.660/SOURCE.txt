@@ -1,0 +1,6 @@
+Package: BitMiracle.LibTiff.NET 2.4.660
+Official license source: https://raw.githubusercontent.com/BitMiracle/libtiff.net/master/license.txt
+Retrieved: 2026-11-12
+SHA-256: 1700d430afca68db45c5e51e5467aa0d4eb9533e964e18a3a56dec5c230f3ba0
+Package copyright metadata: Copyright (C) 2008-2024, Bit Miracle
+The upstream license file is reproduced without changes.

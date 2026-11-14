@@ -1,0 +1,114 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="using:SHOU.Launcher.Desktop.Localization"
+             xmlns:local="using:SHOU.Launcher.Desktop.Views" xmlns:views="using:SHOU.Launcher.Desktop.Views" x:Class="SHOU.Launcher.Desktop.Views.AccountsView" FontSize="13" AttachedToVisualTree="AccountToolbarAttached" DetachedFromVisualTree="AccountToolbarDetached" DataContextChanged="AccountToolbarDataContextChanged">
+  <UserControl.Resources><local:AccountsSourceLabelConverter x:Key="AccountSourceLabel" /></UserControl.Resources>
+  <UserControl.Styles>
+    <Style Selector="TextBlock"><Setter Property="TextWrapping" Value="Wrap" /><Setter Property="LineHeight" Value="18" /></Style>
+    <Style Selector="Button.accountChannel"><Setter Property="Height" Value="34" /><Setter Property="Padding" Value="4,3" /><Setter Property="HorizontalAlignment" Value="Stretch" /><Setter Property="HorizontalContentAlignment" Value="Center" /><Setter Property="BorderBrush" Value="{DynamicResource ClubInputBorder}" /><Setter Property="BorderThickness" Value="1" /></Style>
+    <Style Selector="Button.accountChannel.selected"><Setter Property="BorderThickness" Value="2" /><Setter Property="BorderBrush" Value="{DynamicResource ClubAccent}" /><Setter Property="Background" Value="Transparent" /><Setter Property="Foreground" Value="{DynamicResource ClubForeground}" /></Style>
+    <Style Selector="ListBoxItem"><Setter Property="HorizontalContentAlignment" Value="Stretch" /></Style>
+    <Style Selector="TextBlock.accountHint"><Setter Property="Foreground" Value="{DynamicResource ClubMuted}" /><Setter Property="FontSize" Value="11" /></Style>
+    <Style Selector="Path.accountAvatar"><Setter Property="Stroke" Value="{DynamicResource ClubForeground}" /><Setter Property="StrokeThickness" Value="1.5" /><Setter Property="Stretch" Value="Uniform" /></Style>
+  </UserControl.Styles>
+  <Grid RowDefinitions="*,Auto">
+  <ScrollViewer Name="AccountsPanelScroller" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Name="CompactAccountsPanel" Margin="20,12,20,8" Spacing="8">
+      <StackPanel Name="CredentialAuthorizationPanel" IsVisible="{Binding NeedsCredentialAuthorization}" Spacing="6">
+        <TextBlock Text="{loc:Loc t50a626534809dffa}" TextWrapping="Wrap" Classes="muted"/>
+        <Button Name="RecoverCredentialAccessButton" Content="{loc:Loc t53a59354361e5939}" Command="{Binding RecoverCredentialAccessCommand}" HorizontalAlignment="Stretch"/>
+      </StackPanel>
+      <Grid Name="AccountChannelGrid" ColumnDefinitions="*,*" RowDefinitions="34,40">
+        <Button Name="MicrosoftChannelButton" Classes="accountChannel" Classes.selected="{Binding IsMicrosoftChannel}" Content="{loc:Translate MicrosoftChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="microsoft" Margin="0,0,3,0" />
+        <Button Name="LittleSkinChannelButton" Grid.Column="1" Classes="accountChannel" Classes.selected="{Binding IsLittleSkinChannel}" Content="{loc:Translate LittleSkinChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="littleskin" Margin="3,0,0,0" />
+        <Button Name="MuaChannelButton" Grid.Row="1" Classes="accountChannel" Classes.selected="{Binding IsMuaChannel}" Content="{loc:Translate MuaChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="mua" Margin="0,6,3,0" />
+        <Button Name="OfflineChannelButton" Grid.Row="1" Grid.Column="1" Classes="accountChannel" Classes.selected="{Binding IsOfflineChannel}" Content="{loc:Translate OfflineChannelTitle}" Command="{Binding SelectProviderCommand}" CommandParameter="offline" Margin="3,6,0,0" ToolTip.Tip="{loc:Loc t2a8b2f268240eac9}" />
+      </Grid>
+      <ComboBox Name="LoginProviderSelector" IsVisible="False" ItemsSource="{Binding Providers}" SelectedItem="{Binding SelectedProvider}" IsEnabled="{Binding CanEdit}" />
+      <Grid ColumnDefinitions="*,40" Margin="0,6,0,0"><TextBlock Name="AccountChannelTitle" Text="{loc:Translate ChannelTitle}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /><Button Grid.Column="1" Content="{loc:Translate AllAccountsButtonLabel}" Command="{Binding ToggleAllAccountsCommand}" Padding="4,1" MinHeight="23" /></Grid>
+      <StackPanel Name="ChannelAccountPanel" IsVisible="{Binding ShowChannelAccount}" Spacing="5">
+        <Grid ColumnDefinitions="*,32,32" ColumnSpacing="5" RowDefinitions="32">
+          <ComboBox Name="AccountSelector" ItemsSource="{Binding ChannelAccounts}" SelectedItem="{Binding SelectedChannelAccount}" IsEnabled="{Binding CanEdit}" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" VerticalContentAlignment="Center" MinWidth="0" MinHeight="32" Height="32" Padding="6,0">
+            <ComboBox.ItemTemplate><DataTemplate><StackPanel Spacing="0"><TextBlock Text="{Binding DisplayName}" LineHeight="15" TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" /><TextBlock Text="{Binding ., Converter={StaticResource AccountSourceLabel}}" Classes="accountHint" LineHeight="13" TextWrapping="NoWrap" /></StackPanel></DataTemplate></ComboBox.ItemTemplate>
+            <ToolTip.Tip><StackPanel Name="AccountStorageTooltip" MaxWidth="320" Spacing="5"><TextBlock Text="{Binding AccountDetail}" TextWrapping="Wrap" /><TextBlock Text="{loc:Translate PersistenceSummary}" TextWrapping="Wrap" /></StackPanel></ToolTip.Tip>
+          </ComboBox>
+          <Button Name="BeginAddAccountButton" Grid.Column="1" Command="{Binding BeginAddAccountCommand}" Width="32" Height="32" Padding="0" MinWidth="0" MinHeight="0" CornerRadius="5" BorderBrush="{DynamicResource ClubInputBorder}" AutomationProperties.Name="{loc:Loc tf5f4fd79bf0c08be}" ToolTip.Tip="{loc:Loc tf5f4fd79bf0c08be}"><Path Data="M 2,7 H 12 M 7,2 V 12" Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource ClubForeground}" StrokeThickness="1.3" /></Button>
+          <Button Name="RequestAccountRemovalButton" Grid.Column="2" Command="{Binding RequestRemovalCommand}" Width="32" Height="32" Padding="0" MinWidth="0" MinHeight="0" CornerRadius="5" BorderBrush="{DynamicResource ClubInputBorder}" AutomationProperties.Name="{loc:Loc t5a3fb8c44c938539}" ToolTip.Tip="{loc:Loc t5a3fb8c44c938539}"><Path Data="M 2,2 L 10,10 M 10,2 L 2,10" Width="10" Height="10" Stretch="Uniform" Stroke="{DynamicResource ClubForeground}" StrokeThickness="1.3" /></Button>
+        </Grid>
+        <TextBlock Text="{loc:Loc tfdd8a487551ef56c}" Classes="accountHint" IsVisible="{Binding ShowEmptyChannel}" />
+      </StackPanel>
+      <ListBox Name="AllAccountsSelector" IsVisible="{Binding ShowAllAccounts}" ItemsSource="{Binding AppearanceAccountRows}" SelectedItem="{Binding SelectedAppearanceAccountRow}" IsEnabled="{Binding CanEdit}" MaxHeight="300" Background="Transparent" BorderThickness="0" Padding="0">
+        <ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="38,*" Margin="10,7">
+          <local:AccountSkinAvatarControl Skin="{Binding Skin}" Width="28" Height="28" />
+          <StackPanel Grid.Column="1" Spacing="2"><TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" /><TextBlock Text="{Binding SourceName}" Classes="accountHint" /></StackPanel>
+        </Grid></DataTemplate></ListBox.ItemTemplate>
+      </ListBox>
+      <StackPanel Name="SelectedAccountPanel" Background="Transparent" IsVisible="{Binding ShowSelectedAccount}" Spacing="3" Margin="0,12,0,0">
+        <Button Name="AccountAvatarPreviewButton" Classes="flat" Padding="0" Margin="0,0,0,6" HorizontalAlignment="Center" IsEnabled="{Binding CanPreviewAccountSkin}" AutomationProperties.Name="{loc:Loc t33d17bcc56da3318}" ToolTip.ShowOnDisabled="True" Click="PreviewAccountSkin_Click">
+          <ToolTip.Tip><StackPanel Name="AccountAvatarTooltip" MaxWidth="320" Spacing="5"><TextBlock Text="{loc:Translate SelectedPlayerStatus}" TextWrapping="Wrap" /><TextBlock Text="{Binding AccountAppearanceSummary}" TextWrapping="Wrap" /><TextBlock Text="{Binding AccountAppearanceCapability}" TextWrapping="Wrap" /></StackPanel></ToolTip.Tip>
+          <local:AccountSkinAvatarControl Name="SelectedAccountAvatar" Skin="{Binding AccountSkin}" Width="64" Height="64" />
+        </Button>
+        <TextBlock Text="{Binding SelectedPlayerName}" FontSize="16" LineHeight="22" MaxWidth="240" HorizontalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" ToolTip.Tip="{Binding SelectedPlayerName}" />
+        <TextBlock Text="{loc:Translate SelectedPlayerSource}" Classes="accountHint" HorizontalAlignment="Center" />
+        <Border Name="AccountToolbarHost" Height="32" Width="112" Margin="0,8,0,0" HorizontalAlignment="Center" CornerRadius="6" Background="{DynamicResource ClubSidebar}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" BoxShadow="0 1 4 0 #16000000" Opacity="0" IsHitTestVisible="False">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+          <Button Name="AccountSkinMenuButton" Classes="flat" Padding="7" MinWidth="32" Width="32" MinHeight="30" Height="30" AutomationProperties.Name="{loc:Loc t9320324148d73c83}" ToolTip.Tip="{loc:Loc t9320324148d73c83}"><Button.Flyout><MenuFlyout>
+            <MenuItem Name="ChangeAccountSkinMenuItem" Header="{loc:Loc tdb995b31656dddc5}" Click="ChangeAccountSkin_Click" ToolTip.Tip="{Binding AccountAppearanceCapability}" />
+            <MenuItem Name="SaveAccountSkinMenuItem" Header="{loc:Loc t772d00472094988f}" IsEnabled="{Binding CanSaveSkinPng}" Click="SaveAccountSkin_Click" />
+            <MenuItem Name="RefreshAccountSkinMenuItem" Header="{loc:Loc t96fa37f15534dfcd}" Command="{Binding RefreshAppearanceCommand}" />
+            <MenuItem Name="ChangeAccountCapeMenuItem" Header="{loc:Loc tafa058778f0044cf}" Click="ViewAccountCapes_Click" />
+            <Separator /><MenuItem Header="{loc:Loc tfee7969e381007be}" ToggleType="CheckBox" IsChecked="{Binding Allow3DPreview}" />
+            <MenuItem Name="PreviewAccountSkinMenuItem" Header="{loc:Loc t33d17bcc56da3318}" IsEnabled="{Binding CanPreviewAccountSkin}" Click="PreviewAccountSkin_Click" />
+          </MenuFlyout></Button.Flyout><local:ClubIcon Kind="shirt" Width="16" Height="16" Foreground="{DynamicResource ClubAccent}" /></Button>
+          <Button Name="RefreshAccountButton" Classes="flat" Padding="7" MinWidth="32" Width="32" MinHeight="30" Height="30" AutomationProperties.Name="{loc:Loc t46161a6cd4bff3ce}" ToolTip.Tip="{loc:Loc t46161a6cd4bff3ce}"><Button.Flyout><MenuFlyout>
+            <MenuItem Header="{loc:Loc tf6fd9f688f0a32c9}" Command="{Binding RefreshAccountCommand}" />
+            <MenuItem Header="{loc:Loc tc4a7a8084f348fd6}" Command="{Binding OpenProviderWebsiteCommand}" IsVisible="{Binding IsYggdrasil}" />
+          </MenuFlyout></Button.Flyout><local:ClubIcon Kind="pencil" Width="16" Height="16" Foreground="{DynamicResource ClubAccent}" /></Button>
+          <Button Name="SelectAccountProfileButton" Classes="flat" Command="{Binding ToggleAllAccountsCommand}" Padding="7" MinWidth="32" Width="32" MinHeight="30" Height="30" AutomationProperties.Name="{loc:Loc tbf6831310af54af6}" ToolTip.Tip="{loc:Loc tbf6831310af54af6}"><local:ClubIcon Kind="arrow-right-left" Width="16" Height="16" Foreground="{DynamicResource ClubAccent}" /></Button>
+          </StackPanel>
+        </Border>
+        <TextBlock Name="AccountAppearanceFeedback" Text="{Binding AccountAppearanceStatus}" Classes="accountHint" TextAlignment="Center" IsVisible="False" />
+        <Button Content="{loc:Loc tcc894cbb3dbc79b3}" Command="{Binding CancelAppearanceReadCommand}" IsVisible="{Binding IsAccountAppearanceBusy}" HorizontalAlignment="Center" />
+      </StackPanel>
+      <Border Name="AccountRemovalPanel" IsVisible="{Binding ShowRemoval}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8">
+        <StackPanel Spacing="6"><CheckBox Name="ConfirmAccountRemoval" Content="{loc:Loc t6c5de7f5f954d45a}" IsChecked="{Binding ConfirmRemoval}" IsEnabled="{Binding CanEdit}" /><TextBlock Text="{loc:Loc t52e98d7a6bd03271}" Classes="accountHint" /><StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8"><Button Name="RemoveAccountButton" Content="{loc:Loc tb487f606a41ea8e8}" Command="{Binding RemoveAccountCommand}" /><Button Content="{loc:Loc t572cf45ba43634b3}" Command="{Binding CancelRemovalCommand}" /></StackPanel></StackPanel>
+      </Border>
+      <StackPanel Name="AddAccountPanel" IsVisible="{Binding IsAddingAccount}" Spacing="8">
+        <TextBlock Text="{loc:Translate AddingAccountSummary}" Classes="accountHint" />
+        <StackPanel Name="OfflineAccountForm" IsVisible="{Binding IsOffline}" Spacing="11" Margin="0,10,0,0">
+          <Grid ColumnDefinitions="50,*"><TextBlock Text="{loc:Loc td5edf64786cd13e3}" VerticalAlignment="Center" ToolTip.Tip="{loc:Loc tdb4f260975f6badc}"/><TextBox Name="OfflinePlayerName" Grid.Column="1" Text="{Binding PlayerName}" IsEnabled="{Binding CanEdit}" ToolTip.Tip="{loc:Loc t5183e44102a47d98}" /></Grid>
+          <TextBlock Name="OfflineNameWarning" Text="{loc:Loc td771254187028205}" Classes="accountHint" IsVisible="{Binding HasNonAsciiPlayerName}" />
+          <TextBlock Text="{loc:Loc t80fcb4b2ebd4ca91}" FontWeight="SemiBold" HorizontalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="12" IsEnabled="{Binding CanEdit}"><RadioButton Name="StandardOfflineUuid" Content="{loc:Loc te7bff89ec0daeeda}" GroupName="OfflineUuid" IsChecked="{Binding IsStandardUuid}" ToolTip.Tip="{loc:Loc t5513205d2c931abc}" /><RadioButton Name="LegacyOfflineUuid" Content="{loc:Loc t04ea81768ab82ad0}" GroupName="OfflineUuid" IsChecked="{Binding IsLegacyUuid}" IsEnabled="{Binding SupportsOfflineUuidModes}" ToolTip.Tip="{loc:Loc t30cea34ccb033023}" /><RadioButton Name="CustomOfflineUuid" Content="{loc:Loc t4eafa9e925b30bcd}" GroupName="OfflineUuid" IsChecked="{Binding IsCustomUuid}" IsEnabled="{Binding SupportsOfflineUuidModes}" ToolTip.Tip="{loc:Loc t26aa8becf5530c94}" /></StackPanel>
+          <TextBox Name="OfflineCustomUuidInput" Text="{Binding CustomOfflineUuid}" IsVisible="{Binding IsCustomUuid}" IsEnabled="{Binding CanEdit}" PlaceholderText="{loc:Loc t9810f2f10532ad6c}" />
+
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="{loc:Loc t572cf45ba43634b3}" Command="{Binding EndAddAccountCommand}" /><Button Name="AddOfflineButton" Content="{loc:Loc tcde2cd071d25bbab}" Command="{Binding AddOfflineCommand}" Classes="primary" /></StackPanel>
+        </StackPanel>
+        <StackPanel Name="MicrosoftAccountForm" IsVisible="{Binding ShowMicrosoftLoginForm}" Spacing="15" Margin="0,14,0,0">
+          <views:ClubIcon Classes="accountAvatar" Width="42" Height="46" HorizontalAlignment="Center" Kind="user" />
+          <Button Name="LoginMicrosoftButton" Classes="primary" Content="{loc:Loc te8eead3a6646c67d}" Command="{Binding LoginMicrosoftCommand}" HorizontalAlignment="Center" />
+          <TextBlock Text="{loc:Loc t78a4043b3fe02356}" Classes="accountHint" TextAlignment="Center" />
+          <Button Content="{loc:Loc t572cf45ba43634b3}" Command="{Binding EndAddAccountCommand}" HorizontalAlignment="Center" />
+        </StackPanel>
+        <StackPanel Name="YggdrasilAccountForm" IsVisible="{Binding IsYggdrasil}" Spacing="10" Margin="0,20,0,0">
+          <Grid ColumnDefinitions="50,*"><TextBlock Text="{loc:Loc t73075237fd0f05f0}" VerticalAlignment="Center" /><TextBox Name="YggdrasilUsername" Grid.Column="1" Text="{Binding Username}" PlaceholderText="{loc:Loc tf2dad7d22c3e5144}" IsEnabled="{Binding CanEdit}" /></Grid>
+          <Grid ColumnDefinitions="50,*"><TextBlock Text="{loc:Loc ta621ab606db2a11f}" VerticalAlignment="Center" /><TextBox Name="YggdrasilPassword" Grid.Column="1" Text="{Binding Password}" PasswordChar="●" IsEnabled="{Binding CanEdit}" ToolTip.Tip="{loc:Loc t1de8db25fa95d059}" /></Grid>
+          <Button Content="{loc:Loc tc54c101e02cc35a1}" Command="{Binding OpenProviderWebsiteCommand}" HorizontalAlignment="Center" />
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10"><Button Content="{loc:Loc t572cf45ba43634b3}" Command="{Binding EndAddAccountCommand}" /><Button Name="LoginYggdrasilButton" Classes="primary" Content="{loc:Loc t1e2df9c3075ae9e4}" Command="{Binding LoginYggdrasilCommand}" /></StackPanel>
+        </StackPanel>
+      </StackPanel>
+      <ContentControl Name="AuthenticationProfileChallenge" Content="{Binding ProfileChallenge}" IsVisible="{Binding HasProfileChallenge}" HorizontalContentAlignment="Stretch">
+        <ContentControl.ContentTemplate><DataTemplate>
+          <Border BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8"><StackPanel Spacing="7">
+            <TextBlock Text="{loc:Loc t97ce606c7d813c50}" FontWeight="SemiBold" /><TextBlock Text="{loc:Loc t03420f525ada1482}" Classes="accountHint" />
+            <ListBox Name="AuthenticationProfileSelector" ItemsSource="{Binding Choices}" SelectedItem="{Binding SelectedChoice}" MaxHeight="160"><ListBox.ItemTemplate><DataTemplate><StackPanel Spacing="2"><TextBlock Text="{Binding Name}" /><TextBlock Text="{Binding Id}" Classes="accountHint" /></StackPanel></DataTemplate></ListBox.ItemTemplate></ListBox>
+            <StackPanel Orientation="Horizontal" Spacing="6"><Button Name="ConfirmAuthenticationProfileButton" Classes="primary" Content="{loc:Loc t7cf772790898098e}" Command="{Binding ConfirmCommand}" /><Button Name="CancelAuthenticationProfileButton" Content="{loc:Loc t531c764f9b4eea01}" Command="{Binding CancelCommand}" /></StackPanel>
+          </StackPanel></Border>
+        </DataTemplate></ContentControl.ContentTemplate>
+      </ContentControl>
+      <Border Name="DeviceCodePanel" IsVisible="{Binding HasDeviceChallenge}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="4" Padding="8">
+        <StackPanel Spacing="8"><TextBlock Name="DeviceCodeText" Text="{Binding DeviceCode}" LineHeight="34" FontSize="24" FontWeight="SemiBold" LetterSpacing="2" HorizontalAlignment="Center" /><TextBlock Text="{Binding DeviceInstructions}" Classes="accountHint" /><WrapPanel><Button Content="{loc:Loc t345486d9ee4b78e5}" Command="{Binding OpenVerificationCommand}" Margin="0,0,5,4" /><Button Content="{loc:Loc t420c20dd9fcca860}" Click="CopyDeviceCode_Click" Margin="0,0,5,4" /></WrapPanel><TextBlock Name="DeviceAutomationStatus" Text="{Binding DeviceAutomationStatus}" Classes="accountHint"/></StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+  <Button Name="CancelMicrosoftAuthorizationButton" Grid.Row="1" Content="取消授权" AutomationProperties.Name="取消微软设备授权" Command="{Binding CancelMicrosoftAuthorizationCommand}" IsVisible="{Binding HasDeviceChallenge}" HorizontalAlignment="Stretch" Margin="20,4,20,8" />
+  </Grid>
+</UserControl>

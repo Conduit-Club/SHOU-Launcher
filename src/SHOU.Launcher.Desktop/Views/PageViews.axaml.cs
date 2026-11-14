@@ -1,0 +1,194 @@
+using Avalonia.Controls;
+using Avalonia.Input;
+using Avalonia.Input.Platform;
+using Avalonia.Markup.Xaml;
+using Avalonia.Interactivity;
+using Avalonia.Platform.Storage;
+using Avalonia.Threading;
+using System.Collections.Specialized;
+using SHOU.Launcher.Desktop.ViewModels;
+
+namespace SHOU.Launcher.Desktop.Views;
+
+public partial class HomeView : UserControl { public HomeView() { AvaloniaXamlLoader.Load(this); InitializeUpdatesOverlay(); } }
+public partial class DownloadsView : UserControl { public DownloadsView() => AvaloniaXamlLoader.Load(this); }
+
+public partial class InstancesView : UserControl
+{
+    public InstancesView()
+    {
+        AvaloniaXamlLoader.Load(this);
+        this.FindControl<ListBox>("InstanceContentList")!.AddHandler(Avalonia.Input.InputElement.KeyDownEvent, ContentList_KeyDown, Avalonia.Interactivity.RoutingStrategies.Tunnel);
+    }
+    private async void PickJava_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not InstancesPageViewModel vm) return;
+        try { if (await StorageDialogs.PickJavaAsync(this) is { } path) vm.JavaExecutable = path; }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+}
+
+public partial class AccountsView : UserControl
+{
+    private AccountsPageViewModel? clipboardOwner;
+    private Func<string, CancellationToken, Task>? clipboardWriter;
+    public AccountsView()
+    {
+        AvaloniaXamlLoader.Load(this);
+        AttachedToVisualTree += (_, _) => AttachDeviceClipboard();
+        DataContextChanged += (_, _) => { if (TopLevel.GetTopLevel(this) is not null) AttachDeviceClipboard(); };
+        DetachedFromVisualTree += (_, _) => DetachDeviceClipboard();
+    }
+    private void DetachDeviceClipboard()
+    {
+        if (clipboardOwner is not null && ReferenceEquals(clipboardOwner.DeviceCodeClipboardWriter, clipboardWriter)) clipboardOwner.DeviceCodeClipboardWriter = null;
+        clipboardOwner = null; clipboardWriter = null;
+    }
+    private void AttachDeviceClipboard()
+    {
+        DetachDeviceClipboard();
+        if (DataContext is not AccountsPageViewModel vm) return;
+        clipboardOwner = vm;
+        vm.DeviceCodeClipboardWriter = clipboardWriter = async (code, ct) =>
+        {
+            ct.ThrowIfCancellationRequested();
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。");
+            await clipboard.SetTextAsync(code);
+        };
+    }
+    private async void CopyDeviceCode_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not AccountsPageViewModel vm || !vm.HasDeviceChallenge) return;
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。");
+            await clipboard.SetTextAsync(vm.DeviceCode);
+        }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+}
+
+public partial class SettingsView : UserControl
+{
+    private SettingsPageViewModel? localeOwner;
+    public SettingsView()
+    {
+        AvaloniaXamlLoader.Load(this);
+        DataContextChanged += (_, _) => AttachLocale(); AttachedToVisualTree += (_, _) => AttachLocale();
+        DetachedFromVisualTree += (_, _) => { if (localeOwner is { } previous) previous.PropertyChanged -= LocaleLayoutChanged; localeOwner = null; };
+    }
+    private void AttachLocale()
+    {
+        if (localeOwner is { } previous) previous.PropertyChanged -= LocaleLayoutChanged;
+        localeOwner = DataContext as SettingsPageViewModel;
+        if (localeOwner is { } next) { next.PropertyChanged += LocaleLayoutChanged; this.FindControl<Grid>("SettingsLayout")!.ColumnDefinitions[0].Width = next.SidebarWidth; }
+    }
+    private void LocaleLayoutChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (localeOwner is not { } vm) return;
+        if (e.PropertyName == nameof(SettingsPageViewModel.SidebarWidth)) this.FindControl<Grid>("SettingsLayout")!.ColumnDefinitions[0].Width = vm.SidebarWidth;
+        if (e.PropertyName == nameof(SettingsPageViewModel.SelectedSection))
+        {
+            var section = vm.SelectedSection;
+            Avalonia.Threading.Dispatcher.UIThread.Post(() =>
+            {
+                if (ReferenceEquals(localeOwner, vm) && vm.SelectedSection == section) this.FindControl<ScrollViewer>("SettingsPageScroller")!.Offset = default;
+            }, Avalonia.Threading.DispatcherPriority.Loaded);
+        }
+    }
+    private async void PickGameRoot_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsPageViewModel vm) return;
+        try
+        {
+            var provider = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境无法打开文件选择器。");
+            var folders = await provider.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = "选择游戏根目录", AllowMultiple = false });
+            if (folders.Count > 0) vm.GameRoot = folders[0].TryGetLocalPath() ?? throw new InvalidOperationException("请选择本机文件夹。");
+        }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+    private async void PickJava_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not SettingsPageViewModel vm) return;
+        try { if (await StorageDialogs.PickJavaAsync(this) is { } path) await vm.AddJavaAsync(path); }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+}
+
+public partial class LogsView : UserControl
+{
+    private LogsPageViewModel? _subscribedLogs;
+    public LogsView()
+    {
+        AvaloniaXamlLoader.Load(this);
+        AttachedToVisualTree += (_, _) => Subscribe();
+        DetachedFromVisualTree += (_, _) => Unsubscribe();
+        DataContextChanged += (_, _) => { if (TopLevel.GetTopLevel(this) is not null) Subscribe(); };
+    }
+    private void Subscribe()
+    {
+        Unsubscribe();
+        if (DataContext is not LogsPageViewModel vm) return;
+        _subscribedLogs = vm;
+        vm.Entries.CollectionChanged += FollowLogs;
+    }
+    private void Unsubscribe()
+    {
+        if (_subscribedLogs is { } vm) vm.Entries.CollectionChanged -= FollowLogs;
+        _subscribedLogs = null;
+    }
+    private void FollowLogs(object? sender, NotifyCollectionChangedEventArgs e)
+    {
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_subscribedLogs is { FollowTail: true } vm && vm.Entries.Count > 0)
+                this.FindControl<ListBox>("LogEntries")?.ScrollIntoView(vm.Entries[^1]);
+        });
+    }
+    private async void CopyLogs_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not LogsPageViewModel vm) return;
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。");
+            await clipboard.SetTextAsync(vm.ExportText);
+            vm.Feedback = "已复制脱敏日志。";
+        }
+        catch (Exception ex) { vm.Feedback = "复制失败：" + UiPrivacy.Redact(ex.Message); }
+    }
+    private async void ExportLogs_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not LogsPageViewModel vm) return;
+        try
+        {
+            var provider = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境无法打开文件选择器。");
+            var file = await provider.SaveFilePickerAsync(new FilePickerSaveOptions
+            {
+                Title = "导出脱敏日志", SuggestedFileName = $"SHOU-launcher-{DateTime.Now:yyyyMMdd-HHmmss}.log",
+                DefaultExtension = "log", FileTypeChoices = [new FilePickerFileType("日志文件") { Patterns = ["*.log", "*.txt"] }]
+            });
+            if (file is null) { vm.Feedback = "已取消导出。"; return; }
+            await using var stream = await file.OpenWriteAsync();
+            stream.SetLength(0);
+            await using var writer = new StreamWriter(stream);
+            await writer.WriteAsync(vm.ExportText);
+            vm.Feedback = "脱敏日志已导出。";
+        }
+        catch (Exception ex) { vm.Feedback = "导出失败：" + UiPrivacy.Redact(ex.Message); }
+    }
+    private void ClearLogs_Click(object? sender, RoutedEventArgs e) { if (DataContext is LogsPageViewModel vm) vm.ClearDisplay(); }
+}
+
+internal static class StorageDialogs
+{
+    public static async Task<string?> PickJavaAsync(Control control)
+    {
+        var provider = TopLevel.GetTopLevel(control)?.StorageProvider ?? throw new InvalidOperationException("当前环境无法打开文件选择器。");
+        var files = await provider.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "选择 Java 可执行文件", AllowMultiple = false });
+        return files.Count == 0 ? null : files[0].TryGetLocalPath() ?? throw new InvalidOperationException("请选择本机 Java 可执行文件。");
+    }
+    public static void ShowError(Control control, Exception error)
+    {
+        if (TopLevel.GetTopLevel(control)?.DataContext is MainWindowViewModel root) root.ShowError(UiPrivacy.Redact(error.Message));
+    }
+}

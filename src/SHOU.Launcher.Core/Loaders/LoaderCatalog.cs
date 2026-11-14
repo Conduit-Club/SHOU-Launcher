@@ -1,0 +1,71 @@
+using System.Text.Json.Nodes;
+using System.Xml.Linq;
+using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Core.IO;
+
+namespace SHOU.Launcher.Core.Loaders;
+
+public sealed class LoaderCatalog(HttpClient http)
+{
+    public async Task<IReadOnlyList<LoaderVersionChoice>> GetAsync(string loader, string gameVersion, CancellationToken ct)
+    {
+        SafePath.Identifier(gameVersion);
+        if (loader is "quilt" or "legacyfabric")
+        {
+            var endpoint = loader == "quilt" ? "https://meta.quiltmc.org/v3" : "https://meta.legacyfabric.net/v2";
+            var data = JsonNode.Parse(await TextAsync(new(endpoint + "/versions/loader/" + Uri.EscapeDataString(gameVersion)), 4 * 1024 * 1024, ct)) as JsonArray
+                ?? throw new InvalidDataException("Quilt目录不是数组。");
+            return data.Take(2000).Select(row =>
+            {
+                var version = SafePath.Identifier((string?)row?["loader"]?["version"] ?? throw new InvalidDataException("Quilt版本缺失。"));
+                return new LoaderVersionChoice(loader, version, (bool?)row?["loader"]?["stable"] ?? !version.Contains('-'));
+            }).OrderByDescending(v => v.Stable).ThenByDescending(v => NumericKey(v.Version), StringComparer.Ordinal).ToArray();
+        }
+        var uri = loader switch
+        {
+            "forge" => new Uri("https://maven.minecraftforge.net/net/minecraftforge/forge/maven-metadata.xml"),
+            "neoforge" => new Uri("https://maven.neoforged.net/releases/net/neoforged/neoforge/maven-metadata.xml"),
+            _ => throw new PlatformNotSupportedException("尚未提供此加载器的目录。")
+        };
+        var text = await TextAsync(uri, 4 * 1024 * 1024, ct);
+        if (text.Contains("<!DOCTYPE", StringComparison.OrdinalIgnoreCase)) throw new InvalidDataException("加载器目录不接受DTD。");
+        var versions = XDocument.Parse(text).Descendants("version").Select(x => x.Value).Take(50000);
+        var prefix = loader == "forge" ? gameVersion + "-" : NeoPrefix(gameVersion);
+        return versions.Where(v => loader == "forge" ? v.StartsWith(prefix, StringComparison.Ordinal) : NeoGameVersion(v) == gameVersion).Distinct(StringComparer.Ordinal)
+            .Select(v => new LoaderVersionChoice(loader, SafePath.Identifier(loader == "forge" ? v[prefix.Length..] : v), !v.Any(char.IsLetter),
+                loader == "forge" && (!Version.TryParse(gameVersion, out var game) || game < new Version(1, 13)) ? "此历史 Forge 安装器格式尚未接入。" : null,
+                loader != "forge" || Version.TryParse(gameVersion, out var supportedGame) && supportedGame >= new Version(1, 13)))
+            .OrderByDescending(v => NumericKey(v.Version), StringComparer.Ordinal).Take(2000).ToArray();
+    }
+    public static string NeoPrefix(string gameVersion)
+    {
+        var parts = gameVersion.Split('.');
+        if (parts.Length is < 2 or > 3 || parts.Any(p => !int.TryParse(p, out _))) throw new PlatformNotSupportedException("NeoForge仅支持正式数字版本目录。");
+        return parts[0] == "1" ? parts[1] + "." + (parts.Length == 3 ? parts[2] : "0") + "." : parts[0] + "." + parts[1] + "." + (parts.Length == 3 ? parts[2] : "0") + ".";
+    }
+    internal static string? NeoGameVersion(string version)
+    {
+        // Only numeric releases and beta coordinates have an unambiguous supported game identity.
+        // Snapshot/alpha metadata uses +snapshot-N and must not poison the whole stable directory.
+        var release = version.Split('-', 2);
+        if (release.Length == 2 && release[1] != "beta") return null;
+        var parts = release[0].Split('.');
+        if (parts.Any(p => p.Length == 0 || p.Any(c => !char.IsAsciiDigit(c)) || !int.TryParse(p, out _))) return null;
+        if (parts.Length == 3 && int.Parse(parts[0]) is >= 20 and < 26)
+            return "1." + parts[0] + (int.Parse(parts[1]) == 0 ? "" : "." + parts[1]);
+        if (parts.Length == 4 && int.Parse(parts[0]) >= 26)
+            return parts[0] + "." + parts[1] + (int.Parse(parts[2]) == 0 ? "" : "." + parts[2]);
+        return null;
+    }
+    private static string NumericKey(string version) => string.Join('.', version.Split('.', '-').Select(p => int.TryParse(p, out var number) ? number.ToString("D9", System.Globalization.CultureInfo.InvariantCulture) : p));
+    public async Task<string> TextAsync(Uri uri, int maximum, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(30));
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri); request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.5 (Conduit-Club)");
+        using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode(); if (response.Content.Headers.ContentLength > maximum) throw new InvalidDataException("加载器响应超过大小限制。");
+        await using var input = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false); using var output = new MemoryStream(); var buffer = new byte[16384];
+        while (true) { var count = await input.ReadAsync(buffer, timeout.Token).ConfigureAwait(false); if (count == 0) break; if (output.Length + count > maximum) throw new InvalidDataException("加载器响应超过大小限制。"); output.Write(buffer, 0, count); }
+        return new System.Text.UTF8Encoding(false, true).GetString(output.ToArray());
+    }
+}

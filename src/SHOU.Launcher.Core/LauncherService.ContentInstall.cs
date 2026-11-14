@@ -1,0 +1,88 @@
+using System.Collections.Concurrent;
+using PCL.Core.Conduit;
+using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Core.Content;
+using SHOU.Launcher.Core.Instances;
+using SHOU.Launcher.Core.IO;
+using SHOU.Launcher.Core.Catalog;
+
+namespace SHOU.Launcher.Core;
+
+public sealed partial class LauncherService : IContentInstallationService, IContentDependencyCatalogService
+{
+    private readonly ConcurrentDictionary<string, Func<CancellationToken, Task>> contentOperationRetries = new(StringComparer.Ordinal);
+    public async Task<ContentRelease> GetContentReleaseAsync(string releaseId, CancellationToken cancellationToken = default)
+    { await InitializeAsync(cancellationToken).ConfigureAwait(false); if (!CurseForgeCatalog.IsProject(releaseId)) return await Catalog.ReleaseAsync(releaseId, cancellationToken).ConfigureAwait(false);
+      using var transport = ContentTransport(); return await new CurseForgeCatalog(transport, build.CurseForgeApiKey).ReleaseAsync(releaseId, cancellationToken).ConfigureAwait(false); }
+    public async Task<ContentProject> GetContentProjectAsync(string projectId, CancellationToken cancellationToken = default)
+    { await InitializeAsync(cancellationToken).ConfigureAwait(false); if (!CurseForgeCatalog.IsProject(projectId)) return await Catalog.ProjectAsync(projectId, cancellationToken).ConfigureAwait(false);
+      using var transport = ContentTransport(); return await new CurseForgeCatalog(transport, build.CurseForgeApiKey).ProjectAsync(projectId, cancellationToken).ConfigureAwait(false); }
+    private GameInstance ContentTarget(string instanceId, bool mutate)
+    {
+        var instance = FindInstance(instanceId); EnsureIsolatedGamePath(instance.GameDirectory);
+        _ = ContentInstallFiles.Literal(instance.GameDirectory, ContentInstallFiles.ManifestName);
+        if (!Directory.Exists(instance.GameDirectory)) throw new DirectoryNotFoundException("实例游戏目录不存在，请重新选择实例。");
+        if (mutate) EnsureInstanceNotRunning(instance);
+        return instance;
+    }
+    public async Task<ContentInstallPlan> PlanContentInstallAsync(ContentInstallRequest request, CancellationToken cancellationToken = default)
+    {
+        await InitializeAsync(cancellationToken).ConfigureAwait(false);
+        var instance = ContentTarget(request.InstanceId, false);
+        return await new ContentInstallPlanner(this, this).PlanAsync(instance, InstanceIdentity.GameVersion(instance), request, cancellationToken).ConfigureAwait(false);
+    }
+    public async Task<ContentInstallResult> InstallContentAsync(ContentInstallRequest request, CancellationToken cancellationToken = default)
+    {
+        ContentInstallResult? result = null;
+        await ExecuteAsync("Installing", async ct =>
+        {
+            var instance = ContentTarget(request.InstanceId, true);
+            var plan = await new ContentInstallPlanner(this, this).PlanAsync(instance, InstanceIdentity.GameVersion(instance), request, ct).ConfigureAwait(false);
+            await RunContentTransferAsync("resource-install:" + instance.Id, token => InstallContentAsync(request, token), async token =>
+            {
+                result = await ContentInstallFiles.InstallAsync(instance, plan, DownloadInstallFileAsync, token).ConfigureAwait(false);
+            }, ct).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
+        return result!;
+    }
+    private async Task DownloadInstallFileAsync(ContentFile file, string target, CancellationToken ct)
+    {
+        ContentInstallFiles.ValidateFile(file);
+        if (file.ManualFile is { } manual)
+        {
+            if (await CurseForgeManualCache.DigestAsync(Paths.CacheDirectory, manual, ct).ConfigureAwait(false) is null)
+                throw new InvalidOperationException("此版本需要在官网下载并选择安装文件后继续更新：" + manual.FileName);
+            var source = CurseForgeManualCache.PathFor(Paths.CacheDirectory, manual);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!); IO.SafePath.RejectLinks(target);
+            await using (var input = File.OpenRead(source))
+            await using (var output = new FileStream(target, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, true))
+                await input.CopyToAsync(output, ct).ConfigureAwait(false);
+            if (!await ContentInstallFiles.MatchesAsync(target, file.Sha1, file.Size, ct)) throw new InvalidDataException("补充文件校验失败。");
+            return;
+        }
+        if (CurseForgePackResolver.AllowedCurseForgeUri(file.Uri))
+        {
+            using var transport = ContentTransport();
+            await new CurseForgePackResolver(transport, null, network: network).DownloadAsync(new(0, 0, file.FileName, file.Sha1, null, file.Size, file.Uri, false), target, new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
+            return;
+        }
+        var sources = ModDownloadSources.Resolve(file.Uri.AbsoluteUri, Sources()).Select(s => new Uri(s)).ToArray();
+        await downloader.DownloadAsync(new(sources, target, file.Sha1, Size: file.Size), new InlineProgress<TransferProgress>(OnTransfer), ct).ConfigureAwait(false);
+    }
+    private async Task RunContentTransferAsync(string identity, Func<CancellationToken, Task> retry,
+        Func<CancellationToken, Task> action, CancellationToken ct)
+    {
+        using var cancellation = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var ownership = downloadOwners.Begin(identity); installCancellation = cancellation;
+        contentOperationRetries[ownership.Generation] = retry;
+        if (contentOperationRetries.Count > 250)
+            foreach (var key in contentOperationRetries.Keys.Where(k => k != ownership.Generation).Take(contentOperationRetries.Count - 250)) contentOperationRetries.TryRemove(key, out _);
+        try { await action(cancellation.Token).ConfigureAwait(false); }
+        finally { downloadOwners.End(ownership); installCancellation = null; }
+    }
+    private async Task<bool> TryRetryContentOperationAsync(string generation, CancellationToken ct)
+    {
+        if (!contentOperationRetries.TryGetValue(generation, out var retry)) return false;
+        await retry(ct).ConfigureAwait(false); return true;
+    }
+}

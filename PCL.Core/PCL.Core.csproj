@@ -7,8 +7,8 @@
         <Company>PCL Community</Company>
         <Product>PCL.Core</Product>
         <Copyright>Copyright © PCL Community</Copyright>
-        <AssemblyVersion>1.5.0.0</AssemblyVersion>
-        <FileVersion>1.5.0.0</FileVersion>
+        <AssemblyVersion>1.6.1.0</AssemblyVersion>
+        <FileVersion>1.6.1.0</FileVersion>
     </PropertyGroup>
     <PropertyGroup>
         <Configuration Condition="'$(Configuration)' == ''">Debug</Configuration>
@@ -25,7 +25,7 @@
         <Nullable>enable</Nullable>
         <ErrorReport>prompt</ErrorReport>
         <WarningLevel>4</WarningLevel>
-        <OutputPath>bin\$(Configuration)-$(Platform)\</OutputPath>
+        <OutputPath Condition="'$(UseArtifactsOutput)' != 'true'">bin\$(Configuration)-$(Platform)\</OutputPath>
         <PlatformTarget>$(Platform)</PlatformTarget>
         <NoWarn>$(NoWarn);CS9113</NoWarn>
     </PropertyGroup>

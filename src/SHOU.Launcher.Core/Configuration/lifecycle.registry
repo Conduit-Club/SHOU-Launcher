@@ -1,0 +1,8 @@
+# Bootstrap validates this generated startup order.
+Paths
+DataLock
+Configuration
+Credentials
+Network
+Accounts
+UI

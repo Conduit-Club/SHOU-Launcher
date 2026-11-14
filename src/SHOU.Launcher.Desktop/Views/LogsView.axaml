@@ -1,0 +1,8 @@
+<UserControl xmlns="https://github.com/avaloniaui" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:loc="using:SHOU.Launcher.Desktop.Localization" x:Class="SHOU.Launcher.Desktop.Views.LogsView">
+  <DockPanel>
+    <StackPanel DockPanel.Dock="Top" Spacing="10" Margin="0,0,0,14"><WrapPanel><Button Name="CopyLogsButton" Content="{loc:Loc tf1e8c2a7426d72a4}" Click="CopyLogs_Click" Margin="0,0,8,4" /><Button Name="ExportLogsButton" Content="{loc:Loc tdc194a40b2906ea7}" Click="ExportLogs_Click" Margin="0,0,8,4" /><Button Content="{loc:Loc tdc9b78c003372d95}" Click="ClearLogs_Click" Margin="0,0,8,4" /><CheckBox Content="{loc:Loc t958c9eeb2d6a1f99}" IsChecked="{Binding FollowTail}" Margin="8,0" /></WrapPanel><TextBlock Text="{loc:Translate Summary}" Classes="muted" /><TextBlock Text="{loc:Translate Feedback}" Classes="status muted" /><TextBlock Text="{loc:Loc t19181fcd1bc18789}" IsVisible="{Binding IsEmpty}" Classes="muted" /></StackPanel>
+    <Border BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="10" Background="{DynamicResource ClubSurface}">
+      <ListBox Name="LogEntries" ItemsSource="{Binding Entries}" Background="Transparent" BorderThickness="0" Padding="10" SelectionMode="Single" ScrollViewer.HorizontalScrollBarVisibility="Disabled"><ListBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Text}" FontFamily="{DynamicResource ClubMonospaceFontFamily}" LineHeight="18" FontSize="12" TextWrapping="Wrap" /></DataTemplate></ListBox.ItemTemplate></ListBox>
+    </Border>
+  </DockPanel>
+</UserControl>
