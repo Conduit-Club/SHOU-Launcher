@@ -2,7 +2,7 @@
   "name": "潮涌核心社启动器",
   "codename": "xb",
   "version": {
-    "base": "1.6.0",
+    "base": "1.6.1",
     "upstream": "2.12.1",
     "suffix": "",
     "code": 529

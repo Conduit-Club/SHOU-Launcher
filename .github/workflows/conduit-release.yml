@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing version tag; v1.6 is a prerelease of source 1.6.0'
+        description: 'Existing version tag; source outside main is a prerelease'
         required: true
         type: string
       prerelease:
@@ -39,7 +39,10 @@ jobs:
           RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
           REQUEST_PRERELEASE: ${{ inputs.prerelease && 'true' || 'false' }}
         run: |
-          $pre=$env:REQUEST_PRERELEASE -eq 'true' -or $env:RELEASE_TAG -cmatch '^v\d+\.\d+$' -or $env:RELEASE_TAG -cmatch '^v\d+\.\d+\.\d+-'
+          git merge-base --is-ancestor HEAD origin/main
+          if($LASTEXITCODE -notin @(0,1)){throw 'Cannot determine release source ancestry.'}
+          $onMain=$LASTEXITCODE -eq 0
+          $pre=-not $onMain -or $env:REQUEST_PRERELEASE -eq 'true' -or $env:RELEASE_TAG -cmatch '^v\d+\.\d+$' -or $env:RELEASE_TAG -cmatch '^v\d+\.\d+\.\d+-'
           $identity=./scripts/conduit/Get-BuildIdentity.ps1 -Configuration Release -ReleaseTag $env:RELEASE_TAG -Prerelease:$pre
           "tag=$($identity.ReleaseTag)" >> $env:GITHUB_OUTPUT
           "source_sha=$($identity.Commit)" >> $env:GITHUB_OUTPUT

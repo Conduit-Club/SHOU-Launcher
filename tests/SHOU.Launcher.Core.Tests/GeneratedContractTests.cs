@@ -9,7 +9,7 @@ public sealed class GeneratedContractTests
     [TestMethod] public void MetadataResourceIsReal()
     {
         var build = new BuildConfiguration().GetIdentity();
-        Assert.AreEqual("1.6.0", build.Version);
+        Assert.AreEqual("1.6.1", build.Version);
         Assert.AreEqual("xb", build.Codename);
         Assert.AreEqual("潮涌核心社启动器", build.Name);
         Assert.AreEqual("SHOU.Launcher.Core", build.OwnerAssembly);

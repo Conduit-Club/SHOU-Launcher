@@ -67,6 +67,43 @@ def main():
             identity = json.loads(result.stdout.lstrip('\ufeff'))
             assert identity['Version'] == '1.6.0' and identity['Codename'] == 'xb' and identity['Label'] == tag
 
+    # Run the real workflow classifier: a full numeric patch tag outside main
+    # must remain a prerelease, while stable main and explicit overrides agree.
+    workflow = (repo / '.github/workflows/conduit-release.yml').read_text()
+    mode_step = workflow.split('      - name: Validate tag, source and release mode\n', 1)[1].split('  build:\n', 1)[0]
+    mode_body = mode_step.split('        run: |\n', 1)[1]
+    mode_script = '\n'.join(line[10:] for line in mode_body.splitlines() if line.startswith('          '))
+    mode_cases = [
+        ('patch-feature-is-prerelease', True, 'v1.6.1', False, True, None),
+        ('patch-main-is-stable', False, 'v1.6.1', False, False, None),
+        ('patch-main-explicit-prerelease', False, 'v1.6.1', True, True, None),
+        ('suffix-main-is-prerelease', False, 'v1.6.1-rc.1', False, True, None),
+        ('patch-short-tag-rejected', True, 'v1.6', False, True, 'matching version tag'),
+    ]
+    for label, feature, tag, requested, expected, error in mode_cases:
+        fixture = out / label; (fixture / 'scripts/conduit').mkdir(parents=True)
+        (fixture / 'Plain Craft Launcher 2').mkdir(); (fixture / 'PCL.Core/Conduit').mkdir(parents=True)
+        shutil.copy2(repo / 'scripts/conduit/Get-BuildIdentity.ps1', fixture / 'scripts/conduit/Get-BuildIdentity.ps1')
+        (fixture / 'Plain Craft Launcher 2/metadata.json').write_text(json.dumps(dict(version=dict(base='1.6.1'), codename='xb')))
+        (fixture / 'PCL.Core/Conduit/ClubRelease.cs').write_text('CurrentVersion = "1.6.1"; CurrentCodename = "xb";')
+        def mode_git(*parts):
+            result = subprocess.run([args.git, *parts], cwd=fixture, capture_output=True, text=True)
+            assert result.returncode == 0, result.stderr
+        mode_git('init', '-q', '-b', 'main'); mode_git('add', '.')
+        mode_git('-c', 'user.name=Release Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'seed')
+        mode_git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+        if feature:
+            (fixture / 'feature.txt').write_text('unmerged fixture'); mode_git('add', '.')
+            mode_git('-c', 'user.name=Release Fixture', '-c', 'user.email=fixture@example.invalid', '-c', 'commit.gpgsign=false', 'commit', '-qm', 'feature')
+        mode_git('tag', tag)
+        harness = fixture / 'classify.ps1'
+        harness.write_text("$ErrorActionPreference='Stop'\n$env:RELEASE_TAG='" + tag + "'\n$env:REQUEST_PRERELEASE='" + str(requested).lower()
+                           + "'\n$env:GITHUB_OUTPUT=Join-Path $PSScriptRoot 'outputs.txt'\n" + mode_script + '\n')
+        check([pwsh, '-NoProfile', '-File', harness], label, error, cwd=fixture)
+        if not error:
+            values = dict(line.split('=', 1) for line in (fixture / 'outputs.txt').read_text(encoding='utf-8-sig').splitlines())
+            assert values['prerelease'] == str(expected).lower() and values['tag'] == tag and values['version'] == '1.6.1'
+
     source = '1' * 40; native = repo / 'src/SHOU.Launcher.Desktop/Native/MacOS'
     manifest = json.loads((native / 'frozen-arm64-v1/manifest.json').read_text())
     baseline = out / 'package-baseline'; baseline.mkdir(); (baseline / 'dist').mkdir()

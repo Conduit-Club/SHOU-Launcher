@@ -1,6 +1,6 @@
 # Conduit-Club 构建
 
-当前发行入口是共享 Avalonia Desktop：Windows x64、Windows ARM64 和 Apple Silicon macOS。旧 WPF 工程与构建脚本保留作回归和历史参考，不再供新版 Release 取包。开发基线为 `dev`，稳定分支为 `main`；当前目标为 **1.6.0 / xb**。
+当前发行入口是共享 Avalonia Desktop：Windows x64、Windows ARM64 和 Apple Silicon macOS。旧 WPF 工程与构建脚本保留作回归和历史参考，不再供新版 Release 取包。开发基线为 `dev`，稳定分支为 `main`；当前目标为 **1.6.1 / xb**。
 
 ## Desktop 本地构建
 
@@ -29,7 +29,7 @@ Actions 的仓库 Secrets 使用 `CLIENT_ID`、`CURSEFORGE_API_KEY`、`MACOS_SIG
 - `Legacy WPF regression`：保留旧工程验证包，不参与新版 Release 资产选择。
 - `Conduit Desktop Release Draft`：版本标签 push，或手动选择已有标签；复用同一 Desktop 构建工作流，只有两个宿主的编译、测试、签名与打包全部通过才收集资产。
 
-稳定包必须 `Release`、精确 `v<三段版本>` 标签指向所构建源码，且源码属于 `origin/main`。预发布显式使用 `-Prerelease`，允许同版本的 `v1.6`（仅源码补丁号为 0）或带后缀标签，不要求提前合并 main。`v1.6` 对应程序版本 **1.6.0 / xb**；GitHub 必须标为 Prerelease，不能设为 Latest。用户本轮要求暂不合并 PR，因此此标签从移植功能分支创建。
+稳定包必须 `Release`、精确 `v<三段版本>` 标签指向所构建源码，且源码属于 `origin/main`。打包脚本的预发布显式使用 `-Prerelease`，允许同版本的完整标签、`v1.6`（仅源码补丁号为 0）或带后缀标签，不要求提前合并 main。标签工作流根据源码是否已进入 `origin/main` 决定默认通道：main 之外的源码默认为预发布，短标签、后缀或手动指定也标为预发布；正式版仍需完整版本标签且源码属于 main。历史 `v1.6` 对应 1.6.0 / xb；当前目标 `v1.6.1` 对应 1.6.1 / xb，继续从移植功能分支预发布，不设为 Latest 或提前合并 PR。
 
 `Collect-ReleaseAssets.ps1` 只从 Actions 产物的 `dist` 收集包，拒绝测试夹具、缺平台、混合源码/配置、散落 DLL、错误 PE 架构、损坏哈希、变化的固定凭据组件或不一致的 Mac 构建信息。全部验证后，公开上传目录仅保留三个平台 ZIP；构建/签名信息、`.sha256`、`SHA256SUMS.txt` 与 `RELEASE-MANIFEST.json` 移入 `evidence/`，单独存为 Actions 的 `Desktop-Release-Evidence-<tag>-<run>` 验证产物，不附加到 GitHub Release。公开文件通过 GitHub 自带的 SHA-256 摘要核对；内部来源与完整性检查继续执行。发行说明只描述功能、下载和用户需要知道的兼容事项，分支/PR、源码/SDK、测试编号和过程留在维护报告。先创建**草稿**，不覆盖已有发行、不自动公开；维护者核对资产后再将预发布公开，正式发行仍遵循 dev → main 审查流程。
 

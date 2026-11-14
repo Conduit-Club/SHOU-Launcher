@@ -62,7 +62,7 @@ public sealed partial class LauncherService : ILauncherInformationService
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(20));
         using var request = new HttpRequestMessage(HttpMethod.Get, uri);
-        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.6.0"); request.Headers.Accept.ParseAdd(accept);
+        request.Headers.UserAgent.ParseAdd("SHOU-Launcher/1.6.1"); request.Headers.Accept.ParseAdd(accept);
         using var response = await informationHttp.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
         response.EnsureSuccessStatusCode();
         if (response.Content.Headers.ContentLength > limit) throw new InvalidDataException("响应超过大小限制。");
