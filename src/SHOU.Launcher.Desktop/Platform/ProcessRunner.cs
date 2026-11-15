@@ -7,7 +7,7 @@ using SHOU.Launcher.Core.Abstractions;
 namespace SHOU.Launcher.Desktop.Platform;
 
 /// <summary>Runs only explicit executables; shell scripts are a separate caller decision.</summary>
-public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable, IGameWindowObserver, IGameWindowCustomization
+public sealed partial class ProcessRunner : IProcessRunner, IAsyncDisposable, IGameWindowObserver, IGameWindowCustomization
 {
     private readonly ConcurrentDictionary<int, ManagedProcess> _owned = new();
     private int _disposed;
@@ -102,14 +102,16 @@ public sealed class ProcessRunner : IProcessRunner, IAsyncDisposable, IGameWindo
         await Task.WhenAll(_owned.Values.Select(async process => await process.DisposeAsync().ConfigureAwait(false))).ConfigureAwait(false);
     }
 
+    public bool SupportsGameWindowObservation => OperatingSystem.IsWindows() || OperatingSystem.IsMacOS();
+    public bool SupportsGameWindowTitle => OperatingSystem.IsWindows();
     public async Task<bool> WaitForGameWindowAsync(IManagedProcess process, TimeSpan timeout, CancellationToken cancellationToken)
     {
-        // The Windows window probe belongs here, never in the shared page or Core orchestration.
-        // Other platforms retain their launch path; native window detection still needs Mac acceptance.
+        cancellationToken.ThrowIfCancellationRequested();
+        if (OperatingSystem.IsMacOS()) return await WaitForMacGameWindowAsync(process, timeout, cancellationToken).ConfigureAwait(false);
         if (!OperatingSystem.IsWindows()) return false;
         var timer = Stopwatch.StartNew();
         using var native = Process.GetProcessById(process.ProcessId);
-        while (timer.Elapsed < timeout && !process.Completion.IsCompleted)
+        while ((timeout == Timeout.InfiniteTimeSpan || timer.Elapsed < timeout) && !process.Completion.IsCompleted)
         {
             cancellationToken.ThrowIfCancellationRequested();
             native.Refresh();

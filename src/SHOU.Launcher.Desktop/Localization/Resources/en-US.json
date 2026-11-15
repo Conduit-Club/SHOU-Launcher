@@ -3235,5 +3235,9 @@
   "tfd2d4eb005e182d0": "Custom JVM arguments are passed to Java unchanged. Quote values containing spaces.",
   "tfebb5a932e21b5eb": "Custom JVM arguments are passed to Java unchanged. Quote values containing spaces.",
   "t53a59354361e5939": "Authorize Keychain access",
-  "t50a626534809dffa": "Allow this updated launcher to read macOS Keychain. Your existing sign-in credentials are preserved."
+  "t50a626534809dffa": "Allow this updated launcher to read macOS Keychain. Your existing sign-in credentials are preserved.",
+  "t3b2133aceb4fb225": "Initializing Minecraft",
+  "t0facea6421e1fea3": "Return to launcher",
+  "tb80a7249a2b7bc9e": "Waiting {0:0} s for the game window…",
+  "t56c84f1069b65b44": "Game process started; window not yet confirmed"
 }

@@ -82,6 +82,7 @@ public interface IDetachableProcess : IManagedProcess
 }
 public interface IGameWindowObserver
 {
+    bool SupportsGameWindowObservation => true;
     Task<bool> WaitForGameWindowAsync(IManagedProcess process, TimeSpan timeout, CancellationToken cancellationToken);
 }
 public interface IDataDirectoryLease : IDisposable { string LockPath { get; } }

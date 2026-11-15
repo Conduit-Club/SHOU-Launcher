@@ -38,9 +38,13 @@ public sealed record DownloadTaskSnapshot(string Id, string Name, string State, 
 public sealed record LauncherLog(DateTimeOffset Timestamp, string Level, string Message);
 public sealed record DeviceCodeChallenge(string UserCode, Uri VerificationUri, DateTimeOffset ExpiresAt, string Message);
 public sealed record AuthenticationProfileChoice(string Id, string Name);
-public sealed record GameSessionSnapshot(string InstanceId, int ProcessId, DateTimeOffset StartedAt);
+public sealed record GameSessionSnapshot(string InstanceId, int ProcessId, DateTimeOffset StartedAt)
+{
+    // Null means an existing/unobserved session; false is an owned game without a confirmed window.
+    public bool? WindowReady { get; init; }
+}
 public sealed record LaunchActivity(string InstanceId, string InstanceName, string Stage, string Authentication,
-    long BytesReceived = 0, long? TotalBytes = null);
+    long BytesReceived = 0, long? TotalBytes = null, int? ProcessId = null, DateTimeOffset? ProcessStartedAt = null);
 public sealed record LauncherSnapshot(BuildIdentity Build, PlatformContext Platform, LauncherSettings Settings,
     IReadOnlyList<GameInstance> Instances, IReadOnlyList<AccountProfile> Accounts,
     IReadOnlyList<JavaInstallation> JavaInstallations, IReadOnlyList<ClubServer> Servers,

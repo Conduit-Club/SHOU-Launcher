@@ -24,10 +24,11 @@ public partial class MainWindow
     {
         if (e.PropertyName != nameof(MainWindowViewModel.Snapshot) || sender is not MainWindowViewModel vm) return;
         var state = vm.Snapshot;
-        if (state.GameSessions.Count == 0 && hiddenForGame) { hiddenForGame = false; Show(); WindowState = WindowState.Normal; }
+        if (hiddenForGame && state.GameSessions.All(session => session.WindowReady == false)) { hiddenForGame = false; Show(); WindowState = WindowState.Normal; }
         if (state.State is "Launching" or "Installing") return;
         foreach (var session in state.GameSessions)
         {
+            if (session.WindowReady == false) continue;
             if (!visibilityHandled.Add(session.ProcessId)) continue;
             var instance = state.Instances.FirstOrDefault(i => i.Id == session.InstanceId);
             var behavior = SHOU.Launcher.Core.Minecraft.GameSettingsPolicy.Options(instance, state.Settings).Visibility;

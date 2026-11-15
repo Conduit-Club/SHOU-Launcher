@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Collections.Concurrent;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Core.Downloads;
@@ -34,14 +35,28 @@ public sealed class ProcessLifecycleRegressionTests
         var first = await service.CreateInstanceAsync("First", "fixture");
         await service.LaunchAsync(first.Id).WaitAsync(TimeSpan.FromSeconds(5));
         Assert.AreEqual("Ready", service.Snapshot.State);
+        Assert.AreEqual(Timeout.InfiniteTimeSpan, runner.LastWindowTimeout, "Slow pack observation must not be declared complete by a fixed startup timer.");
+        Assert.AreEqual(runner.Children[0].ProcessId, service.Snapshot.LaunchActivity!.ProcessId);
+        Assert.AreEqual(false, service.Snapshot.GameSessions.Single().WindowReady);
         var marker = Path.Combine(first.GameDirectory, ".shou/install.json"); var originalMarker = await File.ReadAllBytesAsync(marker);
         await service.LaunchAsync(first.Id);
         Assert.AreEqual(2, service.Snapshot.GameSessions.Count);
+        Assert.AreEqual(runner.Children[1].ProcessId, service.Snapshot.LaunchActivity!.ProcessId);
+        runner.ReportWindow(runner.Children[0].ProcessId, true);
+        await WaitUntilAsync(() => service.Snapshot.GameSessions.Single(s => s.ProcessId == runner.Children[0].ProcessId).WindowReady == true);
+        Assert.AreEqual(runner.Children[1].ProcessId, service.Snapshot.LaunchActivity!.ProcessId, "An older window must not dismiss the later launch.");
+        runner.ReportWindow(runner.Children[1].ProcessId, true);
+        await WaitUntilAsync(() => service.Snapshot.LaunchActivity is null);
+        Assert.AreEqual("Ready", service.Snapshot.State);
         CollectionAssert.AreEqual(originalMarker, await File.ReadAllBytesAsync(marker), "A repeat launch must not republish installation state beneath a live game.");
         Assert.AreEqual(2, Directory.GetDirectories(Path.Combine(first.GameDirectory, ".shou/natives"), "*", SearchOption.AllDirectories).Count(p => Guid.TryParseExact(Path.GetFileName(p), "N", out _)));
         var second = await service.CreateInstanceAsync("Second", "fixture");
         await service.LaunchAsync(second.Id);
         Assert.AreEqual(3, service.Snapshot.GameSessions.Count);
+        runner.ReportWindow(runner.Children[2].ProcessId, false);
+        await WaitUntilAsync(() => service.Snapshot.LaunchActivity is null);
+        Assert.IsNull(service.Snapshot.Error, "A window-observation timeout must not fail or stop a live game.");
+        Assert.AreEqual(false, service.Snapshot.GameSessions.Single(s => s.ProcessId == runner.Children[2].ProcessId).WindowReady);
         await Assert.ThrowsAsync<InvalidOperationException>(() => service.InstallInstanceAsync(first.Id));
         await service.StopGameAsync();
         Assert.IsFalse(runner.Children[0].Completion.IsCompleted, "Stopping the selected second instance must leave the first alive.");
@@ -56,13 +71,24 @@ public sealed class ProcessLifecycleRegressionTests
 
     private sealed class HoldingRunner : IProcessRunner, IGameWindowObserver
     {
+        private readonly ConcurrentDictionary<int, TaskCompletionSource<bool>> windowResults = new();
         public bool HoldWindowProbe { get; init; }
+        public TimeSpan LastWindowTimeout { get; private set; }
         public List<HoldingProcess> Children { get; } = [];
         public Task<IManagedProcess> StartAsync(ProcessSpec spec, IProgress<ProcessOutput>? output = null, CancellationToken cancellationToken = default)
         { var child = new HoldingProcess(18000 + Children.Count); Children.Add(child); return Task.FromResult<IManagedProcess>(child); }
         public Task<ProcessResult> RunAsync(ProcessSpec spec, IProgress<ProcessOutput>? output = null, CancellationToken cancellationToken = default) => throw new AssertFailedException("Unexpected helper.");
         public async Task<bool> WaitForGameWindowAsync(IManagedProcess process, TimeSpan timeout, CancellationToken cancellationToken)
-        { if (HoldWindowProbe) await Task.Delay(Timeout.Infinite, cancellationToken); return false; }
+        {
+            LastWindowTimeout = timeout;
+            return HoldWindowProbe ? await windowResults.GetOrAdd(process.ProcessId, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).Task.WaitAsync(cancellationToken) : false;
+        }
+        public void ReportWindow(int pid, bool visible) => windowResults.GetOrAdd(pid, _ => new(TaskCreationOptions.RunContinuationsAsynchronously)).TrySetResult(visible);
+    }
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        while (!condition()) await Task.Delay(10, deadline.Token);
     }
     private sealed class HoldingProcess(int pid) : IManagedProcess
     {
@@ -96,6 +122,7 @@ public sealed class ProcessLifecycleRegressionTests
         var instance = await service.CreateInstanceAsync("Exit fixture", "fixture");
         await service.LaunchAsync(instance.Id);
         Assert.AreEqual("Error", service.Snapshot.State);
+        Assert.IsNull(service.Snapshot.LaunchActivity);
         Assert.IsNotNull(service.Snapshot.Error);
         Assert.IsNull(service.Snapshot.GameProcessId);
         Assert.AreEqual(1L, service.Snapshot.Instances.Single().Presentation!.LaunchCount);

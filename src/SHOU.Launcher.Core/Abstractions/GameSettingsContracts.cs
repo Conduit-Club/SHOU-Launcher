@@ -30,7 +30,11 @@ public sealed record DownloadBehavior(int MaximumConnections = 8, int MaximumKiB
 public sealed record MemoryStatus(long TotalBytes, long AvailableBytes);
 public interface IMemoryInfo { MemoryStatus Read(); }
 public interface IGameSettingsService { MemoryStatus? ReadMemoryStatus(); }
-public interface IGameWindowCustomization { Task SetGameWindowTitleAsync(IManagedProcess process, string title, CancellationToken cancellationToken); }
+public interface IGameWindowCustomization
+{
+    bool SupportsGameWindowTitle => true;
+    Task SetGameWindowTitleAsync(IManagedProcess process, string title, CancellationToken cancellationToken);
+}
 public sealed record ExternalInstanceOrigin(string MinecraftRoot, string VersionDirectory, string OriginalVersionId, string MetadataSha256);
 public sealed record ExistingInstanceCandidate(string Name, string VersionId, string GameVersion, string Loader,
     string? LoaderVersion, string GameDirectory, ExternalInstanceOrigin Origin, InstancePresentation? Presentation = null);

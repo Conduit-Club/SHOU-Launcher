@@ -107,6 +107,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             else SelectedPage = ReferenceEquals(SelectedPage, Logs) ? Settings : Home;
         }, () => IsContextPage);
         CancelOperationCommand = new(CancelCurrentOperation, () => _operation is { IsCancellationRequested: false });
+        HomeLaunchActionCommand = new(HomeLaunchAction, () => IsWaitingForGameWindow || _operation is { IsCancellationRequested: false });
         DismissErrorCommand = new(() => ShowError(null));
         StopGameCommand = new(() => RunControlAsync("停止游戏", ct => Service.StopGameAsync(ct)), () => HasRunningGame);
         Service.SnapshotChanged += OnSnapshotChanged;
@@ -168,7 +169,8 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public string BuildSummary => $"{Snapshot.Build.Version} · {Snapshot.Build.Codename} · {Snapshot.Build.Configuration}";
     public string SourceSummary => Snapshot.Build.SourceSha.Length > 12 ? Snapshot.Build.SourceSha[..12] : Snapshot.Build.SourceSha;
     public string PlatformSummary => $"{Snapshot.Platform.OS} · 硬件 {Snapshot.Platform.HardwareArchitecture} / 进程 {Snapshot.Platform.ProcessArchitecture}";
-    public string StateSummary => _executing ? _operationLabel : Snapshot.State switch
+    public string StateSummary => _executing ? _operationLabel : IsWaitingForGameWindow ? "游戏正在初始化"
+        : Snapshot.GameSessions.Any(session => session.WindowReady == false) ? "游戏进程已启动，窗口状态尚未确认" : Snapshot.State switch
     {
         "Installing" => "正在安装", "Launching" => "正在启动", "Running" => "就绪",
         "Authenticating" => "正在验证账户", "Error" => "操作失败，可修正后重试", _ => _operationLabel
@@ -364,6 +366,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        launchWaitTimer?.Stop();
         Service.SnapshotChanged -= OnSnapshotChanged;
         Service.LogReceived -= OnLogReceived;
         Instances.PropertyChanged -= OnInstancesPropertyChanged;

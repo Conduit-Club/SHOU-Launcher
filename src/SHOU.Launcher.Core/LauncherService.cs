@@ -337,13 +337,16 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     }, cancellationToken);
     private async Task LaunchCoreAsync(string instanceId, string? serverAddress, CancellationToken ct)
     {
+        var launchWatch = System.Diagnostics.Stopwatch.StartNew();
         if (serverAddress is not null) serverAddress = ServerLaunchPolicy.Parse(serverAddress).Address;
         var instance = FindInstance(instanceId);
         var launchSession = Guid.NewGuid().ToString("N");
         var account = Snapshot.Accounts.FirstOrDefault(a => a.Id == Snapshot.SelectedAccountId);
         Set(s => s with { LaunchActivity = new(instance.Id, instance.Name, "准备游戏", account?.Kind == AccountKind.Microsoft ? "微软正版验证" : account?.Kind == AccountKind.Yggdrasil ? "外置账户验证" : "离线角色") });
         var prepared = await PrepareInstanceAsync(instance, ct, launchSession: launchSession).ConfigureAwait(false);
+        Log("LaunchTiming", $"实例 {instanceId} / 文件与 Java 就绪：{launchWatch.ElapsedMilliseconds} ms。");
         var original = await PlanAsync(instance, prepared.Game, prepared.Java, ct, serverAddress, launchSession).ConfigureAwait(false);
+        Log("LaunchTiming", $"实例 {instanceId} / 账户与启动参数就绪：{launchWatch.ElapsedMilliseconds} ms。");
         string? sessionLogPath = null;
         var startedAt = DateTime.UtcNow;
         // The verified Java bootstrap owns output after handoff, including when the launcher exits.
@@ -368,6 +371,8 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
             if (before.ExitCode != 0 || before.TimedOut || before.Cancelled) throw new IOException("启动前程序未成功完成，未启动游戏；请检查设置。");
         }
         var collector = new ProcessLogCollector((error, line) => Log(error ? "GameError" : "Game", line));
+        var processStartedAt = DateTimeOffset.UtcNow;
+        var processStartTimestamp = System.Diagnostics.Stopwatch.GetTimestamp();
         var process = await platform.Processes.StartAsync(new(plan.JavaExecutable, plan.Arguments, plan.WorkingDirectory, plan.EnvironmentOverrides,
             OutputLimitCharacters: 4 * 1024 * 1024, SensitiveInput: protection?.Input,
             OnStarted: protection is null ? null : pid => gameSessions.Register(instance, pid),
@@ -376,8 +381,13 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         var independent = process is IDetachableProcess;
         games[process.ProcessId] = (instanceId, process, independent);
         RefreshGameSessions();
+        if (platform.Processes is IGameWindowObserver { SupportsGameWindowObservation: true })
+            Set(s => s with { LaunchActivity = s.LaunchActivity is { } activity ? activity with {
+                Stage = "等待游戏窗口", BytesReceived = 0, TotalBytes = null, ProcessId = process.ProcessId, ProcessStartedAt = processStartedAt
+            } : null, GameSessions = s.GameSessions.Select(session => session.ProcessId == process.ProcessId ? session with { WindowReady = false } : session).ToArray() });
+        Log("LaunchTiming", $"实例 {instanceId} / PID {process.ProcessId} / Java 已交接：{launchWatch.ElapsedMilliseconds} ms；窗口尚需初始化。");
         var observer = ObserveGameAsync(instanceId, process, collector, sessionLogPath, startedAt);
-        var monitoring = Task.WhenAll(observer, ObserveGameWindowAsync(instance, process, launchOptions));
+        var monitoring = Task.WhenAll(observer, ObserveGameWindowAsync(instance, process, launchOptions, processStartTimestamp));
         gameObservers[process.ProcessId] = monitoring;
         _ = monitoring.ContinueWith(_ => gameObservers.TryRemove(process.ProcessId, out var ignored), CancellationToken.None, TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
         if (process.Completion.IsCompleted) await observer.ConfigureAwait(false);
@@ -385,18 +395,29 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         try { await RecordInstanceLaunchAsync(instanceId).ConfigureAwait(false); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { Log("Warning", "游戏已交接，启动次数保存失败：" + ex.GetType().Name); }
     }
-    private async Task ObserveGameWindowAsync(GameInstance instance, IManagedProcess process, GameLaunchOptions options)
+    private async Task ObserveGameWindowAsync(GameInstance instance, IManagedProcess process, GameLaunchOptions options, long processStartTimestamp)
     {
-        if (process.Completion.IsCompleted || platform.Processes is not IGameWindowObserver observer) return;
+        if (process.Completion.IsCompleted || platform.Processes is not IGameWindowObserver { SupportsGameWindowObservation: true } observer) return;
         try
         {
-            var visible = await observer.WaitForGameWindowAsync(process, TimeSpan.FromSeconds(90), lifetime.Token).ConfigureAwait(false);
-            if (visible && !process.Completion.IsCompleted && !string.IsNullOrEmpty(options.WindowTitle) && platform.Processes is IGameWindowCustomization customization)
+            // Observation is independent of the operation lock and ends on window/exit/shutdown.
+            // Large packs may legitimately initialize for minutes; do not declare them finished at a timer cutoff.
+            var visible = await observer.WaitForGameWindowAsync(process, Timeout.InfiniteTimeSpan, lifetime.Token).ConfigureAwait(false);
+            if (!disposed && visible && !process.Completion.IsCompleted)
+            {
+                Set(s => s with { GameSessions = s.GameSessions.Select(session => session.ProcessId == process.ProcessId ? session with { WindowReady = true } : session).ToArray() });
+                Log("LaunchTiming", $"实例 {instance.Id} / PID {process.ProcessId} / 游戏窗口已出现，Java 交接后耗时 {System.Diagnostics.Stopwatch.GetElapsedTime(processStartTimestamp).TotalMilliseconds:F0} ms。");
+            }
+            else if (!disposed && !process.Completion.IsCompleted)
+                Log("Warning", $"实例 {instance.Id} / PID {process.ProcessId} 尚未确认游戏窗口；游戏继续运行，可返回启动器查看日志。");
+            if (visible && !process.Completion.IsCompleted && !string.IsNullOrEmpty(options.WindowTitle) && platform.Processes is IGameWindowCustomization { SupportsGameWindowTitle: true } customization)
                 await customization.SetGameWindowTitleAsync(process, GameSettingsPolicy.Title(options.WindowTitle, instance), lifetime.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (lifetime.IsCancellationRequested) { }
         catch (Exception ex) { if (!disposed) Log("Warning", $"实例 {instance.Id} / PID {process.ProcessId} 窗口观察未完成：{ex.GetType().Name}"); }
+        finally { if (!disposed) ClearLaunchWindowActivity(process.ProcessId); }
     }
+    private void ClearLaunchWindowActivity(int processId) => Set(s => s.LaunchActivity?.ProcessId == processId ? s with { LaunchActivity = null } : s);
     private async Task ObserveGameAsync(string instanceId, IManagedProcess process, ProcessLogCollector collector, string? sessionLogPath, DateTime startedAt)
     {
         try
@@ -429,7 +450,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         {
             await process.DisposeAsync().ConfigureAwait(false);
             games.TryRemove(process.ProcessId, out _);
-            if (!disposed) RefreshGameSessions();
+            if (!disposed) { ClearLaunchWindowActivity(process.ProcessId); RefreshGameSessions(); }
         }
     }
     public async Task StopGameAsync(CancellationToken cancellationToken = default)
@@ -611,7 +632,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         }
         catch (OperationCanceledException) { downloadOutcome = "Cancelled"; MarkDownloads("Cancelled", null); Set(s => s with { State = "Ready", Error = null }); throw; }
         catch (Exception ex) { downloadOutcome = "Failed"; var message = SafeError(ex); MarkDownloads("Failed", message); Set(s => s with { State = "Error", Error = message }); Log("Error", message); throw; }
-        finally { downloadActivity.Complete(downloadOutcome); downloadRate.Reset(); PublishDownloads(0); if (state == "Launching") Set(s => s with { LaunchActivity = null }); operation.Release(); }
+        finally { downloadActivity.Complete(downloadOutcome); downloadRate.Reset(); PublishDownloads(0); if (state == "Launching") Set(s => s.LaunchActivity?.ProcessId is null ? s with { LaunchActivity = null } : s); operation.Release(); }
     }
     private Task PersistAsync(CancellationToken ct)
     {

@@ -32,8 +32,10 @@ public sealed partial class LauncherService
                     Snapshot.GameSessions.FirstOrDefault(s => s.ProcessId == owned.Process.ProcessId)?.StartedAt ?? DateTimeOffset.UtcNow));
         }
         var next = active.DistinctBy(s => s.ProcessId).OrderBy(s => s.InstanceId, StringComparer.Ordinal).ThenBy(s => s.ProcessId).ToArray();
-        if (Snapshot.GameSessions.SequenceEqual(next)) return;
-        Set(s => s with { GameSessions = next, GameProcessId = next.LastOrDefault()?.ProcessId });
+        if (Snapshot.GameSessions.Select(s => (s.InstanceId, s.ProcessId, s.StartedAt)).SequenceEqual(next.Select(s => (s.InstanceId, s.ProcessId, s.StartedAt)))) return;
+        Set(s => s with { GameSessions = next.Select(session => session with {
+            WindowReady = s.GameSessions.FirstOrDefault(previous => previous.ProcessId == session.ProcessId)?.WindowReady
+        }).ToArray(), GameProcessId = next.LastOrDefault()?.ProcessId });
     }
     private async Task MonitorGameSessionsAsync()
     {
