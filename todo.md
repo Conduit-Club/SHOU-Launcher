@@ -5,8 +5,8 @@
 - [x] R62-SOURCE：启动交接补丁 `7518ece` 已在现有 PR #15，Windows 端由用户确认通过；在同一功能分支补齐 1.6.2 / xb 当前版本、程序集和请求标识，保留历史发行版本。继续预发布，不合并 PR。
 - [x] R62-NOTES：新增 [v1.6.2 用户发行说明](docs/conduit/RELEASE-v1.6.2.md)，说明 Java 初始化等待、真窗口交接、返回启动器及自动隐藏时机；不宣称游戏本体加载提速。
 - [x] R62-LOCAL：本地版本/启动计划/进程生命周期回归 29/29，发行策略回归 27/27，actionlint 通过；编译 0 警告/错误。本轮不新增游戏启动测试。
-- [ ] R62-RELEASE：本地版本/启动生命周期与发行策略回归通过后提交推送；四组源码 CI 通过后打全新 `v1.6.2` 标签，标签构建通过且三包身份、签名、哈希、单 EXE 校验通过后公开预发布。只上传三个 ZIP，不设为稳定 Latest，不改旧标签。
-- [ ] R62-INSTALL：从已验证的公开发行下载 Mac 包，备份并替换 `/Applications/SHOU Launcher.app`；核对原账户、实例与配置保留，补充启动器实窗验收。本轮不启动 Minecraft。发行与安装完成结果留在本机 R62 验证报告；此条在源码提交时仍为待执行。
+- [x] R62-RELEASE：源码 `a028ce9` 的四组 CI 与[标签发行构建](https://github.com/Conduit-Club/SHOU-Launcher/actions/runs/43672301805)全部通过；三包版本、干净源码、内嵌配置、ZIP/哈希、Windows 双架构单 EXE 及 Mac 固定凭据组件核对通过。[v1.6.2 预发布](https://github.com/Conduit-Club/SHOU-Launcher/releases/tag/v1.6.2)已公开，仅三个 ZIP，稳定 Latest 仍为 v1.5.0。旧标签/发行不变，PR #15 未合并。
+- [x] R62-INSTALL：已备份旧应用和配置，用标签版 Mac 包替换 `/Applications/SHOU Launcher.app`，逐文件和严格签名核对通过；实窗软件信息确认 1.6.2 / xb / a028ce9，正常退出重开后保留 3 个账户和 1 个 XPlus，所选微软头像自动恢复、配置字节不变，未出现额外钥匙串提示。本轮不启动 Minecraft；未替代 R60-NEXT 的启动性能和设备矩阵验收。
 
 ## R61：启动交接补丁提交与 Windows 复核（2026-11-15）
 
