@@ -13,7 +13,7 @@ public sealed record InstalledGame(ResolvedVersion Version, LibraryResolution Li
     string ClientJar, string LibrariesDirectory, string AssetsDirectory, string NativesDirectory,
     IReadOnlyList<string> LegacyExtractions);
 
-public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader downloader, string cacheDirectory,
+public sealed class MinecraftInstaller(IVerifiedDownloader downloader, string cacheDirectory,
     Func<IReadOnlyList<DownloadSource>> sources, Func<int>? maximumConnections = null)
 {
     public async Task<InstalledGame> InstallAsync(ResolvedVersion version, RuleContext context, string gameDirectory,
@@ -37,10 +37,10 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
         var librariesDirectory = Path.Combine(cacheDirectory, "libraries");
         var libraries = LibraryResolver.Resolve(metadata, context);
         var completedLibraries = 0; phases?.Report(new("检查依赖库", 0, libraries.Files.Count));
-        await Parallel.ForEachAsync(libraries.Files, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections?.Invoke() ?? 8, 1, 64), CancellationToken = ct }, async (file, token) =>
+        await Parallel.ForEachAsync(libraries.Files, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections?.Invoke() ?? DownloadDefaults.Connections, 1, DownloadDefaults.MaximumConnections), CancellationToken = ct }, async (file, token) =>
         {
             var path = SafePath.Within(librariesDirectory, file.RelativePath);
-            var sha1 = file.Sha1;
+            var sha1 = string.IsNullOrWhiteSpace(file.Sha1) ? null : file.Sha1;
             if (file.Generated)
             {
                 if (sha1?.Length != 40 || !File.Exists(path)) throw new InvalidDataException("加载器生成库缺失，请重新安装加载器。");
@@ -50,12 +50,8 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
                 phases?.Report(new("检查依赖库", Interlocked.Increment(ref completedLibraries), libraries.Files.Count, file.RelativePath));
                 return;
             }
-            if (string.IsNullOrWhiteSpace(sha1))
-            {
-                sha1 = await ReadChecksumAsync(file.Url, token).ConfigureAwait(false);
-            }
             await downloader.DownloadAsync(new(Map(file.Url), path, sha1, Size: file.Size,
-                LocalSources: ExistingSources(existingOrigin, "libraries/" + file.RelativePath)), progress, token).ConfigureAwait(false);
+                LocalSources: ExistingSources(existingOrigin, "libraries/" + file.RelativePath)) { ReuseWithoutHash = string.IsNullOrWhiteSpace(sha1) }, progress, token).ConfigureAwait(false);
             phases?.Report(new("检查依赖库", Interlocked.Increment(ref completedLibraries), libraries.Files.Count, file.RelativePath));
         }).ConfigureAwait(false);
         var assetsDirectory = Path.Combine(cacheDirectory, "assets");
@@ -66,7 +62,7 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
         var assets = AssetResolver.Parse(indexId, await File.ReadAllTextAsync(indexPath, ct).ConfigureAwait(false));
         var objects = assets.Objects.DistinctBy(a => a.Hash).ToArray(); var completedAssets = 0;
         phases?.Report(new("检查游戏资源", 0, objects.Length));
-        await Parallel.ForEachAsync(objects, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections?.Invoke() ?? 8, 1, 64), CancellationToken = ct }, async (asset, token) =>
+        await Parallel.ForEachAsync(objects, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections?.Invoke() ?? DownloadDefaults.Connections, 1, DownloadDefaults.MaximumConnections), CancellationToken = ct }, async (asset, token) =>
         {
             await downloader.DownloadAsync(new(Map(asset.OfficialUri), SafePath.Within(assetsDirectory, asset.RelativePath), asset.Hash, Size: asset.Size,
                 LocalSources: ExistingSources(existingOrigin, "assets/" + asset.RelativePath)), progress, token).ConfigureAwait(false);
@@ -96,26 +92,6 @@ public sealed class MinecraftInstaller(HttpClient http, IVerifiedDownloader down
         return new(version, libraries, assets, clientPath, librariesDirectory, assetsDirectory, nativesDirectory, extracted);
     }
     private IReadOnlyList<Uri> Map(Uri uri) => DownloadSources.Resolve([uri.AbsoluteUri], sources()).Select(s => new Uri(s.Url)).ToArray();
-    private async Task<string> ReadChecksumAsync(Uri artifact, CancellationToken ct)
-    {
-        var errors = new List<Exception>();
-        var checksumUri = new UriBuilder(artifact); checksumUri.Path += ".sha1";
-        foreach (var uri in Map(checksumUri.Uri))
-        {
-            try
-            {
-                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct); timeout.CancelAfter(TimeSpan.FromSeconds(20));
-                var text = (await http.GetStringAsync(uri, timeout.Token).ConfigureAwait(false)).Trim();
-                var checksum = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-                if (checksum?.Length != 40 || checksum.Any(c => !Uri.IsHexDigit(c))) throw new InvalidDataException("Library checksum sidecar is invalid.");
-                return checksum.ToLowerInvariant();
-            }
-            catch (OperationCanceledException) when (ct.IsCancellationRequested) { throw; }
-            catch (Exception error) when (error is HttpRequestException or InvalidDataException or IOException or OperationCanceledException)
-            { errors.Add(new IOException("Library checksum source failed: " + error.GetType().Name)); }
-        }
-        throw new AggregateException("No configured source supplied a usable library checksum.", errors);
-    }
     private static IReadOnlyList<LocalDownloadSource>? ExistingSources(ExternalInstanceOrigin? origin, string relative)
         => origin is null ? null : [new(origin.MinecraftRoot, relative)];
     private static IReadOnlyList<LocalDownloadSource> ClientSources(ExternalInstanceOrigin origin, ResolvedVersion version)

@@ -24,9 +24,18 @@ public interface ILegacyInstanceSettingsService
 {
     Task<LegacyInstanceSettings> ReadLegacyInstanceSettingsAsync(string instanceId, CancellationToken cancellationToken = default);
 }
-public sealed record DownloadBehavior(int MaximumConnections = 8, int MaximumKiBPerSecond = 0,
+public static class DownloadDefaults
+{
+    public const int Connections = 256;
+    public const int MaximumConnections = 256;
+    public const int ConnectionsPerFile = 8;
+}
+public sealed record DownloadBehavior(int MaximumConnections = DownloadDefaults.Connections, int MaximumKiBPerSecond = 0,
     bool HttpsOnly = false, DownloadSourcePreference SourcePreference = DownloadSourcePreference.Custom,
-    bool PreferOfficialCatalog = true, bool SelectInstalledInstance = true);
+    bool PreferOfficialCatalog = true, bool SelectInstalledInstance = true)
+{
+    public int ConcurrencyVersion { get; init; } = 1;
+}
 public sealed record MemoryStatus(long TotalBytes, long AvailableBytes);
 public interface IMemoryInfo { MemoryStatus Read(); }
 public interface IGameSettingsService { MemoryStatus? ReadMemoryStatus(); }

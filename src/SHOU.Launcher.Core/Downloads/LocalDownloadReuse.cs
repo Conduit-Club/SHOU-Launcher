@@ -9,7 +9,7 @@ internal static class LocalDownloadReuse
     internal static async Task<bool> TryImportAsync(DownloadRequest request, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
         if (request.LocalSources is not { Count: > 0 } sources || sources.Count > 64
-            || request.Sha1 is null && request.Sha256 is null) return false;
+            || request.Sha1 is null && request.Sha256 is null && !request.ReuseWithoutHash) return false;
         foreach (var candidate in sources)
         {
             ct.ThrowIfCancellationRequested(); string? temporary = null;
@@ -25,9 +25,20 @@ internal static class LocalDownloadReuse
                 VerifiedDownloader.RejectLink(request.DestinationPath);
                 temporary = request.DestinationPath + ".reuse-" + Guid.NewGuid().ToString("N") + ".tmp";
                 progress?.Report(new(request.DestinationPath, "Verifying", 0, request.Size, "cache", "缓存", "校验旧目录中的已有文件"));
-                await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 65536, FileOptions.Asynchronous))
-                    await input.CopyToAsync(output, ct).ConfigureAwait(false);
-                if (!await VerifiedDownloader.IsValidAsync(temporary, request, ct).ConfigureAwait(false)) continue;
+                using var hash = new TransferHash(request);
+                long copied = 0;
+                await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, FileOptions.Asynchronous))
+                {
+                    var buffer = new byte[131072];
+                    while (true)
+                    {
+                        var count = await input.ReadAsync(buffer, ct).ConfigureAwait(false);
+                        if (count == 0) break;
+                        await output.WriteAsync(buffer.AsMemory(0, count), ct).ConfigureAwait(false);
+                        hash.Append(buffer.AsSpan(0, count)); copied += count;
+                    }
+                }
+                if (!hash.Matches(copied)) continue;
                 ct.ThrowIfCancellationRequested(); VerifiedDownloader.RejectLink(request.DestinationPath);
                 File.Move(temporary, request.DestinationPath, true); temporary = null;
                 progress?.Report(new(request.DestinationPath, "Completed", input.Length, request.Size, "cache", "缓存", "已复用旧目录文件"));

@@ -22,7 +22,7 @@ public sealed class LoaderInstallationTests
         var files = LibraryResolver.Resolve(metadata, new("windows", "10", RuntimeArchitecture.X64));
         var file = files.Files.Single(); Assert.IsTrue(file.LegacyNative);
         Assert.AreEqual("https://maven.legacyfabric.net/org/lwjgl/lwjgl/lwjgl-platform/2.9.4+legacyfabric.17/lwjgl-platform-2.9.4+legacyfabric.17-natives-windows.jar", file.Url.AbsoluteUri);
-        Assert.IsNull(file.Sha1); // MinecraftInstaller must read the repository checksum, never waive verification.
+        Assert.IsNull(file.Sha1); // Metadata has no checksum; the installer must not require a separate .sha1 request.
         Assert.ThrowsExactly<PlatformNotSupportedException>(() => LibraryResolver.Resolve(metadata, new("osx", "26", RuntimeArchitecture.Arm64)));
     }
     [TestMethod, DataRow("valid"), DataRow("wrong-java"), DataRow("wrong-parent"), DataRow("wrong-main")]

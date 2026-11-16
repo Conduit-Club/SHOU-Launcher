@@ -209,7 +209,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         phases?.Report(new("检查 Java 运行环境", 0, 0));
         var java = await SelectInstanceJavaAsync(instance, version, ct).ConfigureAwait(false);
         var context = Context(java);
-        var gameFiles = await new MinecraftInstaller(http, concurrent ? new InstalledFileReader() : downloader, Paths.CacheDirectory, Sources, () => network.Capture().Downloads?.MaximumConnections ?? 8).InstallAsync(version, context,
+        var gameFiles = await new MinecraftInstaller(concurrent ? new InstalledFileReader() : downloader, Paths.CacheDirectory, Sources, () => network.Capture().Downloads?.MaximumConnections ?? DownloadDefaults.Connections).InstallAsync(version, context,
             instance.GameDirectory, new InlineProgress<TransferProgress>(OnTransfer), ct, launchSession, concurrent, phases,
             instance.RuntimeProfileOverride ? null : instance.Origin).ConfigureAwait(false);
         if (!concurrent && !importedLoader && (instance.Origin is null || instance.RuntimeProfileOverride) && Loaders.PortableVendorInstaller.Supports(instance.Loader))

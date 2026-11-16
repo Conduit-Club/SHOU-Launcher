@@ -13,6 +13,21 @@ namespace SHOU.Launcher.Desktop.Tests;
 public sealed class GameSettingsUiTests
 {
     [AvaloniaFact]
+    public async Task DownloadConcurrencyDefaultsTo256AndTheEditorCanSaveCustomValues()
+    {
+        var service = new SettingsService(); using var vm = new MainWindowViewModel(service, new FakeExternalLauncher());
+        var view = new SettingsView { DataContext = vm.Settings }; var window = new Window { Content = view }; window.Show();
+        try
+        {
+            vm.Settings.SelectedSection = "manage"; Dispatcher.UIThread.RunJobs();
+            var input = view.FindControl<NumericUpDown>("DownloadConnectionsSetting")!;
+            Assert.Equal(256m, input.Value);
+            input.Value = 128; Dispatcher.UIThread.RunJobs(); await vm.Settings.SaveCommand.ExecuteAsync(null);
+            Assert.Equal(128, service.Snapshot.Settings.Downloads!.MaximumConnections); Assert.Null(vm.ErrorMessage);
+        }
+        finally { window.Close(); }
+    }
+    [AvaloniaFact]
     public void AutomaticMemoryDisplayUsesCalculatedValueAndPreservesTheManualDraft()
     {
         using var vm = new MainWindowViewModel(new SettingsService(), new FakeExternalLauncher()); vm.Settings.MemoryMiB = 4096;

@@ -83,7 +83,7 @@ public sealed class ExistingGameReuseTests
         metadata["assetIndex"]!["id"]="fixture";metadata["libraries"]![0]!["downloads"]!["artifact"]!["path"]="fixture/library/1/library-1.jar";
         var version=new ResolvedVersion("local-fixture",metadata,Path.Combine(versionFolder,"Friendly profile 中文.json"),["1.21.1","local-fixture"]);
         var progress=new List<TransferProgress>();using var http=new HttpClient(new ScriptedHttpHandler(_=>throw new AssertFailedException("All four game files already exist and must be reused.")));
-        var result=await new MinecraftInstaller(http,new VerifiedDownloader(http),Path.Combine(root,"new cache"),()=>PCL.Core.Conduit.DownloadSources.Defaults()).InstallAsync(version,new("windows","10",RuntimeArchitecture.X64),Path.Combine(root,"new game"),new Progress(progress),
+        var result=await new MinecraftInstaller(new VerifiedDownloader(http),Path.Combine(root,"new cache"),()=>PCL.Core.Conduit.DownloadSources.Defaults()).InstallAsync(version,new("windows","10",RuntimeArchitecture.X64),Path.Combine(root,"new game"),new Progress(progress),
             existingOrigin:new(old,versionFolder,"Friendly profile 中文",new string('a',64)));
         CollectionAssert.AreEqual(client,File.ReadAllBytes(result.ClientJar));Assert.AreEqual(4,progress.Count(p=>p.Stage=="Completed"&&p.Source=="cache"));
         Assert.AreEqual(client.Length+library.Length+index.Length+asset.Length,progress.Where(p=>p.Stage=="Completed").Sum(p=>p.BytesReceived));

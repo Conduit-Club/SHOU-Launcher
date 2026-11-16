@@ -46,7 +46,7 @@ public sealed class DownloadCoordinator(HttpClient http, IVerifiedDownloader int
             try
             {
                 progress?.Report(new(destination, "Queued", 0, request.Size, "aria2", "aria2", "等待全局下载名额"));
-                var maximum = Math.Clamp(configuration.Downloads?.MaximumConnections ?? 8, 1, 64);
+                var maximum = Math.Clamp(configuration.Downloads?.MaximumConnections ?? DownloadDefaults.Connections, 1, DownloadDefaults.MaximumConnections);
                 var connections = request.Size is >= 16 * 1024 * 1024 ? Math.Min(4, maximum) : 1;
                 using var budget = await options.Budget.EnterAsync(maximum, connections, cancellationToken).ConfigureAwait(false);
                 var rpc = await options.Aria2Connection.ConnectAsync(options, configuration, cancellationToken).ConfigureAwait(false);

@@ -20,7 +20,7 @@ public sealed partial class SettingsPageViewModel
     private bool useConsoleJava;
     public bool UseConsoleJava { get => useConsoleJava; set { if (SetProperty(ref useConsoleJava, value)) MarkDirty(); } }
     public bool CanUseConsoleJava => Owner.Snapshot.Platform.OS == LauncherOS.Windows;
-    private decimal maximumConnections = 8, maximumKiBPerSecond;
+    private decimal maximumConnections = DownloadDefaults.Connections, maximumKiBPerSecond;
     private MemoryStatus? systemMemory;
     private DateTime lastMemoryRead;
     public bool AutomaticMemory { get => automaticMemory; set { if (SetProperty(ref automaticMemory, value)) { MarkDirty(); NotifyMemory(); OnPropertyChanged(nameof(CustomMemory)); } } }
@@ -78,7 +78,7 @@ public sealed partial class SettingsPageViewModel
         try
         {
             GameSettingsPolicy.Validate(BuildGameOptions());
-            if (MaximumConnections != decimal.Truncate(MaximumConnections) || MaximumConnections is < 1 or > 64 || MaximumKiBPerSecond != decimal.Truncate(MaximumKiBPerSecond) || MaximumKiBPerSecond is < 0 or > 1048576) throw new ArgumentException("请填写有效的下载并发和限速值。");
+            if (MaximumConnections != decimal.Truncate(MaximumConnections) || MaximumConnections is < 1 or > DownloadDefaults.MaximumConnections || MaximumKiBPerSecond != decimal.Truncate(MaximumKiBPerSecond) || MaximumKiBPerSecond is < 0 or > 1048576) throw new ArgumentException("请填写有效的下载并发和限速值。");
             return true;
         }
         catch (Exception ex) when (ex is ArgumentException or InvalidDataException) { ReportSettingsError(ex.Message); return false; }

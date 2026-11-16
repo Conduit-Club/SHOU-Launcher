@@ -100,7 +100,7 @@ public sealed class MojangJavaRuntimeInstaller(IVerifiedDownloader downloader, I
                 default: throw new InvalidDataException("Unsupported runtime manifest entry type.");
             }
         }
-        await Parallel.ForEachAsync(regularFiles, new ParallelOptions { MaxDegreeOfParallelism = 4, CancellationToken = cancellationToken },
+        await Parallel.ForEachAsync(regularFiles, new ParallelOptions { MaxDegreeOfParallelism = DownloadDefaults.Connections, CancellationToken = cancellationToken },
             async (file, token) =>
             {
                 var raw = Raw(file.Descriptor);

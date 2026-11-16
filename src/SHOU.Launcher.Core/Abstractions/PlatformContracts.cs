@@ -120,7 +120,12 @@ public interface IJavaRuntimeInstaller
 public sealed record LocalDownloadSource(string Root, string RelativePath);
 public sealed record DownloadRequest(IReadOnlyList<Uri> Sources, string DestinationPath,
     string? Sha1 = null, string? Sha256 = null, long? Size = null, bool AllowResume = true,
-    IReadOnlyList<LocalDownloadSource>? LocalSources = null);
+    IReadOnlyList<LocalDownloadSource>? LocalSources = null)
+{
+    // Maven libraries whose version metadata supplies no checksum may reuse an existing file.
+    // Catalog/manifest requests stay fresh unless the caller explicitly opts into file reuse.
+    public bool ReuseWithoutHash { get; init; }
+}
 public interface IVerifiedDownloader
 {
     Task DownloadAsync(DownloadRequest request, IProgress<TransferProgress>? progress = null, CancellationToken cancellationToken = default);

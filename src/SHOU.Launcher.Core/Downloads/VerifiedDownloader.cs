@@ -7,13 +7,14 @@ using SHOU.Launcher.Core.Abstractions;
 
 namespace SHOU.Launcher.Core.Downloads;
 
-public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options = null) : IVerifiedDownloader
+public sealed partial class VerifiedDownloader(HttpClient http, NetworkOptions? options = null) : IVerifiedDownloader
 {
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> Locks = new(StringComparer.Ordinal);
+    private readonly DownloadBudget localBudget = new();
+    private DownloadBudget Budget => options?.Budget ?? localBudget;
     public async Task DownloadAsync(DownloadRequest request, IProgress<TransferProgress>? progress = null, CancellationToken cancellationToken = default)
     {
         var policy = options?.Capture().Downloads ?? new DownloadBehavior();
-        using var budgetLease = options is null ? null : await options.Budget.EnterAsync(policy.MaximumConnections, cancellationToken).ConfigureAwait(false);
         ArgumentException.ThrowIfNullOrWhiteSpace(request.DestinationPath);
         if (request.Sources.Count == 0) throw new ArgumentException("Download has no sources.");
         var destination = Path.GetFullPath(request.DestinationPath);
@@ -44,17 +45,10 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
                     cancellationToken.ThrowIfCancellationRequested();
                     try
                     {
-                        await DownloadOneAsync(uri, destination, request, progress, cancellationToken).ConfigureAwait(false);
-                        progress?.Report(new(destination, "Verifying", new FileInfo(destination + ".part").Length, request.Size, uri.Host, "内置", "校验大小与哈希"));
-                        var checksummed = request.Sha1 is not null || request.Sha256 is not null;
-                        var valid = checksummed ? await IsValidAsync(destination + ".part", request, cancellationToken).ConfigureAwait(false)
-                            : request.Size is not { } declaredSize || new FileInfo(destination + ".part").Length == declaredSize;
-                        if (!valid)
-                        {
-                            // This is owned, reproducible staging, never an installed file.
-                            using (OpenPart(destination + ".part", false)) { }
-                            throw new InvalidDataException("Downloaded file failed size/hash verification.");
-                        }
+                        if (!await TryDownloadRangesAsync(uri, destination, request, policy, progress, cancellationToken).ConfigureAwait(false))
+                            await DownloadOneAsync(uri, destination, request, policy, progress, cancellationToken).ConfigureAwait(false);
+                        cancellationToken.ThrowIfCancellationRequested();
+                        RejectLink(destination); RejectLink(destination + ".part");
                         File.Move(destination + ".part", destination, true);
                         progress?.Report(new(destination, "Completed", new FileInfo(destination).Length, request.Size, uri.Host));
                         return;
@@ -87,12 +81,12 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
     {
         RejectLink(path);
         FileStream stream;
-        try { stream = new(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 131072, true); }
+        try { stream = new(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.None, 131072, true); }
         catch (IOException) when (File.Exists(path))
         {
             RejectLink(path);
             // Open does not truncate an existing target. Validate again before any mutation.
-            stream = new(path, FileMode.Open, FileAccess.Write, FileShare.None, 131072, true);
+            stream = new(path, FileMode.Open, FileAccess.ReadWrite, FileShare.None, 131072, true);
         }
         try
         {
@@ -122,8 +116,9 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
         }
         finally { if (owned && File.Exists(temporary)) File.Delete(temporary); }
     }
-    private async Task DownloadOneAsync(Uri uri, string destination, DownloadRequest request, IProgress<TransferProgress>? progress, CancellationToken ct)
+    private async Task DownloadOneAsync(Uri uri, string destination, DownloadRequest request, DownloadBehavior policy, IProgress<TransferProgress>? progress, CancellationToken ct)
     {
+        using var budgetLease = await Budget.EnterAsync(policy.MaximumConnections, ct).ConfigureAwait(false);
         var part = destination + ".part";
         var resumePath = part + ".resume.json";
         RejectLink(part); RejectLink(resumePath);
@@ -174,6 +169,8 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
         }
         await WriteResumeAsync(resumePath, new(sourceIdentity, response.Headers.ETag?.ToString()), timeout.Token).ConfigureAwait(false);
         await using var output = OpenPart(part, offset > 0);
+        using var hash = new TransferHash(request);
+        await hash.ReadPrefixAsync(output, offset, timeout.Token).ConfigureAwait(false);
         await using var input = await response.Content.ReadAsStreamAsync(timeout.Token).ConfigureAwait(false);
         var bytes = offset;
         var totalBytes = request.Size ?? (response.Content.Headers.ContentLength is { } len ? len + offset : null);
@@ -183,14 +180,23 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
         {
             var read = await input.ReadAsync(buffer, timeout.Token).ConfigureAwait(false);
             if (read == 0) break;
-            if (options is not null) await options.Budget.ThrottleAsync(read, rate, timeout.Token).ConfigureAwait(false);
+            // Waiting for the user's shared bandwidth limit is not a stalled network.
+            timeout.CancelAfter(Timeout.InfiniteTimeSpan);
+            await Budget.ThrottleAsync(read, rate, ct).ConfigureAwait(false);
             bytes += read;
             if (request.Size is { } limit && bytes > limit) throw new InvalidDataException("Download exceeded declared size.");
-            await output.WriteAsync(buffer.AsMemory(0, read), timeout.Token).ConfigureAwait(false);
+            await output.WriteAsync(buffer.AsMemory(0, read), ct).ConfigureAwait(false);
+            hash.Append(buffer.AsSpan(0, read));
+            timeout.CancelAfter(TimeSpan.FromMinutes(rate > 0 ? 30 : 3));
             if (DateTimeOffset.UtcNow - lastProgress > TimeSpan.FromMilliseconds(100))
             { progress?.Report(new(destination, "Downloading", bytes, totalBytes, uri.Host)); lastProgress = DateTimeOffset.UtcNow; }
         }
         await output.FlushAsync(timeout.Token).ConfigureAwait(false);
+        if (!hash.Matches(bytes))
+        {
+            output.SetLength(0);
+            throw new InvalidDataException("Downloaded file failed size/hash verification.");
+        }
         progress?.Report(new(destination, "Downloading", bytes, totalBytes, uri.Host));
     }
     public static async Task<bool> IsValidAsync(string path, DownloadRequest request, CancellationToken ct = default)
@@ -198,11 +204,11 @@ public sealed class VerifiedDownloader(HttpClient http, NetworkOptions? options 
         RejectLink(path);
         if (!File.Exists(path)) return false;
         if (request.Size is { } length && new FileInfo(path).Length != length) return false;
-        if (request.Sha1 is null && request.Sha256 is null) return false; // Unhashed catalogs are fetched fresh.
-        await using var input = File.OpenRead(path);
-        if (request.Sha1 is { } sha1 && !Convert.ToHexString(await SHA1.HashDataAsync(input, ct).ConfigureAwait(false)).Equals(sha1, StringComparison.OrdinalIgnoreCase)) return false;
-        input.Position = 0;
-        if (request.Sha256 is { } sha256 && !Convert.ToHexString(await SHA256.HashDataAsync(input, ct).ConfigureAwait(false)).Equals(sha256, StringComparison.OrdinalIgnoreCase)) return false;
-        return true;
+        if (request.Sha1 is null && request.Sha256 is null)
+            return request.ReuseWithoutHash && new FileInfo(path).Length > 0;
+        await using var input = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read, 131072, FileOptions.Asynchronous | FileOptions.SequentialScan);
+        using var hash = new TransferHash(request);
+        await hash.ReadPrefixAsync(input, input.Length, ct).ConfigureAwait(false);
+        return hash.Matches(input.Length);
     }
 }

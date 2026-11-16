@@ -29,6 +29,11 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
                     ?? throw new InvalidDataException("Configuration root is invalid.");
                 if (((int?)root["schemaVersion"] ?? 1) > 1) { canWrite = false; throw new InvalidDataException("Configuration uses a future schema; writing is disabled."); }
                 var settings = root["settings"]?.Deserialize<LauncherSettings>(JsonOptions) ?? new();
+                // Old Desktop builds persisted the default 8. Upgrade that default once;
+                // settings saved by this build carry a revision, so an explicit 8 stays 8.
+                if (root["settings"]?["downloads"] is JsonObject downloads && !downloads.ContainsKey("concurrencyVersion")
+                    && settings.Downloads is { MaximumConnections: 8 } oldDownloads)
+                    settings = settings with { Downloads = oldDownloads with { MaximumConnections = DownloadDefaults.Connections } };
                 ValidateSettings(settings);
                 var instances = root["instances"]?.Deserialize<GameInstance[]>(JsonOptions) ?? [];
                 ValidateInstances(instances, settings);
@@ -102,7 +107,7 @@ public sealed class ConfigurationStore(IAppPaths paths) : IAsyncDisposable
         if (launcher.LogLineLimit is < 100 or > 20000) throw new ArgumentException("实时日志行数须为 100–20000。");
         if (launcher.RegionalFormat != "system") _ = System.Globalization.CultureInfo.GetCultureInfo(launcher.RegionalFormat);
         var download = settings.Downloads ?? new();
-        if (download.MaximumConnections is < 1 or > 64 || download.MaximumKiBPerSecond is < 0 or > 1048576 || !Enum.IsDefined(download.SourcePreference)) throw new ArgumentException("下载并发须为 1–64，限速须为 0–1048576 KiB/s（0 不限速）。");
+        if (download.MaximumConnections is < 1 or > DownloadDefaults.MaximumConnections || download.MaximumKiBPerSecond is < 0 or > 1048576 || !Enum.IsDefined(download.SourcePreference)) throw new ArgumentException("下载并发须为 1–256，限速须为 0–1048576 KiB/s（0 不限速）。");
         foreach (var property in typeof(LauncherSettings).GetProperties())
             if (!GeneratedSettingsSchema.Entries.Contains(property.Name, StringComparer.Ordinal)) throw new InvalidOperationException("Unregistered generated settings key: " + property.Name);
         if (settings.MemoryMiB is < 512 or > 32768) throw new ArgumentException("内存须在512–32768 MiB之间。");

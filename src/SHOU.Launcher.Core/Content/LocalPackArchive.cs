@@ -95,7 +95,7 @@ public sealed partial class LocalPackArchive
             OptionalFiles: references.Where(f => !f.Required).Select(f => CurseForgePackSelection.Choice(f)).ToArray()), references, overrides, supported);
     }
     public async Task<LocalPackInspection> StageCurseForgeAsync(string path, string expectedSha256, string directory,
-        IReadOnlyList<CurseForgePackFile> files, Func<CurseForgePackFile, string, CancellationToken, Task> download, CancellationToken ct = default, IProgress<PackInstallProgress>? progress = null, int maximumConnections = 8,
+        IReadOnlyList<CurseForgePackFile> files, Func<CurseForgePackFile, string, CancellationToken, Task> download, CancellationToken ct = default, IProgress<PackInstallProgress>? progress = null, int maximumConnections = DownloadDefaults.Connections,
         IReadOnlyList<string>? optionalFiles = null)
     {
         if (!ContentInstallFiles.Hash(expectedSha256, 64)) throw new InvalidDataException("请先读取整合包并确认其 SHA-256。");
@@ -115,7 +115,7 @@ public sealed partial class LocalPackArchive
             PackDiskSpace.Require(directory, checked(files.Sum(f => f.Size) + read.OverrideEntries.Values.Sum(p => archive.Zip.GetEntry(p)!.Length)));
             var installed = new List<ContentInstalledFile>(); var done = 0; var total = files.Count + read.OverrideEntries.Count;
             progress?.Report(new("安装整合包文件", 0, total));
-            await Parallel.ForEachAsync(files, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections, 1, 64), CancellationToken = ct }, async (file, token) =>
+            await Parallel.ForEachAsync(files, new ParallelOptions { MaxDegreeOfParallelism = Math.Clamp(maximumConnections, 1, DownloadDefaults.MaximumConnections), CancellationToken = ct }, async (file, token) =>
             {
                 var targetKind = file.Path.StartsWith("mods/", StringComparison.Ordinal) && file.Path.EndsWith(".jar", StringComparison.OrdinalIgnoreCase) ? "mod"
                     : file.Path.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
