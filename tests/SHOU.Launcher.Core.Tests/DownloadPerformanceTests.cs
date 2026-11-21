@@ -60,11 +60,11 @@ public sealed class DownloadPerformanceTests
         Assert.IsFalse(reports.Any(r => r.Stage == "Verifying")); Assert.AreEqual("Completed", reports.Last().Stage);
     }
 
-    [TestMethod, DataRow(true), DataRow(false)]
-    public async Task ServersIgnoringRangesFallBackWithoutDuplicatingBytes(bool ignoreOnlyChunks)
+    [TestMethod, DataRow(true, 200), DataRow(false, 200), DataRow(true, 416), DataRow(false, 416)]
+    public async Task ServersWithoutUsableRangesFallBackWithoutDuplicatingBytes(bool probeWorks, int unsupportedRangeStatus)
     {
         var payload = new byte[9 * 1024 * 1024]; Random.Shared.NextBytes(payload);
-        using var server = new RangeServer(payload, ignoreRanges: true, probeWorks: ignoreOnlyChunks); using var http = Client();
+        using var server = new RangeServer(payload, unsupportedRangeStatus: unsupportedRangeStatus, probeWorks: probeWorks); using var http = Client();
         var path = Path.Combine(TestFiles.Root(), "client.jar");
         await new VerifiedDownloader(http, Options(64)).DownloadAsync(new([server.Uri("client")], path, Sha256: Hash(payload), Size: payload.Length));
         CollectionAssert.AreEqual(payload, await File.ReadAllBytesAsync(path));
@@ -162,7 +162,7 @@ public sealed class DownloadPerformanceTests
         public int Peak => Volatile.Read(ref peak);
         public int WholeRequests => Volatile.Read(ref whole);
         public ConcurrentQueue<(long From, long To)> Ranges { get; } = [];
-        public RangeServer(byte[] payload, int delayMs = 30, bool ignoreRanges = false, bool probeWorks = false)
+        public RangeServer(byte[] payload, int delayMs = 30, int? unsupportedRangeStatus = null, bool probeWorks = false)
         {
             var socket = new TcpListener(IPAddress.Loopback, 0); socket.Start(); port = ((IPEndPoint)socket.LocalEndpoint).Port; socket.Stop();
             listener.Prefixes.Add($"http://127.0.0.1:{port}/"); listener.Start();
@@ -174,13 +174,18 @@ public sealed class DownloadPerformanceTests
                 {
                     await Task.Delay(delayMs, stop.Token);
                     var range = context.Request.Headers["Range"]; long from = 0, to = payload.Length - 1;
-                    if (range is not null && (!ignoreRanges || probeWorks && range == "bytes=0-0"))
+                    if (range is not null && (unsupportedRangeStatus is null || probeWorks && range == "bytes=0-0"))
                     {
                         var parts = range[6..].Split('-'); from = long.Parse(parts[0]); to = parts[1].Length == 0 ? to : long.Parse(parts[1]);
                         Ranges.Enqueue((from, to)); context.Response.StatusCode = 206;
                         context.Response.Headers["Content-Range"] = $"bytes {from}-{to}/{payload.Length}";
                     }
-                    else Interlocked.Increment(ref whole);
+                    else if (range is not null && unsupportedRangeStatus is int status && status != 200)
+                    {
+                        context.Response.StatusCode = status;
+                        return;
+                    }
+                    else if (range is null) Interlocked.Increment(ref whole);
                     context.Response.Headers["ETag"] = "\"fixture-v1\"";
                     context.Response.ContentLength64 = to - from + 1;
                     await context.Response.OutputStream.WriteAsync(payload.AsMemory((int)from, (int)(to - from + 1)), stop.Token);

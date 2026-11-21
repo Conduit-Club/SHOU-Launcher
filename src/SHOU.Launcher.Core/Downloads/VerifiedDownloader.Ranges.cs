@@ -50,7 +50,7 @@ public sealed partial class VerifiedDownloader
         probe.Headers.Range = new RangeHeaderValue(0, 0);
         probe.Headers.AcceptEncoding.ParseAdd("identity");
         using var response = await http.SendAsync(probe, HttpCompletionOption.ResponseHeadersRead, timeout.Token).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        // A rejected probe does not tell us whether a regular GET can succeed.
         var range = response.Content.Headers.ContentRange;
         if (response.StatusCode != HttpStatusCode.PartialContent || range?.From != 0 || range.To != 0 || range.Length != size
             || response.Content.Headers.ContentEncoding.Any(e => !e.Equals("identity", StringComparison.OrdinalIgnoreCase))) return false;
