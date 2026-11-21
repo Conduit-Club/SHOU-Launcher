@@ -33,10 +33,14 @@ public sealed class DownloadPerformanceTests
         var results = new List<(int Connections, long Ms, int Peak)>();
         foreach (var connections in new[] { 8, 64, DownloadDefaults.Connections })
         {
-            using var server = new RangeServer(payload, delayMs: 60); using var http = Client();
+            // Hold the first responses until the new default exceeds the old limit, even on slow runners.
+            var minimumConcurrentRequests = connections == DownloadDefaults.Connections ? 65 : 0;
+            using var server = new RangeServer(payload, delayMs: 60, minimumConcurrentRequests: minimumConcurrentRequests);
+            using var http = Client();
+            using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var downloader = new VerifiedDownloader(http, Options(connections)); var root = TestFiles.Root();
             var timer = Stopwatch.StartNew();
-            await Parallel.ForEachAsync(Enumerable.Range(0, 256), new ParallelOptions { MaxDegreeOfParallelism = connections },
+            await Parallel.ForEachAsync(Enumerable.Range(0, 256), new ParallelOptions { MaxDegreeOfParallelism = connections, CancellationToken = deadline.Token },
                 async (i, ct) => await downloader.DownloadAsync(new([server.Uri($"asset/{i}")], Path.Combine(root, i + ".bin"), Sha256: Hash(payload), Size: payload.Length), cancellationToken: ct));
             results.Add((connections, timer.ElapsedMilliseconds, server.Peak));
             Assert.IsTrue(server.Peak <= connections, $"Shared budget exceeded: {server.Peak}/{connections}.");
@@ -162,16 +166,19 @@ public sealed class DownloadPerformanceTests
         public int Peak => Volatile.Read(ref peak);
         public int WholeRequests => Volatile.Read(ref whole);
         public ConcurrentQueue<(long From, long To)> Ranges { get; } = [];
-        public RangeServer(byte[] payload, int delayMs = 30, int? unsupportedRangeStatus = null, bool probeWorks = false)
+        public RangeServer(byte[] payload, int delayMs = 30, int? unsupportedRangeStatus = null, bool probeWorks = false, int minimumConcurrentRequests = 0)
         {
             var socket = new TcpListener(IPAddress.Loopback, 0); socket.Start(); port = ((IPEndPoint)socket.LocalEndpoint).Port; socket.Stop();
             listener.Prefixes.Add($"http://127.0.0.1:{port}/"); listener.Start();
+            var requestsReady = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
             async Task Respond(HttpListenerContext context)
             {
                 var count = Interlocked.Increment(ref active);
                 while (count > Volatile.Read(ref peak)) { var old = Volatile.Read(ref peak); if (count <= old || Interlocked.CompareExchange(ref peak, count, old) == old) break; }
                 try
                 {
+                    if (count >= minimumConcurrentRequests) requestsReady.TrySetResult();
+                    await requestsReady.Task.WaitAsync(stop.Token);
                     await Task.Delay(delayMs, stop.Token);
                     var range = context.Request.Headers["Range"]; long from = 0, to = payload.Length - 1;
                     if (range is not null && (unsupportedRangeStatus is null || probeWorks && range == "bytes=0-0"))
