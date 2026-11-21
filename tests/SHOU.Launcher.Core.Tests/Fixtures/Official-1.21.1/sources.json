@@ -1,0 +1,28 @@
+{
+  "created_at": "2026-11-04T16:35:50.453802+00:00",
+  "task_id": "platform-OFFICIAL-1.21.1",
+  "files": [
+    {
+      "file": "/Users/moear/Code/SHOU-Launcher/.shou-dev/reports/night/handoffs/platform/OFFICIAL-1.21.1/1.21.1.json",
+      "url": "https://piston-meta.mojang.com/v1/packages/82ba6501da174a665c1787775f946487422f2432/1.21.1.json",
+      "final_url": "https://piston-meta.mojang.com/v1/packages/82ba6501da174a665c1787775f946487422f2432/1.21.1.json",
+      "expected_sha1": "82ba6501da174a665c1787775f946487422f2432",
+      "sha1": "82ba6501da174a665c1787775f946487422f2432",
+      "sha256": "3636c26c20f1f0b7472ebef1a624ba1a6a2c4b003858c13224929898b5321437",
+      "size_bytes": 38408,
+      "source": "https_tls_verified",
+      "tls_validation": "default trust store + hostname validation, TLS>=1.2"
+    },
+    {
+      "file": "/Users/moear/Code/SHOU-Launcher/.shou-dev/reports/night/handoffs/platform/OFFICIAL-1.21.1/17.json",
+      "url": "https://piston-meta.mojang.com/v1/packages/4ca8e1a1edd37a703c5d1594f71d409852cd9770/17.json",
+      "final_url": "https://piston-meta.mojang.com/v1/packages/4ca8e1a1edd37a703c5d1594f71d409852cd9770/17.json",
+      "expected_sha1": "4ca8e1a1edd37a703c5d1594f71d409852cd9770",
+      "sha1": "4ca8e1a1edd37a703c5d1594f71d409852cd9770",
+      "sha256": "d197dd36d3d8bd75292b47e3d0478a5187e2f89ad1f033ed65b168a183c22ee9",
+      "size_bytes": 449557,
+      "source": "https_tls_verified",
+      "tls_validation": "default trust store + hostname validation, TLS>=1.2"
+    }
+  ]
+}

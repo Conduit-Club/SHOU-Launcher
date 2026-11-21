@@ -1,12 +1,18 @@
-name: Conduit Release Draft
+name: Conduit Desktop Release Draft
 
 on:
+  push:
+    tags: ['v*']
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Existing main-based tag matching the source version (e.g. v1.3.1)'
+        description: 'Existing version tag; source outside main is a prerelease'
         required: true
         type: string
+      prerelease:
+        description: 'Prerelease outside main (stable releases still require main)'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -14,43 +20,89 @@ permissions:
 jobs:
   validate:
     if: github.repository == 'Conduit-Club/SHOU-Launcher'
-    runs-on: ubuntu-latest
+    runs-on: windows-2025
+    outputs:
+      tag: ${{ steps.identity.outputs.tag }}
+      source_sha: ${{ steps.identity.outputs.source_sha }}
+      version: ${{ steps.identity.outputs.version }}
+      codename: ${{ steps.identity.outputs.codename }}
+      prerelease: ${{ steps.identity.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ inputs.tag }}
+          ref: ${{ inputs.tag || github.ref_name }}
           fetch-depth: 0
-      - name: Validate release tag and source
+      - name: Validate tag, source and release mode
+        id: identity
         shell: pwsh
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
-        run: ./scripts/conduit/Get-BuildIdentity.ps1 -Configuration Release -ReleaseTag $env:RELEASE_TAG
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          REQUEST_PRERELEASE: ${{ inputs.prerelease && 'true' || 'false' }}
+        run: |
+          git merge-base --is-ancestor HEAD origin/main
+          if($LASTEXITCODE -notin @(0,1)){throw 'Cannot determine release source ancestry.'}
+          $onMain=$LASTEXITCODE -eq 0
+          $pre=-not $onMain -or $env:REQUEST_PRERELEASE -eq 'true' -or $env:RELEASE_TAG -cmatch '^v\d+\.\d+$' -or $env:RELEASE_TAG -cmatch '^v\d+\.\d+\.\d+-'
+          $identity=./scripts/conduit/Get-BuildIdentity.ps1 -Configuration Release -ReleaseTag $env:RELEASE_TAG -Prerelease:$pre
+          "tag=$($identity.ReleaseTag)" >> $env:GITHUB_OUTPUT
+          "source_sha=$($identity.Commit)" >> $env:GITHUB_OUTPUT
+          "version=$($identity.Version)" >> $env:GITHUB_OUTPUT
+          "codename=$($identity.Codename)" >> $env:GITHUB_OUTPUT
+          "prerelease=$($pre.ToString().ToLowerInvariant())" >> $env:GITHUB_OUTPUT
   build:
     needs: validate
-    uses: ./.github/workflows/conduit-build.yml
+    uses: ./.github/workflows/cross-platform-desktop.yml
     with:
-      source_ref: ${{ inputs.tag }}
-      release_tag: ${{ inputs.tag }}
+      source_ref: ${{ needs.validate.outputs.tag }}
+      release_tag: ${{ needs.validate.outputs.tag }}
+      prerelease: ${{ needs.validate.outputs.prerelease == 'true' }}
     secrets: inherit
   draft:
-    needs: build
-    runs-on: ubuntu-latest
+    needs: [validate, build]
+    runs-on: windows-2025
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.validate.outputs.source_sha }}
       - uses: actions/download-artifact@v8
         with:
-          name: ${{ needs.build.outputs.artifact_name }}
-          path: package
-      - name: Create reviewable release draft
+          pattern: Desktop-Release-*-${{ github.run_id }}
+          path: candidates
+      - name: Validate and collect all three Desktop packages
+        shell: pwsh
+        env:
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          RELEASE_SOURCE: ${{ needs.validate.outputs.source_sha }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_CODENAME: ${{ needs.validate.outputs.codename }}
+          RELEASE_PRERELEASE: ${{ needs.validate.outputs.prerelease }}
+        run: |
+          ./scripts/conduit/Collect-ReleaseAssets.ps1 -InputRoot candidates -OutputRoot release-assets -Tag $env:RELEASE_TAG -SourceSha $env:RELEASE_SOURCE -Version $env:RELEASE_VERSION -Codename $env:RELEASE_CODENAME -Prerelease:($env:RELEASE_PRERELEASE -eq 'true')
+      - name: Preserve internal release verification evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: Desktop-Release-Evidence-${{ needs.validate.outputs.tag }}-${{ github.run_id }}
+          path: release-assets/evidence/
+          if-no-files-found: error
+      - name: Create reviewable Desktop release draft
+        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          RELEASE_TAG: ${{ inputs.tag }}
-        shell: pwsh
+          RELEASE_TAG: ${{ needs.validate.outputs.tag }}
+          RELEASE_VERSION: ${{ needs.validate.outputs.version }}
+          RELEASE_CODENAME: ${{ needs.validate.outputs.codename }}
+          RELEASE_PRERELEASE: ${{ needs.validate.outputs.prerelease }}
         run: |
-          gh release create $env:RELEASE_TAG --verify-tag --draft --title $env:RELEASE_TAG --generate-notes
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot create release draft; an existing release is never overwritten.' }
-          $files = Get-ChildItem package -File | ForEach-Object FullName
+          $flags=@('--verify-tag','--draft','--latest=false')
+          if($env:RELEASE_PRERELEASE -eq 'true'){$flags+='--prerelease'}
+          $notes="docs/conduit/RELEASE-v$($env:RELEASE_VERSION).md"
+          if(-not (Test-Path -LiteralPath $notes -PathType Leaf)){throw 'Version-specific release notes are required.'}
+          gh release create $env:RELEASE_TAG @flags --title "SHOU-Launcher v$($env:RELEASE_VERSION) · $($env:RELEASE_CODENAME)" --notes-file $notes
+          if($LASTEXITCODE -ne 0){throw 'Cannot create draft; existing tags/releases are never overwritten.'}
+          $files=@('osx-arm64','win-x64','win-arm64') | ForEach-Object { Join-Path release-assets "SHOU-Launcher-$_-$($env:RELEASE_TAG).zip" }
+          foreach($file in $files){if(-not (Test-Path -LiteralPath $file -PathType Leaf)){throw 'A compiled release package is missing.'}}
           gh release upload $env:RELEASE_TAG @files
-          if ($LASTEXITCODE -ne 0) { throw 'Release asset upload failed.' }
+          if($LASTEXITCODE -ne 0){throw 'Release asset upload failed; draft stays unpublished.'}
