@@ -1,0 +1,126 @@
+using Avalonia;
+using Avalonia.Input;
+using Avalonia.Controls;
+using Avalonia.Input.Platform;
+using Avalonia.Interactivity;
+using Avalonia.Threading;
+using Avalonia.Platform.Storage;
+using System.ComponentModel;
+using SHOU.Launcher.Desktop.ViewModels;
+
+namespace SHOU.Launcher.Desktop.Views;
+
+public partial class DownloadsView
+{
+    private async void ProvidePackManualFile_Click(object? sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { DataContext: PackManualFileRowViewModel row } || !row.CanProvide) return;
+        try
+        {
+            var storage = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境不支持本机文件选择。");
+            var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "选择已下载的 " + row.Name, AllowMultiple = false });
+            if (files.FirstOrDefault()?.TryGetLocalPath() is { } path) await row.ProvideFileAsync(path);
+        }
+        catch (Exception ex) { if (row.IsCurrent) row.Root.ShowError("补充文件失败：" + UiPrivacy.Redact(ex.Message)); }
+    }
+    private void DownloadsView_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape && DataContext is DownloadsPageViewModel { IsLoading: true } vm)
+        { vm.CancelBrowseCommand.Execute(null); e.Handled = true; }
+    }
+    private void ContentSearch_KeyDown(object? sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && DataContext is DownloadsPageViewModel vm && vm.SearchCommand.CanExecute(null))
+        { vm.SearchCommand.Execute(null); e.Handled = true; }
+    }
+    private async void PickModrinthPack_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DownloadsPageViewModel vm || !vm.CanEdit || !vm.PackServiceAvailable) return;
+        try
+        {
+            var storage = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境不支持本机文件选择。");
+            var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = "选择本机整合包", AllowMultiple = false,
+                FileTypeFilter = [new FilePickerFileType("Minecraft 整合包") { Patterns = ["*.mrpack", "*.zip"] }] });
+            if (files.FirstOrDefault()?.TryGetLocalPath() is { } path) await vm.ReadLocalPackAsync(path);
+        }
+        catch (Exception ex) { vm.Root.ShowError("读取整合包失败：" + UiPrivacy.Redact(ex.Message)); }
+    }
+    private DownloadsPageViewModel? _subscribedNavigation;
+    private bool _navigationAttached;
+
+    private void DownloadsView_AttachedToVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        _navigationAttached = true;
+        SubscribeNavigation();
+    }
+    private void DownloadsView_DetachedFromVisualTree(object? sender, VisualTreeAttachmentEventArgs e)
+    {
+        _navigationAttached = false;
+        UnsubscribeNavigation();
+    }
+    private void DownloadsView_DataContextChanged(object? sender, EventArgs e)
+    {
+        if (_navigationAttached) SubscribeNavigation();
+    }
+    private void SubscribeNavigation()
+    {
+        UnsubscribeNavigation();
+        if (DataContext is not DownloadsPageViewModel vm) return;
+        _subscribedNavigation = vm;
+        vm.PropertyChanged += NavigationPropertyChanged;
+        ResetPageScroll(vm);
+    }
+    private void UnsubscribeNavigation()
+    {
+        if (_subscribedNavigation is { } previous) previous.PropertyChanged -= NavigationPropertyChanged;
+        _subscribedNavigation = null;
+    }
+    private void NavigationPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (sender is DownloadsPageViewModel vm && e.PropertyName is nameof(DownloadsPageViewModel.SelectedCategory)
+            or nameof(DownloadsPageViewModel.IsConfiguration) or nameof(DownloadsPageViewModel.IsResourceDetail))
+            ResetPageScroll(vm);
+    }
+    private void ResetPageScroll(DownloadsPageViewModel vm)
+    {
+        if (!_navigationAttached || !ReferenceEquals(vm, _subscribedNavigation)) return;
+        this.FindControl<ScrollViewer>("DownloadsPageScroller")!.Offset = Vector.Zero;
+        Dispatcher.UIThread.Post(() =>
+        {
+            if (_navigationAttached && ReferenceEquals(vm, _subscribedNavigation))
+                this.FindControl<ScrollViewer>("DownloadsPageScroller")!.Offset = Vector.Zero;
+        }, DispatcherPriority.Loaded);
+    }
+
+    private async void ImportWpfFavorites_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DownloadsPageViewModel vm) return;
+        try { var storage = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境不支持本机文件选择。"); var files = await storage.OpenFilePickerAsync(new FilePickerOpenOptions { Title = Localization.UiLocalization.Instance.Text("选择旧 WPF 收藏配置"), AllowMultiple = false, FileTypeFilter = [new("JSON") { Patterns = ["*.json"] }] }); if (files.FirstOrDefault()?.TryGetLocalPath() is not { } path || !vm.CanEdit) return; SHOU.Launcher.Core.IO.SafePath.RejectLinks(path); if (new FileInfo(path).Length > 1048576) throw new IOException("收藏文件超过大小限制。"); await vm.ImportLegacyFavoritesAsync(await File.ReadAllTextAsync(path)); }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+    private async void SaveFavoriteBatch_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DownloadsPageViewModel vm || !vm.CanSaveFavoriteBatch) return;
+        var identity = vm.FavoriteBatchIdentity;
+        try { var storage = TopLevel.GetTopLevel(this)?.StorageProvider ?? throw new InvalidOperationException("当前环境不支持本机文件选择。"); var folders = await storage.OpenFolderPickerAsync(new FolderPickerOpenOptions { Title = Localization.UiLocalization.Instance.Text("选择收藏资源保存目录"), AllowMultiple = false }); if (folders.FirstOrDefault()?.TryGetLocalPath() is { } directory) await vm.SaveFavoriteDownloadAsync(directory, identity); }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+    private async void ShareFavorites_Click(object? sender, RoutedEventArgs e)
+    {
+        if (DataContext is not DownloadsPageViewModel vm) return;
+        try { var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。"); await clipboard.SetTextAsync(vm.GetFavoriteShareCode()); }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+    private async void CopyProjectName_Click(object? sender, RoutedEventArgs e) => await CopyProjectTextAsync(link: false);
+    private async void CopyProjectLink_Click(object? sender, RoutedEventArgs e) => await CopyProjectTextAsync(link: true);
+    private async Task CopyProjectTextAsync(bool link)
+    {
+        if (DataContext is not DownloadsPageViewModel vm || vm.SelectedProject is not { } project) return;
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。");
+            await clipboard.SetTextAsync(link ? project.PageUri.AbsoluteUri : project.Title);
+        }
+        catch (Exception ex) { vm.Root.ShowError("复制失败：" + UiPrivacy.Redact(ex.Message)); }
+    }
+}

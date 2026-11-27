@@ -1,0 +1,79 @@
+using System.IO.Compression;
+using System.Text;
+using Microsoft.VisualStudio.TestTools.UnitTesting;
+using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Core.Instances;
+
+namespace SHOU.Launcher.Core.Tests;
+
+[TestClass]
+public sealed class ModArchiveMetadataTests
+{
+    [TestMethod]
+    [DataRow("{\"\":\"heading\",\"id\":\"readable\",\"name\":\"Readable\",\"version\":\"3.13.2\",\"\":\"footer\",\"custom\":{\"\":1,\"\":2}}", true)]
+    [DataRow("{\"id\":\"readable\",\"id\":\"conflict\",\"name\":\"Readable\"}", false)]
+    [DataRow("{\"id\":\"readable\",\"version\":\"1\",\"version\":\"2\"}", false)]
+    public void EmptyCommentKeysDoNotDiscardMetadataButConflictingIdentityKeysStillFail(string text, bool readable)
+    {
+        var root = TestFiles.Root(); Directory.CreateDirectory(Path.Combine(root, "mods")); var path = Path.Combine(root, "mods", "fixture.jar");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create)) using (var stream = zip.CreateEntry("fabric.mod.json").Open()) stream.Write(Encoding.UTF8.GetBytes(text));
+        var bytes = File.ReadAllBytes(path); var instance = new GameInstance("fixture", "Fixture", "1.21.1", root, Loader: "fabric");
+        var row = InstanceWorkspace.List(instance, "mods").Single();
+        if (readable)
+        {
+            Assert.IsNull(row.MetadataError); Assert.AreEqual("Readable", row.DisplayName); Assert.AreEqual("3.13.2", row.ModVersion); Assert.AreEqual("readable", row.ModId);
+            Assert.IsEmpty(ModRelations.Read(instance).Notices); Assert.AreEqual("readable", ModRelations.Read(instance).Hosts.Single().Declaration.Ids.Single());
+        }
+        else { Assert.IsNotNull(row.MetadataError); Assert.IsNull(row.ModId); Assert.IsEmpty(ModRelations.Read(instance).Hosts.Single().Declaration.Ids); }
+        CollectionAssert.AreEqual(bytes, File.ReadAllBytes(path));
+    }
+    [TestMethod]
+    [DataRow("\uFEFF{/* local comment */\"id\":\"readable\",\"name\":\"Readable\",\"description\":\"First\nsecond\tline\",\"version\":\"1\",}")]
+    [DataRow("{\"id\":\"readable\",\"name\":\"Readable\",\"description\":\"First\\nsecond\\tline\",\"version\":\"1\"}")]
+    public void LocalMultilineDescriptionKeepsDisplayAndRelationIdentityWithoutRewritingArchive(string text)
+    {
+        var root = TestFiles.Root(); Directory.CreateDirectory(Path.Combine(root, "mods")); var path = Path.Combine(root, "mods", "readable.jar");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create)) using (var output = zip.CreateEntry("fabric.mod.json").Open()) output.Write(Encoding.UTF8.GetBytes(text));
+        var bytes = File.ReadAllBytes(path); var instance = new GameInstance("fixture", "Fixture", "1.21.1", root, Loader: "fabric");
+        var row = InstanceWorkspace.List(instance, "mods").Single(); Assert.IsNull(row.MetadataError); Assert.AreEqual("Readable", row.DisplayName); Assert.AreEqual("readable", row.ModId); Assert.AreEqual("First second line", row.Description);
+        var relations = ModRelations.Read(instance); Assert.IsEmpty(relations.Notices); Assert.AreEqual("readable", relations.Hosts.Single().Declaration.Ids.Single());
+        CollectionAssert.AreEqual(bytes, File.ReadAllBytes(path));
+    }
+    [TestMethod]
+    public void DisplayCompatibilityDoesNotAcceptBrokenStructureOrControlCharactersInIdentity()
+    {
+        var root = TestFiles.Root(); Directory.CreateDirectory(Path.Combine(root, "mods"));
+        foreach (var pair in new[] { ("broken.jar", "{\"id\":\"broken\", "), ("control.jar", "{\"id\":\"bad\nid\",\"name\":\"bad\nname\",\"version\":\"1\"}") })
+            using (var zip = ZipFile.Open(Path.Combine(root, "mods", pair.Item1), ZipArchiveMode.Create)) using (var output = zip.CreateEntry("fabric.mod.json").Open()) output.Write(Encoding.UTF8.GetBytes(pair.Item2));
+        var instance = new GameInstance("fixture", "Fixture", "1.21.1", root, Loader: "fabric"); var rows = InstanceWorkspace.List(instance, "mods");
+        Assert.IsNotNull(rows.Single(r => r.Name == "broken.jar").MetadataError); var control = rows.Single(r => r.Name == "control.jar"); Assert.IsNull(control.ModId); Assert.AreEqual("control.jar", control.DisplayName);
+        Assert.IsEmpty(ModRelations.Read(instance).Hosts.Single(h => h.RelativePath.EndsWith("control.jar")).Declaration.Ids);
+    }
+    [TestMethod]
+    [DataRow("fabric.mod.json", "{\"name\":\"Fabric display\",\"version\":\"2.1\",\"icon\":\"assets/icon.png\"}", "Fabric display")]
+    [DataRow("META-INF/mods.toml", "[[mods]]\ndisplayName=\"Forge display\"\nversion=\"2.1\"\nlogoFile=\"assets/icon.png\"", "Forge display")]
+    [DataRow("mcmod.info", "[{\"name\":\"Legacy display\",\"version\":\"2.1\",\"logoFile\":\"assets/icon.png\"}]", "Legacy display")]
+    public void ReadsDisplayNameVersionAndBoundedPngFromModArchive(string marker, string text, string title)
+    {
+        var root = TestFiles.Root(); Directory.CreateDirectory(Path.Combine(root, "mods"));
+        var path = Path.Combine(root, "mods", "fixture.jar");
+        var icon = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9Wl6RxQAAAAASUVORK5CYII=");
+        using (var zip = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            using (var output = zip.CreateEntry(marker).Open()) output.Write(Encoding.UTF8.GetBytes(text));
+            using (var output = zip.CreateEntry("assets/icon.png").Open()) output.Write(icon);
+        }
+        var row = InstanceWorkspace.List(new GameInstance("fixture", "Fixture", "1.21.1", root), "mods").Single();
+        Assert.AreEqual(title, row.DisplayName); Assert.AreEqual("2.1", row.ModVersion); CollectionAssert.AreEqual(icon, row.IconPng); Assert.IsTrue(row.HasIcon);
+    }
+    [TestMethod]
+    public void BadMetadataAndEscapingIconKeepUsableFileRows()
+    {
+        var root = TestFiles.Root(); Directory.CreateDirectory(Path.Combine(root, "mods"));
+        File.WriteAllText(Path.Combine(root, "mods", "broken.jar"), "not a zip");
+        using (var zip = ZipFile.Open(Path.Combine(root, "mods", "safe.jar"), ZipArchiveMode.Create))
+        using (var output = zip.CreateEntry("fabric.mod.json").Open()) output.Write("{\"name\":\"Safe\",\"icon\":\"../secret.png\"}"u8);
+        var rows = InstanceWorkspace.List(new GameInstance("fixture", "Fixture", "1.21.1", root), "mods");
+        Assert.HasCount(2, rows); Assert.IsTrue(rows.All(r => !r.HasIcon)); Assert.AreEqual("Safe", rows.Single(r => r.Name == "safe.jar").DisplayName);
+    }
+}
