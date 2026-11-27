@@ -49,13 +49,27 @@ public sealed partial class LauncherService : IInstanceWorkspaceService, IInstan
             throw;
         }
     }
-    public Task UpdateInstanceAsync(string instanceId, InstanceEdit edit, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
+    public Task UpdateInstanceAsync(string instanceId, InstanceEdit edit, CancellationToken cancellationToken = default)
+        => UpdateInstanceAsync(instanceId, _ => edit, cancellationToken);
+
+    public Task RenameInstanceAsync(string instanceId, string name, CancellationToken cancellationToken = default)
+        => UpdateInstanceAsync(instanceId, instance => new InstanceEdit(name, instance.JavaExecutable, instance.MemoryMiB, instance.LaunchOptions), cancellationToken);
+
+    public Task SetInstanceDirectoryModeAsync(string instanceId, InstanceDirectoryMode mode, bool confirmed, CancellationToken cancellationToken = default)
+        => UpdateInstanceAsync(instanceId, instance => new InstanceEdit(instance.Name, instance.JavaExecutable, instance.MemoryMiB,
+            instance.LaunchOptions, mode, confirmed), cancellationToken);
+
+    public Task SetInstanceJavaAsync(string instanceId, string? executable, CancellationToken cancellationToken = default)
+        => UpdateInstanceAsync(instanceId, instance => new InstanceEdit(instance.Name, RequireDiscoveredJava(executable), instance.MemoryMiB, instance.LaunchOptions), cancellationToken);
+
+    private Task UpdateInstanceAsync(string instanceId, Func<GameInstance, InstanceEdit> update, CancellationToken cancellationToken) => ExecuteAsync("Ready", async ct =>
     {
+        var instance = FindInstance(instanceId);
+        var edit = update(instance);
         if (string.IsNullOrWhiteSpace(edit.Name) || edit.Name.Length > 160 || edit.Name.Any(char.IsControl)) throw new ArgumentException("实例名称须为1–160字的单行文字。");
         if (edit.JavaExecutable is { Length: > 0 } java && !Path.IsPathFullyQualified(java)) throw new ArgumentException("Java路径须为绝对路径。");
         if (edit.MemoryMiB is < 512 or > 32768)
             throw new ArgumentException("实例最大内存须为512–32768 MiB且不小于初始内存。");
-        var instance = FindInstance(instanceId);
         EnsureInstanceNotRunning(instance);
         if (instance.Origin is { } origin && (edit.DirectoryMode is not null || edit.LaunchOptions != instance.LaunchOptions)) _ = await ExistingInstanceReader.ResolveAsync(origin, instance.VersionId, InstanceIdentity.GameVersion(instance), ct);
         if (edit.LaunchOptions is { } options) Minecraft.GameSettingsPolicy.Validate(options);

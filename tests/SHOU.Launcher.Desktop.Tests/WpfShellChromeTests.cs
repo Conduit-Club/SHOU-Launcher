@@ -159,7 +159,7 @@ public sealed class WpfShellChromeTests
         try
         {
             var footer = Find<StackPanel>(window, "HomeLaunchActions");
-            var buttons = footer.GetVisualDescendants().OfType<Button>().ToArray();
+            var buttons = footer.GetVisualDescendants().OfType<Button>().Where(button => button.IsEffectivelyVisible).ToArray();
             Assert.Equal(3, buttons.Length);
             Assert.Same(vm.Instances.LaunchCommand, Find<Button>(window, "HomeLaunchButton").Command);
             Assert.Same(vm.ShowInstancesCommand, Find<Button>(window, "HomeSelectInstanceButton").Command);

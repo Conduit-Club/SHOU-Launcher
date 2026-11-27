@@ -18,6 +18,7 @@ public sealed partial class LauncherService : IAccountAppearanceService, IAccoun
         {
             var account = FindAccount(accountId);
             if (Snapshot.SelectedAccountId != accountId) throw new InvalidOperationException("当前角色已改变，请重新选择外观。");
+            if (account.Kind == AccountKind.Microsoft) await RestoreAccountAsync(account, ct).ConfigureAwait(false);
             if (account.Kind != AccountKind.Microsoft || !sessions.TryGetValue(accountId, out var session) || !AccountIdentity.Matches(account, session.Profile))
                 throw new InvalidOperationException("请先登录此 Microsoft 角色。");
             using var client = CreateAccountAppearanceClient();
@@ -73,29 +74,32 @@ public sealed partial class LauncherService : IAccountAppearanceService, IAccoun
 
     private async Task<AuthSession> EnsureAppearanceSessionAsync(string accountId, string? rejectedToken, CancellationToken ct)
     {
+        var account = FindAccount(accountId);
+        if (sessions.TryGetValue(accountId, out var cached) && AccountIdentity.Matches(account, cached.Profile)
+            && !ShouldRenewAppearanceSession(account, cached, rejectedToken)) return cached;
+
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
         await operation.WaitAsync(linked.Token).ConfigureAwait(false);
         try
         {
             ObjectDisposedException.ThrowIf(disposed, this);
-            var account = FindAccount(accountId);
+            account = FindAccount(accountId);
+            await RestoreAccountAsync(account, linked.Token).ConfigureAwait(false);
             if (!sessions.TryGetValue(accountId, out var current) || !AccountIdentity.Matches(account, current.Profile))
                 throw new AuthenticationException("missing_credentials", "无法恢复此账户的旧凭据，请重新登录；原记录保留。");
-            var refresh = rejectedToken is not null ? current.AccessToken == rejectedToken
-                : account.Kind == AccountKind.Microsoft
-                    ? !string.IsNullOrEmpty(current.RefreshToken) && (current.Profile.ExpiresAt is null || current.Profile.ExpiresAt < DateTimeOffset.UtcNow.AddMinutes(2))
-                    : !appearanceAuthenticatedTokens.TryGetValue(accountId, out var authenticated) || authenticated != AppearanceTokenHash(current.AccessToken);
-            if (refresh)
-            {
-                var previousState = Snapshot.State;
-                Set(s => s with { State = "Authenticating" });
-                try { current = await RefreshInternalAsync(account, linked.Token, selectAccount: false).ConfigureAwait(false); }
-                finally { Set(s => s.State == "Authenticating" ? s with { State = previousState } : s); }
-            }
+            // Renewal is shared with game authentication because it can rotate the credential.
+            // Profile and texture I/O starts after releasing the gate and has no launcher busy state.
+            if (ShouldRenewAppearanceSession(account, current, rejectedToken))
+                current = await RefreshInternalAsync(account, linked.Token, selectAccount: false).ConfigureAwait(false);
             return current;
         }
         finally { operation.Release(); }
     }
+    private bool ShouldRenewAppearanceSession(AccountProfile account, AuthSession current, string? rejectedToken)
+        => rejectedToken is not null ? current.AccessToken == rejectedToken
+            : account.Kind == AccountKind.Microsoft
+                ? !string.IsNullOrEmpty(current.RefreshToken) && (current.Profile.ExpiresAt is null || current.Profile.ExpiresAt < DateTimeOffset.UtcNow.AddMinutes(2))
+                : !appearanceAuthenticatedTokens.TryGetValue(account.Id, out var authenticated) || authenticated != AppearanceTokenHash(current.AccessToken);
     public async Task<AccountAppearance> SaveOfflineAccountSkinAsync(string accountId, ReadOnlyMemory<byte> png, AccountSkinModel model, CancellationToken cancellationToken = default)
     {
         if (png.Length > AccountAppearancePng.MaximumPngBytes) throw new InvalidDataException("皮肤 PNG 超过 2 MiB 上限。");

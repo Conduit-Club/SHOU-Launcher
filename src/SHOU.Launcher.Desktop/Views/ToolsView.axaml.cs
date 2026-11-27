@@ -1,8 +1,11 @@
 using Avalonia.Controls;
+using Avalonia.Input.Platform;
 using Avalonia.Interactivity;
 using Avalonia.Markup.Xaml;
 using Avalonia.Platform.Storage;
 using SHOU.Launcher.Desktop.Platform;
+using SHOU.Launcher.Desktop.Localization;
+using SHOU.Launcher.Desktop.Mcp;
 using SHOU.Launcher.Desktop.ViewModels;
 
 namespace SHOU.Launcher.Desktop.Views;
@@ -10,6 +13,40 @@ namespace SHOU.Launcher.Desktop.Views;
 public partial class ToolsView : UserControl
 {
     public ToolsView() => AvaloniaXamlLoader.Load(this);
+    private async void CopyMcpAddress_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((DataContext as ToolsPageViewModel)?.Mcp is { } page)
+            await CopyMcpTextAsync(page.Endpoint, page.ReportAddressCopied);
+    }
+
+    private async void CopyMcpToken_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((DataContext as ToolsPageViewModel)?.Mcp is { CanCopyToken: true } page)
+            await CopyMcpTextAsync(page.Token, page.ReportTokenCopied);
+    }
+
+    private async Task CopyMcpTextAsync(string text, Action copied)
+    {
+        try
+        {
+            var clipboard = TopLevel.GetTopLevel(this)?.Clipboard ?? throw new InvalidOperationException("当前环境无法访问剪贴板。");
+            await clipboard.SetTextAsync(text);
+            copied();
+        }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
+    private async void ExportMcpSkill_Click(object? sender, RoutedEventArgs e)
+    {
+        if ((DataContext as ToolsPageViewModel)?.Mcp is not { } page) return;
+        try
+        {
+            var title = UiLocalization.Instance.Text("保存 Agent 技能");
+            if (await SavePathAsync(title, "SKILL.md", "md") is not { } path) return;
+            await File.WriteAllTextAsync(path, LauncherMcpSkill.Read());
+            page.ReportSkillExported();
+        }
+        catch (Exception ex) { StorageDialogs.ShowError(this, ex); }
+    }
     private async void AnalyzeCrashFiles_Click(object? sender, RoutedEventArgs e)
     {
         if ((DataContext as ToolsPageViewModel)?.Crash is not { CanAnalyze: true } vm) return;

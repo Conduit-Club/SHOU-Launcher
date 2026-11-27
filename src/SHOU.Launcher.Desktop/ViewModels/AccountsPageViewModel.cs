@@ -250,7 +250,7 @@ public sealed partial class AccountsPageViewModel : PageViewModel
     }
     internal void OnNavigatingAway()
     {
-        CancelAccountAppearanceWork();
+        CloseAccountAppearance();
         Password = "";
         if (_authenticationActive) Owner.CancelOperationCommand.Execute(null);
     }

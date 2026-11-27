@@ -35,7 +35,9 @@ public sealed class CandidateCapabilityTests
                 Assert.True(Find<Button>(window, "LaunchGameButton").IsEffectivelyEnabled);
                 await vm.Instances.LaunchCommand.ExecuteAsync(null); Pump(window);
                 Assert.Equal("smp", fake.LastLaunchServerId);
+                Assert.Same(vm.Instances, vm.SelectedPage);
                 fake.Publish(fake.Snapshot with { State = "Ready", GameProcessId = null }); Pump(window);
+                vm.ShowHomeCommand.Execute(null);
                 vm.Home.SelectedServer = vm.Home.Servers.Single(s => s.Id == "none"); Pump(window);
                 Assert.True(vm.Instances.LaunchCommand.CanExecute(null));
                 Assert.True(Find<Button>(window, "HomeLaunchButton").IsEffectivelyEnabled);

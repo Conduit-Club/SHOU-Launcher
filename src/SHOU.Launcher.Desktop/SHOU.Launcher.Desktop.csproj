@@ -13,12 +13,14 @@
     <PackageReference Include="Avalonia.Desktop" Version="12.1.5" />
     <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.5" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="ModelContextProtocol.AspNetCore" Version="2.4.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
     <PackageReference Include="PlainToolkit.CngProtectedData" Version="2.1.0" />
     <PackageReference Include="BouncyCastle.Cryptography" Version="2.7.0" />
     <PackageReference Include="BitMiracle.LibTiff.NET" Version="2.4.660" />
     <AvaloniaResource Include="Assets/**" />
     <EmbeddedResource Include="Localization/Resources/zh-CN.json;Localization/Resources/zh-TW.json;Localization/Resources/en-US.json" />
+    <EmbeddedResource Include="../../skills/shou-launcher/SKILL.md" LogicalName="SHOU.Launcher.Desktop.McpSkill.md" />
     <Content Include="Assets/AchievementIcons/LICENSE.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/mcgen.txt" Condition="'$(PublishSingleFile)' != 'true'" />
     <Content Include="Assets/AchievementIcons/README.md" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" TargetPath="licenses/achievement-icons.md" Condition="'$(PublishSingleFile)' != 'true'" />
   </ItemGroup>

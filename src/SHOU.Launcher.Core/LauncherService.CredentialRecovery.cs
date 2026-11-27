@@ -36,6 +36,7 @@ public sealed partial class LauncherService : ICredentialAccessRecoveryService
             { incomplete = true; ReplaceAccount(account with { Status = "系统授权未完成或凭据不可读 · 原记录保留" }); Log("Warning", "重试安全存储未完成：" + ex.GetType().Name); }
         }
         ct.ThrowIfCancellationRequested();
+        if (!incomplete) allAccountsRestored = true;
         Set(s => s with { CanPersistAccounts = !incomplete });
         if (incomplete) throw new InvalidOperationException("部分原登录项尚未恢复。请完成 macOS 的钥匙串授权后重试；原凭据和账户列表均保留。");
         // Do not rotate tokens, rewrite old records or contact authentication servers just to recover access.

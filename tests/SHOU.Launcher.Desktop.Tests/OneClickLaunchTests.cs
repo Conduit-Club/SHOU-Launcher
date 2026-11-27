@@ -18,9 +18,8 @@ public sealed class OneClickLaunchTests
     {
         using var fixture = new Fixture(true, _ => throw new InvalidOperationException("Already installed."));
         await fixture.ClickLaunch().WaitAsync(Deadline); Pump(fixture.Window);
-        Assert.True(fixture.Launch.IsEffectivelyEnabled); Assert.Equal("再开一个游戏窗口", fixture.Vm.Instances.LaunchCaption);
-        Assert.True(Find<TextBlock>(fixture.Window, "ConcurrentPlayHint").IsEffectivelyVisible);
-        Assert.Contains("同一世界", fixture.Vm.Instances.LaunchPrerequisite);
+        Assert.True(fixture.Launch.IsEffectivelyEnabled); Assert.Equal("启动游戏", fixture.Vm.Instances.LaunchCaption);
+        Assert.DoesNotContain(fixture.Window.GetVisualDescendants().OfType<TextBlock>(), text => text.Name == "ConcurrentPlayHint");
         Assert.False(fixture.Vm.Instances.InstallCommand.CanExecute(null)); Assert.False(fixture.Vm.Instances.InspectPlanCommand.CanExecute(null));
         await fixture.ClickLaunch().WaitAsync(Deadline); Pump(fixture.Window);
         Assert.False(fixture.Vm.IsBusy); Assert.False(fixture.Vm.HasError); Assert.True(fixture.Vm.Instances.IsSelectedInstanceRunning);
@@ -46,20 +45,26 @@ public sealed class OneClickLaunchTests
             await entered.Task.WaitAsync(Deadline); Pump(fixture.Window);
             Assert.Equal(1, installs); Assert.True(fixture.Vm.IsBusy);
             Assert.True(Find<Grid>(fixture.Window, "HomeLaunchProgressPanel").IsEffectivelyVisible);
-            Assert.False(Find<AccountsView>(fixture.Window, "HomeAccountsView").IsEffectivelyVisible);
+            Assert.True(Find<AccountsView>(fixture.Window, "HomeAccountsView").IsEffectivelyVisible);
             Assert.False(Find<Border>(fixture.Window, "OperationBar").IsVisible);
-            Assert.Equal("正在启动游戏", Find<TextBlock>(fixture.Window, "HomeLaunchHeading").Text);
-            var snapshot = fixture.Service.Snapshot;
-            fixture.Service.Publish(snapshot with { LaunchActivity = new(snapshot.Instances[0].Id, snapshot.Instances[0].Name, "等待游戏窗口", "离线角色") });
-            Pump(fixture.Window);
-            Assert.Equal("游戏正在初始化", Find<TextBlock>(fixture.Window, "HomeLaunchHeading").Text);
+            Assert.True(fixture.Vm.CanReadRemote);
             Assert.False(fixture.Launch.IsEffectivelyEnabled);
+            fixture.Vm.ShowSettingsCommand.Execute(null);
+            Pump(fixture.Window);
+            Assert.True(Find<TextBox>(fixture.Window, "CustomInfoSetting").IsEffectivelyEnabled);
+            Assert.False(fixture.Vm.Settings.SaveCommand.CanExecute(null));
+            fixture.Vm.ShowToolsCommand.Execute(null);
+            Pump(fixture.Window);
+            Assert.Same(fixture.Vm.Tools, fixture.Vm.SelectedPage);
+            Assert.False(Find<Border>(fixture.Window, "OperationBar").IsVisible);
             Assert.Null(fixture.Service.LastLaunchServerId); Assert.Null(fixture.Service.Snapshot.GameProcessId);
             Assert.False(fixture.Service.Snapshot.Instances.Single().Installed);
             // A later presentation change cannot change the already requested launch destination.
             fixture.Vm.Home.SelectedServer = fixture.Vm.Home.Servers.Single(server => server.Id == "smp");
         }
         finally { release.TrySetResult(); if (running is not null) await running.WaitAsync(Deadline); }
+        Assert.Same(fixture.Vm.Tools, fixture.Vm.SelectedPage);
+        fixture.Vm.ShowHomeCommand.Execute(null);
         Pump(fixture.Window);
         Assert.True(fixture.Service.Snapshot.Instances.Single().Installed);
         Assert.Equal("none", fixture.Service.LastLaunchServerId);

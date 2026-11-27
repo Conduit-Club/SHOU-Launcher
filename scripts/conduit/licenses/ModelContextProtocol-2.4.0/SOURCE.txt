@@ -1,0 +1,3 @@
+ModelContextProtocol, ModelContextProtocol.Core, and ModelContextProtocol.AspNetCore 2.4.0
+Source commit 4cbf42ef107763f0bc75c358af8cb2dfe47a769a, as recorded in the NuGet packages.
+https://github.com/modelcontextprotocol/csharp-sdk/blob/4cbf42ef107763f0bc75c358af8cb2dfe47a769a/LICENSE

@@ -24,6 +24,7 @@ public sealed partial class LauncherService
         AccountProfile? result = null;
         await ExecuteAsync("Authenticating", async ct =>
         {
+            await RestoreAllAccountsAsync(ct).ConfigureAwait(false);
             var source = platform.LegacyMicrosoftAccounts ?? throw new PlatformNotSupportedException("此平台没有旧 Windows 账户读取入口。");
             // Reread the original, never import a token retained by a UI or a screenshot fixture.
             var matches = (await source.ReadAsync(ct).ConfigureAwait(false)).Where(item => item.SourceId == sourceId).Take(2).ToArray();

@@ -96,6 +96,8 @@ public sealed partial class AccountsPageViewModel
     }
     // Renewing a token does not change the character. Keep its in-flight avatar read alive.
     private static string AppearanceIdentity(AccountProfile account) => account.Id + "\n" + account.Kind + "\n" + account.PlayerUuid + "\n" + account.AuthenticationServer;
+    private static string AppearanceSessionStamp(AccountProfile account)
+        => account.ExpiresAt?.UtcTicks + "\n" + account.Persisted + "\n" + account.Status;
     private void RefreshAccountAppearanceRows()
     {
         if (!appearanceReady) return;
@@ -110,7 +112,7 @@ public sealed partial class AccountsPageViewModel
         if (!appearanceReady) return;
         OnPropertyChanged(nameof(SelectedAppearanceAccountRow));
         var identity = SelectedChannelAccount is { } account ? AppearanceIdentity(account) : null;
-        var stamp = SelectedChannelAccount is { } current ? current.ExpiresAt?.UtcTicks + "\n" + current.Persisted + "\n" + current.Status : null;
+        var stamp = SelectedChannelAccount is { } current ? AppearanceSessionStamp(current) : null;
         var sessionChanged = appearanceSessionStamp != stamp; appearanceSessionStamp = stamp;
         if (appearanceIdentity == identity)
         {
@@ -140,13 +142,17 @@ public sealed partial class AccountsPageViewModel
         using var cancellation = new CancellationTokenSource(); appearanceReadCancellation = cancellation; appearanceBusy = true; appearanceMessage = "正在读取外观…"; NotifyAppearancePresentation();
         try
         {
-            var result = await appearanceService.GetAccountAppearanceAsync(account.Id, refreshRemote, cancellation.Token);
+            var result = await Task.Run(() => appearanceService.GetAccountAppearanceAsync(account.Id, refreshRemote, cancellation.Token), cancellation.Token);
             // A first visit should show the selected online character, without requiring a manual refresh.
             // Read cache first; preserve cancellation and identity checks before issuing the remote request.
             if (!refreshRemote && result.Skin is null && account.Kind != AccountKind.Offline
                 && !cancellation.IsCancellationRequested && IsCurrentAppearance(identity, generation))
-                result = await appearanceService.GetAccountAppearanceAsync(account.Id, true, cancellation.Token);
+                result = await Task.Run(() => appearanceService.GetAccountAppearanceAsync(account.Id, true, cancellation.Token), cancellation.Token);
             if (cancellation.IsCancellationRequested || !IsCurrentAppearance(identity, generation) || result.AccountId != account.Id) return;
+            // The background read can finish before the dispatcher applies its own renewal event.
+            var current = Service.Snapshot.Accounts.FirstOrDefault(candidate => candidate.Id == account.Id);
+            if (current is null || AppearanceIdentity(current) != identity) return;
+            appearanceSessionStamp = AppearanceSessionStamp(current);
             CacheAppearance(identity, result); appearanceRead = true; appearanceMessage = result.Skin is null ? account.Kind == AccountKind.Offline ? "尚未选择本地皮肤。" : result.IsRemote ? "服务未返回当前皮肤。" : "点击“刷新头像”读取在线外观。" : refreshRemote ? "外观已刷新" : "";
             if (refreshRemote && result.IsRemote) onlineWriteNeedsRefresh = false;
             UpdateAccountAppearance(result);

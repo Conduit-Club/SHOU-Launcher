@@ -13,7 +13,7 @@ namespace SHOU.Launcher.Desktop.Tests;
 public sealed class GameStartupPresentationTests
 {
     [AvaloniaFact]
-    public void JavaHandoffKeepsRealWindowProgressVisibleWithoutKeepingTheServiceBusy()
+    public void JavaHandoffReturnsToNormalHomeWhileTheWindowObserverWaits()
     {
         var service = new FakeLauncherService();
         using var vm = new MainWindowViewModel(service, new FakeExternalLauncher());
@@ -22,11 +22,9 @@ public sealed class GameStartupPresentationTests
         {
             PublishWaiting(service, 43210); Pump(window);
             Assert.False(vm.IsBusy); Assert.True(vm.CanMutate);
-            Assert.True(Find<Grid>(window, "HomeLaunchProgressPanel").IsEffectivelyVisible);
-            Assert.Equal("游戏正在初始化", Find<TextBlock>(window, "HomeLaunchHeading").Text);
-            Assert.True(Find<ProgressBar>(window, "HomeLaunchProgress").IsIndeterminate);
-            Assert.Contains("秒", Find<TextBlock>(window, "HomeLaunchWaitSummary").Text);
-            Assert.Equal("返回启动器", Find<Button>(window, "CancelHomeLaunchButton").Content);
+            Assert.False(Find<Grid>(window, "HomeLaunchProgressPanel").IsEffectivelyVisible);
+            Assert.True(Find<Button>(window, "HomeLaunchButton").IsEffectivelyVisible);
+            Assert.Equal("启动游戏", vm.Instances.LaunchCaption);
             Assert.DoesNotContain("完成", vm.StateSummary);
             service.Publish(service.Snapshot with { LaunchActivity = null, GameSessions = [service.Snapshot.GameSessions[0] with { WindowReady = true }] }); Pump(window);
             Assert.False(vm.IsHomeLaunching);
@@ -37,7 +35,7 @@ public sealed class GameStartupPresentationTests
     }
 
     [AvaloniaFact]
-    public async Task ReturningFromWindowWaitLeavesGameAliveAndAnotherLaunchAvailable()
+    public async Task GameWindowObservationLeavesGameAliveAndNormalLaunchAvailable()
     {
         var service = new FakeLauncherService();
         using var vm = new MainWindowViewModel(service, new FakeExternalLauncher());
@@ -45,15 +43,14 @@ public sealed class GameStartupPresentationTests
         try
         {
             PublishWaiting(service, 43210); Pump(window);
-            vm.HomeLaunchActionCommand.Execute(null); Pump(window);
-            Assert.False(vm.IsHomeLaunching); Assert.True(vm.IsWaitingForGameWindow);
+            Assert.False(vm.IsHomeLaunching);
             Assert.Equal(0, service.StopCalls); Assert.Equal(43210, service.Snapshot.GameProcessId);
             Assert.True(Find<Button>(window, "HomeLaunchButton").IsEffectivelyEnabled);
             Assert.True(vm.Instances.LaunchCommand.CanExecute(null));
             await vm.Instances.LaunchCommand.ExecuteAsync(null); Pump(window);
             Assert.Equal("none", service.LastLaunchServerId); Assert.Equal(0, service.StopCalls);
             PublishWaiting(service, 43211); Pump(window);
-            Assert.True(vm.IsHomeLaunching, "Dismissing an older PID must not dismiss a later game's startup.");
+            Assert.False(vm.IsHomeLaunching);
         }
         finally { window.Close(); }
     }

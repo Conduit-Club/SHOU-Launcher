@@ -49,6 +49,7 @@ public sealed partial class SettingsPageViewModel : PageViewModel
     public string Aria2Secret { get => _aria2Secret; set { if (SetProperty(ref _aria2Secret, value)) { Aria2ConnectionSummary = "密钥已更改；有效输入会自动保存。"; MarkDirty(); } } }
     public string MicrosoftClientId { get => _microsoftClientId; set { if (SetProperty(ref _microsoftClientId, value)) MarkDirty(); } }
     public bool IsDirty { get => _isDirty; private set { SetProperty(ref _isDirty, value); OnPropertyChanged(nameof(SaveSummary)); NotifyCommands(); } }
+    public bool CanEditDraft => CanEdit || Owner.IsHomeLaunching && Owner.CanReadRemote;
     public string SaveSummary => HasJavaSelectionConflict ? "默认 Java 已在工具页更改，请先到 Java 设置确认保留哪一项。" : IsDirty ? "正在更新设置；有效输入会自动保存。" : "当前显示已保存的设置。";
     public string Feedback { get => _feedback; private set => SetProperty(ref _feedback, value); }
     public string DataDirectory => Service.Paths.DataDirectory;
@@ -161,5 +162,10 @@ public sealed partial class SettingsPageViewModel : PageViewModel
         base.Refresh(snapshot);
         autoSaveReady = true;
         if (waitingToSave && CanEdit) QueueAutoSave();
+    }
+    public override void NotifyCommands()
+    {
+        base.NotifyCommands();
+        OnPropertyChanged(nameof(CanEditDraft));
     }
 }

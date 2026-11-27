@@ -121,7 +121,7 @@ public sealed partial class AccountsPageViewModel
         if (!_panelReady) return;
         OnPropertyChanged(nameof(SelectedChannelAccount)); OnPropertyChanged(nameof(SelectedPlayerName)); OnPropertyChanged(nameof(SelectedPlayerSource)); OnPropertyChanged(nameof(SelectedPlayerStatus));
         ShowRemoval = false; NotifyPanelVisibility();
-        RefreshAccountAppearanceIdentity();
+        if (!_refreshing) RefreshAccountAppearanceIdentity();
     }
     private void NotifyPanelVisibility()
     {

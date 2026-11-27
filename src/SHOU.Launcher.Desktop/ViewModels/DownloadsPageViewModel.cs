@@ -362,7 +362,7 @@ public sealed partial class DownloadsPageViewModel : PageViewModel, IDisposable
         SearchCommand = AsyncCommand(() => SearchAsync(0), () => CanQuery && IsSearchPage && SearchSupported);
         NextPageCommand = AsyncCommand(() => SearchAsync(_searchOffset + 30), () => CanQuery && _searchCompleted && Projects.Count == 30);
         PreviousPageCommand = AsyncCommand(() => SearchAsync(Math.Max(0, _searchOffset - 30)), () => CanQuery && _searchCompleted && _searchOffset > 0);
-        ResetFiltersCommand = Command(() => { QueryText = ""; GameVersionFilter = ""; LoaderFilter = "任意"; SelectedSort = SortChoices[0]; SelectedContentCategory = ContentCategoryChoices[0]; FiltersChanged(); }, () => CanEdit);
+        ResetFiltersCommand = Command(() => { QueryText = ""; GameVersionFilter = ""; LoaderFilter = "任意"; SelectedSort = SortChoices[0]; SelectedContentCategory = ContentCategoryChoices[0]; FiltersChanged(); }, () => CanQuery);
         BackToListCommand = Command(BackToList);
         ShowAutomaticInstallCommand = Command(() => SelectCategory("minecraft"));
         RefreshFabricCommand = AsyncCommand(RefreshFabricAsync, () => CanQuery && _selectedVersion is not null);

@@ -150,11 +150,7 @@ public sealed partial class InstancesPageViewModel
         {
             if (row is null || SelectedInstance is not { } instance || Service is not IServerLaunchService service) return;
             var destination = row.Address;
-            await Owner.RunLaunchAsync(instance, async ct =>
-            {
-                if (!instance.Installed) await Service.InstallInstanceAsync(instance.Id, ct);
-                ct.ThrowIfCancellationRequested(); await service.LaunchToServerAsync(instance.Id, destination, ct);
-            });
+            await Owner.RunLaunchAsync(ct => service.LaunchToServerAsync(instance.Id, destination, ct));
         }, row => row is not null && CanLaunch() && !IsServerDraftDirty && !IsServerEditorOpen && Service is IServerLaunchService);
         RefreshWorldsCommand = AsyncCommand(RefreshWorldsAsync, () => WorldWorkspaceCanRead);
         RefreshWorldDatapacksCommand = AsyncCommand(RefreshWorldPacksAsync, () => WorldWorkspaceCanRead && SelectedWorldRow is { HasError: false });

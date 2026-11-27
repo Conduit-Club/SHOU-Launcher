@@ -31,6 +31,9 @@ foreach ($library in $deps.libraries.GetEnumerator() | Where-Object { $_.Value.t
     # Some packages publish only a license URL. Keep reviewed upstream text
     # in the repository so packaging is complete and does not require network.
     $supplement=Join-Path $PSScriptRoot "licenses/$name-$version"
+    if ($name -in @('ModelContextProtocol.Core','ModelContextProtocol.AspNetCore')) {
+        $supplement=Join-Path $PSScriptRoot "licenses/ModelContextProtocol-$version"
+    }
     if (Test-Path -LiteralPath $supplement -PathType Container) {
         foreach ($file in Get-ChildItem -LiteralPath $supplement -File) {
             Copy-Item -LiteralPath $file.FullName -Destination (Join-Path $folder $file.Name)

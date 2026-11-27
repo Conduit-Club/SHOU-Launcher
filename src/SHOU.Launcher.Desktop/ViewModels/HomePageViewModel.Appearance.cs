@@ -46,8 +46,6 @@ public sealed partial class HomePageViewModel
     public bool ShowCustomHomeDocument => IsCustomHome && presentation.HomeSource != "empty";
     public bool IsRemoteHome => presentation.HomeSource == "remote";
     public string HomeDocument { get => homeDocument; private set => SetProperty(ref homeDocument, value); }
-    public bool ShowGameTip => presentation.ShowLaunchTips;
-    public string GameTip => "你可以在实例设置中为每个实例选择独立的 Java 和内存。";
     internal void ApplyAppearance(SettingsPresentationPreferences settings)
     {
         var previousHome = presentation.HomeSource + presentation.HomeLocation;
@@ -57,7 +55,7 @@ public sealed partial class HomePageViewModel
         backgroundTimer.Interval = TimeSpan.FromSeconds((double)settings.SlideshowSeconds);
         backgroundTimer.IsEnabled = settings.RotateHomeBackground && backgroundFiles.Length > 1;
         foreach (var field in new[] { nameof(HasHomeBackdrop), nameof(BackgroundBrush), nameof(PreviousBackgroundBrush), nameof(BackgroundImageOpacity), nameof(BackgroundImageBlur) }) OnPropertyChanged(field);
-        foreach (var name in new[] { nameof(IsCustomHome), nameof(ShowCustomHomeDocument), nameof(ShowDefaultHome), nameof(HomeDocumentLocation), nameof(IsRemoteHome), nameof(ShowGameTip), nameof(ShowClubIntroduction), nameof(ShowClubServers) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(IsCustomHome), nameof(ShowCustomHomeDocument), nameof(ShowDefaultHome), nameof(HomeDocumentLocation), nameof(IsRemoteHome), nameof(ShowClubIntroduction), nameof(ShowClubServers) }) OnPropertyChanged(name);
         if (previousHome != settings.HomeSource + settings.HomeLocation) _ = ReadCustomHomeAsync();
     }
     public void RefreshBackgrounds()

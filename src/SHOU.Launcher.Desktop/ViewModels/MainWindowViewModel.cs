@@ -6,6 +6,7 @@ using Avalonia.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using SHOU.Launcher.Core.Abstractions;
+using SHOU.Launcher.Desktop.Mcp;
 
 namespace SHOU.Launcher.Desktop.ViewModels;
 
@@ -77,6 +78,9 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public AsyncRelayCommand StopGameCommand { get; }
 
     public MainWindowViewModel(ILauncherService service, IExternalLauncher externalLauncher, ILauncherCatalogService? catalog = null)
+        : this(service, externalLauncher, catalog, null) { }
+
+    internal MainWindowViewModel(ILauncherService service, IExternalLauncher externalLauncher, ILauncherCatalogService? catalog, LauncherMcpServer? mcp)
     {
         Service = service ?? throw new ArgumentNullException(nameof(service));
         ExternalLauncher = externalLauncher ?? throw new ArgumentNullException(nameof(externalLauncher));
@@ -88,7 +92,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         Accounts = new(this);
         Settings = new(this);
         Logs = new(this);
-        Tools = new(this);
+        Tools = new(this, mcp);
         Pages = [Home, Instances, Downloads, Accounts, Settings, Logs, Tools];
         _selectedPage = Home;
         ShowHomeCommand = new(() => SelectedPage = Home);
@@ -107,7 +111,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
             else SelectedPage = ReferenceEquals(SelectedPage, Logs) ? Settings : Home;
         }, () => IsContextPage);
         CancelOperationCommand = new(CancelCurrentOperation, () => _operation is { IsCancellationRequested: false });
-        HomeLaunchActionCommand = new(HomeLaunchAction, () => IsWaitingForGameWindow || _operation is { IsCancellationRequested: false });
         DismissErrorCommand = new(() => ShowError(null));
         StopGameCommand = new(() => RunControlAsync("停止游戏", ct => Service.StopGameAsync(ct)), () => HasRunningGame);
         Service.SnapshotChanged += OnSnapshotChanged;
@@ -169,15 +172,14 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     public string BuildSummary => $"{Snapshot.Build.Version} · {Snapshot.Build.Codename} · {Snapshot.Build.Configuration}";
     public string SourceSummary => Snapshot.Build.SourceSha.Length > 12 ? Snapshot.Build.SourceSha[..12] : Snapshot.Build.SourceSha;
     public string PlatformSummary => $"{Snapshot.Platform.OS} · 硬件 {Snapshot.Platform.HardwareArchitecture} / 进程 {Snapshot.Platform.ProcessArchitecture}";
-    public string StateSummary => _executing ? _operationLabel : IsWaitingForGameWindow ? "游戏正在初始化"
-        : Snapshot.GameSessions.Any(session => session.WindowReady == false) ? "游戏进程已启动，窗口状态尚未确认" : Snapshot.State switch
+    public string StateSummary => _executing ? _operationLabel : Snapshot.State switch
     {
         "Installing" => "正在安装", "Launching" => "正在启动", "Running" => "就绪",
         "Authenticating" => "正在验证账户", "Error" => "操作失败，可修正后重试", _ => _operationLabel
     };
     public bool IsBusy => _executing || Snapshot.State is "Installing" or "Launching" or "Authenticating";
     public bool CanMutate => !_disposed && !closing && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
-    public bool CanReadRemote => !_disposed && !closing && !_executing && Snapshot.State is "Ready" or "Error" or "Running";
+    public bool CanReadRemote => !_disposed && !closing && (!_executing || IsHomeLaunching);
     public bool HasRunningGame => !_disposed && (Snapshot.State == "Running" || Snapshot.GameProcessId is not null);
     private int inlineOperations;
     public string OperationTransferSummary
@@ -192,7 +194,7 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
         }
     }
     public bool HasOperationTransferSummary => OperationTransferSummary.Length > 0;
-    public bool ShowOperationStatus => !backgroundInstall && inlineOperations == 0 && IsBusy && (!IsHomeLaunching || !ReferenceEquals(SelectedPage, Home));
+    public bool ShowOperationStatus => !backgroundInstall && inlineOperations == 0 && _executing && !IsHomeLaunching;
     public async Task<bool> RunInlineAsync(string label, Func<CancellationToken, Task> action)
     {
         inlineOperations++; OnPropertyChanged(nameof(ShowOperationStatus));
@@ -210,17 +212,23 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (_initialized || _disposed) return;
         _initialized = true;
-        await RunAsync("正在初始化", async ct =>
+        await RunControlAsync("初始化启动器", async ct =>
         {
             await Service.InitializeAsync(ct);
             foreach (var log in Service.GetRecentLogs()) Logs.Append(log);
-        }, allowWhileRunning: true);
+        });
         if (!_disposed) { Home.StartCommunityRefresh(); Downloads.OnNavigatedTo(); }
     }
 
     public async Task<bool> RunAsync(string label, Func<CancellationToken, Task> action, bool allowWhileRunning = false, params string?[] sensitiveValues)
     {
-        if (!(allowWhileRunning ? CanReadRemote : CanMutate)) return false;
+        if (allowWhileRunning && IsHomeLaunching && CanReadRemote)
+        {
+            try { await action(_lifetime.Token); return true; }
+            catch (OperationCanceledException) { return false; }
+            catch (Exception ex) { ShowError(UiPrivacy.Redact(ex.Message, sensitiveValues)); return false; }
+        }
+        if (!CanMutate) return false;
         using var operation = CancellationTokenSource.CreateLinkedTokenSource(_lifetime.Token);
         _operation = operation;
         var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously); operationCompletion = completion;
@@ -366,7 +374,6 @@ public sealed partial class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (_disposed) return;
         _disposed = true;
-        launchWaitTimer?.Stop();
         Service.SnapshotChanged -= OnSnapshotChanged;
         Service.LogReceived -= OnLogReceived;
         Instances.PropertyChanged -= OnInstancesPropertyChanged;

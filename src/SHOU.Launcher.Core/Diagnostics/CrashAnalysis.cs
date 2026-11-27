@@ -12,7 +12,7 @@ public static class CrashAnalysis
     private static readonly Lazy<Dictionary<string, Dictionary<string, string>>> Messages = new(() =>
         JsonSerializer.Deserialize<Dictionary<string, Dictionary<string, string>>>(typeof(CrashAnalysis).Assembly.GetManifestResourceStream("SHOU.crash-messages.json")!)!);
     public static async Task<CrashAnalysisReport> AnalyzeAsync(IReadOnlyList<string> files, string language = "zh-CN", IReadOnlyList<string>? modDirectories = null,
-        CancellationToken ct = default, LogRedactor? redactor = null, bool automatic = false, string? instanceId = null)
+        CancellationToken ct = default, LogRedactor? redactor = null, bool automatic = false, string? instanceId = null, int? maximumFileBytes = null)
     {
         redactor ??= new();
         var context = new CrashAnalysisContext(0, "\0"); var sources = new List<CrashLogSource>();
@@ -38,7 +38,11 @@ public static class CrashAnalysis
             { using var bzip = new ICSharpCode.SharpZipLib.BZip2.BZip2InputStream(input) { IsStreamOwner = false }; await Read(bzip, Path.GetFileNameWithoutExtension(file), file, File.GetLastWriteTimeUtc(file)); }
             else if (Path.GetExtension(file).Equals(".gz", StringComparison.OrdinalIgnoreCase))
             { using var gzip = new GZipStream(input, CompressionMode.Decompress, true); await Read(gzip, Path.GetFileNameWithoutExtension(file), file, File.GetLastWriteTimeUtc(file)); }
-            else await Read(input, automatic && file == files.LastOrDefault() ? Path.Combine(Path.GetDirectoryName(file)!, "rawoutput.log") : file, file, File.GetLastWriteTimeUtc(file));
+            else
+            {
+                if (maximumFileBytes is { } limit && input.Length > limit) input.Seek(-limit, SeekOrigin.End);
+                await Read(input, automatic && file == files.LastOrDefault() ? Path.Combine(Path.GetDirectoryName(file)!, "rawoutput.log") : file, file, File.GetLastWriteTimeUtc(file));
+            }
         }
         ct.ThrowIfCancellationRequested();
         return await Task.Run(() =>

@@ -59,7 +59,7 @@ internal class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMi
 
     public FakeLauncherService()
     {
-        Snapshot = new(new("潮涌核心社启动器", "1.6.3", "xb", "b97b565678cbcdc8f602b57973d0837d3ac556a2", "Release", "SHOU.Launcher.Core", false, false),
+        Snapshot = new(new("潮涌核心社启动器", "1.6.4", "mcp", "b97b565678cbcdc8f602b57973d0837d3ac556a2", "Release", "SHOU.Launcher.Core", false, false),
             new(LauncherOS.MacOS, RuntimeArchitecture.Arm64, RuntimeArchitecture.Arm64, "test-fixture"), new(),
             [new("instance-1", "测试原版", "1.21.1", Path.Combine(Paths.InstancesDirectory, "fixture"), Installed: true)],
             [new("offline-1", AccountKind.Offline, "同名角色", "00000000000000000000000000000001")],
@@ -132,7 +132,14 @@ internal class FakeLauncherService : ILauncherService, ILegacyMicrosoftAccountMi
         catch (Exception ex) { Publish(Snapshot with { State = "Error", Error = ex.Message }); throw; }
     }
     public Task<LaunchPlan> BuildLaunchPlanAsync(string instanceId, CancellationToken cancellationToken = default) => Task.FromResult(new LaunchPlan("/fixture/java/bin/java", RuntimeArchitecture.Arm64, "/fixture/game", ["--accessToken", "never-report-raw-plan"], new Dictionary<string, string?>(), [], [], [], ["fixture plan"]));
-    public Task LaunchAsync(string instanceId, string serverId = "none", CancellationToken cancellationToken = default) { LastLaunchServerId = serverId; Publish(Snapshot with { State = "Running", GameProcessId = 1234 }); return Task.CompletedTask; }
+    public async Task LaunchAsync(string instanceId, string serverId = "none", CancellationToken cancellationToken = default)
+    {
+        if (Snapshot.Instances.Any(instance => instance.Id == instanceId && !instance.Installed))
+            await InstallInstanceAsync(instanceId, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+        LastLaunchServerId = serverId;
+        Publish(Snapshot with { State = "Running", GameProcessId = 1234 });
+    }
     public Task StopGameAsync(CancellationToken cancellationToken = default) { StopCalls++; Publish(Snapshot with { State = "Ready", GameProcessId = null }); return Task.CompletedTask; }
     public Task CancelDownloadAsync(string taskId, CancellationToken cancellationToken = default) { LastCancelledDownloadId = taskId; Publish(Snapshot with { Downloads = Snapshot.Downloads.Select(t => t.Id == taskId ? t with { State = "Cancelled" } : t).ToArray() }); return Task.CompletedTask; }
     public Task RetryDownloadAsync(string taskId, CancellationToken cancellationToken = default) { LastRetriedDownloadId = taskId; Publish(Snapshot with { Downloads = Snapshot.Downloads.Select(t => t.Id == taskId ? t with { State = "Queued", Error = null } : t).ToArray() }); return Task.CompletedTask; }

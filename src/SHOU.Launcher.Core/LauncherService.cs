@@ -36,7 +36,10 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     private readonly Queue<LauncherLog> logs = new();
     private readonly LogRedactor redactor = new();
     private LauncherSnapshot snapshot;
-    private bool initialized, disposed;
+    private volatile bool initialized;
+    private bool disposed, allAccountsRestored;
+    private readonly bool deferAccountRestore;
+    private readonly HashSet<string> restoredAccounts = new(StringComparer.Ordinal);
     private CancellationTokenSource? installCancellation;
     private readonly ConcurrentDictionary<int, (string InstanceId, IManagedProcess Process, bool IndependentLog)> games = new();
     private readonly ConcurrentDictionary<int, Task> gameObservers = new();
@@ -49,10 +52,11 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         NetworkOptions network, IBuildConfiguration? buildConfiguration = null, AuthenticationClient? authenticationClient = null,
         JavaBootstrapArtifact? javaBootstrap = null, IJavaTrustService? javaTrust = null, Content.CurseForgePackResolver? localPackResolver = null,
         HttpClient? publicInformationHttp = null, IContentDependencyCatalogService? worldContentCatalog = null, Func<HttpClient>? contentTransportFactory = null,
-        Func<HttpClient>? accountAppearanceTransportFactory = null)
+        Func<HttpClient>? accountAppearanceTransportFactory = null, bool deferAccountRestore = false)
     {
         this.contentTransportFactory = contentTransportFactory;
         this.accountAppearanceTransportFactory = accountAppearanceTransportFactory;
+        this.deferAccountRestore = deferAccountRestore;
         this.platform = platform; this.http = http; this.downloader = downloader; this.network = network;
         this.worldContentCatalog = worldContentCatalog;
         informationHttp = publicInformationHttp ?? new(new InformationRedirectHandler(new ConfigurableNetworkHandler(network, false))) { Timeout = TimeSpan.FromMinutes(5) };
@@ -77,6 +81,9 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     public event EventHandler<LauncherLog>? LogReceived;
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        ObjectDisposedException.ThrowIf(disposed, this);
+        if (initialized) return;
         await initialize.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
@@ -95,36 +102,11 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
             network.Update(state.Settings);
             Set(s => s with { Settings = state.Settings, Instances = state.Instances, Accounts = state.Accounts,
                 SelectedAccountId = state.SelectedAccountId, SelectedInstanceId = state.SelectedInstanceId });
-            foreach (var account in state.Accounts.Where(a => a.Kind != AccountKind.Offline))
-            {
-                try
-                {
-                    var bytes = await platform.Credentials.ReadAsync(AccountKey(account.Id), cancellationToken).ConfigureAwait(false);
-                    if (bytes is not null)
-                    {
-                        try
-                        {
-                            var session = JsonSerializer.Deserialize<AuthSession>(bytes, ConfigurationStore.JsonOptions) ?? throw new InvalidDataException("Empty credential record.");
-                            if (!AccountIdentity.Matches(account, session.Profile)) throw new InvalidDataException("Protected account identity/origin mismatch.");
-                            var trusted = session.Profile with { Persisted = true, Status = "已保存 · 启动时验证" };
-                            RegisterSession(session); sessions[account.Id] = session with { Profile = trusted }; ReplaceAccount(trusted);
-                        }
-                        finally { CryptographicOperations.ZeroMemory(bytes); }
-                    }
-                    else ReplaceAccount(account with { Persisted = false, Status = "凭据缺失 · 请重新登录" });
-                }
-                catch (OperationCanceledException) { throw; }
-                catch (Exception ex) when (ex is CredentialStoreException or JsonException or InvalidDataException or IOException)
-                {
-                    Set(s => s with { CanPersistAccounts = false });
-                    ReplaceAccount(account with { Status = "凭据读取失败 · 原数据保留" });
-                    Log("Warning", "账户凭据无法读取，已禁止账户持久写入；原因类型：" + ex.GetType().Name);
-                }
-            }
-            initialized = true;
+            if (!deferAccountRestore) await RestoreAllAccountsAsync(cancellationToken).ConfigureAwait(false);
             RefreshGameSessions();
             sessionMonitor = MonitorGameSessionsAsync();
             Log("Info", $"{Snapshot.Build.Name} {Snapshot.Build.Version} · {Snapshot.Platform.RuntimeIdentifier} · configuration owner={build.OwnerAssembly}");
+            initialized = true;
         }
         finally { initialize.Release(); }
     }
@@ -277,8 +259,11 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         if (account.Kind == AccountKind.Offline) identity = new(account.DisplayName, account.PlayerUuid, "0");
         else
         {
+            await RestoreAccountAsync(account, ct).ConfigureAwait(false);
             if (!sessions.TryGetValue(account.Id, out var session)) throw new AuthenticationException("missing_credentials", "账户凭据不可用，请重新登录。");
-            if (account.ExpiresAt is null || account.ExpiresAt < DateTimeOffset.UtcNow.AddMinutes(2)) session = await RefreshInternalAsync(account, ct).ConfigureAwait(false);
+            if (session.Profile.ExpiresAt is null || session.Profile.ExpiresAt < DateTimeOffset.UtcNow.AddMinutes(2))
+                session = await RefreshInternalAsync(account, ct, selectAccount: false).ConfigureAwait(false);
+            account = session.Profile;
             identity = new(account.DisplayName, account.PlayerUuid, session.AccessToken, account.Kind == AccountKind.Microsoft ? "msa" : "legacy", session.Xuid,
                 account.Kind == AccountKind.Microsoft ? ResolveClientId() : session.ClientToken);
             if (account.Kind == AccountKind.Yggdrasil)
@@ -483,8 +468,20 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         }
         else await InstallInstanceAsync(owner.InstanceId, cancellationToken).ConfigureAwait(false);
     }
-    public Task SaveSettingsAsync(LauncherSettings settings, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
+    public Task SaveSettingsAsync(LauncherSettings settings, CancellationToken cancellationToken = default)
+        => UpdateSettingsAsync(_ => settings, cancellationToken);
+
+    public Task SetDefaultJavaAsync(string? executable, CancellationToken cancellationToken = default)
+        => UpdateSettingsAsync(settings => settings with { JavaExecutable = RequireDiscoveredJava(executable), JavaTrustSelection = null }, cancellationToken);
+
+    private string? RequireDiscoveredJava(string? executable)
+        => executable is null ? null : Snapshot.JavaInstallations.FirstOrDefault(java => java.IsUsable &&
+            string.Equals(java.ExecutablePath, executable, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))
+            ?.ExecutablePath ?? throw new ArgumentException("请先扫描 Java，然后使用扫描结果中的可用路径。");
+
+    private Task UpdateSettingsAsync(Func<LauncherSettings, LauncherSettings> update, CancellationToken cancellationToken) => ExecuteAsync("Ready", async ct =>
     {
+        var settings = update(Snapshot.Settings);
         ConfigurationStore.ValidateSettings(settings);
         if (Snapshot.Instances.FirstOrDefault(i => (i.MemoryMiB ?? settings.MemoryMiB) < (GameSettingsPolicy.Options(i, settings).MinimumMemoryMiB ?? settings.MinimumMemoryMiB)) is { } conflict)
             throw new ArgumentException($"初始内存不能高于实例“{conflict.Name}”的最大内存，请先修改该实例或降低初始内存。");
@@ -514,6 +511,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         AccountProfile? result = null;
         await ExecuteAsync("Ready", async ct =>
         {
+            await RestoreAllAccountsAsync(ct).ConfigureAwait(false);
             var account = new AccountProfile("offline:" + uuid, AccountKind.Offline, playerName, uuid,
                 Persisted: Snapshot.CanPersistAccounts,
                 Status: Snapshot.CanPersistAccounts ? "本地离线档案 · 无法进入需认证社团服" : "当前会话离线档案 · 持久保存已禁用");
@@ -526,7 +524,12 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     public async Task<AccountProfile> LoginMicrosoftAsync(IProgress<DeviceCodeChallenge> challenge, CancellationToken cancellationToken = default)
     {
         AccountProfile? result = null;
-        await ExecuteAsync("Authenticating", async ct => { var session = await authentication.LoginMicrosoftAsync(ResolveClientId(), challenge, ct).ConfigureAwait(false); result = await SaveSessionAsync(session, ct).ConfigureAwait(false); }, cancellationToken).ConfigureAwait(false);
+        await ExecuteAsync("Authenticating", async ct =>
+        {
+            await RestoreAllAccountsAsync(ct).ConfigureAwait(false);
+            var session = await authentication.LoginMicrosoftAsync(ResolveClientId(), challenge, ct).ConfigureAwait(false);
+            result = await SaveSessionAsync(session, ct).ConfigureAwait(false);
+        }, cancellationToken).ConfigureAwait(false);
         return result!;
     }
     public async Task<IReadOnlyList<AccountProfile>> LoginYggdrasilAsync(Uri server, string username, string password, CancellationToken cancellationToken = default)
@@ -540,7 +543,11 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         redactor.Register(password); redactor.Register(username);
         var result = new List<AccountProfile>();
         await ExecuteAsync("Authenticating", async ct =>
-        { foreach (var session in await authentication.LoginYggdrasilAsync(server, username, password, ct, selectProfile).ConfigureAwait(false)) result.Add(await SaveSessionAsync(session, ct).ConfigureAwait(false)); }, cancellationToken).ConfigureAwait(false);
+        {
+            await RestoreAllAccountsAsync(ct).ConfigureAwait(false);
+            foreach (var session in await authentication.LoginYggdrasilAsync(server, username, password, ct, selectProfile).ConfigureAwait(false))
+                result.Add(await SaveSessionAsync(session, ct).ConfigureAwait(false));
+        }, cancellationToken).ConfigureAwait(false);
         return result;
     }
     private async Task<AccountProfile> SaveSessionAsync(AuthSession session, CancellationToken ct, bool selectAccount = true)
@@ -583,6 +590,8 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     private async Task<AuthSession> RefreshInternalAsync(AccountProfile account, CancellationToken ct, bool selectAccount = true)
     {
         if (account.Kind == AccountKind.Offline) throw new InvalidOperationException("离线档案无需刷新。");
+        if (selectAccount) await RestoreAllAccountsAsync(ct).ConfigureAwait(false);
+        else await RestoreAccountAsync(account, ct).ConfigureAwait(false);
         if (!sessions.TryGetValue(account.Id, out var current)) throw new AuthenticationException("missing_credentials", "请重新登录此账户。");
         try
         {
@@ -595,11 +604,13 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     public Task SelectAccountAsync(string accountId, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     {
         _ = FindAccount(accountId);
+        await RestoreAllAccountsAsync(ct).ConfigureAwait(false);
         await PersistCandidateAsync(Snapshot with { SelectedAccountId = accountId }, ct).ConfigureAwait(false);
         Set(s => s with { SelectedAccountId = accountId });
     }, cancellationToken);
     public Task RemoveAccountAsync(string accountId, CancellationToken cancellationToken = default) => ExecuteAsync("Ready", async ct =>
     {
+        await RestoreAllAccountsAsync(ct).ConfigureAwait(false);
         var account = FindAccount(accountId);
         if (!Snapshot.CanPersistAccounts && account.Kind != AccountKind.Offline) throw new InvalidOperationException("凭据读取曾失败，删除写入已禁用以保护原数据。");
         if (account.Kind != AccountKind.Offline) await platform.Credentials.DeleteAsync(AccountKey(accountId), ct).ConfigureAwait(false);
@@ -618,8 +629,9 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
     private async Task ExecuteAsync(string state, Func<CancellationToken, Task> action, CancellationToken ct)
     {
         await InitializeAsync(ct).ConfigureAwait(false);
-        if (!await operation.WaitAsync(0, ct).ConfigureAwait(false)) throw new InvalidOperationException("另一项操作尚在运行，请等待或取消。");
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, lifetime.Token);
+        if (state == "Launching") await operation.WaitAsync(linked.Token).ConfigureAwait(false);
+        else if (!await operation.WaitAsync(0, linked.Token).ConfigureAwait(false)) throw new InvalidOperationException("另一项操作尚在运行，请等待或取消。");
         var downloadOutcome = "Completed";
         downloadActivity.Begin(state == "Launching" ? "游戏文件准备" : state == "Installing" ? "资源下载与安装" : "文件传输");
         try
@@ -643,7 +655,7 @@ public sealed partial class LauncherService : IInstanceInstallProgressService, I
         // If reading any credential failed, do not overwrite the persisted account list with a partial view.
         var savedAccounts = state.Accounts.Where(a => a.Kind == AccountKind.Offline || a.Persisted).ToArray();
         var savedSelection = savedAccounts.Any(a => a.Id == state.SelectedAccountId) ? state.SelectedAccountId : null;
-        return config.SaveAsync(new(state.Settings, state.Instances, savedAccounts, savedSelection, state.SelectedInstanceId), ct, writeAccounts: state.CanPersistAccounts);
+        return config.SaveAsync(new(state.Settings, state.Instances, savedAccounts, savedSelection, state.SelectedInstanceId), ct, writeAccounts: allAccountsRestored && state.CanPersistAccounts);
     }
     private static LauncherSnapshot AccountCandidate(LauncherSnapshot state, AccountProfile account) => state with
     { Accounts = state.Accounts.Where(a => a.Id != account.Id).Append(account).ToArray(), SelectedAccountId = account.Id };

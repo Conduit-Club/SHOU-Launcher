@@ -14,33 +14,23 @@
     </Border>
     <Border Name="LaunchAccountPanel" Background="{DynamicResource ClubSidebar}">
       <Grid RowDefinitions="*,Auto">
-        <views:AccountsView Name="HomeAccountsView" DataContext="{Binding Root.Accounts}" IsVisible="{Binding !Root.IsHomeLaunching}" />
-        <StackPanel Name="HomeLaunchActions" Grid.Row="1" Margin="20,5,20,20" Spacing="10" IsVisible="{Binding !Root.IsHomeLaunching}">
-          <Button Name="HomeLaunchButton" Classes="primary" Command="{Binding Root.Instances.LaunchCommand}" HorizontalAlignment="Stretch" Height="54" ToolTip.Tip="{Binding Root.Instances.LaunchPrerequisite}">
+        <views:AccountsView Name="HomeAccountsView" DataContext="{Binding Root.Accounts}" />
+        <StackPanel Name="HomeLaunchActions" Grid.Row="1" Margin="20,5,20,20" Spacing="10">
+          <Button Name="HomeLaunchButton" Classes="primary" IsVisible="{Binding !Root.IsHomeLaunching}" Command="{Binding Root.Instances.LaunchCommand}" HorizontalAlignment="Stretch" Height="54" ToolTip.Tip="{Binding Root.Instances.LaunchPrerequisite}">
             <StackPanel Spacing="3"><TextBlock Text="{Binding Root.Instances.LaunchCaption}" HorizontalAlignment="Center" LineHeight="18" /><TextBlock Name="HomeSelectedInstanceName" Text="{Binding SelectedInstanceName}" Classes="muted" FontSize="11" LineHeight="16" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" MaxLines="1" ToolTip.Tip="{Binding SelectedInstanceName}" MaxWidth="232" HorizontalAlignment="Center" /></StackPanel>
           </Button>
-          <TextBlock Name="ConcurrentPlayHint" Text="{Binding Root.Instances.ConcurrentPlayHint}" IsVisible="{Binding Root.Instances.IsSelectedInstanceRunning}" FontSize="11" LineHeight="16" Foreground="{DynamicResource ClubMuted}" TextWrapping="Wrap" />
+          <Grid Name="HomeLaunchProgressPanel" IsVisible="{Binding Root.IsHomeLaunching}" ColumnDefinitions="*,Auto" Height="54">
+            <StackPanel Spacing="6" VerticalAlignment="Center" Margin="0,0,10,0">
+              <TextBlock Name="HomeLaunchHeading" Text="{loc:Translate Root.StateSummary}" />
+              <ProgressBar IsIndeterminate="{Binding Root.IsLaunchProgressIndeterminate}" Value="{Binding Root.LaunchProgress}" Height="4" />
+            </StackPanel>
+            <Button Grid.Column="1" Name="CancelHomeLaunchButton" Content="{loc:Loc t2cd0f3be8738a86c}" Command="{Binding Root.CancelOperationCommand}" VerticalAlignment="Center" />
+          </Grid>
           <Grid ColumnDefinitions="*,10,*">
             <Button Name="HomeSelectInstanceButton" IsVisible="{Binding Root.VisibleFeatures[instance-manager]}" Content="{loc:Loc tf5a76549ed49cfaa}" Command="{Binding Root.ShowInstancesCommand}" HorizontalAlignment="Stretch" Height="35" />
             <Button Grid.Column="2" Name="HomeInstanceSettingsButton" Content="{loc:Loc tcb5c4d21c9d75f2f}" Command="{Binding Root.Instances.ShowInstanceSettingsCommand}" HorizontalAlignment="Stretch" Height="35" />
           </Grid>
         </StackPanel>
-        <Grid Name="HomeLaunchProgressPanel" Grid.RowSpan="2" RowDefinitions="*,Auto" Margin="20,20,20,20" IsVisible="{Binding Root.IsHomeLaunching}">
-          <StackPanel VerticalAlignment="Center" Spacing="12" Margin="4,0">
-            <views:ClubIcon Kind="play" Width="44" Height="44" Foreground="{DynamicResource ClubAccent}" HorizontalAlignment="Center" Margin="0,0,0,8" />
-            <TextBlock Name="HomeLaunchHeading" Text="{Binding Root.LaunchHeading}" FontSize="21" LineHeight="28" Foreground="{DynamicResource ClubAccent}" HorizontalAlignment="Center" />
-            <TextBlock Name="LaunchInstanceTitle" Text="{Binding Root.LaunchInstanceName}" ToolTip.Tip="{Binding Root.LaunchInstanceName}" TextTrimming="CharacterEllipsis" TextWrapping="NoWrap" HorizontalAlignment="Stretch" TextAlignment="Center" Foreground="{DynamicResource ClubAccent}" />
-            <ProgressBar Name="HomeLaunchProgress" IsIndeterminate="{Binding Root.IsLaunchProgressIndeterminate}" Value="{Binding Root.LaunchProgress}" Foreground="{DynamicResource ClubAccent}" Background="{DynamicResource ClubBorder}" Minimum="0" Maximum="100" Height="4" Margin="0,6" />
-            <Grid ColumnDefinitions="Auto,12,*" RowDefinitions="Auto,Auto" HorizontalAlignment="Center" Margin="0,8,0,0">
-              <TextBlock Text="{loc:Loc te590e84f23a587dc}" Classes="muted" VerticalAlignment="Center" /><TextBlock Grid.Column="2" Text="{Binding Root.LaunchStage}" TextWrapping="Wrap" />
-              <TextBlock Grid.Row="1" Text="{loc:Loc t52373e4342173705}" Classes="muted" Margin="0,6,0,0" /><TextBlock Grid.Row="1" Grid.Column="2" Text="{Binding Root.LaunchAuthentication}" Margin="0,6,0,0" TextWrapping="Wrap" />
-            </Grid>
-            <TextBlock Text="{Binding Root.LaunchTransferSummary}" Classes="muted" LineHeight="16" FontSize="11" TextAlignment="Center" TextWrapping="Wrap" />
-            <TextBlock Name="HomeLaunchWaitSummary" Text="{Binding Root.LaunchWaitSummary}" IsVisible="{Binding Root.IsWaitingForGameWindow}" Classes="muted" LineHeight="16" FontSize="11" TextAlignment="Center" TextWrapping="Wrap" />
-            <Border IsVisible="{Binding ShowGameTip}" BorderBrush="{DynamicResource ClubBorder}" BorderThickness="1" CornerRadius="5" Padding="10" Margin="0,12"><TextBlock Text="{Binding GameTip}" TextWrapping="Wrap" /></Border>
-          </StackPanel>
-          <Button Name="CancelHomeLaunchButton" Grid.Row="1" Content="{Binding Root.HomeLaunchActionCaption}" Command="{Binding Root.HomeLaunchActionCommand}" HorizontalAlignment="Stretch" Height="35" AutomationProperties.Name="{Binding Root.HomeLaunchActionCaption}" />
-        </Grid>
       </Grid>
     </Border>
     <ScrollViewer Grid.Column="1" HorizontalScrollBarVisibility="Disabled" VerticalScrollBarVisibility="Auto">
@@ -63,7 +53,7 @@
         <Border Name="ClubServersCard" Classes="card" IsVisible="{Binding ShowClubServers}">
           <StackPanel Spacing="6">
             <DockPanel Margin="0,0,0,1"><Button Name="RefreshServersButton" DockPanel.Dock="Right" Classes="flat" Command="{Binding RefreshServersCommand}" AutomationProperties.Name="{loc:Loc tf06fb3f71f88681b}" ToolTip.Tip="{loc:Loc t802a407c774302aa}" MinHeight="18" MinWidth="20" Height="18" Width="20" Padding="2"><views:ClubIcon Name="RefreshServersIcon" Kind="refresh-cw" Width="14" Height="14" Foreground="{DynamicResource ClubForeground}" /></Button><TextBlock Text="{loc:Loc tccc334b83bd8dcca}" Classes="sectionTitle" LineHeight="18" VerticalAlignment="Center" /></DockPanel>
-            <ListBox Name="ServerSelector" FontFamily="{DynamicResource ClubMotdFontFamily}" Classes="serverCards" ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer}" IsEnabled="{Binding CanEdit}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+            <ListBox Name="ServerSelector" FontFamily="{DynamicResource ClubMotdFontFamily}" Classes="serverCards" ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer}" IsEnabled="{Binding Root.CanReadRemote}" ScrollViewer.HorizontalScrollBarVisibility="Disabled">
               <ListBox.ItemsPanel><ItemsPanelTemplate><UniformGrid Columns="2" /></ItemsPanelTemplate></ListBox.ItemsPanel>
               <ListBox.ItemTemplate><DataTemplate><Grid ColumnDefinitions="*,Auto" ToolTip.Tip="{Binding Status}"><StackPanel Spacing="3"><TextBlock Text="{Binding Name}" FontSize="15" LineHeight="20" TextTrimming="CharacterEllipsis" FontWeight="SemiBold" /><TextBlock Text="{Binding Detail}" Classes="muted" FontSize="12" LineHeight="14" TextTrimming="CharacterEllipsis" /></StackPanel><Path Classes="serverSelectionCheck" Grid.Column="1" Data="M 1,7 L 5,12 L 13,1" Width="12" Height="12" Stretch="Uniform" Stroke="{DynamicResource ClubAccent}" StrokeThickness="1.6" Margin="8,0,0,0" VerticalAlignment="Center" IsHitTestVisible="False" /></Grid></DataTemplate></ListBox.ItemTemplate>
             </ListBox>

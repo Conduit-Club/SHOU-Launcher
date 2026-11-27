@@ -12,6 +12,37 @@ namespace SHOU.Launcher.Core.Tests;
 public sealed partial class AccountAppearanceTests
 {
     [TestMethod]
+    public async Task DesktopStartupDefersCredentialsAndAnInFlightTextureDoesNotHoldTheOperationGate()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var fixture = await SessionFixture.CreateAsync(deferAccountRestore: true, beforeTexture: () =>
+        {
+            entered.TrySetResult();
+            return release.Task;
+        });
+        Assert.AreEqual(0, fixture.Credentials.Reads);
+        Assert.AreEqual("microsoft:fixture", fixture.Service.Snapshot.SelectedAccountId);
+        var instance = await fixture.Service.CreateInstanceAsync("Startup fixture", "1.21.1");
+        Assert.AreEqual(instance.Id, fixture.Service.Snapshot.SelectedInstanceId);
+        Assert.AreEqual(0, fixture.Credentials.Reads);
+        using (var disk = JsonDocument.Parse(await File.ReadAllTextAsync(fixture.Config)))
+            Assert.AreEqual("microsoft:fixture", disk.RootElement.GetProperty("selectedAccountId").GetString());
+
+        var portrait = fixture.Service.GetAccountAppearanceAsync("microsoft:fixture", true);
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.AreEqual(1, fixture.Credentials.Reads);
+            Assert.AreEqual("Ready", fixture.Service.Snapshot.State);
+            await fixture.Service.RenameInstanceAsync(instance.Id, "Renamed while loading avatar").WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.IsFalse(portrait.IsCompleted);
+        }
+        finally { release.TrySetResult(); }
+        Assert.IsNotNull((await portrait.WaitAsync(TimeSpan.FromSeconds(5))).Skin);
+    }
+
+    [TestMethod]
     public async Task LegacyAccessOnlySessionCanReadItsPortraitWhileTheTokenStillWorks()
     {
         await using var fixture = await SessionFixture.CreateAsync(expired: true, accessOnly: true);
@@ -85,8 +116,9 @@ public sealed partial class AccountAppearanceTests
     private sealed class SessionCredentials(byte[] seed, bool failWrite) : ICredentialStore
     {
         public byte[] Bytes { get; private set; } = seed;
-        public int Writes, Deletes;
-        public Task<byte[]?> ReadAsync(string key, CancellationToken cancellationToken = default) => Task.FromResult<byte[]?>(Bytes.ToArray());
+        public int Reads, Writes, Deletes;
+        public Task<byte[]?> ReadAsync(string key, CancellationToken cancellationToken = default)
+        { Reads++; return Task.FromResult<byte[]?>(Bytes.ToArray()); }
         public Task WriteAsync(string key, ReadOnlyMemory<byte> value, CancellationToken cancellationToken = default)
         {
             Writes++; if (failWrite) throw new CredentialStoreException(CredentialFailure.Denied, "Fixture write denied.");
@@ -105,7 +137,8 @@ public sealed partial class AccountAppearanceTests
         private IDisposable Lease = null!;
         public int Refreshes;
 
-        public static async Task<SessionFixture> CreateAsync(bool expired = false, bool selectOffline = false, bool rejectOldProfile = false, bool rejectTexture = false, bool invalidRefresh = false, bool failWrite = false, bool yggdrasil = false, bool accessOnly = false)
+        public static async Task<SessionFixture> CreateAsync(bool expired = false, bool selectOffline = false, bool rejectOldProfile = false, bool rejectTexture = false, bool invalidRefresh = false, bool failWrite = false, bool yggdrasil = false, bool accessOnly = false,
+            bool deferAccountRestore = false, Func<Task>? beforeTexture = null)
         {
             SessionFixture? fixture = null;
             var handler = new ScriptedHttpHandler(request =>
@@ -138,6 +171,7 @@ public sealed partial class AccountAppearanceTests
                     return Task.FromResult(ScriptedHttpHandler.Json($$"""{"id":"{{Uuid}}","name":"Fixture","skins":[{"state":"ACTIVE","variant":"CLASSIC","url":"https://textures.minecraft.net/texture/fixture"}],"capes":[]}"""));
                 }
                 Assert.AreEqual("textures.minecraft.net", uri.Host); Assert.IsNull(request.Headers.Authorization);
+                if (beforeTexture is not null) return DelayedTextureAsync(beforeTexture);
                 return Task.FromResult(new HttpResponseMessage(rejectTexture ? HttpStatusCode.Unauthorized : HttpStatusCode.OK) { Content = new ByteArrayContent(Png()) });
             });
             var http = new HttpClient(handler); var downloader = new VerifiedDownloader(http);
@@ -147,9 +181,15 @@ public sealed partial class AccountAppearanceTests
             var lease = platform.DataLock.Acquire(platform.Paths);
             await using (var store = new ConfigurationStore(platform.Paths))
                 await store.SaveAsync(new(new(MicrosoftClientId: "11111111-2222-3333-4444-555555555555", Proxy: new(ProxyMode.Direct)), [], selectOffline ? [profile, Offline()] : [profile], selectOffline ? Offline().Id : profile.Id));
-            var service = new LauncherService(platform, http, downloader, new NetworkOptions(), accountAppearanceTransportFactory: () => new HttpClient(handler, disposeHandler: false));
+            var service = new LauncherService(platform, http, downloader, new NetworkOptions(),
+                accountAppearanceTransportFactory: () => new HttpClient(handler, disposeHandler: false), deferAccountRestore: deferAccountRestore);
             fixture = new() { Service = service, Credentials = credentials, Config = Path.Combine(platform.Paths.LocalDataDirectory, "shou.desktop.v1.json"), Http = http, Processes = (ProcessRunner)platform.Processes, Lease = lease };
             await service.InitializeAsync(); return fixture;
+        }
+        private static async Task<HttpResponseMessage> DelayedTextureAsync(Func<Task> beforeTexture)
+        {
+            await beforeTexture();
+            return new(HttpStatusCode.OK) { Content = new ByteArrayContent(Png()) };
         }
         public async ValueTask DisposeAsync() { await Service.DisposeAsync(); await Processes.DisposeAsync(); Lease.Dispose(); Http.Dispose(); }
     }

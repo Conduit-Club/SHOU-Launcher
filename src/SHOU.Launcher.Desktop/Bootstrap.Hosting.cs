@@ -5,6 +5,7 @@ using SHOU.Launcher.Core.Abstractions;
 using SHOU.Launcher.Core.Configuration;
 using SHOU.Launcher.Core.Downloads;
 using SHOU.Launcher.Desktop.Platform;
+using SHOU.Launcher.Desktop.Mcp;
 using Avalonia;
 
 namespace SHOU.Launcher.Desktop;
@@ -16,6 +17,7 @@ public static partial class Bootstrap
     private static HttpClient? httpClient;
     private static NetworkOptions? networkOptions;
     private static IVerifiedDownloader? verifiedDownloader;
+    internal static LauncherMcpServer? McpServer { get; private set; }
     public static int Run(string[] args)
     {
         Arguments = args;
@@ -56,7 +58,7 @@ public static partial class Bootstrap
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
         networkOptions = new();
         httpClient = new(new ConfigurableNetworkHandler(networkOptions)) { Timeout = TimeSpan.FromSeconds(40), MaxResponseContentBufferSize = 4 * 1024 * 1024 };
-        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("SHOU-Launcher/1.6.3");
+        httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("SHOU-Launcher/1.6.4");
         verifiedDownloader = new DownloadCoordinator(httpClient, new VerifiedDownloader(httpClient, networkOptions), networkOptions,
             warning => Console.Error.WriteLine(warning));
         platformServices = PlatformServicesFactory.Create(new(data, ArgumentValue("--java-path")), verifiedDownloader);
@@ -64,13 +66,22 @@ public static partial class Bootstrap
         dataLease = platformServices.DataLock.Acquire(platformServices.Paths);
         ExternalLauncher = platformServices.ExternalLauncher;
         productJavaBootstrap = DescribeJavaBootstrap(platformServices.Paths);
-        Launcher = new LauncherService(platformServices, httpClient, verifiedDownloader, networkOptions, javaBootstrap: productJavaBootstrap);
+        var desktop = !Arguments.Any(a => a is "--diagnostics" or "--prepare-minecraft" or "--launch-minecraft"
+            or "--inspect-java-trust" or "--derive-java-trust" or "--credential-smoke" or "--dry-run-launch" or "--launch-instance");
+        var launcher = new LauncherService(platformServices, httpClient, verifiedDownloader, networkOptions, javaBootstrap: productJavaBootstrap,
+            deferAccountRestore: desktop);
+        Launcher = launcher;
         await Launcher.InitializeAsync().ConfigureAwait(false);
         if (productJavaBootstrap is not null) await InstallJavaBootstrapAsync(productJavaBootstrap).ConfigureAwait(false);
+        if (desktop) McpServer = new(launcher);
     }
     private static async Task ShutdownHostAsync()
     {
-        try { if (Launcher is not null) await Launcher.DisposeAsync().ConfigureAwait(false); }
+        try
+        {
+            try { if (McpServer is not null) await McpServer.DisposeAsync().ConfigureAwait(false); }
+            finally { if (Launcher is not null) await Launcher.DisposeAsync().ConfigureAwait(false); }
+        }
         finally
         {
             try { if (platformServices?.Processes is IAsyncDisposable processes) await processes.DisposeAsync().ConfigureAwait(false); }

@@ -22,6 +22,34 @@ namespace SHOU.Launcher.Desktop.Tests;
 public sealed partial class AccountAppearanceUiTests
 {
     [AvaloniaFact]
+    public async Task NavigationAndLaunchProceedWhileTheAvatarIsLoading()
+    {
+        using var fixture = await Fixture.OpenAsync();
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Service.Read = async (id, _, ct) =>
+        {
+            entered.TrySetResult();
+            await release.Task.WaitAsync(ct);
+            return await fixture.Service.Store.LoadOfflineAsync(fixture.Service.Snapshot.Accounts.Single(a => a.Id == id), ct);
+        };
+        var portrait = fixture.Vm.ReadAccountAppearanceAsync(true);
+        try
+        {
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            fixture.Root.ShowDownloadsCommand.Execute(null);
+            Assert.Same(fixture.Root.Downloads, fixture.Root.SelectedPage);
+            Assert.True(fixture.Root.Instances.LaunchCommand.CanExecute(null));
+            await fixture.Root.Instances.LaunchCommand.ExecuteAsync(null).WaitAsync(TimeSpan.FromSeconds(5));
+            Assert.Equal("none", fixture.Service.Base.LastLaunchServerId);
+            Assert.Same(fixture.Root.Downloads, fixture.Root.SelectedPage);
+            Assert.False(portrait.IsCompleted);
+        }
+        finally { release.TrySetResult(); }
+        await portrait.WaitAsync(TimeSpan.FromSeconds(5));
+    }
+
+    [AvaloniaFact]
     public async Task RejectedOldCredentialsShowLoginRequiredWithoutAutomaticRefreshLoop()
     {
         var service = new AppearanceUiService(); var old = new AccountProfile("microsoft:fixture", AccountKind.Microsoft, "Fixture", new string('a', 32)); var reads = 0;
@@ -74,12 +102,21 @@ public sealed partial class AccountAppearanceUiTests
         service.Base.Publish(service.Snapshot with { Accounts = [old], SelectedAccountId = old.Id });
         var online = new AccountAppearance(old.Id, AccountSkinModel.Classic, AccountAppearancePng.Decode(Png()), [], false, null, "fixture", true);
         service.Read = (_, _, _) => Task.FromResult(online); using var fixture = await Fixture.OpenAsync(service: service);
-        var delayed = new TaskCompletionSource<AccountAppearance>(TaskCreationOptions.RunContinuationsAsynchronously); var fresh = false;
-        service.Read = (_, _, _) => fresh ? Task.FromResult(online) : delayed.Task;
-        var pending = fixture.Vm.RefreshAppearanceCommand.ExecuteAsync(null); Pump(fixture.Window);
-        fresh = true; service.Base.Publish(service.Snapshot with { Accounts = [old with { ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) }] });
-        for (var i = 0; i < 100 && !fixture.Vm.HasAccountSkin; i++) { Pump(fixture.Window); await Task.Delay(10); }
-        delayed.SetException(new HttpRequestException("HTTP 401 stale")); await pending; Pump(fixture.Window);
+        var delayed = new TaskCompletionSource<AccountAppearance>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reads = 0;
+        service.Read = (_, _, _) =>
+        {
+            if (Interlocked.Increment(ref reads) != 1) return Task.FromResult(online);
+            started.TrySetResult();
+            return delayed.Task;
+        };
+        var pending = fixture.Vm.RefreshAppearanceCommand.ExecuteAsync(null);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        service.Base.Publish(service.Snapshot with { Accounts = [old with { ExpiresAt = DateTimeOffset.UtcNow.AddHours(1) }] });
+        delayed.SetException(new HttpRequestException("HTTP 401 stale")); await pending;
+        for (var i = 0; i < 100 && (reads == 1 || fixture.Vm.IsAccountAppearanceBusy); i++) { Pump(fixture.Window); await Task.Delay(10); }
+        Assert.Equal(2, reads);
         Assert.Same(online.Skin, fixture.Vm.AccountSkin); Assert.DoesNotContain("401", fixture.Vm.AccountAppearanceStatus); Assert.False(fixture.Vm.IsAccountAppearanceBusy);
     }
     private static void Pump(Window window) { Dispatcher.UIThread.RunJobs(); window.UpdateLayout(); Dispatcher.UIThread.RunJobs(); }
@@ -133,8 +170,11 @@ public sealed partial class AccountAppearanceUiTests
     public async Task CancelledRefreshKeepsPreviouslyLoadedTextureAndDoesNotRescheduleRemoteRead()
     {
         using var fixture = await Fixture.OpenAsync(); var vm = fixture.Vm; var skin = vm.AccountSkin; var calls = 0;
-        fixture.Service.Read = async (_, _, ct) => { calls++; await Task.Delay(Timeout.Infinite, ct); throw new InvalidOperationException(); };
-        var pending = vm.ReadAccountAppearanceAsync(true); vm.CancelAppearanceReadCommand.Execute(null); await pending; Pump(fixture.Window);
+        var started = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        fixture.Service.Read = async (_, _, ct) => { calls++; started.TrySetResult(); await Task.Delay(Timeout.Infinite, ct); throw new InvalidOperationException(); };
+        var pending = vm.ReadAccountAppearanceAsync(true);
+        await started.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        vm.CancelAppearanceReadCommand.Execute(null); await pending; Pump(fixture.Window);
         Assert.Same(skin, vm.AccountSkin); Assert.Contains("取消", vm.AccountAppearanceStatus); Assert.Equal(1, calls); Assert.False(vm.IsAccountAppearanceBusy);
     }
     [AvaloniaFact]

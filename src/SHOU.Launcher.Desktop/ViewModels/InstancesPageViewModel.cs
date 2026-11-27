@@ -99,7 +99,6 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         {
             if (SelectedInstance is null) return "创建或选择一个实例。";
             if (!SelectedInstanceSupported) return $"当前候选不支持加载器 {SelectedInstance.Loader}，不会按原版安装或启动。";
-            if (IsSelectedInstanceRunning) return "可再开一个游戏窗口；多开共享此实例的配置和存档，同一世界不可同时打开。关闭启动器不会结束游戏。";
             var account = Owner.Snapshot.Accounts.FirstOrDefault(a => a.Id == Owner.Snapshot.SelectedAccountId);
             if (account is null) return "请在账户页添加并选择账户。";
             if (!SelectedInstance.Installed) return "首次启动会自动下载并校验游戏本体与加载器，然后启动。";
@@ -157,19 +156,13 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         (Owner.Snapshot.GameSessions.Any(s => s.InstanceId == instance.Id)
          || Owner.Snapshot.GameSessions.Count == 0 && Owner.Snapshot.GameProcessId is not null && Owner.Snapshot.SelectedInstanceId == instance.Id);
     public bool CanPrepareSelectedInstance => CanEdit && !IsSelectedInstanceRunning && SelectedInstanceSupported;
-    public string LaunchCaption => IsSelectedInstanceRunning ? "再开一个游戏窗口" : Localization.UiLocalization.Instance.Text("启动游戏");
-    public string ConcurrentPlayHint => IsSelectedInstanceRunning ? "多开将共享此实例的配置和存档；同一世界不可同时打开。运行期间请勿修改模组与资源。" : "";
+    public string LaunchCaption => Localization.UiLocalization.Instance.Text("启动游戏");
     private bool CanLaunch() => CanEdit && (!IsSelectedInstanceRunning || SelectedInstance?.Installed == true) && SelectedInstanceSupported && Owner.Snapshot.Accounts.Any(a => a.Id == Owner.Snapshot.SelectedAccountId);
     private Task LaunchSelectedInstanceAsync()
     {
         if (!CanLaunch() || SelectedInstance is not { } instance) return Task.CompletedTask;
         var destination = Owner.Home.SelectedServerId;
-        return Owner.RunLaunchAsync(instance, async ct =>
-        {
-            if (!instance.Installed) await Service.InstallInstanceAsync(instance.Id, ct);
-            ct.ThrowIfCancellationRequested();
-            await Service.LaunchAsync(instance.Id, destination, ct);
-        });
+        return Owner.RunLaunchAsync(ct => Service.LaunchAsync(instance.Id, destination, ct));
     }
     private async Task SaveRuntimeAsync()
     {
@@ -201,5 +194,5 @@ public sealed partial class InstancesPageViewModel : PageViewModel
         RefreshWorkspaceSnapshot(snapshot);
         base.Refresh(snapshot);
     }
-    public override void NotifyCommands() { base.NotifyCommands(); foreach (var image in ScreenshotPreviews) image.RemoveCommand.NotifyCanExecuteChanged(); OnPropertyChanged(nameof(IsSelectedInstanceRunning)); OnPropertyChanged(nameof(CanUpdateContent)); OnPropertyChanged(nameof(CanTrashContent)); OnPropertyChanged(nameof(CanOpenContentProject)); OnPropertyChanged(nameof(CanPrepareSelectedInstance)); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(LaunchCaption)); OnPropertyChanged(nameof(ConcurrentPlayHint)); OnPropertyChanged(nameof(CanImportContent)); ScheduleContentRefresh(); NotifyWorldWorkspace(); }
+    public override void NotifyCommands() { base.NotifyCommands(); foreach (var image in ScreenshotPreviews) image.RemoveCommand.NotifyCanExecuteChanged(); OnPropertyChanged(nameof(IsSelectedInstanceRunning)); OnPropertyChanged(nameof(CanUpdateContent)); OnPropertyChanged(nameof(CanTrashContent)); OnPropertyChanged(nameof(CanOpenContentProject)); OnPropertyChanged(nameof(CanPrepareSelectedInstance)); OnPropertyChanged(nameof(LaunchPrerequisite)); OnPropertyChanged(nameof(LaunchCaption)); OnPropertyChanged(nameof(CanImportContent)); ScheduleContentRefresh(); NotifyWorldWorkspace(); }
 }
